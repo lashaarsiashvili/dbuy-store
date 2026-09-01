@@ -254,18 +254,14 @@ export const Footer: React.FC = () => {
 
           {/* Authentic Payment System Badges & Logos */}
           <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {/* VISA Logo Badge - Official Styling */}
+            {/* VISA Logo Badge */}
             <div 
-              className="h-8 px-3 bg-white rounded-lg flex items-center justify-center shadow-xs border border-slate-200 hover:border-slate-300 transition-all cursor-default"
-              title="Visa Secure"
+              className="h-8 px-3.5 bg-white rounded-lg flex items-center justify-center shadow-xs border border-slate-200 hover:border-slate-300 transition-all cursor-default select-none"
+              title="VISA"
             >
-              <svg className="h-3.5 w-auto" viewBox="0 0 100 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M38.868 31.428L44.894 0.658H54.532L48.506 31.428H38.868Z" fill="#1A1F71"/>
-                <path d="M72.074 1.258C69.96 0.448 66.586 0 62.43 0C52.122 0 44.882 5.488 44.82 13.284C44.758 19.08 49.954 22.316 53.904 24.254C57.962 26.242 59.336 27.502 59.31 29.314C59.274 32.086 55.952 33.314 52.88 33.314C47.458 33.314 44.428 32.504 41.344 31.134L39.794 30.432L38.2 38.318C40.852 39.544 45.748 40.598 50.814 40.648C61.738 40.648 68.868 35.258 68.942 26.89C68.98 22.368 66.246 18.844 60.312 15.98C56.666 14.128 54.436 12.87 54.458 10.922C54.458 9.176 56.444 7.332 60.592 7.332C64.12 7.274 66.842 8.084 69.346 9.176L70.47 9.684L72.074 1.258Z" transform="scale(0.8) translate(0, -1)" fill="#1A1F71"/>
-                <path d="M83.67 21.056L87.828 9.774L90.234 21.056H83.67ZM93.18 0.658H85.748C83.432 0.658 81.658 1.332 80.652 3.738L68.888 31.428H78.986C78.986 31.428 80.638 26.848 81.018 25.818H93.354C93.634 27.108 94.498 31.428 94.498 31.428H103.424L95.534 0.658H93.18Z" fill="#1A1F71"/>
-                <path d="M26.478 0.658L17.064 21.688L13.254 3.784C12.594 1.488 10.748 0.658 8.784 0.658H0.144L0 1.332C4.168 2.234 8.896 4.798 12.444 8.796L20.89 31.428H30.584L45.474 0.658H26.478Z" fill="#1A1F71"/>
-                <path d="M12.444 8.796L8.784 0.658H0.144L0 1.332C4.168 2.234 8.896 4.798 12.444 8.796Z" fill="#F7B600"/>
-              </svg>
+              <span className="text-[15px] font-black italic tracking-wider text-[#1A1F71] leading-none" style={{ fontFamily: "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" }}>
+                VISA
+              </span>
             </div>
 
             {/* MASTERCARD Logo Badge */}
