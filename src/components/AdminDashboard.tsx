@@ -59,6 +59,9 @@ export const AdminDashboard: React.FC = () => {
     resetBillboards,
     setBillboardIntervalSeconds,
     setCurrentPage,
+    navigateToProduct,
+    copyProductUrl,
+    getProductUrl,
     formatPrice,
     addToast,
     analyticsData,
@@ -864,6 +867,7 @@ export const AdminDashboard: React.FC = () => {
                   <tr>
                     <th className="p-4">Image</th>
                     <th className="p-4">Title & Details</th>
+                    <th className="p-4">Unique URL</th>
                     <th className="p-4">Category</th>
                     <th className="p-4">Price</th>
                     <th className="p-4">Stock</th>
@@ -888,6 +892,20 @@ export const AdminDashboard: React.FC = () => {
                         )}
                         <div className="text-[10px] text-slate-400 font-mono mt-0.5">
                           ID: {prod.id}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center space-x-1.5">
+                          <code className="text-[11px] bg-slate-100 px-2 py-0.5 rounded-md font-mono text-slate-700 select-all max-w-[140px] truncate block">
+                            /product/{prod.id}
+                          </code>
+                          <button
+                            onClick={() => copyProductUrl(prod.id)}
+                            className="p-1 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                            title="Copy unique product URL"
+                          >
+                            <LinkIcon className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </td>
                       <td className="p-4 uppercase font-semibold text-[10px] text-blue-600">
@@ -919,15 +937,22 @@ export const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="p-4 text-right space-x-1">
                         <button
+                          onClick={() => navigateToProduct(prod.id)}
+                          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                          title="View Live Product Page"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => handleOpenEditProduct(prod)}
-                          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors"
+                          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
                           title="Edit Product"
                         >
                           <Edit3 className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => deleteProduct(prod.id)}
-                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                           title="Delete Product"
                         >
                           <Trash2 className="w-4 h-4" />

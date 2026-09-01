@@ -18,6 +18,7 @@ export const Hero: React.FC = () => {
     setSelectedCategory, 
     products, 
     setQuickViewProduct, 
+    navigateToProduct,
     formatPrice,
     billboards,
     billboardIntervalSeconds
@@ -99,7 +100,7 @@ export const Hero: React.FC = () => {
 
   const handleAction = () => {
     if (linkedProduct) {
-      setQuickViewProduct(linkedProduct);
+      navigateToProduct(linkedProduct.id);
     } else if (currentSlide.category) {
       setSelectedCategory(currentSlide.category);
     } else {

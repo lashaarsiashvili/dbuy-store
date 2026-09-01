@@ -4,7 +4,7 @@ export type Currency = 'USD' | 'EUR' | 'GEL';
 
 export type Language = 'en' | 'ka' | 'es' | 'ru' | 'de' | 'zh';
 
-export type PageView = 'home' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders';
+export type PageView = 'home' | 'product' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders';
 
 export interface Product {
   id: string;

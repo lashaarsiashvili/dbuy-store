@@ -33,6 +33,11 @@ interface StoreContextType {
   // Navigation & View
   currentPage: PageView;
   setCurrentPage: (page: PageView) => void;
+  activeProductId: string | null;
+  navigateToProduct: (productId: string) => void;
+  getProductUrl: (productId: string) => string;
+  copyProductUrl: (productId: string) => void;
+  shareProduct: (product: Product) => void;
 
   // Language & Translation
   language: Language;
@@ -174,11 +179,121 @@ const defaultUser: User = {
   role: 'customer',
 };
 
+const parseRouteFromLocation = (pathname: string): { page: PageView; productId: string | null } => {
+  const clean = pathname.replace(/^\/+|\/+$/g, '');
+  const lower = clean.toLowerCase();
+  if (!clean || lower === 'home') {
+    return { page: 'home', productId: null };
+  }
+  if (lower.startsWith('product/') || lower.startsWith('products/')) {
+    const rawId = clean.split('/')[1] || null;
+    return { page: 'product', productId: rawId };
+  }
+  if (lower === 'admin' || lower.startsWith('admin/')) {
+    return { page: 'admin', productId: null };
+  }
+  if (lower === 'about') return { page: 'about', productId: null };
+  if (lower === 'contact') return { page: 'contact', productId: null };
+  if (lower === 'privacy') return { page: 'privacy', productId: null };
+  if (lower === 'returns') return { page: 'returns', productId: null };
+  if (lower === 'guarantee') return { page: 'guarantee', productId: null };
+  if (lower === 'my-orders' || lower === 'orders') return { page: 'my-orders', productId: null };
+  return { page: 'home', productId: null };
+};
+
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Page Routing
-  const [currentPage, setCurrentPage] = useState<PageView>('home');
+  // Page & Deep Link Routing
+  const [currentPage, setCurrentPageState] = useState<PageView>(() => {
+    if (typeof window !== 'undefined') {
+      return parseRouteFromLocation(window.location.pathname).page;
+    }
+    return 'home';
+  });
+
+  const [activeProductId, setActiveProductId] = useState<string | null>(() => {
+    if (typeof window !== 'undefined') {
+      return parseRouteFromLocation(window.location.pathname).productId;
+    }
+    return null;
+  });
+
+  // Sync with browser back / forward navigation
+  useEffect(() => {
+    const handlePopState = () => {
+      const route = parseRouteFromLocation(window.location.pathname);
+      setCurrentPageState(route.page);
+      setActiveProductId(route.productId);
+    };
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  const setCurrentPage = (page: PageView) => {
+    setCurrentPageState(page);
+    let targetPath = '/';
+    if (page === 'home') {
+      targetPath = '/';
+      setActiveProductId(null);
+    } else if (page === 'product') {
+      targetPath = activeProductId ? `/product/${activeProductId}` : '/';
+    } else {
+      targetPath = `/${page}`;
+      setActiveProductId(null);
+    }
+
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      window.history.pushState({ page, productId: activeProductId }, '', targetPath);
+    }
+  };
+
+  const navigateToProduct = (productId: string) => {
+    setActiveProductId(productId);
+    setCurrentPageState('product');
+    const targetPath = `/product/${productId}`;
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      window.history.pushState({ page: 'product', productId }, '', targetPath);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const getProductUrl = (productId: string): string => {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/product/${productId}`;
+    }
+    return `/product/${productId}`;
+  };
+
+  const copyProductUrl = (productId: string) => {
+    const url = getProductUrl(productId);
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        addToast(language === 'ka' ? '🔗 პროდუქტის უნიკალური ბმული დაკოპირდა!' : '🔗 Product unique URL copied to clipboard!', 'success');
+      }).catch(() => {
+        addToast(url, 'info');
+      });
+    } else {
+      addToast(url, 'info');
+    }
+  };
+
+  const shareProduct = (product: Product) => {
+    const url = getProductUrl(product.id);
+    const title = (language === 'ka' && product.titleKa) ? product.titleKa : product.title;
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share({
+        title: `${title} | DBUY Store`,
+        text: `${title} - Check out this product on DBUY!`,
+        url: url,
+      }).catch(() => {
+        copyProductUrl(product.id);
+      });
+    } else {
+      copyProductUrl(product.id);
+    }
+  };
 
   // Multi-language
   const [language, setLanguageState] = useState<Language>(() => {
@@ -1067,6 +1182,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       value={{
         currentPage,
         setCurrentPage,
+        activeProductId,
+        navigateToProduct,
+        getProductUrl,
+        copyProductUrl,
+        shareProduct,
         language,
         setLanguage,
         t,

@@ -15,6 +15,7 @@ import { AboutPage } from './components/AboutPage';
 import { ContactPage } from './components/ContactPage';
 import { GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPages';
 import { MyOrdersPage } from './components/MyOrdersPage';
+import { ProductDetailPage } from './components/ProductDetailPage';
 import { ToastContainer } from './components/ToastContainer';
 
 const MainLayout: React.FC = () => {
@@ -26,6 +27,7 @@ const MainLayout: React.FC = () => {
     if (currentPage !== 'admin') {
       const pageNames: Record<string, string> = {
         home: 'Storefront (Home)',
+        product: 'Product Detail Page',
         about: 'About Us Page',
         contact: 'Contact Us Page',
         guarantee: 'Guarantee Policy',
@@ -52,6 +54,7 @@ const MainLayout: React.FC = () => {
           </>
         )}
 
+        {currentPage === 'product' && <ProductDetailPage />}
         {currentPage === 'about' && <AboutPage />}
         {currentPage === 'contact' && <ContactPage />}
         {currentPage === 'guarantee' && <GuaranteePage />}

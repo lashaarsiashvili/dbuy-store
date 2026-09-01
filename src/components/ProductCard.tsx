@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { Star, ShoppingCart, Eye, Check, Heart } from 'lucide-react';
+import { Star, ShoppingCart, Eye, Check, Heart, Share2, Link as LinkIcon } from 'lucide-react';
 
 interface ProductCardProps {
   product: Product;
@@ -14,6 +14,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     formatPrice, 
     addToCart, 
     setQuickViewProduct,
+    navigateToProduct,
+    copyProductUrl,
     isInWishlist,
     toggleWishlist,
   } = useStore();
@@ -34,6 +36,15 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     toggleWishlist(product);
   };
 
+  const handleCardClick = () => {
+    navigateToProduct(product.id);
+  };
+
+  const handleCopyLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    copyProductUrl(product.id);
+  };
+
   const discountPercent = product.origPrice
     ? Math.round(((product.origPrice - product.price) / product.origPrice) * 100)
     : 0;
@@ -52,7 +63,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   return (
     <div 
       className="group relative flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
-      onClick={() => setQuickViewProduct(product)}
+      onClick={handleCardClick}
     >
       {/* Badge */}
       {product.badge && (
@@ -71,13 +82,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </div>
       )}
 
-      {/* Top Right Controls: Wishlist Button & Discount Tag */}
+      {/* Top Right Controls: Quick Copy URL & Wishlist Button & Discount Tag */}
       <div className="absolute top-3 right-3 z-10 flex items-center space-x-1.5">
         {discountPercent > 0 && (
           <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-red-100 text-red-700 border border-red-200">
             -{discountPercent}%
           </span>
         )}
+        <button
+          onClick={handleCopyLink}
+          className="p-2 rounded-full shadow-md bg-white/90 text-slate-500 hover:text-blue-600 hover:bg-white transition-all cursor-pointer"
+          title={language === 'ka' ? 'URL ბმულის კოპირება' : 'Copy unique URL'}
+          aria-label="Copy unique product URL"
+        >
+          <LinkIcon className="w-3.5 h-3.5" />
+        </button>
         <button
           onClick={handleWishlistToggle}
           className={`p-2 rounded-full shadow-md backdrop-blur-xs transition-all cursor-pointer ${
@@ -102,13 +121,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         />
 
         {/* Quick View Hover Overlay Button */}
-        <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+        <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center space-x-2">
           <button
             onClick={(e) => {
               e.stopPropagation();
               setQuickViewProduct(product);
             }}
-            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-slate-50 transition-transform transform translate-y-2 group-hover:translate-y-0 duration-200 cursor-pointer"
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-slate-50 transition-transform transform translate-y-2 group-hover:translate-y-0 duration-200 cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5 text-blue-600" />
             <span>{t('products.quickView')}</span>
