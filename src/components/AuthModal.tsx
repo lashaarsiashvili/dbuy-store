@@ -39,11 +39,13 @@ export const AuthModal: React.FC = () => {
     setIsAuthModalOpen,
     loginUser,
     registerUser,
+    resetUserPassword,
     theme,
     addToast,
   } = useStore();
 
   const [tab, setTab] = useState<'login' | 'register'>('login');
+  const [viewMode, setViewMode] = useState<'auth' | 'forgot'>('auth');
   
   // Registration Multi-Step State: 1 = Personal & Security, 2 = Address & Region, 3 = Email Verification (OTP)
   const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
@@ -54,6 +56,12 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  
+  // Forgot Password / Recovery State
+  const [forgotEmail, setForgotEmail] = useState('');
+  const [failedAttemptsMap, setFailedAttemptsMap] = useState<Record<string, number>>({});
+  const [isSendingTempPass, setIsSendingTempPass] = useState<boolean>(false);
+  const [tempPassSentTo, setTempPassSentTo] = useState<string | null>(null);
   
   // Address Fields
   const [country, setCountry] = useState('Georgia');
@@ -107,16 +115,20 @@ export const AuthModal: React.FC = () => {
       setOtpDigits(['', '', '', '', '']);
       setVerificationError(null);
       setRegStep(1);
+      setViewMode('auth');
+      setTempPassSentTo(null);
     }
   }, [isAuthModalOpen]);
 
   const handleTabSwitch = (newTab: 'login' | 'register') => {
     setTab(newTab);
+    setViewMode('auth');
     setRegStep(1);
     setPassword('');
     setConfirmPassword('');
     setOtpDigits(['', '', '', '', '']);
     setVerificationError(null);
+    setTempPassSentTo(null);
   };
 
   // Countdown timer for lockout
@@ -192,12 +204,57 @@ export const AuthModal: React.FC = () => {
     const success = loginUser(cleanEmail, 'Customer', password);
     if (success) {
       resetAttempts(cleanEmail);
+      setFailedAttemptsMap(prev => ({ ...prev, [cleanEmail]: 0 }));
     } else {
+      const currentFailures = (failedAttemptsMap[cleanEmail] || 0) + 1;
+      setFailedAttemptsMap(prev => ({ ...prev, [cleanEmail]: currentFailures }));
+      
       const attemptRes = recordFailedAttempt(cleanEmail);
       if (attemptRes.locked && attemptRes.waitSeconds) {
         setLockoutSec(attemptRes.waitSeconds);
         addToast(t('auth.lockoutWarning', { sec: String(attemptRes.waitSeconds) }), 'error');
       }
+    }
+  };
+
+  // Handle Forgot Password submission
+  const handleForgotSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const cleanEmail = sanitizeInput(forgotEmail || email).toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      addToast(t('checkout.email'), 'warning');
+      return;
+    }
+
+    setIsSendingTempPass(true);
+    try {
+      const response = await fetch('/api/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          language,
+        }),
+      });
+
+      const data = await response.json();
+      if (response.ok && data.success) {
+        if (data.tempPassword) {
+          resetUserPassword(cleanEmail, data.tempPassword);
+        }
+        setFailedAttemptsMap(prev => ({ ...prev, [cleanEmail]: 0 }));
+        resetAttempts(cleanEmail);
+        setTempPassSentTo(cleanEmail);
+        addToast(t('auth.tempPasswordSent', { email: cleanEmail }), 'success');
+      } else {
+        const errorMsg = data.error || 'Failed to send temporary password';
+        addToast(errorMsg, 'error');
+      }
+    } catch (err) {
+      console.error('Error in forgot password request:', err);
+      addToast('Failed to send temporary password. Please try again.', 'error');
+    } finally {
+      setIsSendingTempPass(false);
     }
   };
 
@@ -358,101 +415,231 @@ export const AuthModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex border-b border-slate-200 mb-6">
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('login')}
-            className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
-              tab === 'login'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {t('auth.signInTab')}
-          </button>
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('register')}
-            className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
-              tab === 'register'
-                ? 'border-blue-600 text-blue-600'
-                : 'border-transparent text-slate-500 hover:text-slate-700'
-            }`}
-          >
-            {t('auth.registerTab')}
-          </button>
-        </div>
-
-        {/* ---------------- LOGIN FORM ---------------- */}
-        {tab === 'login' && (
-          <form onSubmit={handleLoginSubmit} className="space-y-4">
-            {lockoutSec > 0 && (
-              <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
-                <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
-                <span>
-                  {t('auth.lockoutWarning', { sec: String(lockoutSec) })}
-                </span>
+        {/* ---------------- FORGOT PASSWORD RECOVERY VIEW ---------------- */}
+        {viewMode === 'forgot' ? (
+          <div className="space-y-4 animate-in fade-in duration-200">
+            <div className="text-center pb-1">
+              <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto mb-3 text-blue-600 shadow-xs">
+                <KeyRound className="w-6 h-6" />
               </div>
-            )}
-
-            <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {t('auth.email')}
-              </label>
-              <div className="relative">
-                <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={e => setEmail(e.target.value)}
-                  placeholder="you@example.com"
-                  className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                />
-              </div>
+              <h3 className="text-base font-bold text-slate-900">
+                {t('auth.resetPasswordTitle')}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                {t('auth.resetPasswordDesc')}
+              </p>
             </div>
 
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-semibold text-slate-700">
-                  {t('auth.password')}
-                </label>
-              </div>
-              <div className="relative">
-                <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                <input
-                  type={showPassword ? 'text' : 'password'}
-                  required
-                  value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  placeholder={t('auth.passwordPlaceholder')}
-                  className="w-full pl-9 pr-10 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                />
+            {tempPassSentTo ? (
+              <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs space-y-3">
+                <div className="flex items-start space-x-2.5">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-emerald-900">
+                      {t('auth.tempPasswordSent', { email: tempPassSentTo })}
+                    </p>
+                    <p className="text-[11px] text-emerald-700 mt-1">
+                      {language === 'ka' 
+                        ? 'შეამოწმეთ ელ-ფოსტის შემოსული წერილები (Inbox / Spam) და გამოიყენეთ გამოგზავნილი დროებითი პაროლი.' 
+                        : 'Check your email inbox (and spam folder) and use the received temporary password to sign in.'}
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600"
+                  onClick={() => {
+                    setEmail(tempPassSentTo);
+                    setTempPassSentTo(null);
+                    setViewMode('auth');
+                    setTab('login');
+                  }}
+                  className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1.5"
                 >
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  <span>{t('auth.backToSignIn')}</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
                 </button>
               </div>
+            ) : (
+              <form onSubmit={handleForgotSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {t('auth.email')}
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="email"
+                      required
+                      value={forgotEmail}
+                      onChange={e => setForgotEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={isSendingTempPass}
+                  className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white rounded-xl font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer"
+                >
+                  {isSendingTempPass ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>{t('auth.sendingTempPass')}</span>
+                    </>
+                  ) : (
+                    <>
+                      <KeyRound className="w-4 h-4" />
+                      <span>{t('auth.sendTempPassword')}</span>
+                    </>
+                  )}
+                </button>
+
+                <div className="text-center pt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setViewMode('auth');
+                      setTab('login');
+                    }}
+                    className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center space-x-1 cursor-pointer"
+                  >
+                    <ArrowLeft className="w-3.5 h-3.5" />
+                    <span>{t('auth.backToSignIn')}</span>
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        ) : (
+          <>
+            {/* Tab Switcher */}
+            <div className="flex border-b border-slate-200 mb-6">
+              <button
+                type="button"
+                onClick={() => handleTabSwitch('login')}
+                className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                  tab === 'login'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t('auth.signInTab')}
+              </button>
+              <button
+                type="button"
+                onClick={() => handleTabSwitch('register')}
+                className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                  tab === 'register'
+                    ? 'border-blue-600 text-blue-600'
+                    : 'border-transparent text-slate-500 hover:text-slate-700'
+                }`}
+              >
+                {t('auth.registerTab')}
+              </button>
             </div>
 
-            <button
-              type="submit"
-              disabled={lockoutSec > 0}
-              className={`w-full py-3 rounded-xl font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer ${
-                lockoutSec > 0
-                  ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
-                  : 'bg-blue-600 hover:bg-blue-700 text-white'
-              }`}
-            >
-              <Lock className="w-4 h-4" />
-              <span>{t('auth.signInTab')}</span>
-            </button>
-          </form>
-        )}
+            {/* ---------------- LOGIN FORM ---------------- */}
+            {tab === 'login' && (
+              <form onSubmit={handleLoginSubmit} className="space-y-4">
+                {lockoutSec > 0 && (
+                  <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
+                    <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
+                    <span>
+                      {t('auth.lockoutWarning', { sec: String(lockoutSec) })}
+                    </span>
+                  </div>
+                )}
+
+                {/* 3 Failed Attempts: Offer Forgot Password */}
+                {(failedAttemptsMap[email.trim().toLowerCase()] || 0) >= 3 && (
+                  <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+                    <div className="flex items-start space-x-2">
+                      <KeyRound className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
+                      <span className="leading-snug font-medium">{t('auth.forgotPasswordPrompt')}</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotEmail(email.trim());
+                        setViewMode('forgot');
+                      }}
+                      className="shrink-0 px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold text-[11px] transition-colors cursor-pointer flex items-center space-x-1"
+                    >
+                      <span>{t('auth.forgotPassword')}</span>
+                      <ArrowRight className="w-3 h-3" />
+                    </button>
+                  </div>
+                )}
+
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    {t('auth.email')}
+                  </label>
+                  <div className="relative">
+                    <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type="email"
+                      required
+                      value={email}
+                      onChange={e => setEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-semibold text-slate-700">
+                      {t('auth.password')}
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setForgotEmail(email.trim());
+                        setViewMode('forgot');
+                      }}
+                      className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                    >
+                      {t('auth.forgotPassword')}
+                    </button>
+                  </div>
+                  <div className="relative">
+                    <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                    <input
+                      type={showPassword ? 'text' : 'password'}
+                      required
+                      value={password}
+                      onChange={e => setPassword(e.target.value)}
+                      placeholder={t('auth.passwordPlaceholder')}
+                      className="w-full pl-9 pr-10 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                    >
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  </div>
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={lockoutSec > 0}
+                  className={`w-full py-3 rounded-xl font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer ${
+                    lockoutSec > 0
+                      ? 'bg-slate-300 text-slate-500 cursor-not-allowed'
+                      : 'bg-blue-600 hover:bg-blue-700 text-white'
+                  }`}
+                >
+                  <Lock className="w-4 h-4" />
+                  <span>{t('auth.signInTab')}</span>
+                </button>
+              </form>
+            )}
 
         {/* ---------------- REGISTER MULTI-STEP ---------------- */}
         {tab === 'register' && (
@@ -826,6 +1013,8 @@ export const AuthModal: React.FC = () => {
             )}
           </div>
         )}
+        </>
+      )}
       </div>
     </div>
   );

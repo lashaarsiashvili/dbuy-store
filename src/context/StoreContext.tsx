@@ -137,6 +137,7 @@ interface StoreContextType {
     phone?: string;
   }) => boolean;
   changeAdminPassword: (oldPass: string, newPass: string) => boolean;
+  resetUserPassword: (email: string, newTempPass: string) => boolean;
   isAdmin: boolean;
 
   // Toast Notifications
@@ -717,11 +718,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     user.role === 'admin' || user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com'
   );
 
+  // Helper to load registered users store
+  const getRegisteredUsersMap = (): Record<string, any> => {
+    try {
+      const raw = localStorage.getItem('dbuy_registered_users');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
   const loginUser = (email: string, name = 'Customer', password?: string): boolean => {
     const trimmedEmail = email.trim().toLowerCase();
     const isAdminEmail = trimmedEmail === 'lashaarsiashvili@gmail.com';
 
-    // If logging in as admin email, check password
+    // If logging in as admin email, check password against current admin password
     if (isAdminEmail) {
       if (password && password !== adminPassword) {
         addToast(t('toasts.invalidAdminPass'), 'error');
@@ -741,6 +752,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     // Regular customer login
+    const registeredMap = getRegisteredUsersMap();
+    const existingAccount = registeredMap[trimmedEmail];
+
+    if (existingAccount) {
+      if (password && existingAccount.password && password !== existingAccount.password) {
+        addToast(t('toasts.invalidAdminPass'), 'error');
+        return false;
+      }
+      const loggedUser: User = {
+        name: existingAccount.name || name || 'Customer',
+        email: existingAccount.email || email,
+        isLoggedIn: true,
+        role: 'customer',
+        country: existingAccount.country || 'Georgia',
+        city: existingAccount.city || 'Tbilisi',
+        zip: existingAccount.zip || '',
+        address: existingAccount.address || '',
+        phone: existingAccount.phone || '',
+        createdAt: existingAccount.createdAt,
+      };
+      setUser(loggedUser);
+      localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
+      setIsAuthModalOpen(false);
+      addToast(t('toasts.welcome', { name: loggedUser.name }), 'success');
+      return true;
+    }
+
+    // New or standard customer without stored password constraint
     const loggedUser: User = {
       name: name || 'Customer',
       email: email,
@@ -784,10 +823,50 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       createdAt: new Date().toISOString(),
     };
 
+    // Save in persistent registered users store
+    const registeredMap = getRegisteredUsersMap();
+    registeredMap[trimmedEmail] = {
+      ...newUser,
+      password: userData.password,
+    };
+    localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+
+    // If admin registered or updated password
+    if (isAdminEmail && userData.password) {
+      setAdminPassword(userData.password);
+      localStorage.setItem('dbuy_admin_password', userData.password);
+    }
+
     setUser(newUser);
     localStorage.setItem('dbuy_user', JSON.stringify(newUser));
     setIsAuthModalOpen(false);
     addToast(t('toasts.registered', { name: newUser.name }), 'success');
+    return true;
+  };
+
+  const resetUserPassword = (email: string, newTempPass: string): boolean => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (trimmedEmail === 'lashaarsiashvili@gmail.com') {
+      setAdminPassword(newTempPass);
+      localStorage.setItem('dbuy_admin_password', newTempPass);
+      return true;
+    }
+
+    const registeredMap = getRegisteredUsersMap();
+    if (registeredMap[trimmedEmail]) {
+      registeredMap[trimmedEmail].password = newTempPass;
+      localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+    } else {
+      registeredMap[trimmedEmail] = {
+        name: 'Customer',
+        email: trimmedEmail,
+        password: newTempPass,
+        isLoggedIn: false,
+        role: 'customer',
+        createdAt: new Date().toISOString(),
+      };
+      localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+    }
     return true;
   };
 
@@ -989,6 +1068,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         logoutUser,
         registerUser,
         changeAdminPassword,
+        resetUserPassword,
         isAdmin,
         toasts,
         addToast,
