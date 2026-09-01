@@ -114,6 +114,18 @@ export interface User {
   createdAt?: string;
 }
 
+export interface RegisteredUser {
+  name: string;
+  email: string;
+  country?: string;
+  city?: string;
+  zip?: string;
+  address?: string;
+  phone?: string;
+  createdAt: string;
+  role: 'customer' | 'admin';
+}
+
 export interface ToastMessage {
   id: string;
   type: 'success' | 'info' | 'error' | 'warning';

@@ -8,6 +8,7 @@ import {
   PageView, 
   ThemeSettings, 
   User, 
+  RegisteredUser,
   ToastMessage, 
   Category,
   VisitorLog,
@@ -140,6 +141,8 @@ interface StoreContextType {
   changeAdminPassword: (oldPass: string, newPass: string) => boolean;
   resetUserPassword: (email: string, newTempPass: string) => boolean;
   isAdmin: boolean;
+  registeredUsers: RegisteredUser[];
+  deleteRegisteredUser: (email: string) => void;
 
   // Toast Notifications
   toasts: ToastMessage[];
@@ -723,6 +726,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     user.role === 'admin' || user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com'
   );
 
+  // Registered Users (Exposed strictly without password hashes for privacy)
+  const mapRegisteredUsersList = (map: Record<string, any>): RegisteredUser[] => {
+    return Object.values(map).map((u: any) => ({
+      name: u.name || 'Customer',
+      email: u.email,
+      country: u.country || 'Georgia',
+      city: u.city || 'Tbilisi',
+      zip: u.zip || '',
+      address: u.address || '',
+      phone: u.phone || '',
+      createdAt: u.createdAt || new Date().toISOString(),
+      role: (u.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' || u.role === 'admin') ? 'admin' : 'customer',
+    }));
+  };
+
   // Helper to load registered users store
   const getRegisteredUsersMap = (): Record<string, any> => {
     try {
@@ -733,13 +751,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>(() => {
+    const map = getRegisteredUsersMap();
+    return mapRegisteredUsersList(map);
+  });
+
+  const refreshRegisteredUsers = () => {
+    const map = getRegisteredUsersMap();
+    setRegisteredUsers(mapRegisteredUsersList(map));
+  };
+
+  const deleteRegisteredUser = (targetEmail: string) => {
+    const trimmed = targetEmail.toLowerCase().trim();
+    if (trimmed === 'lashaarsiashvili@gmail.com') {
+      addToast(language === 'ka' ? 'ადმინისტრატორის ანგარიშის წაშლა შეუძლებელია' : 'Cannot delete primary administrator account', 'warning');
+      return;
+    }
+    const map = getRegisteredUsersMap();
+    if (map[trimmed]) {
+      delete map[trimmed];
+      localStorage.setItem('dbuy_registered_users', JSON.stringify(map));
+      refreshRegisteredUsers();
+      addToast(language === 'ka' ? 'მომხმარებლის ანგარიში წაიშალა' : 'User account removed successfully', 'info');
+    }
+  };
+
   const loginUser = (email: string, name = 'Customer', password?: string): boolean => {
     const trimmedEmail = email.trim().toLowerCase();
     const isAdminEmail = trimmedEmail === 'lashaarsiashvili@gmail.com';
 
-    // If logging in as admin email, check password cryptographically
+    // 1. Password is strictly required
+    if (!password) {
+      addToast(t('toasts.invalidAdminPass'), 'error');
+      return false;
+    }
+
+    // 2. Administrator Login
     if (isAdminEmail) {
-      if (password && !verifyPassword(password, adminPassword)) {
+      if (!verifyPassword(password, adminPassword)) {
         addToast(t('toasts.invalidAdminPass'), 'error');
         return false;
       }
@@ -756,40 +805,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return true;
     }
 
-    // Regular customer login
+    // 3. Regular Registered Customer Login (Strict: MUST BE REGISTERED)
     const registeredMap = getRegisteredUsersMap();
     const existingAccount = registeredMap[trimmedEmail];
 
-    if (existingAccount) {
-      if (password && existingAccount.password && !verifyPassword(password, existingAccount.password)) {
-        addToast(t('toasts.invalidAdminPass'), 'error');
-        return false;
-      }
-      const loggedUser: User = {
-        name: existingAccount.name || name || 'Customer',
-        email: existingAccount.email || email,
-        isLoggedIn: true,
-        role: 'customer',
-        country: existingAccount.country || 'Georgia',
-        city: existingAccount.city || 'Tbilisi',
-        zip: existingAccount.zip || '',
-        address: existingAccount.address || '',
-        phone: existingAccount.phone || '',
-        createdAt: existingAccount.createdAt,
-      };
-      setUser(loggedUser);
-      localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
-      setIsAuthModalOpen(false);
-      addToast(t('toasts.welcome', { name: loggedUser.name }), 'success');
-      return true;
+    if (!existingAccount) {
+      addToast(t('auth.userNotFound'), 'error');
+      return false;
     }
 
-    // New or standard customer without stored password constraint
+    if (!existingAccount.password || !verifyPassword(password, existingAccount.password)) {
+      addToast(t('toasts.invalidAdminPass'), 'error');
+      return false;
+    }
+
     const loggedUser: User = {
-      name: name || 'Customer',
-      email: email,
+      name: existingAccount.name || name || 'Customer',
+      email: existingAccount.email || email,
       isLoggedIn: true,
       role: 'customer',
+      country: existingAccount.country || 'Georgia',
+      city: existingAccount.city || 'Tbilisi',
+      zip: existingAccount.zip || '',
+      address: existingAccount.address || '',
+      phone: existingAccount.phone || '',
+      createdAt: existingAccount.createdAt,
     };
     setUser(loggedUser);
     localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
@@ -799,7 +839,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const demoLogin = () => {
-    loginUser('demo.user@example.com', 'Alex Morgan');
+    // Ensure demo account exists in registered store
+    const demoEmail = 'demo.user@example.com';
+    const registeredMap = getRegisteredUsersMap();
+    if (!registeredMap[demoEmail]) {
+      registerUser({
+        name: 'Alex Morgan',
+        email: demoEmail,
+        password: 'demoUser2026',
+        country: 'United States',
+        city: 'New York',
+        zip: '10001',
+        address: '742 Evergreen Terrace',
+      });
+    } else {
+      loginUser(demoEmail, 'Alex Morgan', 'demoUser2026');
+    }
   };
 
   const registerUser = (userData: {
@@ -836,6 +891,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       password: hashedPassword,
     };
     localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+    refreshRegisteredUsers();
 
     // If admin registered or updated password
     if (isAdminEmail && hashedPassword) {
@@ -864,6 +920,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (registeredMap[trimmedEmail]) {
       registeredMap[trimmedEmail].password = hashedTempPass;
       localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+      refreshRegisteredUsers();
     } else {
       registeredMap[trimmedEmail] = {
         name: 'Customer',
@@ -874,6 +931,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         createdAt: new Date().toISOString(),
       };
       localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+      refreshRegisteredUsers();
     }
     return true;
   };
@@ -1079,6 +1137,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         changeAdminPassword,
         resetUserPassword,
         isAdmin,
+        registeredUsers,
+        deleteRegisteredUser,
         toasts,
         addToast,
         removeToast,

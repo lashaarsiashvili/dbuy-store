@@ -68,6 +68,8 @@ export const AdminDashboard: React.FC = () => {
     logoutUser,
     loginUser,
     isAdmin,
+    registeredUsers,
+    deleteRegisteredUser,
     language,
     t,
   } = useStore();
@@ -83,8 +85,13 @@ export const AdminDashboard: React.FC = () => {
   const [newPasswordInput, setNewPasswordInput] = useState('');
   const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
 
+  // Registered Users Management State
+  const [userSearch, setUserSearch] = useState('');
+  const [userToDelete, setUserToDelete] = useState<string | null>(null);
+  const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+
   // Tabs
-  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'security'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security'>('analytics');
 
   // Product Add / Edit Modal
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -779,6 +786,17 @@ export const AdminDashboard: React.FC = () => {
             📋 {isKa ? 'შეკვეთების მართვა' : 'Orders Management'} ({orders.length})
           </button>
           <button
+            onClick={() => setActiveTab('users')}
+            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
+              activeTab === 'users'
+                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Users className="w-4 h-4 text-blue-600" />
+            <span>{isKa ? `👥 დარეგისტრირებული იუზერები (${registeredUsers.length})` : `👥 Registered Users (${registeredUsers.length})`}</span>
+          </button>
+          <button
             onClick={() => setActiveTab('security')}
             className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
               activeTab === 'security'
@@ -1444,6 +1462,284 @@ export const AdminDashboard: React.FC = () => {
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 4.5: REGISTERED USERS MANAGEMENT */}
+        {activeTab === 'users' && (
+          <div className="space-y-6">
+            {/* Top Cards & Privacy Notice */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+                <div className="p-3 rounded-xl bg-blue-50 text-blue-600 shrink-0">
+                  <Users className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'სულ რეგისტრირებული' : 'Total Accounts'}
+                  </p>
+                  <h3 className="text-xl font-black text-slate-900">{registeredUsers.length}</h3>
+                </div>
+              </div>
+
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+                <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
+                  <CheckCircle2 className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'მყიდველები (Customers)' : 'Active Customers'}
+                  </p>
+                  <h3 className="text-xl font-black text-slate-900">
+                    {registeredUsers.filter(u => u.role !== 'admin' && u.email?.toLowerCase().trim() !== 'lashaarsiashvili@gmail.com').length}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+                <div className="p-3 rounded-xl bg-amber-50 text-amber-600 shrink-0">
+                  <ShieldCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'ადმინისტრატორი' : 'Admin Accounts'}
+                  </p>
+                  <h3 className="text-xl font-black text-slate-900">
+                    {registeredUsers.filter(u => u.role === 'admin' || u.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com').length || 1}
+                  </h3>
+                </div>
+              </div>
+
+              <div className="p-5 bg-gradient-to-br from-slate-900 to-slate-800 text-white rounded-2xl border border-slate-700 shadow-xs flex items-center space-x-3.5">
+                <div className="p-3 rounded-xl bg-slate-800 text-amber-400 border border-slate-700 shrink-0">
+                  <Lock className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold text-amber-300 uppercase tracking-wider">
+                    {isKa ? 'პაროლების დაცვა' : 'Password Security'}
+                  </p>
+                  <p className="text-xs font-semibold text-slate-200 truncate">
+                    {isKa ? '🔒 Salted SHA-256 (დაფარულია)' : '🔒 Salted SHA-256 (Hidden)'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Privacy & Confidentiality Guarantee Banner */}
+            <div className="p-4 bg-blue-50/70 border border-blue-200/80 rounded-2xl flex items-start space-x-3 text-xs text-blue-900">
+              <ShieldAlert className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+              <div>
+                <span className="font-bold">
+                  {isKa ? 'უსაფრთხოების გარანტია: ' : 'Security & Privacy Guarantee: '}
+                </span>
+                <span>
+                  {isKa 
+                    ? 'მომხმარებელთა პაროლები კრიპტოგრაფიულად დაშიფრულია და არ ჩანს არცერთ ადმინისტრატორულ ინტერფეისში. ადმინისტრატორს შეუძლია იხილოს მხოლოდ მომხმარებლის საკონტაქტო ელ-ფოსტა, მიწოდების მისამართი და შეკვეთების ისტორია.'
+                    : 'Customer passwords are cryptographically salted & hashed. They are completely hidden and never displayed to administrators. Only email, delivery location, and order history are accessible for fulfillment.'}
+                </span>
+              </div>
+            </div>
+
+            {/* Registered Users Table Container */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+              {/* Table Action Bar */}
+              <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center space-x-3 w-full sm:w-auto">
+                  <input
+                    type="text"
+                    value={userSearch}
+                    onChange={e => setUserSearch(e.target.value)}
+                    placeholder={isKa ? 'ძიება: სახელი, ელ-ფოსტა, ქალაქი...' : 'Search: Name, email, city...'}
+                    className="w-full sm:w-80 px-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                  {userSearch && (
+                    <button
+                      onClick={() => setUserSearch('')}
+                      className="px-2.5 py-2 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                    >
+                      {isKa ? 'გასუფთავება' : 'Clear'}
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                  <span className="text-xs text-slate-500 font-medium">
+                    {isKa ? `ნაჩვენებია: ${registeredUsers.length} მომხმარებელი` : `Showing: ${registeredUsers.length} users`}
+                  </span>
+                </div>
+              </div>
+
+              {/* Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                      <th className="py-3.5 px-4">{isKa ? 'მომხმარებელი' : 'Customer'}</th>
+                      <th className="py-3.5 px-4">{isKa ? 'ელ-ფოსტა (Email)' : 'Email'}</th>
+                      <th className="py-3.5 px-4">{isKa ? 'მისამართი / ქალაქი' : 'Location & Address'}</th>
+                      <th className="py-3.5 px-4">{isKa ? 'რეგისტრაციის თარიღი' : 'Registered Date'}</th>
+                      <th className="py-3.5 px-4">{isKa ? 'როლი' : 'Role'}</th>
+                      <th className="py-3.5 px-4">{isKa ? 'შეკვეთები' : 'Orders'}</th>
+                      <th className="py-3.5 px-4">{isKa ? 'პაროლის სტატუსი' : 'Password Status'}</th>
+                      <th className="py-3.5 px-4 text-right">{isKa ? 'მოქმედება' : 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {registeredUsers
+                      .filter(u => {
+                        if (!userSearch.trim()) return true;
+                        const query = userSearch.toLowerCase().trim();
+                        return (
+                          u.name?.toLowerCase().includes(query) ||
+                          u.email?.toLowerCase().includes(query) ||
+                          u.city?.toLowerCase().includes(query) ||
+                          u.country?.toLowerCase().includes(query) ||
+                          u.phone?.toLowerCase().includes(query)
+                        );
+                      })
+                      .map((u, idx) => {
+                        const isPrimaryAdmin = u.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' || u.role === 'admin';
+                        const userOrdersCount = orders.filter(o => o.email?.toLowerCase().trim() === u.email?.toLowerCase().trim()).length;
+                        const initials = u.name ? u.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U';
+
+                        return (
+                          <tr key={u.email || idx} className="hover:bg-slate-50/60 transition-colors">
+                            {/* User Name + Avatar */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center space-x-3">
+                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                                  isPrimaryAdmin 
+                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
+                                    : 'bg-blue-100 text-blue-700 border border-blue-200'
+                                }`}>
+                                  {initials}
+                                </div>
+                                <div className="min-w-0">
+                                  <p className="font-bold text-slate-900 truncate">{u.name}</p>
+                                  {u.phone && <p className="text-[11px] text-slate-400 font-mono">{u.phone}</p>}
+                                </div>
+                              </div>
+                            </td>
+
+                            {/* Email */}
+                            <td className="py-3.5 px-4">
+                              <div className="flex items-center space-x-1.5">
+                                <span className="font-mono text-xs font-semibold text-slate-800 select-all">
+                                  {u.email}
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(u.email);
+                                    setCopiedEmail(u.email);
+                                    setTimeout(() => setCopiedEmail(null), 2000);
+                                    addToast(isKa ? 'ელ-ფოსტა დაკოპირდა' : 'Email copied to clipboard', 'info');
+                                  }}
+                                  className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                  title="Copy Email"
+                                >
+                                  {copiedEmail === u.email ? (
+                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                  ) : (
+                                    <span className="text-[10px] px-1 py-0.5 bg-slate-100 rounded text-slate-600 hover:bg-slate-200">Copy</span>
+                                  )}
+                                </button>
+                              </div>
+                            </td>
+
+                            {/* Location & Address */}
+                            <td className="py-3.5 px-4 max-w-[200px]">
+                              <p className="text-slate-900 font-medium truncate">
+                                {[u.city, u.country].filter(Boolean).join(', ') || 'Tbilisi, Georgia'}
+                              </p>
+                              {u.address && (
+                                <p className="text-[11px] text-slate-400 truncate" title={u.address}>
+                                  {u.address}
+                                </p>
+                              )}
+                            </td>
+
+                            {/* Registered Date */}
+                            <td className="py-3.5 px-4 text-slate-600 text-xs">
+                              {u.createdAt ? new Date(u.createdAt).toLocaleDateString(language === 'ka' ? 'ka-GE' : 'en-US', {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              }) : '—'}
+                            </td>
+
+                            {/* Role */}
+                            <td className="py-3.5 px-4">
+                              {isPrimaryAdmin ? (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                  👑 {isKa ? 'ადმინისტრატორი' : 'Admin'}
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                  👤 {isKa ? 'მომხმარებელი' : 'Customer'}
+                                </span>
+                              )}
+                            </td>
+
+                            {/* Orders Placed */}
+                            <td className="py-3.5 px-4">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold ${
+                                userOrdersCount > 0 ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-slate-400'
+                              }`}>
+                                {userOrdersCount} {isKa ? 'შეკვეთა' : 'orders'}
+                              </span>
+                            </td>
+
+                            {/* Password Status (Strictly Hidden & Protected) */}
+                            <td className="py-3.5 px-4">
+                              <div className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                                <Lock className="w-3 h-3 text-emerald-600" />
+                                <span>{isKa ? '🔒 დაშიფრული (არ ჩანს)' : '🔒 Encrypted (Hidden)'}</span>
+                              </div>
+                            </td>
+
+                            {/* Actions */}
+                            <td className="py-3.5 px-4 text-right">
+                              {isPrimaryAdmin ? (
+                                <span className="text-[11px] text-slate-400 font-semibold italic">
+                                  {isKa ? 'დაცული ანგარიში' : 'Protected Admin'}
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => setUserToDelete(u.email)}
+                                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                  title={isKa ? 'მომხმარებლის წაშლა' : 'Delete user'}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                    {registeredUsers.length === 0 && (
+                      <tr>
+                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                          <Users className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                          <p className="font-bold text-slate-600">
+                            {isKa ? 'დარეგისტრირებული მომხმარებლები არ მოიძებნა' : 'No registered users found'}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {isKa 
+                              ? 'ახალი მომხმარებლები რეგისტრაციისთანავე ავტომატურად გამოჩნდებიან ამ სიაში.'
+                              : 'Newly registered users will appear here automatically.'}
+                          </p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -2327,6 +2623,55 @@ export const AdminDashboard: React.FC = () => {
           updateTheme({ logoStyle: newId });
         }}
       />
+
+      {/* Delete User Confirmation Modal */}
+      {userToDelete && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center space-x-3 mb-4">
+              <div className="p-3 rounded-2xl bg-red-50 text-red-600 border border-red-200">
+                <Trash2 className="w-6 h-6" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-slate-900">
+                  {isKa ? 'მომხმარებლის წაშლა' : 'Delete User Account'}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {userToDelete}
+                </p>
+              </div>
+            </div>
+
+            <p className="text-xs text-slate-600 mb-6">
+              {isKa 
+                ? 'დარწმუნებული ხართ, რომ გსურთ ამ მომხმარებლის ანგარიშის წაშლა? მომხმარებელი ვეღარ შეძლებს ძველი პაროლით შესვლას.'
+                : 'Are you sure you want to delete this registered user account? The user will no longer be able to log in with their existing credentials.'}
+            </p>
+
+            <div className="flex justify-end space-x-2">
+              <button
+                type="button"
+                onClick={() => setUserToDelete(null)}
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+              >
+                {isKa ? 'გაუქმება' : 'Cancel'}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (userToDelete) {
+                    deleteRegisteredUser(userToDelete);
+                    setUserToDelete(null);
+                  }
+                }}
+                className="px-5 py-2.5 rounded-xl bg-red-600 hover:bg-red-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+              >
+                {isKa ? 'დიახ, წაშლა' : 'Yes, Delete Account'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
