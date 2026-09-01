@@ -130,6 +130,11 @@ interface StoreContextType {
   // User Authentication
   user: User;
   adminPassword?: string;
+  adminSecretSlug: string;
+  updateAdminSecretSlug: (newSlug: string) => boolean;
+  generateRandomAdminSlug: () => string;
+  getAdminUrl: () => string;
+  copyAdminUrl: () => void;
   loginUser: (email: string, name?: string, password?: string) => boolean;
   demoLogin: () => void;
   logoutUser: () => void;
@@ -179,7 +184,29 @@ const defaultUser: User = {
   role: 'customer',
 };
 
-const parseRouteFromLocation = (pathname: string): { page: PageView; productId: string | null } => {
+const generateCryptoSecretSlug = () => {
+  const chars = 'abcdefghjkmnpqrstuvwxyz23456789';
+  let token = '';
+  for (let i = 0; i < 18; i++) {
+    token += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `portal-sec-${token}`;
+};
+
+const getStoredSecretSlug = (): string => {
+  if (typeof window === 'undefined') return 'portal-sec-9a84f1b2c7e09843';
+  const saved = localStorage.getItem('dbuy_admin_secret_slug');
+  if (saved && saved.trim().length >= 4) return saved.trim();
+  const generated = generateCryptoSecretSlug();
+  localStorage.setItem('dbuy_admin_secret_slug', generated);
+  return generated;
+};
+
+const parseRouteFromLocation = (
+  pathname: string,
+  secretSlug?: string,
+  isUserAdmin?: boolean
+): { page: PageView; productId: string | null; isCloaked?: boolean } => {
   const clean = pathname.replace(/^\/+|\/+$/g, '');
   const lower = clean.toLowerCase();
   if (!clean || lower === 'home') {
@@ -189,9 +216,24 @@ const parseRouteFromLocation = (pathname: string): { page: PageView; productId: 
     const rawId = clean.split('/')[1] || null;
     return { page: 'product', productId: rawId };
   }
-  if (lower === 'admin' || lower.startsWith('admin/')) {
+
+  const activeSlug = (secretSlug || getStoredSecretSlug()).toLowerCase();
+
+  // Match Secret Stealth Admin Gateway URL
+  if (lower === activeSlug || lower === `admin/${activeSlug}` || lower === `portal/${activeSlug}`) {
     return { page: 'admin', productId: null };
   }
+
+  // Legacy/Default Admin paths (e.g. /admin, /administrator)
+  if (lower === 'admin' || lower === 'administrator' || lower.startsWith('admin/')) {
+    // If user is already authenticated as admin
+    if (activeSlug === 'admin' || isUserAdmin) {
+      return { page: 'admin', productId: null };
+    }
+    // Stealth Cloaking Honeypot: Block public scan, redirect to home
+    return { page: 'home', productId: null, isCloaked: true };
+  }
+
   if (lower === 'about') return { page: 'about', productId: null };
   if (lower === 'contact') return { page: 'contact', productId: null };
   if (lower === 'privacy') return { page: 'privacy', productId: null };
@@ -204,17 +246,66 @@ const parseRouteFromLocation = (pathname: string): { page: PageView; productId: 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Multi-language State
+  const [language, setLanguageState] = useState<Language>(() => {
+    const saved = localStorage.getItem('dbuy_lang');
+    return (saved as Language) || 'ka';
+  });
+
+  const setLanguage = (lang: Language) => {
+    setLanguageState(lang);
+    localStorage.setItem('dbuy_lang', lang);
+  };
+
+  // Toast Notifications
+  const [toasts, setToasts] = useState<ToastMessage[]>([]);
+
+  const removeToast = (id: string) => {
+    setToasts(prev => prev.filter(t => t.id !== id));
+  };
+
+  const addToast = (message: string, type: ToastMessage['type'] = 'success') => {
+    const id = 'toast-' + Math.random().toString(36).substr(2, 9);
+    setToasts(prev => [...prev.slice(-3), { id, message, type }]);
+
+    setTimeout(() => {
+      removeToast(id);
+    }, 4000);
+  };
+
+  // Translation helper
+  const t = (key: string, params?: Record<string, string | number>): string => {
+    const dict = translations[language] || translations['en'];
+    let text = dict[key] || translations['en']?.[key];
+
+    if (!text) {
+      const cleanKey = key.includes('.') ? key.split('.').pop() || key : key;
+      text = cleanKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+    }
+
+    if (params) {
+      Object.entries(params).forEach(([paramKey, value]) => {
+        text = text.replace(new RegExp(`{${paramKey}}`, 'g'), String(value));
+      });
+    }
+
+    return text;
+  };
+
+  // Secret Stealth Admin Slug
+  const [adminSecretSlug, setAdminSecretSlug] = useState<string>(() => getStoredSecretSlug());
+
   // Page & Deep Link Routing
   const [currentPage, setCurrentPageState] = useState<PageView>(() => {
     if (typeof window !== 'undefined') {
-      return parseRouteFromLocation(window.location.pathname).page;
+      return parseRouteFromLocation(window.location.pathname, getStoredSecretSlug()).page;
     }
     return 'home';
   });
 
   const [activeProductId, setActiveProductId] = useState<string | null>(() => {
     if (typeof window !== 'undefined') {
-      return parseRouteFromLocation(window.location.pathname).productId;
+      return parseRouteFromLocation(window.location.pathname, getStoredSecretSlug()).productId;
     }
     return null;
   });
@@ -222,14 +313,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Sync with browser back / forward navigation
   useEffect(() => {
     const handlePopState = () => {
-      const route = parseRouteFromLocation(window.location.pathname);
+      const route = parseRouteFromLocation(window.location.pathname, adminSecretSlug);
       setCurrentPageState(route.page);
       setActiveProductId(route.productId);
+      if (route.isCloaked) {
+        addToast(
+          language === 'ka' 
+            ? '🛡️ Stealth დაცვა: /admin მისამართი დაბლოკილია უსაფრთხოების ფაირვოლით.' 
+            : '🛡️ Stealth Defense: Public /admin route is cloaked & protected.',
+          'warning'
+        );
+      }
     };
 
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [adminSecretSlug, language]);
 
   const setCurrentPage = (page: PageView) => {
     setCurrentPageState(page);
@@ -239,6 +338,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setActiveProductId(null);
     } else if (page === 'product') {
       targetPath = activeProductId ? `/product/${activeProductId}` : '/';
+    } else if (page === 'admin') {
+      targetPath = `/${adminSecretSlug}`;
+      setActiveProductId(null);
     } else {
       targetPath = `/${page}`;
       setActiveProductId(null);
@@ -295,50 +397,80 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  // Multi-language
-  const [language, setLanguageState] = useState<Language>(() => {
-    const saved = localStorage.getItem('dbuy_lang');
-    return (saved as Language) || 'ka';
-  });
-
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    localStorage.setItem('dbuy_lang', lang);
-  };
-
-  // Toast Notifications
-  const [toasts, setToasts] = useState<ToastMessage[]>([]);
-
-  const removeToast = (id: string) => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  };
-
-  const addToast = (message: string, type: ToastMessage['type'] = 'success') => {
-    const id = 'toast-' + Math.random().toString(36).substr(2, 9);
-    setToasts(prev => [...prev.slice(-3), { id, message, type }]);
-
-    setTimeout(() => {
-      removeToast(id);
-    }, 4000);
-  };
-
-  // Translation helper
-  const t = (key: string, params?: Record<string, string | number>): string => {
-    const dict = translations[language] || translations['en'];
-    let text = dict[key] || translations['en']?.[key];
-
-    if (!text) {
-      // Fallback: strip namespace prefixes like "footer." or "nav."
-      const cleanKey = key.includes('.') ? key.split('.').pop() || key : key;
-      text = cleanKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
+  const getAdminUrl = (): string => {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}/${adminSecretSlug}`;
     }
+    return `/${adminSecretSlug}`;
+  };
 
-    if (params) {
-      Object.entries(params).forEach(([paramKey, paramVal]) => {
-        text = text.replace(new RegExp(`\\{${paramKey}\\}`, 'g'), String(paramVal));
+  const copyAdminUrl = () => {
+    const url = getAdminUrl();
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(url).then(() => {
+        addToast(
+          language === 'ka' 
+            ? '🔐 საიდუმლო ადმინ URL დაკოპირდა!' 
+            : '🔐 Secret Admin URL copied to clipboard!', 
+          'success'
+        );
+      }).catch(() => {
+        addToast(url, 'info');
       });
+    } else {
+      addToast(url, 'info');
     }
-    return text;
+  };
+
+  const updateAdminSecretSlug = (newSlug: string): boolean => {
+    const sanitized = newSlug.trim().toLowerCase().replace(/[^a-z0-9-_]/g, '');
+    if (sanitized.length < 5) {
+      addToast(
+        language === 'ka' 
+          ? 'URL slug უნდა შეიცავდეს მინიმუმ 5 სიმბოლოს' 
+          : 'URL slug must be at least 5 characters', 
+        'warning'
+      );
+      return false;
+    }
+    if (['home', 'about', 'contact', 'privacy', 'returns', 'guarantee', 'my-orders', 'product', 'api'].includes(sanitized)) {
+      addToast(
+        language === 'ka' 
+          ? 'ეს მისამართი დაცულია სისტემის მიერ' 
+          : 'This path is reserved by the system', 
+        'error'
+      );
+      return false;
+    }
+
+    setAdminSecretSlug(sanitized);
+    localStorage.setItem('dbuy_admin_secret_slug', sanitized);
+    if (currentPage === 'admin' && typeof window !== 'undefined') {
+      window.history.replaceState({ page: 'admin' }, '', `/${sanitized}`);
+    }
+    addToast(
+      language === 'ka' 
+        ? '🔐 საიდუმლო ადმინ URL წარმატებით განახლდა!' 
+        : '🔐 Secret Admin URL updated successfully!', 
+      'success'
+    );
+    return true;
+  };
+
+  const generateRandomAdminSlug = (): string => {
+    const generated = generateCryptoSecretSlug();
+    setAdminSecretSlug(generated);
+    localStorage.setItem('dbuy_admin_secret_slug', generated);
+    if (currentPage === 'admin' && typeof window !== 'undefined') {
+      window.history.replaceState({ page: 'admin' }, '', `/${generated}`);
+    }
+    addToast(
+      language === 'ka' 
+        ? '🎲 ახალი კრიპტოგრაფიული საიდუმლო ადმინ URL გენერირდა!' 
+        : '🎲 New high-entropy secret Admin URL generated!', 
+      'success'
+    );
+    return generated;
   };
 
   // Multi-currency
@@ -1250,6 +1382,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setBillboardIntervalSeconds,
         user,
         adminPassword,
+        adminSecretSlug,
+        updateAdminSecretSlug,
+        generateRandomAdminSlug,
+        getAdminUrl,
+        copyAdminUrl,
         loginUser,
         demoLogin,
         logoutUser,

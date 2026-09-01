@@ -35,7 +35,10 @@ import {
   SlidersHorizontal,
   Sliders,
   KeyRound,
-  ShieldAlert
+  ShieldAlert,
+  Copy,
+  RefreshCw,
+  Key
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -63,6 +66,11 @@ export const AdminDashboard: React.FC = () => {
     navigateToProduct,
     copyProductUrl,
     getProductUrl,
+    adminSecretSlug,
+    updateAdminSecretSlug,
+    generateRandomAdminSlug,
+    getAdminUrl,
+    copyAdminUrl,
     formatPrice,
     addToast,
     analyticsData,
@@ -79,6 +87,15 @@ export const AdminDashboard: React.FC = () => {
   } = useStore();
 
   const isKa = language === 'ka';
+
+  // Secret Slug Management
+  const [slugInputValue, setSlugInputValue] = useState(adminSecretSlug);
+  const [isCopiedSlugUrl, setIsCopiedSlugUrl] = useState(false);
+
+  // Sync slug input value with store
+  React.useEffect(() => {
+    setSlugInputValue(adminSecretSlug);
+  }, [adminSecretSlug]);
 
   // Password Login Gate State for non-logged in or non-admin users
   const [pinInput, setPinInput] = useState('');
@@ -1800,6 +1817,142 @@ export const AdminDashboard: React.FC = () => {
         {/* TAB 5: SECURITY & PASSWORD SETTINGS */}
         {activeTab === 'security' && (
           <div className="space-y-6">
+            
+            {/* 1. SECRET STEALTH ADMIN GATEWAY & CLOAKING FIREWALL */}
+            <div className="bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950 rounded-3xl border border-indigo-900/50 shadow-xl p-6 sm:p-8 text-white">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-800 mb-6">
+                <div className="flex items-center space-x-3.5">
+                  <div className="p-3 rounded-2xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30">
+                    <Key className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-base font-black text-white">
+                        {isKa ? '🔐 საიდუმლო ადმინ URL და Stealth Firewall' : '🔐 Secret Admin Gateway & Stealth Firewall'}
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 flex items-center space-x-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>{isKa ? 'აქტიურია & დაცულია' : 'Active & Stealth Protected'}</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      {isKa 
+                        ? 'საჯარო /admin ბმული სრულად დაბლოკილია. ადმინ პანელში შესასვლელად გამოიყენეთ მხოლოდ თქვენი პირადი საიდუმლო URL.' 
+                        : 'Public /admin route is completely cloaked & firewalled. Access is restricted exclusively to your unique secret gateway URL.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      copyAdminUrl();
+                      setIsCopiedSlugUrl(true);
+                      setTimeout(() => setIsCopiedSlugUrl(false), 2500);
+                    }}
+                    className="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold shadow-lg transition-all flex items-center space-x-2 cursor-pointer"
+                  >
+                    {isCopiedSlugUrl ? <Check className="w-4 h-4 text-emerald-300" /> : <Copy className="w-4 h-4" />}
+                    <span>{isCopiedSlugUrl ? (isKa ? 'დაკოპირდა!' : 'Copied!') : (isKa ? 'საიდუმლო URL-ის კოპირება' : 'Copy Secret Gateway URL')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const newSlug = generateRandomAdminSlug();
+                      setSlugInputValue(newSlug);
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold border border-slate-700 transition-colors flex items-center space-x-1.5 cursor-pointer"
+                    title={isKa ? 'ახალი შემთხვევითი კრიპტოგრაფიული URL-ის გენერირება' : 'Generate new cryptographic high-entropy slug'}
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" />
+                    <span>{isKa ? 'ახალი კოდი' : 'Generate Token'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Active Gateway URL Display & Customizer */}
+              <div className="bg-slate-950/80 border border-slate-800/90 rounded-2xl p-5 space-y-4">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <p className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
+                      {isKa ? 'მიმდინარე უნიკალური საიდუმლო მისამართი (Full Gateway URL)' : 'Current Active Secret Gateway URL'}
+                    </p>
+                    <p className="text-xs sm:text-sm font-mono font-bold text-white break-all bg-slate-900 px-3.5 py-2 rounded-xl border border-slate-800 select-all">
+                      {getAdminUrl()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Custom Slug Input */}
+                <div className="pt-3 border-t border-slate-800/80">
+                  <label className="block text-xs font-bold text-slate-300 mb-1.5">
+                    {isKa ? 'მისამართის Slug-ის მორგება (Customize Secret Slug):' : 'Customize Secret Slug:'}
+                  </label>
+                  <div className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                    <span className="text-xs font-mono text-slate-500 select-none hidden sm:inline">
+                      {typeof window !== 'undefined' ? `${window.location.origin}/` : '/'}
+                    </span>
+                    <input
+                      type="text"
+                      value={slugInputValue}
+                      onChange={e => setSlugInputValue(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
+                      placeholder="e.g. portal-sec-9x8f7"
+                      className="flex-1 px-3.5 py-2 text-xs font-mono bg-slate-900 border border-slate-700 rounded-xl text-indigo-200 focus:ring-2 focus:ring-indigo-500 focus:outline-hidden"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateAdminSecretSlug(slugInputValue)}
+                      disabled={slugInputValue.trim() === adminSecretSlug}
+                      className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-indigo-600 disabled:opacity-40 text-white text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      {isKa ? 'შენახვა' : 'Save Slug'}
+                    </button>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-1.5">
+                    {isKa 
+                      ? '💡 რჩევა: შეინახეთ ეს მისამართი თქვენს ბრაუზერის Bookmark-ებში. საჯარო /admin ბმულით საიტზე ვერავინ შემოვა.'
+                      : '💡 Tip: Bookmark this private URL in your browser. Public bots attempting to scan /admin are instantly cloaked and redirected.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Stealth Defense Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
+                <div className="p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80 space-y-1">
+                  <div className="flex items-center space-x-1.5 text-emerald-400 text-xs font-bold">
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    <span>{isKa ? 'Stealth Honeypot' : 'Stealth Honeypot'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    {isKa ? '/admin და /administrator ბმულები გადამისამართებულია მაღაზიაზე.' : 'Scanners trying /admin are cloaked and sent to storefront.'}
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80 space-y-1">
+                  <div className="flex items-center space-x-1.5 text-indigo-400 text-xs font-bold">
+                    <Lock className="w-3.5 h-3.5" />
+                    <span>{isKa ? 'Entropy 2^128 Token' : 'High Entropy Token'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    {isKa ? 'უნიკალური 18-სიმბოლოიანი კოდი შეუძლებელს ხდის გამოცნობას.' : 'Cryptographic pseudo-random tokens prevent URL guessing.'}
+                  </p>
+                </div>
+
+                <div className="p-3.5 rounded-xl bg-slate-950/50 border border-slate-800/80 space-y-1">
+                  <div className="flex items-center space-x-1.5 text-amber-400 text-xs font-bold">
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>{isKa ? 'Session Shield' : 'Session Shield'}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400">
+                    {isKa ? 'მოითხოვს დაცულ პაროლს lashaarsiashvili@gmail.com ექაუნთისთვის.' : 'Enforces cryptographic authentication for admin account.'}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* 2. ADMINISTRATOR PASSWORD MANAGEMENT */}
             <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8">
               <div className="flex items-center space-x-3 pb-5 border-b border-slate-100 mb-6">
                 <div className="p-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200">
