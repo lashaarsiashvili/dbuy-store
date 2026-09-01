@@ -747,9 +747,14 @@ export const AdminDashboard: React.FC = () => {
                 </p>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
               </div>
-              <h3 className="text-lg font-black text-slate-900">
-                {analyticsData.totalVisitorsToday} <span className="text-xs font-normal text-slate-400">{isKa ? 'ვიზიტორი' : 'visitors'}</span>
-              </h3>
+              <div className="flex items-baseline space-x-2">
+                <h3 className="text-lg font-black text-slate-900">
+                  {analyticsData.totalVisitorsToday} <span className="text-xs font-normal text-slate-400">{isKa ? 'ვიზიტორი' : 'visitors'}</span>
+                </h3>
+              </div>
+              <span className="text-[10px] text-emerald-600 font-semibold flex items-center space-x-1">
+                <span>🛡️ {isKa ? 'თქვენი ვიზიტები არ ითვლება' : 'Admin excluded'}</span>
+              </span>
             </div>
           </div>
 

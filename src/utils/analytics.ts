@@ -140,6 +140,79 @@ export async function fetchLiveGeoLocation(): Promise<{ country: string; code: s
 }
 
 const STORAGE_KEY = 'dbuy_analytics_visitor_logs';
+const EXCLUDE_ADMIN_KEY = 'dbuy_exclude_my_visits';
+const ADMIN_DEVICE_KEY = 'dbuy_is_admin_device';
+
+/**
+ * Checks if the current browser/device is configured to be excluded from analytics
+ * (e.g. Admin/Owner visits, logged-in administrators, or explicitly excluded devices).
+ */
+export function isExcludedAdminDevice(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const explicitSetting = localStorage.getItem(EXCLUDE_ADMIN_KEY);
+    if (explicitSetting === 'true') return true;
+    if (explicitSetting === 'false') return false;
+
+    // Check if device was previously marked as an admin device
+    if (localStorage.getItem(ADMIN_DEVICE_KEY) === 'true') return true;
+
+    // Check if user is logged in as admin in local storage
+    const rawUser = localStorage.getItem('dbuy_user');
+    if (rawUser) {
+      const u = JSON.parse(rawUser);
+      if (
+        u?.role === 'admin' ||
+        u?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+        u?.email?.toLowerCase().trim() === 'admin@dbuy.com'
+      ) {
+        return true;
+      }
+    }
+
+    // Check active session storage for admin session
+    if (sessionStorage.getItem('dbuy_admin_session') === 'true') {
+      return true;
+    }
+  } catch {
+    // Ignore storage parse errors
+  }
+  return false;
+}
+
+/**
+ * Permanently marks or unmarks the current browser device as an admin device
+ */
+export function setAdminDeviceExclusion(exclude: boolean): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(EXCLUDE_ADMIN_KEY, exclude ? 'true' : 'false');
+    if (exclude) {
+      localStorage.setItem(ADMIN_DEVICE_KEY, 'true');
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+/**
+ * Cleans out any internal admin visits or test pages from logs
+ */
+export function filterOutAdminLogs(logs: VisitorLog[]): VisitorLog[] {
+  if (!Array.isArray(logs)) return [];
+  return logs.filter(l => {
+    if (!l) return false;
+    const pageLower = (l.page || '').toLowerCase();
+    if (pageLower.includes('admin') || pageLower.includes('dashboard') || pageLower.includes('portal-sec')) {
+      return false;
+    }
+    // Remove mock legacy ids if any
+    if (l.id?.startsWith('v_2026-') && l.id.length <= 25) {
+      return false;
+    }
+    return true;
+  });
+}
 
 export function loadVisitorLogs(): VisitorLog[] {
   if (typeof localStorage === 'undefined') return [];
@@ -149,9 +222,8 @@ export function loadVisitorLogs(): VisitorLog[] {
       return [];
     }
     const parsed = JSON.parse(raw);
-    // If it contains legacy mock ids (v_2026-...), filter them out to ensure clean real logs
     if (Array.isArray(parsed)) {
-      return parsed.filter((l: VisitorLog) => !l.id?.startsWith('v_2026-') || l.id.length > 25);
+      return filterOutAdminLogs(parsed);
     }
     return [];
   } catch {
@@ -162,8 +234,9 @@ export function loadVisitorLogs(): VisitorLog[] {
 export function saveVisitorLogs(logs: VisitorLog[]): void {
   if (typeof localStorage === 'undefined') return;
   try {
+    const cleanLogs = filterOutAdminLogs(logs);
     // Keep at most 2000 recent logs to keep storage light
-    const trimmed = logs.slice(0, 2000);
+    const trimmed = cleanLogs.slice(0, 2000);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
   } catch (err) {
     console.error('Failed to save visitor logs', err);
@@ -172,8 +245,20 @@ export function saveVisitorLogs(logs: VisitorLog[]): void {
 
 export function logNewVisitor(
   geo: { country: string; code: string; city: string; flag: string },
-  pageName: string = 'Storefront (Home)'
-): VisitorLog {
+  pageName: string = 'Storefront (Home)',
+  forceLog: boolean = false
+): VisitorLog | null {
+  // If this device is the admin's device or excluded, do NOT record any visit!
+  if (!forceLog && isExcludedAdminDevice()) {
+    return null;
+  }
+
+  // Never record admin dashboard pages
+  const pageLower = pageName.toLowerCase();
+  if (!forceLog && (pageLower.includes('admin') || pageLower.includes('portal-sec'))) {
+    return null;
+  }
+
   const currentLogs = loadVisitorLogs();
   const now = new Date();
   const { browser, device } = getBrowserInfo();

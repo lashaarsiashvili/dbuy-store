@@ -25,7 +25,10 @@ import {
   logNewVisitor, 
   computeAnalytics, 
   fetchLiveGeoLocation, 
-  detectLocalCountry 
+  detectLocalCountry,
+  isExcludedAdminDevice,
+  setAdminDeviceExclusion,
+  filterOutAdminLogs
 } from '../utils/analytics';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
 
@@ -165,6 +168,9 @@ interface StoreContextType {
   recordVisit: (pageName?: string) => void;
   clearAnalytics: () => void;
   simulateVisitor: (countryName?: string, code?: string, flag?: string, city?: string) => void;
+  excludeAdminVisits: boolean;
+  setExcludeAdminVisits: (exclude: boolean) => void;
+  purgeAdminLogs: () => void;
 }
 
 const defaultTheme: ThemeSettings = {
@@ -1250,6 +1256,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return loadVisitorLogs();
   });
 
+  const [excludeAdminVisits, setExcludeAdminVisitsState] = useState<boolean>(() => {
+    return isExcludedAdminDevice();
+  });
+
   const [currentGeo, setCurrentGeo] = useState(() => detectLocalCountry());
 
   // Detect real visitor geo asynchronously upon boot
@@ -1265,30 +1275,105 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
   }, []);
 
-  // Track page visits
+  // When admin role, email, or admin page is detected, ensure device is excluded
+  useEffect(() => {
+    if (
+      isAdmin ||
+      user.role === 'admin' ||
+      user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+      user.email?.toLowerCase().trim() === 'admin@dbuy.com' ||
+      currentPage === 'admin'
+    ) {
+      setAdminDeviceExclusion(true);
+      setExcludeAdminVisitsState(true);
+    }
+  }, [isAdmin, user.role, user.email, currentPage]);
+
+  const setExcludeAdminVisits = (exclude: boolean) => {
+    setExcludeAdminVisitsState(exclude);
+    setAdminDeviceExclusion(exclude);
+    if (exclude) {
+      setVisitorLogs(prev => filterOutAdminLogs(prev));
+      saveVisitorLogs(filterOutAdminLogs(visitorLogs));
+      addToast(
+        language === 'ka'
+          ? 'ადმინისტრატორის ვიზიტების იგნორირება ჩართულია — თქვენი შესვლები აღარ აღირიცხება'
+          : 'Admin visit exclusion enabled — your visits will not be counted in analytics',
+        'success'
+      );
+    } else {
+      addToast(
+        language === 'ka'
+          ? 'ადმინისტრატორის ვიზიტების იგნორირება გათიშულია'
+          : 'Admin visit exclusion disabled',
+        'info'
+      );
+    }
+  };
+
+  const purgeAdminLogs = () => {
+    const cleaned = filterOutAdminLogs(visitorLogs);
+    setVisitorLogs(cleaned);
+    saveVisitorLogs(cleaned);
+    addToast(
+      language === 'ka'
+        ? 'ადმინის ძველი ჩანაწერები და ტესტ-ვიზიტები გასუფთავებულია'
+        : 'Admin test visits and internal logs cleaned from analytics',
+      'success'
+    );
+  };
+
+  // Track page visits (Strictly filters out Admin & Owner devices)
   const recordVisit = (pageName: string = 'Storefront (Home)') => {
     try {
+      const isCurrentAdmin =
+        isAdmin ||
+        user.role === 'admin' ||
+        user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+        user.email?.toLowerCase().trim() === 'admin@dbuy.com' ||
+        currentPage === 'admin' ||
+        excludeAdminVisits ||
+        isExcludedAdminDevice();
+
+      if (isCurrentAdmin) {
+        // Skip recording for admin / owner visits
+        return;
+      }
+
       const newLog = logNewVisitor(currentGeo, pageName);
-      setVisitorLogs(prev => [newLog, ...prev]);
+      if (newLog) {
+        setVisitorLogs(prev => [newLog, ...prev]);
+      }
     } catch (e) {
       console.error('Error logging visit', e);
     }
   };
 
-  // Record initial visit once per session
+  // Record initial visit once per session for real visitors
   useEffect(() => {
+    const isCurrentAdmin =
+      isAdmin ||
+      user.role === 'admin' ||
+      user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+      user.email?.toLowerCase().trim() === 'admin@dbuy.com' ||
+      currentPage === 'admin' ||
+      excludeAdminVisits ||
+      isExcludedAdminDevice();
+
+    if (isCurrentAdmin) return;
+
     const sessionVisited = sessionStorage.getItem('dbuy_session_logged');
     if (!sessionVisited) {
       sessionStorage.setItem('dbuy_session_logged', 'true');
       recordVisit('Storefront (Home)');
     }
-  }, [currentGeo]);
+  }, [currentGeo, isAdmin, user.role, user.email, currentPage, excludeAdminVisits]);
 
   const clearAnalytics = () => {
     const fresh: VisitorLog[] = [];
     setVisitorLogs(fresh);
     saveVisitorLogs(fresh);
-    addToast('Analytics traffic history cleared', 'info');
+    addToast(language === 'ka' ? 'ანალიტიკის ისტორია გასუფთავებულია' : 'Analytics traffic history cleared', 'info');
   };
 
   const simulateVisitor = (
@@ -1300,9 +1385,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const simGeo = { country: countryName, code, city, flag };
     const pages = ['Product Details', 'Storefront (Home)', 'Daily Deals', 'Checkout Page'];
     const randomPage = pages[Math.floor(Math.random() * pages.length)];
-    const log = logNewVisitor(simGeo, randomPage);
-    setVisitorLogs(prev => [log, ...prev]);
-    addToast(`New visitor tracked from ${flag} ${countryName}!`, 'success');
+    const log = logNewVisitor(simGeo, randomPage, true);
+    if (log) {
+      setVisitorLogs(prev => [log, ...prev]);
+    }
+    addToast(
+      language === 'ka' 
+        ? `დაფიქსირდა ახალი ვიზიტორი: ${flag} ${countryName}!` 
+        : `New visitor tracked from ${flag} ${countryName}!`, 
+      'success'
+    );
   };
 
   const analyticsData = useMemo(() => {
@@ -1426,6 +1518,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         recordVisit,
         clearAnalytics,
         simulateVisitor,
+        excludeAdminVisits,
+        setExcludeAdminVisits,
+        purgeAdminLogs,
       }}
     >
       {children}

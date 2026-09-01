@@ -13,11 +13,24 @@ import {
   Compass, 
   Activity, 
   CheckCircle2, 
-  Layers 
+  Layers,
+  ShieldCheck,
+  ShieldAlert,
+  EyeOff,
+  Sparkles,
+  Filter
 } from 'lucide-react';
 
 export const AdminAnalytics: React.FC = () => {
-  const { analyticsData, clearAnalytics, addToast, language } = useStore();
+  const { 
+    analyticsData, 
+    clearAnalytics, 
+    addToast, 
+    language, 
+    excludeAdminVisits, 
+    setExcludeAdminVisits, 
+    purgeAdminLogs 
+  } = useStore();
   const [timeFilter, setTimeFilter] = useState<'today' | 'all'>('today');
   const isKa = language === 'ka';
 
@@ -153,6 +166,70 @@ export const AdminAnalytics: React.FC = () => {
           >
             <RotateCcw className="w-4 h-4" />
           </button>
+        </div>
+      </div>
+
+      {/* Admin Visit Exclusion Status & Protection Banner */}
+      <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
+        excludeAdminVisits
+          ? 'bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-emerald-50/90 border-emerald-200 text-emerald-950'
+          : 'bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 border-amber-200 text-amber-950'
+      }`}>
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-start space-x-3.5">
+            <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
+              excludeAdminVisits ? 'bg-emerald-600 text-white shadow-xs' : 'bg-amber-600 text-white shadow-xs'
+            }`}>
+              {excludeAdminVisits ? <ShieldCheck className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
+            </div>
+            <div>
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <h4 className="text-sm font-black">
+                  {isKa 
+                    ? 'ადმინისტრატორის ვიზიტების ფილტრი' 
+                    : 'Administrator Visit Exclusion'}
+                </h4>
+                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
+                  excludeAdminVisits
+                    ? 'bg-emerald-100/90 text-emerald-800 border-emerald-300'
+                    : 'bg-amber-100/90 text-amber-800 border-amber-300'
+                }`}>
+                  {excludeAdminVisits 
+                    ? (isKa ? '✓ ჩართულია (ჩემი შესვლები არ ითვლება)' : '✓ Active (Your visits are excluded)') 
+                    : (isKa ? '⚠ გათიშულია' : '⚠ Inactive')}
+                </span>
+              </div>
+              <p className="text-xs opacity-90 max-w-2xl leading-relaxed">
+                {isKa
+                  ? 'სისტემა ავტომატურად აიდენტიფიცირებს თქვენს მოწყობილობას და ადმინ სესიას. თქვენი გვერდების დათვალიერება ანალიტიკაში არ ითვლება, რათა ზუსტად დაინახოთ მხოლოდ რეალური გარეშე მომხმარებლებისა და მყიდველების ნაკადი.'
+                  : 'The system recognizes your device and administrator credentials. Your page visits are not tracked so you see 100% genuine customer and visitor traffic.'}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2.5 self-start md:self-center shrink-0">
+            <button
+              onClick={purgeAdminLogs}
+              className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white/90 hover:bg-white text-slate-700 border border-slate-200/80 shadow-2xs transition-all cursor-pointer flex items-center space-x-1.5"
+              title={isKa ? 'ადმინის ძველი ჩანაწერების გასუფთავება' : 'Purge previous admin sessions'}
+            >
+              <EyeOff className="w-3.5 h-3.5 text-slate-500" />
+              <span>{isKa ? 'ადმინის ტესტების გასუფთავება' : 'Clean Admin Logs'}</span>
+            </button>
+
+            <button
+              onClick={() => setExcludeAdminVisits(!excludeAdminVisits)}
+              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs ${
+                excludeAdminVisits
+                  ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
+                  : 'bg-amber-700 hover:bg-amber-800 text-white'
+              }`}
+            >
+              {excludeAdminVisits
+                ? (isKa ? 'იგნორირება ჩართულია' : 'Exclusion: ON')
+                : (isKa ? 'ჩართე იგნორირება' : 'Enable Exclusion')}
+            </button>
+          </div>
         </div>
       </div>
 
