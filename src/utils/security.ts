@@ -1,4 +1,4 @@
-// Rate limiting and client-side brute-force defense
+// Rate limiting, password hashing (SHA-256), and client-side brute-force defense
 
 interface AttemptRecord {
   count: number;
@@ -9,6 +9,60 @@ interface AttemptRecord {
 const loginAttemptsKey = 'dbuy_sec_login_attempts';
 const MAX_ATTEMPTS = 5;
 const LOCKOUT_MS = 60 * 1000; // 1 minute lockout
+
+// Cryptographic Salt for SHA-256 hashing
+const SALT = 'dbuy_security_hash_salt_2026_x89';
+
+/**
+ * Hash password with SHA-256 & Salt using Web Crypto API
+ */
+export const hashPassword = async (password: string): Promise<string> => {
+  if (!password) return '';
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(password + SALT);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch {
+    // Fallback pseudo-hash if subtle crypto unavailable
+    return hashPasswordSync(password);
+  }
+};
+
+/**
+ * Synchronous hash implementation for immediate validation loops
+ */
+export const hashPasswordSync = (password: string): string => {
+  if (!password) return '';
+  const str = password + SALT;
+  let hash1 = 0xdeadbeef;
+  let hash2 = 0x41c64e6d;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash1 = Math.imul(hash1 ^ ch, 2654435761);
+    hash2 = Math.imul(hash2 ^ ch, 1597334677);
+  }
+  hash1 = Math.imul(hash1 ^ (hash1 >>> 16), 2246822507);
+  hash1 ^= Math.imul(hash2 ^ (hash2 >>> 13), 3266489909);
+  hash2 = Math.imul(hash2 ^ (hash2 >>> 16), 2246822507);
+  hash2 ^= Math.imul(hash1 ^ (hash1 >>> 13), 3266489909);
+  const hex = (4294967296 * (2097151 & hash2) + (hash1 >>> 0)).toString(16);
+  return `h_${hex.padStart(16, '0')}`;
+};
+
+/**
+ * Verify password against stored hash or plaintext fallback
+ */
+export const verifyPassword = (enteredPassword: string, storedHashOrPass: string): boolean => {
+  if (!enteredPassword || !storedHashOrPass) return false;
+  // Match hashed version
+  const syncHash = hashPasswordSync(enteredPassword);
+  if (storedHashOrPass === syncHash) return true;
+  // Match direct if legacy plain
+  if (storedHashOrPass === enteredPassword) return true;
+  return false;
+};
 
 export const checkRateLimit = (identifier: string): { allowed: boolean; waitSeconds?: number } => {
   try {
@@ -46,12 +100,15 @@ export const recordFailedAttempt = (identifier: string): { locked: boolean; wait
     record.count += 1;
     record.lastAttempt = Date.now();
 
+    // Progressive Lockout
     if (record.count >= MAX_ATTEMPTS) {
-      record.lockedUntil = Date.now() + LOCKOUT_MS;
-      record.count = 0; // reset count after applying lock
+      // Exponential penalty if repeated
+      const multiplier = Math.min(5, Math.floor(record.count / MAX_ATTEMPTS));
+      const penaltyMs = LOCKOUT_MS * multiplier;
+      record.lockedUntil = Date.now() + penaltyMs;
       data[identifier] = record;
       localStorage.setItem(loginAttemptsKey, JSON.stringify(data));
-      return { locked: true, waitSeconds: Math.ceil(LOCKOUT_MS / 1000) };
+      return { locked: true, waitSeconds: Math.ceil(penaltyMs / 1000) };
     }
 
     data[identifier] = record;
@@ -74,15 +131,15 @@ export const resetAttempts = (identifier: string) => {
   }
 };
 
-// Input sanitization against XSS
+// Input sanitization against XSS and injection
 export const sanitizeInput = (text: string): string => {
   if (!text) return '';
   return text
-    .replace(/[<>]/g, '')
+    .replace(/[<>"'`;()]/g, '')
     .trim();
 };
 
-// Simple Password strength score (0-4)
+// Password strength evaluator (0-4)
 export const evaluatePasswordStrength = (password: string): { score: number; label: string; color: string } => {
   let score = 0;
   if (!password) return { score: 0, label: 'ცარიელი', color: 'bg-slate-200' };

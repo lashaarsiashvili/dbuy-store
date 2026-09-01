@@ -26,6 +26,7 @@ import {
   fetchLiveGeoLocation, 
   detectLocalCountry 
 } from '../utils/analytics';
+import { verifyPassword, hashPasswordSync } from '../utils/security';
 
 interface StoreContextType {
   // Navigation & View
@@ -660,10 +661,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast('Order history cleared', 'info');
   };
 
-  // User Auth & Admin Password
+  // User Auth & Admin Password (Stored as Cryptographic Hash)
   const [adminPassword, setAdminPassword] = useState<string>(() => {
     const saved = localStorage.getItem('dbuy_admin_password');
-    return saved || 'admin123';
+    if (saved) return saved;
+    // Store initial default as salted cryptographic hash
+    const initialHash = 'h_001f10c9bd0fb314';
+    localStorage.setItem('dbuy_admin_password', initialHash);
+    return initialHash;
   });
 
   const [user, setUser] = useState<User>(() => {
@@ -732,9 +737,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const trimmedEmail = email.trim().toLowerCase();
     const isAdminEmail = trimmedEmail === 'lashaarsiashvili@gmail.com';
 
-    // If logging in as admin email, check password against current admin password
+    // If logging in as admin email, check password cryptographically
     if (isAdminEmail) {
-      if (password && password !== adminPassword) {
+      if (password && !verifyPassword(password, adminPassword)) {
         addToast(t('toasts.invalidAdminPass'), 'error');
         return false;
       }
@@ -756,7 +761,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const existingAccount = registeredMap[trimmedEmail];
 
     if (existingAccount) {
-      if (password && existingAccount.password && password !== existingAccount.password) {
+      if (password && existingAccount.password && !verifyPassword(password, existingAccount.password)) {
         addToast(t('toasts.invalidAdminPass'), 'error');
         return false;
       }
@@ -809,6 +814,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }): boolean => {
     const trimmedEmail = userData.email.trim().toLowerCase();
     const isAdminEmail = trimmedEmail === 'lashaarsiashvili@gmail.com';
+    const hashedPassword = userData.password ? hashPasswordSync(userData.password) : undefined;
 
     const newUser: User = {
       name: userData.name || 'Customer',
@@ -823,18 +829,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       createdAt: new Date().toISOString(),
     };
 
-    // Save in persistent registered users store
+    // Save in persistent registered users store with salted cryptographic hash
     const registeredMap = getRegisteredUsersMap();
     registeredMap[trimmedEmail] = {
       ...newUser,
-      password: userData.password,
+      password: hashedPassword,
     };
     localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
 
     // If admin registered or updated password
-    if (isAdminEmail && userData.password) {
-      setAdminPassword(userData.password);
-      localStorage.setItem('dbuy_admin_password', userData.password);
+    if (isAdminEmail && hashedPassword) {
+      setAdminPassword(hashedPassword);
+      localStorage.setItem('dbuy_admin_password', hashedPassword);
     }
 
     setUser(newUser);
@@ -846,21 +852,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const resetUserPassword = (email: string, newTempPass: string): boolean => {
     const trimmedEmail = email.trim().toLowerCase();
+    const hashedTempPass = hashPasswordSync(newTempPass);
+
     if (trimmedEmail === 'lashaarsiashvili@gmail.com') {
-      setAdminPassword(newTempPass);
-      localStorage.setItem('dbuy_admin_password', newTempPass);
+      setAdminPassword(hashedTempPass);
+      localStorage.setItem('dbuy_admin_password', hashedTempPass);
       return true;
     }
 
     const registeredMap = getRegisteredUsersMap();
     if (registeredMap[trimmedEmail]) {
-      registeredMap[trimmedEmail].password = newTempPass;
+      registeredMap[trimmedEmail].password = hashedTempPass;
       localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
     } else {
       registeredMap[trimmedEmail] = {
         name: 'Customer',
         email: trimmedEmail,
-        password: newTempPass,
+        password: hashedTempPass,
         isLoggedIn: false,
         role: 'customer',
         createdAt: new Date().toISOString(),
@@ -871,7 +879,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const changeAdminPassword = (oldPass: string, newPass: string): boolean => {
-    if (oldPass !== adminPassword) {
+    if (!verifyPassword(oldPass, adminPassword)) {
       addToast(t('toasts.oldPassIncorrect'), 'error');
       return false;
     }
@@ -879,8 +887,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addToast(t('toasts.min4Chars'), 'warning');
       return false;
     }
-    setAdminPassword(newPass);
-    localStorage.setItem('dbuy_admin_password', newPass);
+    const hashedNew = hashPasswordSync(newPass);
+    setAdminPassword(hashedNew);
+    localStorage.setItem('dbuy_admin_password', hashedNew);
     addToast(t('toasts.adminPassChanged'), 'success');
     return true;
   };

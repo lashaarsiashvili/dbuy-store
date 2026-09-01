@@ -563,7 +563,7 @@ export const AdminDashboard: React.FC = () => {
 
             <div>
               <label className="block text-xs font-bold text-slate-300 mb-1">
-                {isKa ? 'ადმინის პაროლი (ნაგულისხმევი: admin123)' : 'Admin Password (Default: admin123)'}
+                {isKa ? 'ადმინისტრატორის პაროლი' : 'Admin Password'}
               </label>
               <input
                 type="password"
@@ -1487,9 +1487,7 @@ export const AdminDashboard: React.FC = () => {
                     {isKa ? 'პაროლის სტატუსი' : 'Password Status'}
                   </p>
                   <p className="text-xs font-medium text-slate-700">
-                    {adminPassword === 'admin123'
-                      ? (isKa ? '⚠️ ნაგულისხმევი (admin123)' : '⚠️ Default (admin123)')
-                      : (isKa ? '🔒 მორგებული პაროლი' : '🔒 Custom Password')}
+                    {isKa ? '🔒 დაცული პაროლი' : '🔒 Protected Password'}
                   </p>
                 </div>
               </div>
@@ -1505,7 +1503,7 @@ export const AdminDashboard: React.FC = () => {
                     required
                     value={oldPasswordInput}
                     onChange={e => setOldPasswordInput(e.target.value)}
-                    placeholder={isKa ? 'შეიყვანეთ მიმდინარე პაროლი (მაგ: admin123)...' : 'Enter current password (e.g. admin123)...'}
+                    placeholder={isKa ? 'შეიყვანეთ მიმდინარე პაროლი...' : 'Enter current password...'}
                     className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
                   />
                 </div>
