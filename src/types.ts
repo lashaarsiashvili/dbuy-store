@@ -10,6 +10,7 @@ export interface Product {
   id: string;
   title: string;
   titleKa?: string;
+  customSlug?: string;
   category: 'tech' | 'fitness' | 'everyday' | 'accessories';
   price: number;
   origPrice?: number;

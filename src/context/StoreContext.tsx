@@ -193,6 +193,15 @@ const generateCryptoSecretSlug = () => {
   return `portal-sec-${token}`;
 };
 
+export const generateProductSlug = (title: string): string => {
+  if (!title) return '';
+  return title
+    .trim()
+    .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+};
+
 const getStoredSecretSlug = (): string => {
   if (typeof window === 'undefined') return 'portal-sec-9a84f1b2c7e09843';
   const saved = localStorage.getItem('dbuy_admin_secret_slug');
@@ -213,7 +222,9 @@ const parseRouteFromLocation = (
     return { page: 'home', productId: null };
   }
   if (lower.startsWith('product/') || lower.startsWith('products/')) {
-    const rawId = clean.split('/')[1] || null;
+    const segments = clean.split('/');
+    // Handles /product/:id or /product/:id/:titleSlug
+    const rawId = segments[1] ? decodeURIComponent(segments[1]) : null;
     return { page: 'product', productId: rawId };
   }
 
@@ -337,7 +348,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       targetPath = '/';
       setActiveProductId(null);
     } else if (page === 'product') {
-      targetPath = activeProductId ? `/product/${activeProductId}` : '/';
+      if (activeProductId) {
+        const prod = products.find(p => p.id === activeProductId);
+        const slug = prod?.customSlug?.trim() || (prod ? generateProductSlug(prod.title) : '');
+        targetPath = slug ? `/product/${activeProductId}/${encodeURIComponent(slug)}` : `/product/${activeProductId}`;
+      } else {
+        targetPath = '/';
+      }
     } else if (page === 'admin') {
       targetPath = `/${adminSecretSlug}`;
       setActiveProductId(null);
@@ -354,7 +371,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const navigateToProduct = (productId: string) => {
     setActiveProductId(productId);
     setCurrentPageState('product');
-    const targetPath = `/product/${productId}`;
+    const prod = products.find(p => p.id === productId);
+    const slug = prod?.customSlug?.trim() || (prod ? generateProductSlug(prod.title) : '');
+    const targetPath = slug ? `/product/${productId}/${encodeURIComponent(slug)}` : `/product/${productId}`;
     if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
       window.history.pushState({ page: 'product', productId }, '', targetPath);
     }
@@ -362,10 +381,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const getProductUrl = (productId: string): string => {
+    const prod = products.find(p => p.id === productId);
+    const slug = prod?.customSlug?.trim() || (prod ? generateProductSlug(prod.title) : '');
+    const path = slug ? `/product/${productId}/${encodeURIComponent(slug)}` : `/product/${productId}`;
     if (typeof window !== 'undefined') {
-      return `${window.location.origin}/product/${productId}`;
+      return `${window.location.origin}${path}`;
     }
-    return `/product/${productId}`;
+    return path;
   };
 
   const copyProductUrl = (productId: string) => {

@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useStore } from '../context/StoreContext';
+import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product, Order, BillboardSlide } from '../types';
 import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
@@ -126,6 +126,7 @@ export const AdminDashboard: React.FC = () => {
   const [prodForm, setProdForm] = useState({
     title: '',
     titleKa: '',
+    customSlug: '',
     category: 'tech' as Product['category'],
     price: 49.99,
     origPrice: 69.99 as number | undefined,
@@ -459,6 +460,7 @@ export const AdminDashboard: React.FC = () => {
     setProdForm({
       title: '',
       titleKa: '',
+      customSlug: '',
       category: 'tech',
       price: 29.99,
       origPrice: 39.99,
@@ -478,6 +480,7 @@ export const AdminDashboard: React.FC = () => {
     setProdForm({
       title: prod.title,
       titleKa: prod.titleKa || '',
+      customSlug: prod.customSlug || generateProductSlug(prod.title),
       category: prod.category,
       price: prod.price,
       origPrice: prod.origPrice || 0,
@@ -497,11 +500,14 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
 
+    const finalSlug = prodForm.customSlug?.trim() || generateProductSlug(prodForm.title);
+
     if (editingProduct) {
       updateProduct({
         ...editingProduct,
         title: prodForm.title,
         titleKa: prodForm.titleKa,
+        customSlug: finalSlug,
         category: prodForm.category,
         price: Number(prodForm.price),
         origPrice: prodForm.origPrice ? Number(prodForm.origPrice) : undefined,
@@ -518,6 +524,7 @@ export const AdminDashboard: React.FC = () => {
       addProduct({
         title: prodForm.title,
         titleKa: prodForm.titleKa,
+        customSlug: finalSlug,
         category: prodForm.category,
         price: Number(prodForm.price),
         origPrice: prodForm.origPrice ? Number(prodForm.origPrice) : undefined,
@@ -941,13 +948,17 @@ export const AdminDashboard: React.FC = () => {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center space-x-1.5">
-                          <code className="text-[11px] bg-slate-100 px-2 py-0.5 rounded-md font-mono text-slate-700 select-all max-w-[140px] truncate block">
-                            /product/{prod.id}
+                          <code 
+                            className="text-[11px] bg-slate-100 px-2 py-1 rounded-md font-mono text-slate-700 select-all max-w-[200px] truncate block cursor-pointer hover:bg-slate-200 transition-colors"
+                            onClick={() => copyProductUrl(prod.id)}
+                            title={getProductUrl(prod.id)}
+                          >
+                            /product/{prod.id}/{prod.customSlug || generateProductSlug(prod.title)}
                           </code>
                           <button
                             onClick={() => copyProductUrl(prod.id)}
-                            className="p-1 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                            title="Copy unique product URL"
+                            className="p-1 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer shrink-0"
+                            title="Copy full unique product URL"
                           >
                             <LinkIcon className="w-3.5 h-3.5" />
                           </button>
@@ -2569,6 +2580,41 @@ export const AdminDashboard: React.FC = () => {
                   placeholder="მაგ: ერგონომიული უსადენო მაუსი"
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
+              </div>
+
+              {/* Product URL Slug (Auto-generated from title, fully editable) */}
+              <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">
+                    {isKa ? 'პროდუქტის URL მისამართი (Slug)' : 'Product URL Slug'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const autoSlug = generateProductSlug(prodForm.title || 'product');
+                      setProdForm({ ...prodForm, customSlug: autoSlug });
+                    }}
+                    className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>{isKa ? 'სათაურიდან გენერირება' : 'Reset from Title'}</span>
+                  </button>
+                </div>
+                <div className="flex items-center space-x-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200">
+                  <span className="text-xs text-slate-400 select-none font-mono">/product/{editingProduct ? editingProduct.id : 'prod-id'}/</span>
+                  <input
+                    type="text"
+                    value={prodForm.customSlug || generateProductSlug(prodForm.title)}
+                    onChange={e => setProdForm({ ...prodForm, customSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
+                    placeholder="custom-product-url-slug"
+                    className="flex-1 text-xs font-mono text-slate-800 focus:outline-hidden"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-500 leading-tight">
+                  {isKa 
+                    ? 'ეს ტექსტი ავტომატურად ჯდება პროდუქტის უნიკალურ ბმულში (მაგ: /product/prod-2/Mechanical-Wireless-Keyboard). შეგიძლიათ თავისუფლად ჩაასწოროთ.'
+                    : 'This slug is included in the canonical product URL (e.g. /product/prod-2/mechanical-wireless-keyboard). You can edit it manually.'}
+                </p>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
