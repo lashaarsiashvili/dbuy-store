@@ -21,6 +21,7 @@ import {
   X, 
   Check, 
   Eye,
+  EyeOff,
   Upload,
   UploadCloud,
   ImageIcon,
@@ -81,6 +82,7 @@ export const AdminDashboard: React.FC = () => {
 
   // Password Login Gate State for non-logged in or non-admin users
   const [pinInput, setPinInput] = useState('');
+  const [showPinPassword, setShowPinPassword] = useState(false);
   const [authError, setAuthError] = useState(false);
 
   // Change Password Form State
@@ -321,6 +323,7 @@ export const AdminDashboard: React.FC = () => {
       setPinInput('');
     } else {
       setAuthError(true);
+      setPinInput('');
     }
   };
 
@@ -575,17 +578,42 @@ export const AdminDashboard: React.FC = () => {
               <label className="block text-xs font-bold text-slate-300 mb-1">
                 {isKa ? 'ადმინისტრატორის პაროლი' : 'Admin Password'}
               </label>
-              <input
-                type="password"
-                required
-                value={pinInput ?? ''}
-                onChange={e => {
-                  setPinInput(e.target.value);
-                  setAuthError(false);
-                }}
-                placeholder={isKa ? 'შეიყვანეთ პაროლი...' : 'Enter password...'}
-                className="w-full px-4 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-              />
+              <div className="relative">
+                <input
+                  type={showPinPassword ? 'text' : 'password'}
+                  required
+                  autoComplete="current-password"
+                  value={pinInput ?? ''}
+                  onFocus={e => e.target.select()}
+                  onClick={e => (e.target as HTMLInputElement).select()}
+                  onChange={e => {
+                    setPinInput(e.target.value);
+                    setAuthError(false);
+                  }}
+                  placeholder={isKa ? 'შეიყვანეთ პაროლი...' : 'Enter password...'}
+                  className="w-full pl-4 pr-16 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+                <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
+                  {pinInput.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setPinInput('')}
+                      className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                      title={isKa ? 'გასუფთავება' : 'Clear'}
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setShowPinPassword(!showPinPassword)}
+                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                    title={showPinPassword ? 'Hide password' : 'Show password'}
+                  >
+                    {showPinPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
+                </div>
+              </div>
               {authError && (
                 <p className="text-xs text-red-400 font-medium mt-1.5">
                   {isKa ? 'პაროლი არასწორია! გთხოვთ სცადოთ თავიდან.' : 'Incorrect password! Please try again.'}
@@ -1823,6 +1851,8 @@ export const AdminDashboard: React.FC = () => {
                     type="password"
                     required
                     value={oldPasswordInput}
+                    onFocus={e => e.target.select()}
+                    onClick={e => (e.target as HTMLInputElement).select()}
                     onChange={e => setOldPasswordInput(e.target.value)}
                     placeholder={isKa ? 'შეიყვანეთ მიმდინარე პაროლი...' : 'Enter current password...'}
                     className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
@@ -1838,6 +1868,8 @@ export const AdminDashboard: React.FC = () => {
                       type="password"
                       required
                       value={newPasswordInput}
+                      onFocus={e => e.target.select()}
+                      onClick={e => (e.target as HTMLInputElement).select()}
                       onChange={e => setNewPasswordInput(e.target.value)}
                       placeholder={isKa ? 'ახალი პაროლი...' : 'New password...'}
                       className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
@@ -1851,6 +1883,8 @@ export const AdminDashboard: React.FC = () => {
                       type="password"
                       required
                       value={confirmPasswordInput}
+                      onFocus={e => e.target.select()}
+                      onClick={e => (e.target as HTMLInputElement).select()}
                       onChange={e => setConfirmPasswordInput(e.target.value)}
                       placeholder={isKa ? 'გაიმეორეთ ახალი პაროლი...' : 'Confirm new password...'}
                       className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"

@@ -205,7 +205,9 @@ export const AuthModal: React.FC = () => {
     if (success) {
       resetAttempts(cleanEmail);
       setFailedAttemptsMap(prev => ({ ...prev, [cleanEmail]: 0 }));
+      setPassword('');
     } else {
+      setPassword('');
       const currentFailures = (failedAttemptsMap[cleanEmail] || 0) + 1;
       setFailedAttemptsMap(prev => ({ ...prev, [cleanEmail]: currentFailures }));
       
@@ -611,18 +613,34 @@ export const AuthModal: React.FC = () => {
                     <input
                       type={showPassword ? 'text' : 'password'}
                       required
+                      autoComplete="current-password"
                       value={password}
+                      onFocus={e => e.target.select()}
+                      onClick={e => (e.target as HTMLInputElement).select()}
                       onChange={e => setPassword(e.target.value)}
                       placeholder={t('auth.passwordPlaceholder')}
-                      className="w-full pl-9 pr-10 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                      className="w-full pl-9 pr-16 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                     />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                    <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
+                      {password.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setPassword('')}
+                          className="p-1 rounded-md text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          title={language === 'ka' ? 'გასუფთავება' : 'Clear'}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="p-1 rounded-md text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                        title={showPassword ? 'Hide password' : 'Show password'}
+                      >
+                        {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -705,7 +723,10 @@ export const AuthModal: React.FC = () => {
                       <input
                         type={showPassword ? 'text' : 'password'}
                         required
+                        autoComplete="new-password"
                         value={password}
+                        onFocus={e => e.target.select()}
+                        onClick={e => (e.target as HTMLInputElement).select()}
                         onChange={e => setPassword(e.target.value)}
                         placeholder={t('auth.pwdMin')}
                         className="w-full pl-9 pr-8 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
@@ -713,7 +734,7 @@ export const AuthModal: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600"
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
                       >
                         {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                       </button>
@@ -729,7 +750,10 @@ export const AuthModal: React.FC = () => {
                       <input
                         type={showPassword ? 'text' : 'password'}
                         required
+                        autoComplete="new-password"
                         value={confirmPassword}
+                        onFocus={e => e.target.select()}
+                        onClick={e => (e.target as HTMLInputElement).select()}
                         onChange={e => setConfirmPassword(e.target.value)}
                         placeholder={t('auth.confirmPassword')}
                         className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
