@@ -1,0 +1,490 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { useStore } from '../context/StoreContext';
+import { Category, Currency, Language } from '../types';
+import { BrandLogo } from './BrandLogo';
+import { LanguageSelector } from './LanguageSelector';
+import { 
+  Search, 
+  ShoppingCart, 
+  User as UserIcon, 
+  X, 
+  HelpCircle, 
+  ShieldAlert, 
+  Package, 
+  LogOut, 
+  ChevronDown,
+  Sparkles,
+  Tag,
+  Heart
+} from 'lucide-react';
+
+export const Header: React.FC = () => {
+  const {
+    t,
+    currentPage,
+    setCurrentPage,
+    language,
+    setLanguage,
+    currency,
+    setCurrency,
+    selectedCategory,
+    setSelectedCategory,
+    searchQuery,
+    setSearchQuery,
+    cartTotalCount,
+    setIsCartOpen,
+    wishlistCount,
+    setIsWishlistOpen,
+    user,
+    logoutUser,
+    setIsAuthModalOpen,
+    theme,
+    isAdmin,
+  } = useStore();
+
+  const [announcementClosed, setAnnouncementClosed] = useState(false);
+  const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setUserDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleCategorySelect = (cat: Category) => {
+    setSelectedCategory(cat);
+    if (currentPage !== 'home') {
+      setCurrentPage('home');
+    }
+  };
+
+  const handleLogoClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    setCurrentPage('home');
+    setSelectedCategory('all');
+    setSearchQuery('');
+  };
+
+  return (
+    <header className="sticky top-0 z-40 w-full bg-white shadow-xs">
+      {/* 1. Top Announcement Bar */}
+      {theme.announcementVisible && !announcementClosed && (
+        <div className="relative flex items-center justify-between px-4 py-2 text-xs md:text-sm font-medium text-white transition-colors bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-600">
+          <div className="flex items-center justify-center flex-1 space-x-2 text-center">
+            <Sparkles className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
+            <span className="truncate">{theme.announcementText}</span>
+          </div>
+          <button
+            onClick={() => setAnnouncementClosed(true)}
+            className="p-1 transition-opacity rounded-sm hover:opacity-80 shrink-0 text-white/80 hover:text-white"
+            aria-label="Dismiss Announcement"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* 2. Top Utility Nav Bar */}
+      <div className="border-b border-slate-100 bg-slate-50/80 text-xs text-slate-600">
+        <div className="flex items-center justify-between max-w-7xl px-4 py-1.5 mx-auto">
+          {/* Left: Quick Links (Daily Deals & Help) */}
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => {
+                handleCategorySelect('deals');
+              }}
+              className="flex items-center space-x-1 font-medium text-blue-600 hover:text-blue-700 transition-colors"
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              <span>{t('top.dailyDeals')}</span>
+            </button>
+            <span className="text-slate-300">|</span>
+            <button
+              onClick={() => setCurrentPage('contact')}
+              className="flex items-center space-x-1 hover:text-blue-600 transition-colors"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{t('top.help')}</span>
+            </button>
+          </div>
+
+          {/* Right: Currency & Language Selectors & Admin Portal */}
+          <div className="flex items-center space-x-2 sm:space-x-2.5">
+            {/* Currency Select */}
+            <div className="relative inline-flex items-center">
+              <select
+                value={currency}
+                onChange={e => setCurrency(e.target.value as Currency)}
+                aria-label="Select Currency"
+                className="px-2 py-1 font-bold bg-white border border-slate-200 rounded-lg text-slate-800 text-[11px] hover:border-slate-300 focus:ring-1 focus:ring-blue-500 focus:outline-hidden cursor-pointer shadow-2xs transition-colors"
+              >
+                <option value="USD">$ USD</option>
+                <option value="EUR">€ EUR</option>
+                <option value="GEL">₾ GEL</option>
+              </select>
+            </div>
+
+            {/* Polished Language Selector with Round Flags & Short Labels */}
+            <LanguageSelector variant="light" />
+
+            {/* Admin Panel Link - Only visible when logged in as admin */}
+            {isAdmin && (
+              <>
+                <span className="text-slate-200">|</span>
+                <button
+                  onClick={() => setCurrentPage('admin')}
+                  className={`flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer shadow-2xs ${
+                    currentPage === 'admin'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                  }`}
+                >
+                  <ShieldAlert className="w-3.5 h-3.5 text-amber-300" />
+                  <span className="hidden md:inline">{t('top.admin')}</span>
+                  <span className="md:hidden">Admin</span>
+                </button>
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* 3. Main Header & Search Bar */}
+      <div className="max-w-7xl px-4 py-3 mx-auto flex items-center justify-between gap-4">
+        {/* Brand Logo */}
+        <a
+          href="#home"
+          onClick={handleLogoClick}
+          className="flex items-center shrink-0 cursor-pointer"
+        >
+          <BrandLogo size="md" variant="light" styleOverride={theme.logoStyle} />
+        </a>
+
+        {/* eBay-Style Search Container */}
+        <div className="hidden sm:flex flex-1 max-w-2xl items-center border-2 border-blue-600 rounded-lg overflow-hidden bg-white shadow-xs focus-within:ring-2 focus-within:ring-blue-300">
+          <select
+            value={selectedCategory}
+            onChange={e => handleCategorySelect(e.target.value as Category)}
+            aria-label="Search Category"
+            className="px-3 py-2 text-xs font-semibold bg-slate-100 text-slate-700 border-r border-slate-200 focus:outline-hidden cursor-pointer"
+          >
+            <option value="all">{t('nav.all')}</option>
+            <option value="tech">{t('nav.cat.tech')}</option>
+            <option value="fitness">{t('nav.cat.fitness')}</option>
+            <option value="everyday">{t('nav.cat.everyday')}</option>
+            <option value="accessories">{t('nav.cat.accessories')}</option>
+            <option value="deals">{t('nav.cat.deals')}</option>
+          </select>
+
+          <div className="relative flex-1 flex items-center">
+            <input
+              type="text"
+              value={searchQuery ?? ''}
+              onChange={e => setSearchQuery(e.target.value)}
+              placeholder={t('nav.searchPlaceholder')}
+              className="w-full px-3 py-2 text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden"
+            />
+            {searchQuery && (
+              <button
+                onClick={() => setSearchQuery('')}
+                className="p-1 text-slate-400 hover:text-slate-600 pr-2"
+                aria-label="Clear search"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <button
+            onClick={() => {
+              if (currentPage !== 'home') setCurrentPage('home');
+            }}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors"
+          >
+            <Search className="w-4 h-4 mr-1.5" />
+            <span>{t('nav.search')}</span>
+          </button>
+        </div>
+
+        {/* Right Header Controls: Account & Cart */}
+        <div className="flex items-center space-x-3">
+          {/* User Account Dropdown */}
+          <div className="relative" ref={dropdownRef}>
+            <button
+              onClick={() => {
+                if (user.isLoggedIn) {
+                  setUserDropdownOpen(!userDropdownOpen);
+                } else {
+                  setIsAuthModalOpen(true);
+                }
+              }}
+              className="flex items-center space-x-1.5 p-2 rounded-lg text-slate-700 hover:bg-slate-100 transition-colors"
+              aria-label="User Account"
+            >
+              <div className="p-1.5 rounded-full bg-slate-100 text-slate-700">
+                <UserIcon className="w-4 h-4" />
+              </div>
+              <div className="hidden lg:flex flex-col text-left">
+                <span className="text-[11px] text-slate-400 leading-tight">
+                  {user.isLoggedIn ? t('top.hi') : t('top.signIn')}
+                </span>
+                <span className="text-xs font-bold text-slate-800 truncate max-w-[90px]">
+                  {user.isLoggedIn ? user.name : t('nav.account')}
+                </span>
+              </div>
+              {user.isLoggedIn && <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden lg:inline" />}
+            </button>
+
+            {/* Dropdown Menu */}
+            {userDropdownOpen && user.isLoggedIn && (
+              <div className="absolute right-0 mt-2 w-56 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
+                <div className="px-4 py-2 border-b border-slate-100">
+                  <p className="text-xs font-semibold text-slate-900">{user.name}</p>
+                  <p className="text-[11px] text-slate-500 truncate">{user.email}</p>
+                </div>
+                <div className="py-1">
+                  <button
+                    onClick={() => {
+                      setIsWishlistOpen(true);
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
+                  >
+                    <Heart className="w-4 h-4 text-red-500" />
+                    <span>{t('wishlist.title')} ({wishlistCount})</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setCurrentPage('my-orders');
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 flex items-center space-x-2"
+                  >
+                    <Package className="w-4 h-4 text-blue-600" />
+                    <span>{t('nav.myOrders')}</span>
+                  </button>
+                  {isAdmin && (
+                    <button
+                      onClick={() => {
+                        setCurrentPage('admin');
+                        setUserDropdownOpen(false);
+                      }}
+                      className="w-full text-left px-4 py-2 text-xs text-indigo-700 bg-indigo-50/70 hover:bg-indigo-100 font-bold flex items-center space-x-2 transition-colors"
+                    >
+                      <ShieldAlert className="w-4 h-4 text-indigo-600" />
+                      <span>{t('nav.adminDash')}</span>
+                    </button>
+                  )}
+                </div>
+                <div className="border-t border-slate-100 pt-1">
+                  <button
+                    onClick={() => {
+                      logoutUser();
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>{t('nav.signOut')}</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Wishlist Button */}
+          <button
+            onClick={() => {
+              if (!user.isLoggedIn) {
+                setIsAuthModalOpen(true);
+              } else {
+                setIsWishlistOpen(true);
+              }
+            }}
+            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-slate-50 hover:bg-red-50 text-slate-700 hover:text-red-600 transition-all font-semibold cursor-pointer border border-slate-100"
+            aria-label="Open Wishlist"
+            title={t('wishlist.title')}
+          >
+            <div className="relative">
+              <Heart className={`w-5 h-5 ${wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'text-slate-600'}`} />
+              {wishlistCount > 0 && (
+                <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[10px] font-bold text-white bg-red-500 rounded-full">
+                  {wishlistCount}
+                </span>
+              )}
+            </div>
+            <span className="hidden md:inline text-xs">{t('wishlist.buttonTitle')}</span>
+          </button>
+
+          {/* Cart Button */}
+          <button
+            onClick={() => setIsCartOpen(true)}
+            className="flex items-center space-x-2 px-3 py-2 rounded-xl bg-blue-50 text-blue-700 hover:bg-blue-100 transition-all font-semibold cursor-pointer"
+            aria-label="Open Cart"
+          >
+            <div className="relative">
+              <ShoppingCart className="w-5 h-5" />
+              {cartTotalCount > 0 && (
+                <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[18px] h-[18px] px-1 text-[11px] font-bold text-white bg-red-600 rounded-full animate-bounce">
+                  {cartTotalCount}
+                </span>
+              )}
+            </div>
+            <span className="hidden sm:inline text-xs">{t('nav.cart')}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Mobile Search Bar */}
+      <div className="sm:hidden px-4 pb-2.5">
+        <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-white shadow-2xs">
+          <input
+            type="text"
+            value={searchQuery ?? ''}
+            onChange={e => setSearchQuery(e.target.value)}
+            placeholder={t('nav.searchPlaceholder')}
+            className="w-full px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
+          />
+          {searchQuery && (
+            <button
+              onClick={() => setSearchQuery('')}
+              className="p-1 text-slate-400"
+            >
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
+          <button
+            onClick={() => {
+              if (currentPage !== 'home') setCurrentPage('home');
+            }}
+            className="p-2 bg-blue-600 text-white"
+          >
+            <Search className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      </div>
+
+      {/* 4. Category Navigation Ribbon */}
+      <nav className="border-t border-slate-200/80 bg-white">
+        <div className="max-w-7xl px-4 mx-auto flex items-center space-x-2 overflow-x-auto py-2 scrollbar-none text-xs font-semibold text-slate-700">
+          <button
+            onClick={() => {
+              setCurrentPage('home');
+              handleCategorySelect('all');
+            }}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+              currentPage === 'home' && selectedCategory === 'all'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            {t('nav.allCategories')}
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentPage('home');
+              handleCategorySelect('tech');
+            }}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+              currentPage === 'home' && selectedCategory === 'tech'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            {t('nav.cat.tech')}
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentPage('home');
+              handleCategorySelect('fitness');
+            }}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+              currentPage === 'home' && selectedCategory === 'fitness'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            {t('nav.cat.fitness')}
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentPage('home');
+              handleCategorySelect('everyday');
+            }}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+              currentPage === 'home' && selectedCategory === 'everyday'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            {t('nav.cat.everyday')}
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentPage('home');
+              handleCategorySelect('accessories');
+            }}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+              currentPage === 'home' && selectedCategory === 'accessories'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
+            }`}
+          >
+            {t('nav.cat.accessories')}
+          </button>
+
+          <button
+            onClick={() => {
+              setCurrentPage('home');
+              handleCategorySelect('deals');
+            }}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors flex items-center space-x-1.5 ${
+              currentPage === 'home' && selectedCategory === 'deals'
+                ? 'bg-blue-600 text-white shadow-xs'
+                : 'bg-blue-50/80 text-blue-700 hover:bg-blue-100 border border-blue-200/80'
+            }`}
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>{t('nav.cat.deals')}</span>
+          </button>
+
+          <span className="text-slate-300">|</span>
+
+          {/* Direct Page Links */}
+          <button
+            onClick={() => setCurrentPage('about')}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+              currentPage === 'about'
+                ? 'bg-slate-900 text-white'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            {t('nav.about')}
+          </button>
+
+          <button
+            onClick={() => setCurrentPage('contact')}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors ${
+              currentPage === 'contact'
+                ? 'bg-slate-900 text-white'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-100'
+            }`}
+          >
+            {t('nav.contact')}
+          </button>
+        </div>
+      </nav>
+    </header>
+  );
+};

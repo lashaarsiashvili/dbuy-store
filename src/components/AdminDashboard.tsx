@@ -1,0 +1,2335 @@
+import React, { useState, useRef } from 'react';
+import { useStore } from '../context/StoreContext';
+import { Product, Order, BillboardSlide } from '../types';
+import { AdminAnalytics } from './AdminAnalytics';
+import { BrandLogo } from './BrandLogo';
+import { LogoPreviewModal } from './LogoPreviewModal';
+import { 
+  ShieldCheck, 
+  DollarSign, 
+  Package, 
+  ShoppingBag, 
+  Users, 
+  Plus, 
+  RotateCcw, 
+  Edit3, 
+  Trash2, 
+  Save, 
+  Lock, 
+  Unlock, 
+  ExternalLink, 
+  X, 
+  Check, 
+  Eye,
+  Upload,
+  UploadCloud,
+  ImageIcon,
+  Link as LinkIcon,
+  CheckCircle2,
+  Globe,
+  Activity,
+  Layers,
+  Sparkles,
+  Clock,
+  SlidersHorizontal,
+  Sliders,
+  KeyRound,
+  ShieldAlert
+} from 'lucide-react';
+
+export const AdminDashboard: React.FC = () => {
+  const {
+    products,
+    addProduct,
+    updateProduct,
+    deleteProduct,
+    resetDefaultProducts,
+    orders,
+    updateOrderStatus,
+    deleteOrder,
+    clearOrderHistory,
+    theme,
+    updateTheme,
+    resetTheme,
+    billboards,
+    billboardIntervalSeconds,
+    updateBillboard,
+    addBillboard,
+    deleteBillboard,
+    resetBillboards,
+    setBillboardIntervalSeconds,
+    setCurrentPage,
+    formatPrice,
+    addToast,
+    analyticsData,
+    user,
+    adminPassword,
+    changeAdminPassword,
+    logoutUser,
+    loginUser,
+    isAdmin,
+    language,
+    t,
+  } = useStore();
+
+  const isKa = language === 'ka';
+
+  // Password Login Gate State for non-logged in or non-admin users
+  const [pinInput, setPinInput] = useState('');
+  const [authError, setAuthError] = useState(false);
+
+  // Change Password Form State
+  const [oldPasswordInput, setOldPasswordInput] = useState('');
+  const [newPasswordInput, setNewPasswordInput] = useState('');
+  const [confirmPasswordInput, setConfirmPasswordInput] = useState('');
+
+  // Tabs
+  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'security'>('analytics');
+
+  // Product Add / Edit Modal
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('upload');
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadedFileInfo, setUploadedFileInfo] = useState<{ name: string; size: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const [prodForm, setProdForm] = useState({
+    title: '',
+    titleKa: '',
+    category: 'tech' as Product['category'],
+    price: 49.99,
+    origPrice: 69.99 as number | undefined,
+    stock: 20,
+    badge: 'New',
+    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
+    description: '',
+    descriptionKa: '',
+  });
+
+  // Product catalog table search & filter
+  const [productSearch, setProductSearch] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+
+  // Theme Form State
+  const [themeForm, setThemeForm] = useState<{
+    announcementText: string;
+    announcementVisible: boolean;
+    primaryColor: string;
+    heroTitle: string;
+    heroSubtitle: string;
+    eurRate: number;
+    gelRate: number;
+    logoStyle: 'dynamic' | 'shopping' | 'minimal' | 'prism';
+  }>({
+    announcementText: theme?.announcementText || '',
+    announcementVisible: theme?.announcementVisible ?? true,
+    primaryColor: theme?.primaryColor || '#2563eb',
+    heroTitle: theme?.heroTitle || '',
+    heroSubtitle: theme?.heroSubtitle || '',
+    eurRate: theme?.eurRate ?? 0.92,
+    gelRate: theme?.gelRate ?? 2.78,
+    logoStyle: theme?.logoStyle || 'dynamic',
+  });
+
+  // Billboard Management State
+  const [isBillboardModalOpen, setIsBillboardModalOpen] = useState(false);
+  const [showLogoModal, setShowLogoModal] = useState(false);
+  const [editingBillboard, setEditingBillboard] = useState<BillboardSlide | null>(null);
+  const [billboardImageMode, setBillboardImageMode] = useState<'upload' | 'url'>('url');
+  const billboardFileInputRef = useRef<HTMLInputElement>(null);
+
+  const [billboardForm, setBillboardForm] = useState<Omit<BillboardSlide, 'id'>>({
+    title: '',
+    titleKa: '',
+    subtitle: '',
+    subtitleKa: '',
+    image: '',
+    bgImage: '',
+    bgGradient: 'from-slate-950 via-indigo-950 to-slate-900',
+    badge: 'Featured Deal',
+    badgeKa: 'რჩეული პროდუქტი',
+    discountTag: '-20% OFF',
+    priceTag: '$49.99',
+    origPriceTag: '$69.99',
+    buttonText: 'Shop Now',
+    buttonTextKa: 'შეძენა',
+    productId: '',
+    category: 'tech',
+    isActive: true,
+  });
+
+  const billboardGradients = [
+    { label: 'Deep Indigo Space', value: 'from-slate-950 via-indigo-950 to-slate-900' },
+    { label: 'Midnight Cyber Sky', value: 'from-slate-950 via-slate-900 to-sky-950' },
+    { label: 'Emerald Forest Tech', value: 'from-slate-950 via-teal-950 to-slate-900' },
+    { label: 'Royal Blue Pulse', value: 'from-slate-950 via-blue-950 to-slate-900' },
+    { label: 'Dark Crimson Luxury', value: 'from-slate-950 via-rose-950 to-slate-900' },
+    { label: 'Obsidian Pure Black', value: 'from-slate-950 via-slate-900 to-slate-950' },
+  ];
+
+  const handleOpenAddBillboard = () => {
+    setEditingBillboard(null);
+    setBillboardForm({
+      title: 'New Featured Product Billboard',
+      titleKa: 'ახალი რჩეული პროდუქტის ბილბორდი',
+      subtitle: 'Discover high quality gear tailored for modern everyday convenience.',
+      subtitleKa: 'აღმოაჩინეთ უმაღლესი ხარისხის პროდუქტები თქვენი ყოველდღიური კომფორტისთვის.',
+      image: products[0]?.image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=80',
+      bgImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1920&q=80',
+      bgGradient: 'from-slate-950 via-indigo-950 to-slate-900',
+      badge: 'Featured Deal • 2026',
+      badgeKa: 'ტოპ შეთავაზება • 2026',
+      discountTag: '-25% OFF',
+      priceTag: '$79.99',
+      origPriceTag: '$99.99',
+      buttonText: 'Shop Featured',
+      buttonTextKa: 'პროდუქტის შეძენა',
+      productId: products[0]?.id || '',
+      category: 'tech',
+      isActive: true,
+    });
+    setIsBillboardModalOpen(true);
+  };
+
+  const handleOpenEditBillboard = (slide: BillboardSlide) => {
+    setEditingBillboard(slide);
+    setBillboardForm({
+      title: slide.title,
+      titleKa: slide.titleKa || '',
+      subtitle: slide.subtitle,
+      subtitleKa: slide.subtitleKa || '',
+      image: slide.image,
+      bgImage: slide.bgImage || '',
+      bgGradient: slide.bgGradient || 'from-slate-950 via-indigo-950 to-slate-900',
+      badge: slide.badge || '',
+      badgeKa: slide.badgeKa || '',
+      discountTag: slide.discountTag || '',
+      priceTag: slide.priceTag || '',
+      origPriceTag: slide.origPriceTag || '',
+      buttonText: slide.buttonText || 'Shop Now',
+      buttonTextKa: slide.buttonTextKa || 'შეძენა',
+      productId: slide.productId || '',
+      category: slide.category || 'tech',
+      isActive: slide.isActive ?? true,
+    });
+    setIsBillboardModalOpen(true);
+  };
+
+  const handleAutoFillFromProduct = (prodId: string) => {
+    const prod = products.find(p => p.id === prodId);
+    if (!prod) return;
+    setBillboardForm(prev => ({
+      ...prev,
+      productId: prod.id,
+      title: prod.title,
+      titleKa: prod.titleKa || prod.title,
+      subtitle: prod.description,
+      subtitleKa: prod.descriptionKa || prod.description,
+      image: prod.image,
+      category: prod.category,
+      priceTag: `$${prod.price.toFixed(2)}`,
+      origPriceTag: prod.origPrice ? `$${prod.origPrice.toFixed(2)}` : '',
+      discountTag: prod.origPrice ? `-${Math.round((1 - prod.price/prod.origPrice)*100)}% OFF` : (prod.badge || ''),
+      badge: prod.badge || 'Best Seller',
+      badgeKa: prod.badge || 'რჩეული პროდუქტი',
+      buttonText: `Shop ${prod.title.split(' ')[0]}`,
+      buttonTextKa: 'პროდუქტის შეძენა',
+    }));
+    addToast(`Autofilled details from "${prod.title}"!`, 'info');
+  };
+
+  const handleSaveBillboardSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!billboardForm.image.trim()) {
+      addToast(isKa ? 'გთხოვთ მიუთითოთ ბილბორდის სურათი' : 'Please provide a billboard image', 'error');
+      return;
+    }
+    if (!billboardForm.title.trim()) {
+      addToast(isKa ? 'გთხოვთ მიუთითოთ ბილბორდის სათაური' : 'Please provide a billboard title', 'error');
+      return;
+    }
+
+    if (editingBillboard) {
+      updateBillboard(editingBillboard.id, billboardForm);
+    } else {
+      addBillboard(billboardForm);
+    }
+    setIsBillboardModalOpen(false);
+  };
+
+  const processBillboardImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      addToast(isKa ? 'გთხოვთ ატვირთოთ ვალიდური სურათის ფაილი' : 'Please upload a valid image file', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (!result) return;
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1400;
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const optimized = canvas.toDataURL('image/jpeg', 0.85);
+          setBillboardForm(prev => ({ ...prev, image: optimized }));
+          addToast(isKa ? 'ბილბორდის სურათი წარმატებით აიტვირთა!' : 'Billboard image uploaded successfully!', 'success');
+        }
+      };
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Calculate Metrics
+  const totalRevenueUSD = orders.reduce((sum, o) => sum + o.total, 0);
+  const totalOrdersCount = orders.length;
+  const totalProductsCount = products.length;
+  const registeredCustomersCount = 1 + orders.length;
+
+  const handlePinSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const success = loginUser('lashaarsiashvili@gmail.com', 'Lasha (Admin)', pinInput);
+    if (success) {
+      setAuthError(false);
+      setPinInput('');
+    } else {
+      setAuthError(true);
+    }
+  };
+
+  const handlePasswordChangeSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPasswordInput !== confirmPasswordInput) {
+      addToast(isKa ? 'ახალი პაროლები ერთმანეთს არ ემთხვევა!' : 'New passwords do not match!', 'error');
+      return;
+    }
+    const success = changeAdminPassword(oldPasswordInput, newPasswordInput);
+    if (success) {
+      setOldPasswordInput('');
+      setNewPasswordInput('');
+      setConfirmPasswordInput('');
+    }
+  };
+
+  const processImageFile = (file: File) => {
+    if (!file.type.startsWith('image/')) {
+      addToast(isKa ? 'გთხოვთ ატვირთოთ ვალიდური სურათის ფაილი (JPG, PNG, WEBP, GIF)' : 'Please upload a valid image file (JPG, PNG, WEBP, GIF)', 'error');
+      return;
+    }
+
+    if (file.size > 15 * 1024 * 1024) {
+      addToast(isKa ? 'სურათის ზომა არ უნდა აღემატებოდეს 15MB-ს' : 'Image size must not exceed 15MB', 'error');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      if (!result) return;
+
+      // Optimize image via Canvas to keep preview fast and avoid quota issues
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
+        const maxDim = 1200;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+          setProdForm(prev => ({ ...prev, image: compressedDataUrl }));
+          setUploadedFileInfo({
+            name: file.name,
+            size: `${(file.size / 1024).toFixed(1)} KB`
+          });
+          addToast(isKa ? 'სურათი წარმატებით აიტვირთა!' : 'Image uploaded successfully!', 'success');
+        } else {
+          setProdForm(prev => ({ ...prev, image: result }));
+          setUploadedFileInfo({
+            name: file.name,
+            size: `${(file.size / 1024).toFixed(1)} KB`
+          });
+          addToast(isKa ? 'სურათი წარმატებით აიტვირთა!' : 'Image uploaded successfully!', 'success');
+        }
+      };
+      img.onerror = () => {
+        setProdForm(prev => ({ ...prev, image: result }));
+        setUploadedFileInfo({
+          name: file.name,
+          size: `${(file.size / 1024).toFixed(1)} KB`
+        });
+        addToast(isKa ? 'სურათი აიტვირთა' : 'Image uploaded', 'success');
+      };
+      img.src = result;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleOpenAddProduct = () => {
+    setEditingProduct(null);
+    setUploadedFileInfo(null);
+    setImageInputMode('upload');
+    setProdForm({
+      title: '',
+      titleKa: '',
+      category: 'tech',
+      price: 29.99,
+      origPrice: 39.99,
+      stock: 25,
+      badge: 'New',
+      image: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=800&q=80',
+      description: 'High-grade premium lifestyle and tech essential with superior build quality.',
+      descriptionKa: 'მაღალი ხარისხის პრემიუმ ტექნიკური აქსესუარი საიმედო კორპუსით.',
+    });
+    setIsProductModalOpen(true);
+  };
+
+  const handleOpenEditProduct = (prod: Product) => {
+    setEditingProduct(prod);
+    setUploadedFileInfo(prod.image?.startsWith('data:') ? { name: 'Uploaded Image', size: 'Local' } : null);
+    setImageInputMode(prod.image?.startsWith('data:') ? 'upload' : 'url');
+    setProdForm({
+      title: prod.title,
+      titleKa: prod.titleKa || '',
+      category: prod.category,
+      price: prod.price,
+      origPrice: prod.origPrice || 0,
+      stock: prod.stock,
+      badge: prod.badge || '',
+      image: prod.image,
+      description: prod.description,
+      descriptionKa: prod.descriptionKa || '',
+    });
+    setIsProductModalOpen(true);
+  };
+
+  const handleSaveProduct = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!prodForm.title.trim()) {
+      addToast('Product title is required', 'warning');
+      return;
+    }
+
+    if (editingProduct) {
+      updateProduct({
+        ...editingProduct,
+        title: prodForm.title,
+        titleKa: prodForm.titleKa,
+        category: prodForm.category,
+        price: Number(prodForm.price),
+        origPrice: prodForm.origPrice ? Number(prodForm.origPrice) : undefined,
+        stock: Number(prodForm.stock),
+        badge: prodForm.badge || undefined,
+        image: prodForm.image,
+        images: editingProduct.images && editingProduct.images.length > 0
+          ? [prodForm.image, ...editingProduct.images.filter(img => img !== prodForm.image)]
+          : [prodForm.image],
+        description: prodForm.description,
+        descriptionKa: prodForm.descriptionKa,
+      });
+    } else {
+      addProduct({
+        title: prodForm.title,
+        titleKa: prodForm.titleKa,
+        category: prodForm.category,
+        price: Number(prodForm.price),
+        origPrice: prodForm.origPrice ? Number(prodForm.origPrice) : undefined,
+        stock: Number(prodForm.stock),
+        badge: prodForm.badge || undefined,
+        image: prodForm.image,
+        images: [prodForm.image],
+        description: prodForm.description,
+        descriptionKa: prodForm.descriptionKa,
+        rating: 5.0,
+        reviewsCount: 1,
+        features: ['Premium materials', 'Full warranty included', 'Worldwide tested'],
+      });
+    }
+    setIsProductModalOpen(false);
+  };
+
+  const handleSaveTheme = () => {
+    updateTheme(themeForm);
+  };
+
+  // Filtered products in admin table
+  const filteredProducts = products.filter(p => {
+    if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
+    if (productSearch.trim() && !p.title.toLowerCase().includes(productSearch.toLowerCase())) return false;
+    return true;
+  });
+
+  // Preset image choices
+  const presetImages = [
+    { label: 'Smart Bottle', url: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Keyboard', url: 'https://images.unsplash.com/photo-1587829741301-dc798b83add3?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Fitness Band', url: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Microphone', url: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Flashlight', url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=800&q=80' },
+    { label: 'Headphones', url: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80' },
+  ];
+
+  // 1. Gate if not authenticated as admin
+  if (!isAdmin) {
+    return (
+      <div className="min-h-[75vh] flex items-center justify-center px-4 py-12 bg-slate-900 text-white">
+        <div className="w-full max-w-md bg-slate-800 border border-slate-700 rounded-3xl p-8 shadow-2xl space-y-6 text-center">
+          <div className="inline-flex p-4 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+            <Lock className="w-8 h-8" />
+          </div>
+
+          <div className="space-y-1.5">
+            <h2 className="text-xl font-black text-white">
+              {isKa ? 'ადმინისტრატორის ავტორიზაცია' : 'Administrator Authorization'}
+            </h2>
+            <p className="text-xs text-slate-400">
+              {isKa ? (
+                <>ადმინ პანელზე წვდომა დაცულია. გთხოვთ შეიყვანოთ ადმინის (<span className="text-amber-300 font-semibold">lashaarsiashvili@gmail.com</span>) პაროლი.</>
+              ) : (
+                <>Admin panel access is protected. Please enter admin (<span className="text-amber-300 font-semibold">lashaarsiashvili@gmail.com</span>) password.</>
+              )}
+            </p>
+          </div>
+
+          <form onSubmit={handlePinSubmit} className="space-y-4 text-left">
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                {isKa ? 'ადმინისტრატორის ელ-ფოსტა' : 'Administrator Email'}
+              </label>
+              <input
+                type="email"
+                disabled
+                value="lashaarsiashvili@gmail.com"
+                className="w-full px-4 py-2.5 text-xs bg-slate-950 border border-slate-700 rounded-xl text-slate-400 font-mono select-none"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-300 mb-1">
+                {isKa ? 'ადმინის პაროლი (ნაგულისხმევი: admin123)' : 'Admin Password (Default: admin123)'}
+              </label>
+              <input
+                type="password"
+                required
+                value={pinInput ?? ''}
+                onChange={e => {
+                  setPinInput(e.target.value);
+                  setAuthError(false);
+                }}
+                placeholder={isKa ? 'შეიყვანეთ პაროლი...' : 'Enter password...'}
+                className="w-full px-4 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+              />
+              {authError && (
+                <p className="text-xs text-red-400 font-medium mt-1.5">
+                  {isKa ? 'პაროლი არასწორია! გთხოვთ სცადოთ თავიდან.' : 'Incorrect password! Please try again.'}
+                </p>
+              )}
+            </div>
+
+            <button
+              type="submit"
+              className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer"
+            >
+              <Unlock className="w-4 h-4" />
+              <span>{isKa ? 'ადმინ პანელში შესვლა' : 'Sign in to Admin Panel'}</span>
+            </button>
+          </form>
+
+          <div className="pt-2 border-t border-slate-700/80">
+            <button
+              onClick={() => setCurrentPage('home')}
+              className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
+            >
+              {isKa ? '← მაღაზიის მთავარ გვერდზე დაბრუნება' : '← Return to Store Home'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. Authenticated Admin Dashboard
+  return (
+    <div className="min-h-screen bg-slate-100/70 pb-16">
+      {/* Top Admin Header */}
+      <div className="bg-slate-900 text-white border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <BrandLogo size="sm" variant="dark" showText={false} />
+            <div>
+              <h1 className="text-base font-bold text-white flex items-center space-x-2">
+                <span>DBUY Master Control Panel</span>
+                <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full">
+                  🟢 Session Active
+                </span>
+              </h1>
+            </div>
+          </div>
+
+          <div className="flex items-center space-x-3">
+            <button
+              onClick={() => setCurrentPage('home')}
+              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+            >
+              <ExternalLink className="w-3.5 h-3.5" />
+              <span>View Storefront</span>
+            </button>
+            <button
+              onClick={() => {
+                logoutUser();
+                setCurrentPage('home');
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 text-xs font-semibold border border-red-500/30 transition-colors cursor-pointer"
+            >
+              Lock / Logout
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div className="max-w-7xl mx-auto px-4 pt-8 space-y-8">
+        
+        {/* Metrics Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {/* Revenue */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+            <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
+              <DollarSign className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Revenue</p>
+              <h3 className="text-lg font-black text-slate-900">{formatPrice(totalRevenueUSD)}</h3>
+            </div>
+          </div>
+
+          {/* Orders */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+            <div className="p-3 rounded-xl bg-blue-50 text-blue-600 shrink-0">
+              <ShoppingBag className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Orders Placed</p>
+              <h3 className="text-lg font-black text-slate-900">{totalOrdersCount}</h3>
+            </div>
+          </div>
+
+          {/* Today's Visitors (LIVE) */}
+          <div 
+            onClick={() => setActiveTab('analytics')}
+            className="p-5 bg-white rounded-2xl border border-blue-200/80 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
+          >
+            <div className="p-3 rounded-xl bg-blue-50 text-blue-600 shrink-0 group-hover:scale-105 transition-transform">
+              <Activity className="w-5 h-5 animate-pulse" />
+            </div>
+            <div>
+              <div className="flex items-center space-x-1.5">
+                <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">
+                  {isKa ? 'დღის ვიზიტები' : "Today's Visits"}
+                </p>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
+              </div>
+              <h3 className="text-lg font-black text-slate-900">
+                {analyticsData.totalVisitorsToday} <span className="text-xs font-normal text-slate-400">{isKa ? 'ვიზიტორი' : 'visitors'}</span>
+              </h3>
+            </div>
+          </div>
+
+          {/* Top Country */}
+          <div 
+            onClick={() => setActiveTab('analytics')}
+            className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-indigo-400 transition-all"
+          >
+            <div className="p-3 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
+              <Globe className="w-5 h-5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                {isKa ? 'ტოპ ქვეყანა' : 'Top Country'}
+              </p>
+              <h3 className="text-base font-black text-slate-900 truncate flex items-center space-x-1">
+                <span>{analyticsData.countryStatsToday[0]?.flag || '🇬🇪'}</span>
+                <span className="truncate">{analyticsData.countryStatsToday[0]?.country || 'Georgia'}</span>
+              </h3>
+            </div>
+          </div>
+
+          {/* Products */}
+          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
+            <div className="p-3 rounded-xl bg-amber-50 text-amber-600 shrink-0">
+              <Package className="w-5 h-5" />
+            </div>
+            <div>
+              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                {isKa ? 'პროდუქტების კატალოგი' : 'Catalog Products'}
+              </p>
+              <h3 className="text-lg font-black text-slate-900">{totalProductsCount}</h3>
+            </div>
+          </div>
+        </div>
+
+        {/* Tab Navigation */}
+        <div className="flex border-b border-slate-200 space-x-2 overflow-x-auto pb-0.5">
+          <button
+            onClick={() => setActiveTab('analytics')}
+            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
+              activeTab === 'analytics'
+                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Activity className="w-4 h-4 text-blue-600" />
+            <span>{isKa ? `📊 ტრაფიკი & ქვეყნები (${analyticsData.totalVisitorsToday} დღეს)` : `📊 Traffic & Countries (${analyticsData.totalVisitorsToday} today)`}</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('products')}
+            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer shrink-0 ${
+              activeTab === 'products'
+                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            📦 {isKa ? 'პროდუქტების კატალოგი' : 'Products Catalog'} ({products.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('billboards')}
+            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
+              activeTab === 'billboards'
+                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Layers className="w-4 h-4 text-blue-600" />
+            <span>{isKa ? `🖼️ ბილბორდები / ბანერები (${billboards.length})` : `🖼️ Billboards & Banners (${billboards.length})`}</span>
+          </button>
+          <button
+            onClick={() => setActiveTab('theme')}
+            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer shrink-0 ${
+              activeTab === 'theme'
+                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            🎨 {isKa ? 'ვიზუალური თემა და სტილი' : 'Visual & Theme Customizer'}
+          </button>
+          <button
+            onClick={() => setActiveTab('orders')}
+            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer shrink-0 ${
+              activeTab === 'orders'
+                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            📋 {isKa ? 'შეკვეთების მართვა' : 'Orders Management'} ({orders.length})
+          </button>
+          <button
+            onClick={() => setActiveTab('security')}
+            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
+              activeTab === 'security'
+                ? 'border-amber-600 text-amber-600 bg-amber-50/50 rounded-t-xl'
+                : 'border-transparent text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            <Lock className="w-4 h-4 text-amber-600" />
+            <span>{isKa ? '🔐 ადმინის უსაფრთხოება & პაროლი' : '🔐 Admin Security & Password'}</span>
+          </button>
+        </div>
+
+        {/* TAB 0: TRAFFIC & COUNTRY ANALYTICS */}
+        {activeTab === 'analytics' && <AdminAnalytics />}
+
+        {/* TAB 1: PRODUCTS CATALOG */}
+        {activeTab === 'products' && (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+            {/* Action Bar */}
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
+              <div className="flex items-center space-x-3 w-full sm:w-auto">
+                <input
+                  type="text"
+                  value={productSearch ?? ''}
+                  onChange={e => setProductSearch(e.target.value)}
+                  placeholder="Filter products by title..."
+                  className="px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden w-full sm:w-64"
+                />
+                <select
+                  value={categoryFilter ?? 'all'}
+                  onChange={e => setCategoryFilter(e.target.value)}
+                  className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
+                >
+                  <option value="all">All Categories</option>
+                  <option value="tech">Smart Tech</option>
+                  <option value="fitness">Fitness & Hydration</option>
+                  <option value="everyday">Everyday Carry</option>
+                  <option value="accessories">Accessories</option>
+                </select>
+              </div>
+
+              <div className="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
+                <button
+                  onClick={handleOpenAddProduct}
+                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add New Product</span>
+                </button>
+                <button
+                  onClick={resetDefaultProducts}
+                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                  title="Reset to initial 8 products"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Reset Default Catalog</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Table */}
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="p-4">Image</th>
+                    <th className="p-4">Title & Details</th>
+                    <th className="p-4">Category</th>
+                    <th className="p-4">Price</th>
+                    <th className="p-4">Stock</th>
+                    <th className="p-4">Badge</th>
+                    <th className="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {filteredProducts.map(prod => (
+                    <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-4">
+                        <img
+                          src={prod.image}
+                          alt={prod.title}
+                          className="w-12 h-12 object-cover rounded-xl bg-slate-100"
+                        />
+                      </td>
+                      <td className="p-4">
+                        <div className="font-bold text-slate-900">{prod.title}</div>
+                        {prod.titleKa && (
+                          <div className="text-[11px] text-slate-500">{prod.titleKa}</div>
+                        )}
+                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                          ID: {prod.id}
+                        </div>
+                      </td>
+                      <td className="p-4 uppercase font-semibold text-[10px] text-blue-600">
+                        {prod.category}
+                      </td>
+                      <td className="p-4 font-black text-slate-900">
+                        {formatPrice(prod.price)}
+                        {prod.origPrice && (
+                          <span className="text-[10px] text-slate-400 line-through ml-1.5">
+                            {formatPrice(prod.origPrice)}
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4">
+                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
+                          prod.stock > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
+                        }`}>
+                          {prod.stock} units
+                        </span>
+                      </td>
+                      <td className="p-4">
+                        {prod.badge ? (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px]">
+                            {prod.badge}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 text-[10px]">None</span>
+                        )}
+                      </td>
+                      <td className="p-4 text-right space-x-1">
+                        <button
+                          onClick={() => handleOpenEditProduct(prod)}
+                          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors"
+                          title="Edit Product"
+                        >
+                          <Edit3 className="w-4 h-4" />
+                        </button>
+                        <button
+                          onClick={() => deleteProduct(prod.id)}
+                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors"
+                          title="Delete Product"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB: HERO BILLBOARDS & BANNER MANAGEMENT */}
+        {activeTab === 'billboards' && (
+          <div className="space-y-6">
+            {/* Top Control Header Card */}
+            <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-xs">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="p-2 rounded-xl bg-blue-50 text-blue-600 font-bold">
+                      <Layers className="w-5 h-5" />
+                    </span>
+                    <h3 className="text-lg font-black text-slate-900">
+                      Hero Billboards & Banners Management
+                    </h3>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-1 max-w-2xl">
+                    მართეთ მაღაზიის მთავარ გვერდზე განთავსებული სარეკლამო ბილბორდები. სლაიდები იცვლება ავტომატურად (ნაგულისხმევად ყოველ 2 წუთში).
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2.5">
+                  <button
+                    onClick={handleOpenAddBillboard}
+                    className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/20 transition-all flex items-center space-x-2 cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>ახალი ბილბორდის დამატება</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      if (window.confirm('გსურთ ბილბორდების საწყის მდგომარეობაში დაბრუნება?')) {
+                        resetBillboards();
+                      }
+                    }}
+                    className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>საწყისზე დაბრუნება</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Rotation Timer Configuration */}
+              <div className="mt-5 p-4 bg-slate-50 rounded-2xl border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-center space-x-3">
+                  <div className="p-2.5 rounded-xl bg-amber-100 text-amber-700">
+                    <Clock className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-800">
+                      ავტომატური როტაციის ინტერვალი (Auto-Rotation Timer)
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      განსაზღვრეთ რა დროის შემდეგ გადავა ბილბორდი შემდეგ პროდუქტზე (ნაგულისხმევი: 120 წამი = 2 წუთი).
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <div className="flex bg-white rounded-xl border border-slate-200 p-1">
+                    {[
+                      { label: '1 წთ (60s)', sec: 60 },
+                      { label: '2 წთ (120s)', sec: 120 },
+                      { label: '3 წთ (180s)', sec: 180 },
+                      { label: '5 წთ (300s)', sec: 300 },
+                    ].map(preset => (
+                      <button
+                        key={preset.sec}
+                        onClick={() => {
+                          setBillboardIntervalSeconds(preset.sec);
+                          addToast(`როტაციის ინტერვალი დაყენდა: ${preset.label}`, 'success');
+                        }}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          billboardIntervalSeconds === preset.sec
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center space-x-1 pl-2">
+                    <input
+                      type="number"
+                      min="10"
+                      max="1800"
+                      value={billboardIntervalSeconds}
+                      onChange={e => setBillboardIntervalSeconds(Math.max(10, Number(e.target.value) || 120))}
+                      className="w-16 px-2 py-1.5 text-xs text-center font-bold bg-white border border-slate-200 rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                    />
+                    <span className="text-xs text-slate-500 font-semibold">წმ</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Billboards Slides Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {billboards.map((slide, index) => {
+                const linked = slide.productId ? products.find(p => p.id === slide.productId) : null;
+                return (
+                  <div 
+                    key={slide.id}
+                    className={`bg-white rounded-3xl border overflow-hidden shadow-xs transition-all flex flex-col justify-between ${
+                      slide.isActive 
+                        ? 'border-slate-200 hover:border-blue-400 hover:shadow-md' 
+                        : 'border-slate-200 opacity-60 bg-slate-50/50'
+                    }`}
+                  >
+                    <div>
+                      {/* Card Header */}
+                      <div className="p-4 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+                        <div className="flex items-center space-x-2">
+                          <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-mono text-xs font-bold">
+                            #{index + 1}
+                          </span>
+                          <span className="text-xs font-bold text-slate-700">
+                            {slide.badge || 'Featured Slide'}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <button
+                            onClick={() => {
+                              updateBillboard(slide.id, { isActive: !slide.isActive });
+                              addToast(`ბილბორდი #${index + 1} ${slide.isActive ? 'გაითიშა' : 'გააქტიურდა'}`, 'info');
+                            }}
+                            className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
+                              slide.isActive
+                                ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
+                                : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                            }`}
+                          >
+                            {slide.isActive ? '✓ აქტიურია' : 'გათიშულია'}
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Visual Preview Area */}
+                      <div className="p-5">
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
+                          {/* Image Box */}
+                          <div className="sm:col-span-5 h-44 rounded-2xl overflow-hidden bg-slate-950 relative border border-slate-200 shadow-inner group">
+                            <img
+                              src={slide.image}
+                              alt={slide.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                            {slide.discountTag && (
+                              <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-black uppercase shadow-xs">
+                                {slide.discountTag}
+                              </span>
+                            )}
+                            <div className="absolute bottom-2 left-2 px-2 py-1 rounded-md bg-slate-900/80 backdrop-blur-xs text-[11px] font-bold text-white">
+                              {slide.priceTag || (linked ? formatPrice(linked.price) : '')}
+                            </div>
+                          </div>
+
+                          {/* Text Specs */}
+                          <div className="sm:col-span-7 space-y-2">
+                            <div>
+                              <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">
+                                {slide.category || 'Featured Product'}
+                              </p>
+                              <h4 className="text-sm font-bold text-slate-900 line-clamp-1">
+                                {slide.titleKa || slide.title}
+                              </h4>
+                              {slide.titleKa && slide.title && (
+                                <p className="text-xs text-slate-500 line-clamp-1 italic">
+                                  EN: {slide.title}
+                                </p>
+                              )}
+                            </div>
+
+                            <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                              {slide.subtitleKa || slide.subtitle}
+                            </p>
+
+                            {linked && (
+                              <div className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-semibold border border-blue-100">
+                                <span>🔗 პროდუქტი:</span>
+                                <span className="font-bold truncate max-w-[140px]">{linked.title}</span>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Bottom Actions Bar */}
+                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between">
+                      <span className="text-[11px] text-slate-400 font-mono">
+                        ID: {slide.id}
+                      </span>
+
+                      <div className="flex items-center space-x-2">
+                        <button
+                          onClick={() => handleOpenEditBillboard(slide)}
+                          className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
+                        >
+                          <Edit3 className="w-3.5 h-3.5" />
+                          <span>რედაქტირება / სურათის შეცვლა</span>
+                        </button>
+
+                        <button
+                          onClick={() => {
+                            if (billboards.length <= 1) {
+                              addToast('მინიმუმ 1 ბილბორდი უნდა დარჩეს', 'error');
+                              return;
+                            }
+                            if (window.confirm(`ნამდვილად გსურთ ბილბორდის წაშლა?`)) {
+                              deleteBillboard(slide.id);
+                            }
+                          }}
+                          className="p-2 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer"
+                          title="წაშლა"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: VISUAL & THEME CUSTOMIZER */}
+        {activeTab === 'theme' && (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-6 max-w-4xl">
+            <div className="border-b border-slate-100 pb-4">
+              <h3 className="text-lg font-bold text-slate-900">
+                🎨 Visual Customizer & Global Storefront Settings
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                Customize banner announcements, hero headlines, and currency exchange multipliers in real-time.
+              </p>
+            </div>
+
+            <div className="space-y-5">
+              {/* Brand Logo Selection Showcase */}
+              <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                      <Sparkles className="w-4 h-4 text-purple-600" />
+                      <span>DBUY ლოგოს სტილის არჩევა (5 ვარიანტი)</span>
+                    </h4>
+                    <p className="text-[11px] text-slate-500">
+                      დააჭირეთ სასურველ ლოგოს მის ასარჩევად ან გახსენით სრული გადახედვის ფანჯარა.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowLogoModal(true)}
+                    className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white text-[11px] font-bold shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer shrink-0"
+                  >
+                    <Eye className="w-3.5 h-3.5" />
+                    <span>5-ვე ლოგოს შედარება</span>
+                  </button>
+                </div>
+
+                {/* 5 Quick Selection Cards */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {[
+                    { id: 'geometric-tech', name: '1. Clean DBuy Wordmark', desc: 'სუფთა DBuy ლოგო ჩარჩოების გარეშე' },
+                    { id: 'cyber-d', name: '2. Cyber Dynamic D', desc: 'აეროდინამიკური ენერგია + ისარი' },
+                    { id: 'bag-cart', name: '3. Smart Shopping Bag', desc: 'E-commerce სავაჭრო ჩანთის D' },
+                    { id: 'infinity-loop', name: '4. Infinity Loop D-B', desc: 'D და B-ს უსასრულო მარყუჟი' },
+                    { id: 'circle-monogram', name: '5. Luxury Obsidian Badge', desc: 'შავი ობსიდიანის წრიული ემბლემა' },
+                  ].map((logoOpt) => {
+                    const isSelected = (themeForm.logoStyle || 'geometric-tech') === logoOpt.id;
+                    return (
+                      <button
+                        key={logoOpt.id}
+                        type="button"
+                        onClick={() => {
+                          const newStyle = logoOpt.id as any;
+                          setThemeForm(prev => ({ ...prev, logoStyle: newStyle }));
+                          updateTheme({ logoStyle: newStyle });
+                        }}
+                        className={`p-3 rounded-2xl border text-left flex items-center space-x-3 transition-all cursor-pointer ${
+                          isSelected
+                            ? 'bg-purple-950 border-purple-500 ring-2 ring-purple-500/30 text-white shadow-md'
+                            : 'bg-slate-900 border-slate-800 text-slate-200 hover:border-slate-700 hover:bg-slate-850'
+                        }`}
+                      >
+                        <div className="p-1.5 rounded-xl bg-slate-950 border border-slate-800 shrink-0">
+                          <BrandLogo size="sm" variant="dark" showText={false} styleOverride={logoOpt.id as any} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold truncate">{logoOpt.name}</span>
+                            {isSelected && (
+                              <span className="text-[10px] font-black text-emerald-400 shrink-0 ml-1">✓ აქტიური</span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-400 truncate">{logoOpt.desc}</p>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Announcement text */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  📢 Top Announcement Banner
+                </label>
+                <input
+                  type="text"
+                  value={themeForm.announcementText ?? ''}
+                  onChange={e => setThemeForm({ ...themeForm, announcementText: e.target.value })}
+                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Hero Title & Subtitle */}
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    🌟 Hero Section Main Headline
+                  </label>
+                  <input
+                    type="text"
+                    value={themeForm.heroTitle ?? ''}
+                    onChange={e => setThemeForm({ ...themeForm, heroTitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    🌟 Hero Section Subtitle
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={themeForm.heroSubtitle ?? ''}
+                    onChange={e => setThemeForm({ ...themeForm, heroSubtitle: e.target.value })}
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Currency Multipliers */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <h4 className="text-xs font-bold text-slate-800">
+                  💱 Currency Multiplier Rates (Base: 1 USD)
+                </h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      EUR Rate (€ per $1 USD)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={themeForm.eurRate ?? ''}
+                      onChange={e => setThemeForm({ ...themeForm, eurRate: e.target.value === '' ? 0 : Number(e.target.value) })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                      GEL Rate (₾ per $1 USD)
+                    </label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      value={themeForm.gelRate ?? ''}
+                      onChange={e => setThemeForm({ ...themeForm, gelRate: e.target.value === '' ? 0 : Number(e.target.value) })}
+                      className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Save Theme button */}
+              <div className="flex items-center space-x-3 pt-2">
+                <button
+                  type="button"
+                  onClick={handleSaveTheme}
+                  className="px-6 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors flex items-center space-x-2 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Save Visual Settings</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={resetTheme}
+                  className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                >
+                  Reset Defaults
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: ORDERS MANAGEMENT */}
+        {activeTab === 'orders' && (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">
+                  Customer Orders Ledger
+                </h3>
+                <p className="text-xs text-slate-500">
+                  Real-time orders placed across all storefront sessions.
+                </p>
+              </div>
+              {orders.length > 0 && (
+                <button
+                  onClick={clearOrderHistory}
+                  className="px-3.5 py-1.5 rounded-xl text-red-600 hover:bg-red-50 font-semibold text-xs transition-colors"
+                >
+                  Clear Order History
+                </button>
+              )}
+            </div>
+
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                  <tr>
+                    <th className="p-4">Order ID</th>
+                    <th className="p-4">Customer</th>
+                    <th className="p-4">Date</th>
+                    <th className="p-4">Items</th>
+                    <th className="p-4">Total</th>
+                    <th className="p-4">Status</th>
+                    <th className="p-4">Tracking</th>
+                    <th className="p-4 text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {orders.length === 0 ? (
+                    <tr>
+                      <td colSpan={8} className="p-8 text-center text-slate-400">
+                        No orders recorded yet. Place an order in the checkout to see it appear here!
+                      </td>
+                    </tr>
+                  ) : (
+                    orders.map(order => (
+                      <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="p-4 font-mono font-bold text-blue-700">
+                          <div>{order.id}</div>
+                          {order.paypalTransactionId && (
+                            <div className="text-[10px] text-emerald-600 font-normal mt-0.5">
+                              PP: {order.paypalTransactionId}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-4">
+                          <div className="font-bold text-slate-900">{order.customerName}</div>
+                          <div className="text-[11px] text-slate-400">{order.email}</div>
+                          <div className="text-[10px] text-slate-500">{order.city}, {order.country}</div>
+                        </td>
+                        <td className="p-4 text-slate-500">
+                          {order.date}
+                        </td>
+                        <td className="p-4">
+                          <div className="space-y-1 max-w-xs">
+                            {order.items.map((it, idx) => (
+                              <div key={idx} className="text-[11px] text-slate-700 truncate">
+                                • {it.quantity}x {it.title}
+                              </div>
+                            ))}
+                          </div>
+                        </td>
+                        <td className="p-4 font-black text-slate-900">
+                          {formatPrice(order.total)}
+                        </td>
+                        <td className="p-4">
+                          <select
+                            value={order.status}
+                            onChange={e => updateOrderStatus(order.id, e.target.value as Order['status'])}
+                            className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer border ${
+                              order.status === 'Delivered'
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                : order.status === 'Shipped'
+                                ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                : order.status === 'Cancelled'
+                                ? 'bg-red-50 text-red-700 border-red-200'
+                                : 'bg-amber-50 text-amber-700 border-amber-200'
+                            }`}
+                          >
+                            <option value="Processing">Processing</option>
+                            <option value="Shipped">Shipped</option>
+                            <option value="Delivered">Delivered</option>
+                            <option value="Cancelled">Cancelled</option>
+                          </select>
+                        </td>
+                        <td className="p-4 font-mono text-[11px] text-slate-600">
+                          {order.trackingNumber}
+                        </td>
+                        <td className="p-4 text-right">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (window.confirm(`Delete order ${order.id}?`)) {
+                                deleteOrder(order.id);
+                              }
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            title="Delete order"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: SECURITY & PASSWORD SETTINGS */}
+        {activeTab === 'security' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8">
+              <div className="flex items-center space-x-3 pb-5 border-b border-slate-100 mb-6">
+                <div className="p-3 rounded-2xl bg-amber-50 text-amber-600 border border-amber-200">
+                  <Lock className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    {isKa ? 'ადმინისტრატორის პაროლის მართვა' : 'Administrator Password Management'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {isKa ? 'აქედან შეგიძლიათ შეცვალოთ ადმინ პანელის უსაფრთხოების პაროლი ნებისმიერ დროს.' : 'You can change the admin panel security password at any time.'}
+                  </p>
+                </div>
+              </div>
+
+              {/* Current Account Information Card */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    {isKa ? 'ადმინის ელ-ფოსტა' : 'Admin Email'}
+                  </p>
+                  <p className="text-xs font-mono font-bold text-slate-900">lashaarsiashvili@gmail.com</p>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    {isKa ? 'სტატუსი' : 'Status'}
+                  </p>
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800">
+                    {isKa ? '✓ ავტორიზებული ადმინი' : '✓ Authorized Admin'}
+                  </span>
+                </div>
+                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
+                  <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
+                    {isKa ? 'პაროლის სტატუსი' : 'Password Status'}
+                  </p>
+                  <p className="text-xs font-medium text-slate-700">
+                    {adminPassword === 'admin123'
+                      ? (isKa ? '⚠️ ნაგულისხმევი (admin123)' : '⚠️ Default (admin123)')
+                      : (isKa ? '🔒 მორგებული პაროლი' : '🔒 Custom Password')}
+                  </p>
+                </div>
+              </div>
+
+              {/* Password Change Form */}
+              <form onSubmit={handlePasswordChangeSubmit} className="max-w-xl space-y-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKa ? 'ძველი პაროლი (Current Password) *' : 'Current Password *'}
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    value={oldPasswordInput}
+                    onChange={e => setOldPasswordInput(e.target.value)}
+                    placeholder={isKa ? 'შეიყვანეთ მიმდინარე პაროლი (მაგ: admin123)...' : 'Enter current password (e.g. admin123)...'}
+                    className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {isKa ? 'ახალი პაროლი (New Password) *' : 'New Password *'}
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={newPasswordInput}
+                      onChange={e => setNewPasswordInput(e.target.value)}
+                      placeholder={isKa ? 'ახალი პაროლი...' : 'New password...'}
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {isKa ? 'გაიმეორეთ ახალი პაროლი *' : 'Confirm New Password *'}
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={confirmPasswordInput}
+                      onChange={e => setConfirmPasswordInput(e.target.value)}
+                      placeholder={isKa ? 'გაიმეორეთ ახალი პაროლი...' : 'Confirm new password...'}
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-2">
+                  <button
+                    type="submit"
+                    className="px-6 py-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs shadow-md transition-colors flex items-center space-x-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isKa ? 'პაროლის განახლება' : 'Update Password'}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Platform Security Defense Status */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8">
+              <div className="flex items-center space-x-3 pb-4 border-b border-slate-100 mb-6">
+                <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-200">
+                  <ShieldCheck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">
+                    {isKa ? 'აქტიური უსაფრთხოების მექანიზმები (Security Defenses)' : 'Active Platform Security Defenses'}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {isKa ? 'საიტზე ჩართულია რეალურ დროში დაცვისა და გატეხვის საწინააღმდეგო სისტემები' : 'Real-time defense and attack prevention systems are active'}
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start space-x-3">
+                  <div className="p-2 rounded-xl bg-emerald-100 text-emerald-700 mt-0.5">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">
+                      {isKa ? 'ბრუტფორსის (Brute-Force) საწინააღმდეგო ბლოკირება' : 'Anti-Brute Force Protection'}
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      {isKa ? 'ავტორიზაციის 5 არასწორი მცდელობის შემდეგ სისტემა ავტომატურად ბლოკავს შემომავალ მოთხოვნებს 60 წამით.' : 'After 5 incorrect authorization attempts, incoming requests are blocked for 60 seconds.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start space-x-3">
+                  <div className="p-2 rounded-xl bg-blue-100 text-blue-700 mt-0.5">
+                    <KeyRound className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">
+                      {isKa ? '5-ციფრიანი OTP იმეილ ვერიფიკაცია' : '5-Digit OTP Verification'}
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      {isKa ? 'რეგისტრაციისას იმეილის რეალურობა მოწმდება კრიპტოგრაფიულად გენერირებული 5-ნიშნა კოდით.' : 'Email validity is verified via cryptographically generated 5-digit verification code.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start space-x-3">
+                  <div className="p-2 rounded-xl bg-indigo-100 text-indigo-700 mt-0.5">
+                    <Lock className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">
+                      {isKa ? 'XSS & Script Injection სანიტიზაცია' : 'XSS & Script Injection Sanitization'}
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      {isKa ? 'ყველა შეყვანილი მონაცემი (სახელი, მისამართი, ელ-ფოსტა) იფილტრება მავნე კოდის ინექციისგან.' : 'All user input fields (name, address, email) are sanitized against malicious code injections.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 flex items-start space-x-3">
+                  <div className="p-2 rounded-xl bg-purple-100 text-purple-700 mt-0.5">
+                    <ShieldAlert className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-slate-900">
+                      {isKa ? 'ადმინ პანელის სრული იზოლაცია' : 'Admin Panel Isolation'}
+                    </h4>
+                    <p className="text-[11px] text-slate-600 mt-0.5">
+                      {isKa ? 'ადმინის მართვის პანელი და ლინკები სრულად დამალულია საიტის გარედან და მოითხოვს ადმინის სესიას.' : 'Admin control panel and routes are isolated and require an active admin session.'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </div>
+
+      {/* Add / Edit Billboard Modal */}
+      {isBillboardModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="absolute inset-0" onClick={() => setIsBillboardModalOpen(false)} />
+
+          <div className="relative w-full max-w-3xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto space-y-6">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Layers className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-900">
+                    {editingBillboard
+                      ? (isKa ? 'ბილბორდის რედაქტირება' : 'Edit Billboard')
+                      : (isKa ? 'ახალი ბილბორდის დამატება' : 'Add New Billboard')}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {isKa ? 'შეცვალეთ ბილბორდის სურათი, სათაურები, ფასდაკლების აქცია და დაკავშირებული პროდუქტი.' : 'Customize billboard image, headlines, discount promotions, and linked store product.'}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsBillboardModalOpen(false)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveBillboardSubmit} className="space-y-5">
+              
+              {/* 1. Quick Store Product Picker (Autofill) */}
+              <div className="p-4 bg-blue-50/70 rounded-2xl border border-blue-100 space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-blue-900 flex items-center space-x-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{isKa ? 'სწრაფი არჩევა მაღაზიის პროდუქტებიდან (Autofill)' : 'Quick Store Product Picker (Autofill)'}</span>
+                  </span>
+                  <span className="text-[11px] text-blue-600">{isKa ? 'დააჭირეთ პროდუქტს მონაცემების გადმოსატანად' : 'Click a product to auto-fill billboard details'}</span>
+                </div>
+                <div className="flex items-center space-x-2 overflow-x-auto pb-1.5">
+                  {products.slice(0, 10).map((prod) => (
+                    <button
+                      key={prod.id}
+                      type="button"
+                      onClick={() => handleAutoFillFromProduct(prod.id)}
+                      className={`shrink-0 flex items-center space-x-2 p-1.5 rounded-xl border bg-white text-left transition-all cursor-pointer ${
+                        billboardForm.productId === prod.id
+                          ? 'border-blue-600 ring-2 ring-blue-500/30'
+                          : 'border-slate-200 hover:border-blue-400'
+                      }`}
+                    >
+                      <img
+                        src={prod.image}
+                        alt={prod.title}
+                        className="w-8 h-8 rounded-lg object-cover bg-slate-950 shrink-0"
+                      />
+                      <div className="max-w-[100px]">
+                        <p className="text-[11px] font-bold text-slate-900 truncate">{prod.title}</p>
+                        <p className="text-[10px] text-blue-600 font-black">{formatPrice(prod.price)}</p>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 2. Main Product Image Setting */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-800">
+                    🖼️ {isKa ? 'ბილბორდის მთავარი სურათი (Main Product Showcase Image) *' : 'Main Product Showcase Image *'}
+                  </label>
+                  <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setBillboardImageMode('url')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        billboardImageMode === 'url' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600'
+                      }`}
+                    >
+                      {isKa ? 'URL ბმული' : 'URL Link'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setBillboardImageMode('upload')}
+                      className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
+                        billboardImageMode === 'upload' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600'
+                      }`}
+                    >
+                      {isKa ? 'ფაილის ატვირთვა' : 'Upload File'}
+                    </button>
+                  </div>
+                </div>
+
+                {billboardImageMode === 'upload' ? (
+                  <div
+                    onClick={() => billboardFileInputRef.current?.click()}
+                    className="p-6 border-2 border-dashed border-slate-300 hover:border-blue-500 rounded-2xl bg-slate-50 hover:bg-blue-50/20 text-center cursor-pointer transition-colors"
+                  >
+                    <input
+                      ref={billboardFileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={e => {
+                        const file = e.target.files?.[0];
+                        if (file) processBillboardImageFile(file);
+                      }}
+                    />
+                    <UploadCloud className="w-8 h-8 text-blue-500 mx-auto mb-2" />
+                    <p className="text-xs font-bold text-slate-800">{isKa ? 'დააჭირეთ სურათის ასატვირთად' : 'Click to upload image'}</p>
+                    <p className="text-[11px] text-slate-500">{isKa ? 'PNG, JPG, WEBP (ავტომატური ოპტიმიზაცია)' : 'PNG, JPG, WEBP (Auto optimized)'}</p>
+                  </div>
+                ) : (
+                  <input
+                    type="text"
+                    required
+                    value={billboardForm.image}
+                    onChange={e => setBillboardForm({ ...billboardForm, image: e.target.value })}
+                    placeholder="https://images.unsplash.com/photo-..."
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                )}
+
+                {/* Live Image Preview Card */}
+                {billboardForm.image && (
+                  <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 flex items-center space-x-4">
+                    <img
+                      src={billboardForm.image}
+                      alt="Preview"
+                      className="w-20 h-20 rounded-xl object-cover bg-slate-950 border border-slate-700 shrink-0"
+                    />
+                    <div className="text-xs text-white min-w-0">
+                      <p className="font-bold text-blue-400 truncate">{isKa ? 'სურათის გადახედვა:' : 'Image Preview:'}</p>
+                      <p className="text-[11px] text-slate-300 truncate">{billboardForm.title || (isKa ? 'სათაური არ არის შეყვანილი' : 'No title entered')}</p>
+                      <p className="text-[10px] text-slate-400 mt-1 font-mono truncate">{billboardForm.image}</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 3. Background Gradient / Preset Colors */}
+              <div>
+                <label className="block text-xs font-bold text-slate-800 mb-2">
+                  🎨 {isKa ? 'ფონის გრადიენტი (Background Atmosphere Gradient)' : 'Background Atmosphere Gradient'}
+                </label>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {billboardGradients.map((grad, i) => (
+                    <button
+                      key={i}
+                      type="button"
+                      onClick={() => setBillboardForm({ ...billboardForm, bgGradient: grad.value })}
+                      className={`p-2.5 rounded-xl border text-left flex items-center space-x-2.5 transition-all cursor-pointer ${
+                        billboardForm.bgGradient === grad.value
+                          ? 'border-blue-600 ring-2 ring-blue-500/20 bg-blue-50/50'
+                          : 'border-slate-200 hover:border-slate-300'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${grad.value} shrink-0 border border-slate-700 shadow-xs`} />
+                      <span className="text-[11px] font-bold text-slate-800 truncate">{grad.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* 4. Ambient Background Texture URL */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  🌌 {isKa ? 'ფონის ბუნდოვანი სურათი (Ambient Lifestyle Background URL - Optional)' : 'Ambient Lifestyle Background URL (Optional)'}
+                </label>
+                <input
+                  type="text"
+                  value={billboardForm.bgImage || ''}
+                  onChange={e => setBillboardForm({ ...billboardForm, bgImage: e.target.value })}
+                  placeholder={isKa ? 'https://images.unsplash.com/... (ფონის მსუბუქი ეფექტისთვის)' : 'https://images.unsplash.com/... (for subtle mood overlay)'}
+                  className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* 5. Bilingual Titles */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    🇬🇪 ქართული სათაური (Georgian Headline) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={billboardForm.titleKa}
+                    onChange={e => setBillboardForm({ ...billboardForm, titleKa: e.target.value })}
+                    placeholder="მაგ: ფლაგმანი უკაბელო ყურსასმენი"
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    🇬🇧 ინგლისური სათაური (English Headline) *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={billboardForm.title}
+                    onChange={e => setBillboardForm({ ...billboardForm, title: e.target.value })}
+                    placeholder="e.g. Next-Gen ANC Wireless Headphones"
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-semibold"
+                  />
+                </div>
+              </div>
+
+              {/* 6. Bilingual Subtitles */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    🇬🇪 ქართული აღწერა (Georgian Subtitle)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={billboardForm.subtitleKa}
+                    onChange={e => setBillboardForm({ ...billboardForm, subtitleKa: e.target.value })}
+                    placeholder="მოკლე სარეკლამო აღწერა ქართულად..."
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                    🇬🇧 ინგლისური აღწერა (English Subtitle)
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={billboardForm.subtitle}
+                    onChange={e => setBillboardForm({ ...billboardForm, subtitle: e.target.value })}
+                    placeholder="Short promotional subtitle in English..."
+                    className="w-full px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* 7. Badges, Pricing & Discounts */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    🏷️ Badge (EN)
+                  </label>
+                  <input
+                    type="text"
+                    value={billboardForm.badge || ''}
+                    onChange={e => setBillboardForm({ ...billboardForm, badge: e.target.value })}
+                    placeholder="Flagship Audio"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    🏷️ Badge (KA)
+                  </label>
+                  <input
+                    type="text"
+                    value={billboardForm.badgeKa || ''}
+                    onChange={e => setBillboardForm({ ...billboardForm, badgeKa: e.target.value })}
+                    placeholder="ტოპ შეთავაზება"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    🔥 Discount Tag
+                  </label>
+                  <input
+                    type="text"
+                    value={billboardForm.discountTag || ''}
+                    onChange={e => setBillboardForm({ ...billboardForm, discountTag: e.target.value })}
+                    placeholder="-27% OFF"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-bold text-rose-600"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    💰 Display Price
+                  </label>
+                  <input
+                    type="text"
+                    value={billboardForm.priceTag || ''}
+                    onChange={e => setBillboardForm({ ...billboardForm, priceTag: e.target.value })}
+                    placeholder="$79.99"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-bold"
+                  />
+                </div>
+              </div>
+
+              {/* 8. Button Labels & Category */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    🔘 {isKa ? 'ღილაკის ტექსტი (KA)' : 'Button Label (KA)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={billboardForm.buttonTextKa || ''}
+                    onChange={e => setBillboardForm({ ...billboardForm, buttonTextKa: e.target.value })}
+                    placeholder="ყურსასმენის შეძენა"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    🔘 {isKa ? 'ღილაკის ტექსტი (EN)' : 'Button Label (EN)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={billboardForm.buttonText || ''}
+                    onChange={e => setBillboardForm({ ...billboardForm, buttonText: e.target.value })}
+                    placeholder="Shop Now"
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    📂 {isKa ? 'კატეგორია' : 'Category'}
+                  </label>
+                  <select
+                    value={billboardForm.category || 'tech'}
+                    onChange={e => setBillboardForm({ ...billboardForm, category: e.target.value as any })}
+                    className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-semibold"
+                  >
+                    <option value="tech">Tech & Gadgets</option>
+                    <option value="fitness">Fitness & Hydration</option>
+                    <option value="everyday">Everyday Carry</option>
+                    <option value="accessories">Accessories</option>
+                    <option value="deals">Special Deals</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* 9. Active Status Toggle */}
+              <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
+                <div>
+                  <p className="text-xs font-bold text-slate-900">
+                    {isKa ? 'სტატუსი: აქტიური ბილბორდი' : 'Status: Active Billboard'}
+                  </p>
+                  <p className="text-[11px] text-slate-500">
+                    {isKa ? 'თუ გათიშავთ, ეს სლაიდი როტაციაში არ გამოჩნდება' : 'If deactivated, this slide will not appear in storefront rotation'}
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={billboardForm.isActive}
+                  onChange={e => setBillboardForm({ ...billboardForm, isActive: e.target.checked })}
+                  className="w-5 h-5 rounded-md text-blue-600 focus:ring-blue-500 cursor-pointer"
+                />
+              </div>
+
+              {/* Form Buttons */}
+              <div className="pt-2 flex items-center justify-end space-x-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setIsBillboardModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  {isKa ? 'გაუქმება' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md shadow-blue-600/30 transition-all flex items-center space-x-2 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>
+                    {editingBillboard
+                      ? (isKa ? 'ცვლილებების შენახვა' : 'Save Changes')
+                      : (isKa ? 'ბილბორდის დამატება' : 'Add Billboard')}
+                  </span>
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Add / Edit Product Modal */}
+      {isProductModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="absolute inset-0" onClick={() => setIsProductModalOpen(false)} />
+
+          <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+            <button
+              onClick={() => setIsProductModalOpen(false)}
+              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <h3 className="text-lg font-bold text-slate-900 mb-4">
+              {editingProduct
+                ? (isKa ? 'პროდუქტის რედაქტირება' : 'Edit Product')
+                : (isKa ? 'ახალი პროდუქტის დამატება' : 'Add New Product')}
+            </h3>
+
+            <form onSubmit={handleSaveProduct} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isKa ? 'პროდუქტის სათაური (EN) *' : 'Product Title (EN) *'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={prodForm.title ?? ''}
+                  onChange={e => setProdForm({ ...prodForm, title: e.target.value })}
+                  placeholder="e.g. Wireless Ergonomic Mouse"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isKa ? 'პროდუქტის სათაური ქართულად (KA)' : 'Product Title in Georgian (KA)'}
+                </label>
+                <input
+                  type="text"
+                  value={prodForm.titleKa ?? ''}
+                  onChange={e => setProdForm({ ...prodForm, titleKa: e.target.value })}
+                  placeholder="მაგ: ერგონომიული უსადენო მაუსი"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKa ? 'კატეგორია *' : 'Category *'}
+                  </label>
+                  <select
+                    value={prodForm.category ?? 'tech'}
+                    onChange={e => setProdForm({ ...prodForm, category: e.target.value as Product['category'] })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden"
+                  >
+                    <option value="tech">{isKa ? 'ჭკვიანი ტექნიკა' : 'Smart Tech'}</option>
+                    <option value="fitness">{isKa ? 'ფიტნესი და აქტივობა' : 'Fitness & Hydration'}</option>
+                    <option value="everyday">{isKa ? 'ყოველდღიური ნივთები' : 'Everyday Carry'}</option>
+                    <option value="accessories">{isKa ? 'აქსესუარები' : 'Accessories'}</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKa ? 'ბეიჯის იარლიყი' : 'Badge Label'}
+                  </label>
+                  <select
+                    value={prodForm.badge ?? ''}
+                    onChange={e => setProdForm({ ...prodForm, badge: e.target.value })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden"
+                  >
+                    <option value="">{isKa ? 'არცერთი' : 'None'}</option>
+                    <option value="Best Seller">{isKa ? 'ბესტსელერი' : 'Best Seller'}</option>
+                    <option value="Trending">{isKa ? 'პოპულარული' : 'Trending'}</option>
+                    <option value="Hot Deal">{isKa ? 'ცხელი შეთავაზება' : 'Hot Deal'}</option>
+                    <option value="New">{isKa ? 'ახალი' : 'New'}</option>
+                    <option value="Sale">{isKa ? 'ფასდაკლება' : 'Sale'}</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKa ? 'ფასი ($ USD) *' : 'Price ($ USD) *'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={prodForm.price ?? ''}
+                    onChange={e => setProdForm({ ...prodForm, price: e.target.value === '' ? 0 : Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKa ? 'ძველი ფასი ($)' : 'Orig Price ($)'}
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    value={prodForm.origPrice ?? ''}
+                    onChange={e => setProdForm({ ...prodForm, origPrice: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKa ? 'მარაგი (ერთეული)' : 'Stock Units'}
+                  </label>
+                  <input
+                    type="number"
+                    value={prodForm.stock ?? ''}
+                    onChange={e => setProdForm({ ...prodForm, stock: e.target.value === '' ? 0 : Number(e.target.value) })}
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Product Image Section: File Upload or Direct URL */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">
+                    {isKa ? 'პროდუქტის სურათი *' : 'Product Image *'}
+                  </label>
+                  
+                  {/* Mode switcher */}
+                  <div className="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => setImageInputMode('upload')}
+                      className={`px-2.5 py-1 rounded-md font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+                        imageInputMode === 'upload'
+                          ? 'bg-white text-blue-600 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <Upload className="w-3 h-3" />
+                      <span>{isKa ? 'ატვირთვა' : 'Upload'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setImageInputMode('url')}
+                      className={`px-2.5 py-1 rounded-md font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+                        imageInputMode === 'url'
+                          ? 'bg-white text-blue-600 shadow-xs'
+                          : 'text-slate-500 hover:text-slate-800'
+                      }`}
+                    >
+                      <LinkIcon className="w-3 h-3" />
+                      <span>{isKa ? 'ლინკი (URL)' : 'Link (URL)'}</span>
+                    </button>
+                  </div>
+                </div>
+
+                {imageInputMode === 'upload' ? (
+                  <div className="space-y-2">
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/png, image/jpeg, image/jpg, image/webp, image/gif, image/svg+xml"
+                      onChange={handleFileInputChange}
+                      className="hidden"
+                    />
+
+                    {/* Drag and drop dropzone */}
+                    <div
+                      onDragOver={handleDragOver}
+                      onDragLeave={handleDragLeave}
+                      onDrop={handleDrop}
+                      onClick={() => fileInputRef.current?.click()}
+                      className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
+                        isDragging
+                          ? 'border-blue-500 bg-blue-50/80 scale-[1.01]'
+                          : prodForm.image
+                          ? 'border-emerald-300 bg-emerald-50/30 hover:border-blue-400 hover:bg-slate-50'
+                          : 'border-slate-300 bg-slate-50/70 hover:border-blue-500 hover:bg-blue-50/30'
+                      }`}
+                    >
+                      {prodForm.image ? (
+                        <div className="flex items-center space-x-3.5 text-left">
+                          <img
+                            src={prodForm.image}
+                            alt="Preview"
+                            className="w-16 h-16 object-cover rounded-xl border border-slate-200 shrink-0 shadow-xs"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-800">
+                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                              <span className="truncate">
+                                {uploadedFileInfo?.name || (isKa ? 'სურათი მზადაა' : 'Image ready')}
+                              </span>
+                            </div>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {uploadedFileInfo?.size ? `${isKa ? 'ზომა' : 'Size'}: ${uploadedFileInfo.size} • ` : ''}
+                              {isKa ? 'დააჭირეთ შესაცვლელად' : 'Click to change'}
+                            </p>
+                            <div className="flex items-center space-x-2 mt-1.5">
+                              <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md">
+                                {isKa ? 'შეცვლა' : 'Replace'}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="py-3 flex flex-col items-center justify-center space-y-2">
+                          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
+                            <UploadCloud className="w-5 h-5" />
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-700">
+                              {isKa ? 'დააჭირეთ ასატვირთად ან გადმოათრიეთ სურათი' : 'Click to upload or drag & drop image'}
+                            </p>
+                            <p className="text-[11px] text-slate-400 mt-0.5">
+                              {isKa ? 'PNG, JPG, WEBP, GIF (მაქს. 15MB)' : 'PNG, JPG, WEBP, GIF (Max 15MB)'}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <input
+                      type="text"
+                      required
+                      value={prodForm.image ?? ''}
+                      onChange={e => {
+                        setProdForm({ ...prodForm, image: e.target.value });
+                        setUploadedFileInfo(null);
+                      }}
+                      placeholder="https://images.unsplash.com/..."
+                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden mb-2"
+                    />
+
+                    <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+                      {presetImages.map((preset, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setProdForm({ ...prodForm, image: preset.url });
+                            setUploadedFileInfo(null);
+                          }}
+                          className={`shrink-0 p-1 rounded-lg border transition-all ${
+                            prodForm.image === preset.url
+                              ? 'border-blue-600 ring-2 ring-blue-500/20'
+                              : 'border-slate-200 hover:border-blue-400'
+                          }`}
+                          title={preset.label}
+                        >
+                          <img
+                            src={preset.url}
+                            alt={preset.label}
+                            className="w-10 h-10 object-cover rounded-md"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  {isKa ? 'აღწერა' : 'Description'}
+                </label>
+                <textarea
+                  rows={2}
+                  value={prodForm.description ?? ''}
+                  onChange={e => setProdForm({ ...prodForm, description: e.target.value })}
+                  placeholder={isKa ? 'პროდუქტის მოკლე აღწერა...' : 'Product description...'}
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="pt-2 flex justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsProductModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  {isKa ? 'გაუქმება' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                >
+                  {isKa ? 'შენახვა' : 'Save Product'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Logo Preview Modal with 5 options selector */}
+      <LogoPreviewModal
+        isOpen={showLogoModal}
+        onClose={() => setShowLogoModal(false)}
+        currentLogo={(themeForm.logoStyle as any) || 'geometric-tech'}
+        onSelectLogo={(newId) => {
+          setThemeForm(prev => ({ ...prev, logoStyle: newId }));
+          updateTheme({ logoStyle: newId });
+        }}
+      />
+
+    </div>
+  );
+};

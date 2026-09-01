@@ -1,0 +1,195 @@
+import React, { useState } from 'react';
+import { Product } from '../types';
+import { useStore } from '../context/StoreContext';
+import { Star, ShoppingCart, Eye, Check, Heart } from 'lucide-react';
+
+interface ProductCardProps {
+  product: Product;
+}
+
+export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+  const { 
+    t, 
+    language, 
+    formatPrice, 
+    addToCart, 
+    setQuickViewProduct,
+    isInWishlist,
+    toggleWishlist,
+  } = useStore();
+  const [justAdded, setJustAdded] = useState(false);
+
+  const isFavorite = isInWishlist(product.id);
+  const displayTitle = (language === 'ka' && product.titleKa) ? product.titleKa : product.title;
+
+  const handleAddToCart = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    addToCart(product, 1);
+    setJustAdded(true);
+    setTimeout(() => setJustAdded(false), 1500);
+  };
+
+  const handleWishlistToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    toggleWishlist(product);
+  };
+
+  const discountPercent = product.origPrice
+    ? Math.round(((product.origPrice - product.price) / product.origPrice) * 100)
+    : 0;
+
+  const getBadgeLabel = (badge?: string) => {
+    if (!badge) return '';
+    if (language === 'ka') {
+      if (badge === 'Best Seller') return 'ბესტსელერი';
+      if (badge === 'Hot Deal') return 'ცხელი შეთავაზება';
+      if (badge === 'Trending') return 'ტრენდული';
+      if (badge === 'New') return 'ახალი';
+    }
+    return badge;
+  };
+
+  return (
+    <div 
+      className="group relative flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
+      onClick={() => setQuickViewProduct(product)}
+    >
+      {/* Badge */}
+      {product.badge && (
+        <div className="absolute top-3 left-3 z-10">
+          <span className={`px-2.5 py-1 text-[11px] font-bold rounded-md uppercase tracking-wider shadow-xs ${
+            product.badge === 'Best Seller'
+              ? 'bg-amber-500 text-slate-950'
+              : product.badge === 'Hot Deal'
+              ? 'bg-red-600 text-white'
+              : product.badge === 'Trending'
+              ? 'bg-blue-600 text-white'
+              : 'bg-emerald-600 text-white'
+          }`}>
+            {getBadgeLabel(product.badge)}
+          </span>
+        </div>
+      )}
+
+      {/* Top Right Controls: Wishlist Button & Discount Tag */}
+      <div className="absolute top-3 right-3 z-10 flex items-center space-x-1.5">
+        {discountPercent > 0 && (
+          <span className="px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-red-100 text-red-700 border border-red-200">
+            -{discountPercent}%
+          </span>
+        )}
+        <button
+          onClick={handleWishlistToggle}
+          className={`p-2 rounded-full shadow-md backdrop-blur-xs transition-all cursor-pointer ${
+            isFavorite 
+              ? 'bg-white text-red-500 hover:scale-110' 
+              : 'bg-white/90 text-slate-500 hover:text-red-500 hover:bg-white'
+          }`}
+          title={isFavorite ? t('wishlist.remove') : t('wishlist.add')}
+          aria-label={t('wishlist.title')}
+        >
+          <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+        </button>
+      </div>
+
+      {/* Product Image Container */}
+      <div className="relative w-full pt-[85%] bg-slate-100 overflow-hidden">
+        <img
+          src={product.image}
+          alt={displayTitle}
+          className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
+          loading="lazy"
+        />
+
+        {/* Quick View Hover Overlay Button */}
+        <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center">
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setQuickViewProduct(product);
+            }}
+            className="flex items-center space-x-1.5 px-3.5 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-slate-50 transition-transform transform translate-y-2 group-hover:translate-y-0 duration-200 cursor-pointer"
+          >
+            <Eye className="w-3.5 h-3.5 text-blue-600" />
+            <span>{t('products.quickView')}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Card Body */}
+      <div className="flex-1 p-4 flex flex-col justify-between space-y-3">
+        <div>
+          {/* Category & Rating */}
+          <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
+            <span className="uppercase font-semibold tracking-wider text-[10px] text-blue-600">
+              {product.category}
+            </span>
+            <div className="flex items-center space-x-1 text-slate-700 font-medium">
+              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+              <span>{product.rating.toFixed(1)}</span>
+              <span className="text-slate-400 text-[10px]">({product.reviewsCount})</span>
+            </div>
+          </div>
+
+          {/* Product Title */}
+          <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
+            {displayTitle}
+          </h3>
+        </div>
+
+        {/* Price & Stock */}
+        <div className="pt-2 border-t border-slate-100">
+          <div className="flex items-baseline justify-between mb-3">
+            <div className="flex items-baseline space-x-2">
+              <span className="text-lg font-black text-slate-900">
+                {formatPrice(product.price)}
+              </span>
+              {product.origPrice && (
+                <span className="text-xs text-slate-400 line-through">
+                  {formatPrice(product.origPrice)}
+                </span>
+              )}
+            </div>
+
+            <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
+              product.stock > 0
+                ? 'bg-emerald-50 text-emerald-700'
+                : 'bg-red-50 text-red-700'
+            }`}>
+              {product.stock > 0
+                ? product.stock < 10
+                  ? t('products.stockLeft', { count: product.stock })
+                  : t('products.inStock')
+                : t('products.outOfStock')}
+            </span>
+          </div>
+
+          {/* Add to Cart Button */}
+          <button
+            onClick={handleAddToCart}
+            disabled={product.stock <= 0}
+            className={`w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer ${
+              justAdded
+                ? 'bg-emerald-600 text-white'
+                : product.stock > 0
+                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md'
+                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+            }`}
+          >
+            {justAdded ? (
+              <>
+                <Check className="w-4 h-4" />
+                <span>{t('products.added')}</span>
+              </>
+            ) : (
+              <>
+                <ShoppingCart className="w-4 h-4" />
+                <span>{t('products.addToCart')}</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
