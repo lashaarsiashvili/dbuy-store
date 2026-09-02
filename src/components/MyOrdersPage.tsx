@@ -1,10 +1,17 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Package, Truck, ArrowRight, LogIn, Trash2, AlertTriangle, X } from 'lucide-react';
+import { Package, Truck, ArrowRight, LogIn, Trash2, AlertTriangle, X, Copy, Check, ExternalLink } from 'lucide-react';
 
 export const MyOrdersPage: React.FC = () => {
-  const { t, orders, formatPrice, setCurrentPage, user, setIsAuthModalOpen, deleteOrder } = useStore();
+  const { t, orders, formatPrice, setCurrentPage, user, setIsAuthModalOpen, deleteOrder, isKa } = useStore();
   const [orderToDelete, setOrderToDelete] = useState<string | null>(null);
+  const [copiedTracking, setCopiedTracking] = useState<string | null>(null);
+
+  const handleCopyTracking = (tracking: string) => {
+    navigator.clipboard?.writeText(tracking);
+    setCopiedTracking(tracking);
+    setTimeout(() => setCopiedTracking(null), 2000);
+  };
 
   // Individual space: Non-admins ONLY see their own orders based on user email
   const displayOrders = React.useMemo(() => {
@@ -164,16 +171,64 @@ export const MyOrdersPage: React.FC = () => {
                 </div>
 
                 {/* Footer / Tracking Info */}
-                <div className="p-4 sm:p-6 bg-slate-50/50 border-t border-slate-100 flex flex-wrap items-center justify-between gap-3 text-xs">
-                  <div className="flex items-center space-x-2 text-slate-600">
-                    <Truck className="w-4 h-4 text-blue-600" />
-                    <span>
-                      {t('orders.tracking')}: <strong className="font-mono text-slate-800">{order.trackingNumber}</strong>
-                    </span>
+                <div className="p-4 sm:p-6 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                  <div className="space-y-1.5">
+                    <div className="flex flex-wrap items-center gap-2 text-slate-700">
+                      <div className="flex items-center space-x-1.5 font-semibold">
+                        <Truck className="w-4 h-4 text-blue-600" />
+                        <span>{t('orders.tracking')}:</span>
+                      </div>
+                      
+                      <div className="inline-flex items-center bg-white border border-slate-200 rounded-lg px-2 py-0.5 shadow-2xs">
+                        <strong className="font-mono text-slate-900 mr-1.5">{order.trackingNumber}</strong>
+                        <button
+                          type="button"
+                          onClick={() => handleCopyTracking(order.trackingNumber)}
+                          className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors cursor-pointer"
+                          title="Copy tracking number"
+                        >
+                          {copiedTracking === order.trackingNumber ? (
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          ) : (
+                            <Copy className="w-3.5 h-3.5" />
+                          )}
+                        </button>
+                      </div>
+
+                      {order.carrier && (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                          {order.carrier}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="text-slate-500 text-[11px]">
+                      {t('orders.deliveringTo')}: <strong className="text-slate-700">{order.address}, {order.city}</strong>
+                    </div>
                   </div>
 
-                  <div className="text-slate-500">
-                    {t('orders.deliveringTo')}: <strong className="text-slate-700">{order.address}, {order.city}</strong>
+                  <div className="flex items-center space-x-2">
+                    {order.trackingUrl ? (
+                      <a
+                        href={order.trackingUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors inline-flex items-center space-x-1.5"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>{isKa ? 'ამანათის თრექინგი' : 'Track Package'}</span>
+                      </a>
+                    ) : order.trackingNumber ? (
+                      <a
+                        href={`https://t.17track.net/en#nums=${order.trackingNumber}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition-colors inline-flex items-center space-x-1.5"
+                      >
+                        <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+                        <span>{isKa ? 'თრექინგის შემოწმება' : 'Track Status'}</span>
+                      </a>
+                    ) : null}
                   </div>
                 </div>
               </div>

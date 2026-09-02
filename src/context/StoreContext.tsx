@@ -62,8 +62,10 @@ interface StoreContextType {
   sortOption: string;
   setSortOption: (option: string) => void;
   addProduct: (product: Omit<Product, 'id'>) => void;
+  bulkImportProducts: (newProducts: Product[], replaceExisting?: boolean) => void;
   updateProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
+  clearAllProducts: () => void;
   resetDefaultProducts: () => void;
 
   // Wishlist
@@ -111,6 +113,15 @@ interface StoreContextType {
     paypalTransactionId?: string;
   }) => Order;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
+  updateOrderTracking: (
+    orderId: string,
+    details: {
+      trackingNumber?: string;
+      carrier?: string;
+      trackingUrl?: string;
+      status?: Order['status'];
+    }
+  ) => void;
   deleteOrder: (orderId: string) => void;
   clearOrderHistory: () => void;
   lastPlacedOrder: Order | null;
@@ -648,6 +659,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(`Added "${newProd.title}" to catalog!`, 'success');
   };
 
+  const bulkImportProducts = (newProducts: Product[], replaceExisting: boolean = false) => {
+    if (!newProducts || newProducts.length === 0) return;
+    const finalCatalog = replaceExisting ? newProducts : [...newProducts, ...products];
+    saveProducts(finalCatalog);
+    addToast(
+      language === 'ka'
+        ? `წარმატებით შემოტანილია ${newProducts.length} პროდუქტი!`
+        : `Successfully imported ${newProducts.length} products!`,
+      'success'
+    );
+  };
+
+  const clearAllProducts = () => {
+    saveProducts([]);
+    addToast(
+      language === 'ka' ? 'კატალოგი გასუფთავებულია' : 'Catalog cleared',
+      'info'
+    );
+  };
+
   const updateProduct = (updated: Product) => {
     const newProducts = products.map(p => (p.id === updated.id ? updated : p));
     saveProducts(newProducts);
@@ -921,6 +952,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
     addToast(`Order ${orderId} updated to "${status}"`, 'info');
+  };
+
+  const updateOrderTracking = (
+    orderId: string,
+    details: {
+      trackingNumber?: string;
+      carrier?: string;
+      trackingUrl?: string;
+      status?: Order['status'];
+    }
+  ) => {
+    const updated = orders.map(o => {
+      if (o.id === orderId) {
+        return {
+          ...o,
+          trackingNumber: details.trackingNumber !== undefined ? details.trackingNumber.trim() : o.trackingNumber,
+          carrier: details.carrier !== undefined ? details.carrier.trim() : o.carrier,
+          trackingUrl: details.trackingUrl !== undefined ? details.trackingUrl.trim() : o.trackingUrl,
+          status: details.status !== undefined ? details.status : o.status,
+          trackingUpdatedAt: new Date().toISOString(),
+        };
+      }
+      return o;
+    });
+    setOrders(updated);
+    localStorage.setItem('dbuy_orders', JSON.stringify(updated));
+    addToast(
+      language === 'ka'
+        ? `შეკვეთის (${orderId}) თრექინგის მონაცემები წარმატებით განახლდა!`
+        : `Order ${orderId} tracking info updated successfully!`,
+      'success'
+    );
   };
 
   const deleteOrder = (orderId: string) => {
@@ -1448,8 +1511,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         sortOption,
         setSortOption,
         addProduct,
+        bulkImportProducts,
         updateProduct,
         deleteProduct,
+        clearAllProducts,
         resetDefaultProducts,
         wishlist,
         toggleWishlist,
@@ -1480,6 +1545,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         orders,
         placeOrder,
         updateOrderStatus,
+        updateOrderTracking,
         deleteOrder,
         clearOrderHistory,
         lastPlacedOrder,

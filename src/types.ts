@@ -58,6 +58,9 @@ export interface Order {
   currency: Currency;
   status: 'Processing' | 'Shipped' | 'Delivered' | 'Cancelled';
   trackingNumber: string;
+  carrier?: string;
+  trackingUrl?: string;
+  trackingUpdatedAt?: string;
   paymentMethod: 'card' | 'paypal' | 'applepay';
   paypalTransactionId?: string;
 }

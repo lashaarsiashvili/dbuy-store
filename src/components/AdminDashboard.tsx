@@ -4,6 +4,7 @@ import { Product, Order, BillboardSlide } from '../types';
 import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
+import { PayhipImportModal } from './PayhipImportModal';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -24,6 +25,7 @@ import {
   EyeOff,
   Upload,
   UploadCloud,
+  Download,
   ImageIcon,
   Link as LinkIcon,
   CheckCircle2,
@@ -38,18 +40,23 @@ import {
   ShieldAlert,
   Copy,
   RefreshCw,
-  Key
+  Key,
+  Truck,
+  Navigation
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
   const {
     products,
     addProduct,
+    bulkImportProducts,
     updateProduct,
     deleteProduct,
+    clearAllProducts,
     resetDefaultProducts,
     orders,
     updateOrderStatus,
+    updateOrderTracking,
     deleteOrder,
     clearOrderHistory,
     theme,
@@ -118,6 +125,39 @@ export const AdminDashboard: React.FC = () => {
   // Product Add / Edit Modal
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
+  const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+
+  // Tracking Number Management Modal
+  const [trackingModalOrder, setTrackingModalOrder] = useState<Order | null>(null);
+  const [trackingForm, setTrackingForm] = useState({
+    trackingNumber: '',
+    carrier: 'Georgian Post',
+    trackingUrl: '',
+    status: 'Shipped' as Order['status'],
+  });
+
+  const openTrackingModal = (order: Order) => {
+    setTrackingModalOrder(order);
+    setTrackingForm({
+      trackingNumber: order.trackingNumber || '',
+      carrier: order.carrier || 'Georgian Post',
+      trackingUrl: order.trackingUrl || '',
+      status: order.status === 'Processing' ? 'Shipped' : order.status,
+    });
+  };
+
+  const handleSaveTracking = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trackingModalOrder) return;
+    updateOrderTracking(trackingModalOrder.id, {
+      trackingNumber: trackingForm.trackingNumber,
+      carrier: trackingForm.carrier,
+      trackingUrl: trackingForm.trackingUrl,
+      status: trackingForm.status,
+    });
+    setTrackingModalOrder(null);
+  };
+
   const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('upload');
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFileInfo, setUploadedFileInfo] = useState<{ name: string; size: string } | null>(null);
@@ -898,21 +938,29 @@ export const AdminDashboard: React.FC = () => {
                 </select>
               </div>
 
-              <div className="flex items-center space-x-2.5 w-full sm:w-auto justify-end">
+              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  onClick={() => setIsImportModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
+                  title="Import products from Payhip or CSV file"
+                >
+                  <UploadCloud className="w-4 h-4" />
+                  <span>{isKa ? 'Payhip & CSV იმპორტი' : 'Payhip & CSV Import'}</span>
+                </button>
                 <button
                   onClick={handleOpenAddProduct}
                   className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
                 >
                   <Plus className="w-4 h-4" />
-                  <span>Add New Product</span>
+                  <span>{isKa ? 'პროდუქტის დამატება' : 'Add New Product'}</span>
                 </button>
                 <button
                   onClick={resetDefaultProducts}
-                  className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
                   title="Reset to initial 8 products"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset Default Catalog</span>
+                  <span>{isKa ? 'საწყისი კატალოგი' : 'Reset'}</span>
                 </button>
               </div>
             </div>
@@ -1464,7 +1512,7 @@ export const AdminDashboard: React.FC = () => {
                     <th className="p-4">Items</th>
                     <th className="p-4">Total</th>
                     <th className="p-4">Status</th>
-                    <th className="p-4">Tracking</th>
+                    <th className="p-4">{isKa ? 'თრექინგი / გადამზიდი' : 'Tracking & Courier'}</th>
                     <th className="p-4 text-right">Actions</th>
                   </tr>
                 </thead>
@@ -1472,7 +1520,7 @@ export const AdminDashboard: React.FC = () => {
                   {orders.length === 0 ? (
                     <tr>
                       <td colSpan={8} className="p-8 text-center text-slate-400">
-                        No orders recorded yet. Place an order in the checkout to see it appear here!
+                        {isKa ? 'შეკვეთები ჯერ არ არის დაფიქსირებული' : 'No orders recorded yet. Place an order in the checkout to see it appear here!'}
                       </td>
                     </tr>
                   ) : (
@@ -1526,8 +1574,28 @@ export const AdminDashboard: React.FC = () => {
                             <option value="Cancelled">Cancelled</option>
                           </select>
                         </td>
-                        <td className="p-4 font-mono text-[11px] text-slate-600">
-                          {order.trackingNumber}
+                        <td className="p-4">
+                          <div className="flex flex-col space-y-1">
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                {order.trackingNumber || 'Pending'}
+                              </span>
+                            </div>
+                            {order.carrier && (
+                              <span className="text-[10px] font-semibold text-indigo-700 flex items-center space-x-1">
+                                <Truck className="w-3 h-3" />
+                                <span>{order.carrier}</span>
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openTrackingModal(order)}
+                              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 pt-0.5 cursor-pointer"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                              <span>{isKa ? 'თრექინგის ჩასმა/შეცვლა' : 'Edit / Set Tracking'}</span>
+                            </button>
+                          </div>
                         </td>
                         <td className="p-4 text-right">
                           <button
@@ -1537,7 +1605,7 @@ export const AdminDashboard: React.FC = () => {
                                 deleteOrder(order.id);
                               }
                             }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                             title="Delete order"
                           >
                             <Trash2 className="w-4 h-4" />
@@ -2932,6 +3000,203 @@ export const AdminDashboard: React.FC = () => {
                 {isKa ? 'დიახ, წაშლა' : 'Yes, Delete Account'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Payhip & CSV Product Import Modal */}
+      <PayhipImportModal
+        isOpen={isImportModalOpen}
+        onClose={() => setIsImportModalOpen(false)}
+        onImport={(importedProducts, replaceExisting) => {
+          bulkImportProducts(importedProducts, replaceExisting);
+        }}
+        currentProductsCount={products.length}
+        isKa={isKa}
+        allProducts={products}
+      />
+
+      {/* Order Tracking Management Modal */}
+      {trackingModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-lg overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+            
+            {/* Modal Header */}
+            <div className="p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2.5 rounded-2xl bg-blue-600/30 border border-blue-400/30 text-blue-300">
+                  <Truck className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight flex items-center space-x-2">
+                    <span>{isKa ? 'თრექინგ ნომრის მინიჭება' : 'Assign Tracking Number'}</span>
+                    <span className="text-[10px] bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 px-2 py-0.5 rounded-full font-bold">
+                      Live Sync
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-300">
+                    {isKa 
+                      ? `შეკვეთა: #${trackingModalOrder.id} • ${trackingModalOrder.customerName}`
+                      : `Order: #${trackingModalOrder.id} • ${trackingModalOrder.customerName}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setTrackingModalOrder(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Modal Form */}
+            <form onSubmit={handleSaveTracking} className="p-6 space-y-5">
+              
+              {/* Customer summary */}
+              <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-slate-500 block text-[11px]">{isKa ? 'ადრესატი / ელ-ფოსტა:' : 'Customer & Email:'}</span>
+                  <span className="font-bold text-slate-900">{trackingModalOrder.customerName}</span>
+                  <span className="text-slate-500 ml-1">({trackingModalOrder.email})</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-500 block text-[11px]">{isKa ? 'დანიშნულება:' : 'Destination:'}</span>
+                  <span className="font-bold text-slate-800">{trackingModalOrder.city}, {trackingModalOrder.country}</span>
+                </div>
+              </div>
+
+              {/* Tracking Number Input */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800">
+                    {isKa ? 'თრექინგ კოდი (Tracking Number)' : 'Tracking Number / Waybill'}
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const prefix = trackingForm.carrier.toLowerCase().includes('georgian') ? 'GEP' : 'TRK';
+                      const randomCode = `${prefix}-${Math.floor(10000000 + Math.random() * 90000000)}`;
+                      setTrackingForm(prev => ({ ...prev, trackingNumber: randomCode }));
+                    }}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 flex items-center space-x-1 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3 h-3" />
+                    <span>{isKa ? 'გენერაცია' : 'Auto Generate'}</span>
+                  </button>
+                </div>
+                <input
+                  type="text"
+                  required
+                  value={trackingForm.trackingNumber}
+                  onChange={(e) => setTrackingForm(prev => ({ ...prev, trackingNumber: e.target.value }))}
+                  placeholder="მაგ: GEP-94819283 ან 94001118992231..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Carrier Selection */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-800">
+                  {isKa ? 'საკურიერო კომპანია / გადამზიდი (Carrier)' : 'Shipping Carrier'}
+                </label>
+                <select
+                  value={trackingForm.carrier}
+                  onChange={(e) => {
+                    const carrier = e.target.value;
+                    let defaultUrl = '';
+                    if (carrier === 'Georgian Post' || carrier.includes('საქართველოს')) {
+                      defaultUrl = `https://www.gpost.ge/tracking?id=${trackingForm.trackingNumber}`;
+                    } else if (carrier === 'DHL Express') {
+                      defaultUrl = `https://www.dhl.com/en/express/tracking.html?AWB=${trackingForm.trackingNumber}`;
+                    } else if (carrier === 'FedEx') {
+                      defaultUrl = `https://www.fedex.com/fedextrack/?trknbr=${trackingForm.trackingNumber}`;
+                    } else if (carrier === 'USPS') {
+                      defaultUrl = `https://tools.usps.com/go/TrackConfirmAction?tLabels=${trackingForm.trackingNumber}`;
+                    } else if (carrier === 'UPS') {
+                      defaultUrl = `https://www.ups.com/track?tracknum=${trackingForm.trackingNumber}`;
+                    }
+                    setTrackingForm(prev => ({ ...prev, carrier, trackingUrl: defaultUrl || prev.trackingUrl }));
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+                >
+                  <option value="Georgian Post">საქართველოს ფოსტა (Georgian Post)</option>
+                  <option value="FedEx">FedEx Express</option>
+                  <option value="DHL Express">DHL Express</option>
+                  <option value="USPS">USPS Priority</option>
+                  <option value="UPS">UPS Worldwide</option>
+                  <option value="Royal Mail">Royal Mail</option>
+                  <option value="Other">სხვა / Custom Courier</option>
+                </select>
+              </div>
+
+              {/* Direct Tracking URL (Optional) */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                  <span>{isKa ? 'თრექინგის პირდაპირი ბმული (Tracking URL)' : 'Direct Tracking Link (Optional)'}</span>
+                  <span className="text-[10px] text-slate-400 font-normal">{isKa ? 'მომხმარებელი გადავა 1-დაჭერით' : '1-click customer track'}</span>
+                </label>
+                <input
+                  type="url"
+                  value={trackingForm.trackingUrl}
+                  onChange={(e) => setTrackingForm(prev => ({ ...prev, trackingUrl: e.target.value }))}
+                  placeholder="https://www.gpost.ge/tracking?id=..."
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* Status Selector */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-slate-800">
+                  {isKa ? 'შეკვეთის სტატუსი (Order Status)' : 'Update Order Status'}
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {(['Shipped', 'Delivered', 'Processing', 'Cancelled'] as Order['status'][]).map(st => (
+                    <button
+                      key={st}
+                      type="button"
+                      onClick={() => setTrackingForm(prev => ({ ...prev, status: st }))}
+                      className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
+                        trackingForm.status === st
+                          ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
+                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      {st}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notice */}
+              <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl text-[11px] text-emerald-800 flex items-start space-x-2">
+                <CheckCircle2 className="w-4 h-4 shrink-0 text-emerald-600 mt-0.5" />
+                <span>
+                  {isKa
+                    ? 'შენახვისთანავე თრექინგ კოდი და გადამზიდის დეტალები მომენტალურად აისახება მყიდველის პირად გვერდზე („ჩემი შეკვეთები“).'
+                    : 'Saving immediately syncs this tracking number and courier link directly to the buyer’s "My Orders" profile view.'}
+                </span>
+              </div>
+
+              {/* Form Actions */}
+              <div className="flex items-center justify-end space-x-2.5 pt-2 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setTrackingModalOrder(null)}
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                >
+                  {isKa ? 'გაუქმება' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all cursor-pointer flex items-center space-x-1.5"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>{isKa ? 'შენახვა და ასახვა' : 'Save & Sync with User'}</span>
+                </button>
+              </div>
+
+            </form>
           </div>
         </div>
       )}
