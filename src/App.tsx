@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -17,6 +18,9 @@ import { GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPage
 import { MyOrdersPage } from './components/MyOrdersPage';
 import { ProductDetailPage } from './components/ProductDetailPage';
 import { ToastContainer } from './components/ToastContainer';
+
+const LIVE_PAYPAL_CLIENT_ID = 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
+const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || LIVE_PAYPAL_CLIENT_ID;
 
 const MainLayout: React.FC = () => {
   const { currentPage, recordVisit } = useStore();
@@ -81,7 +85,17 @@ const MainLayout: React.FC = () => {
 export function App() {
   return (
     <StoreProvider>
-      <MainLayout />
+      <PayPalScriptProvider
+        options={{
+          clientId: paypalClientId,
+          currency: 'USD',
+          intent: 'capture',
+          components: 'buttons',
+          enableFunding: 'card,venmo,paylater,applepay',
+        }}
+      >
+        <MainLayout />
+      </PayPalScriptProvider>
     </StoreProvider>
   );
 }

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../types';
 import { getProductFeatures } from '../utils/productFeatures';
+import { ProductPaymentModule } from './ProductPaymentModule';
 import { 
   Star, 
   ShoppingCart, 
@@ -445,103 +446,9 @@ export const ProductDetailPage: React.FC = () => {
               </button>
             </div>
 
-            {/* Instant Express Checkout Button */}
-            <button
-              onClick={handleBuyNow}
-              className="w-full py-4 px-6 rounded-2xl bg-gradient-to-r from-amber-400 via-amber-300 to-amber-400 hover:from-amber-500 hover:to-amber-500 text-slate-950 font-black text-sm flex items-center justify-center space-x-2.5 shadow-md hover:shadow-lg transition-all cursor-pointer border border-amber-400/80 active:scale-[0.99]"
-            >
-              <Zap className="w-5 h-5 fill-slate-950 text-slate-950" />
-              <span>{t('cart.expressCheckout')} (PayPal • Pay • GPay)</span>
-            </button>
-
-            {/* PAYMENT METHODS & TRUST BADGES BOX */}
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/90 space-y-3 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-800">
-                  <Lock className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                  <span>{language === 'ka' ? 'გადახდის მეთოდები & დაცვა' : 'Guaranteed Safe & Instant Checkout'}</span>
-                </div>
-                <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                  256-Bit SSL
-                </span>
-              </div>
-
-              {/* Verified Payment Brand Badges */}
-              <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                {/*  Apple Pay */}
-                <div 
-                  onClick={handleBuyNow}
-                  className="flex items-center justify-center py-2.5 px-2 rounded-xl bg-slate-950 text-white shadow-xs border border-slate-800 hover:bg-black transition-all cursor-pointer group" 
-                  title="Apple Pay — 1-Click Checkout"
-                >
-                  <div className="flex items-center space-x-1 font-bold text-xs tracking-tight">
-                    <svg className="w-4 h-4 fill-current group-hover:scale-110 transition-transform" viewBox="0 0 170 170">
-                      <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.05-7.7-7.9-12-14.54-6.42-9.92-11.45-21.2-15.08-33.84-3.64-12.63-5.46-24.36-5.46-35.18 0-14.88 3.82-26.96 11.45-36.24 7.64-9.29 17.1-13.98 28.39-14.09 4.36 0 9.27 1.16 14.73 3.49 5.47 2.33 9.4 3.55 11.8 3.65 2.18 0 6.1-1.22 11.75-3.65 5.65-2.44 10.37-3.55 14.15-3.34 11.64.64 20.78 4.9 27.42 12.8-10.46 6.35-15.58 15.24-15.36 26.67.22 8.99 3.6 16.5 10.14 22.52 6.54 6.03 14.36 9.36 23.47 10-2.39 7.4-5.32 14.65-8.79 21.75zM119.22 33.72c0-7.39 2.65-14.13 7.95-20.21 5.3-6.08 11.78-9.96 19.45-11.64.44 1.7.65 3.4.65 5.1 0 7.3-2.73 14.16-8.19 20.57-5.46 6.42-12 10.45-19.63 12.1-0.15-2.02-.23-3.99-.23-5.92z"/>
-                    </svg>
-                    <span className="text-[11px] font-black">Pay</span>
-                  </div>
-                </div>
-
-                {/* Google Pay */}
-                <div 
-                  onClick={handleBuyNow}
-                  className="flex items-center justify-center py-2.5 px-2 rounded-xl bg-white text-slate-800 shadow-xs border border-slate-300 hover:border-slate-400 transition-all cursor-pointer group" 
-                  title="Google Pay — Instant 1-Click"
-                >
-                  <div className="flex items-center space-x-1 font-bold text-xs tracking-tight">
-                    <span className="text-blue-600 font-extrabold group-hover:scale-110 transition-transform">G</span>
-                    <span className="text-[11px] font-black text-slate-700">Pay</span>
-                  </div>
-                </div>
-
-                {/* PayPal */}
-                <div 
-                  onClick={handleBuyNow}
-                  className="flex items-center justify-center py-2.5 px-2 rounded-xl bg-white text-blue-700 shadow-xs border border-slate-200 hover:border-blue-300 transition-all cursor-pointer group" 
-                  title="PayPal & PayPal Credit"
-                >
-                  <div className="flex items-center font-black text-xs italic group-hover:scale-105 transition-transform">
-                    <span className="text-blue-800">Pay</span>
-                    <span className="text-sky-500">Pal</span>
-                  </div>
-                </div>
-
-                {/* Visa */}
-                <div 
-                  onClick={handleBuyNow}
-                  className="flex items-center justify-center py-2.5 px-2 rounded-xl bg-white text-blue-900 shadow-xs border border-slate-200 hover:border-blue-300 transition-all cursor-pointer group" 
-                  title="Visa Debit / Credit Card"
-                >
-                  <span className="text-xs font-black italic tracking-wider text-blue-900 group-hover:scale-105 transition-transform">VISA</span>
-                </div>
-
-                {/* Mastercard */}
-                <div 
-                  onClick={handleBuyNow}
-                  className="flex items-center justify-center py-2.5 px-2 rounded-xl bg-white shadow-xs border border-slate-200 hover:border-orange-300 transition-all cursor-pointer group" 
-                  title="Mastercard"
-                >
-                  <div className="flex items-center -space-x-1.5 group-hover:scale-110 transition-transform">
-                    <div className="w-3.5 h-3.5 rounded-full bg-red-500 opacity-90" />
-                    <div className="w-3.5 h-3.5 rounded-full bg-amber-400 opacity-90" />
-                  </div>
-                </div>
-
-                {/* Amex */}
-                <div 
-                  onClick={handleBuyNow}
-                  className="flex items-center justify-center py-2.5 px-2 rounded-xl bg-[#006FCF] text-white shadow-xs border border-blue-700 hover:bg-[#005bb0] transition-all cursor-pointer group" 
-                  title="American Express"
-                >
-                  <span className="text-[10px] font-black tracking-tighter uppercase group-hover:scale-105 transition-transform">AMEX</span>
-                </div>
-              </div>
-
-              <p className="text-center text-[11px] text-slate-500 font-medium">
-                {language === 'ka' 
-                  ? '✓ რეგისტრაცია არ არის საჭირო • მყისიერი Guest Checkout' 
-                  : '✓ No account required • Instant Guest Checkout with Buyer Protection'}
-              </p>
+            {/* REAL INTERACTIVE PAYPAL, APPLE PAY, GOOGLE PAY & CARD MODULE */}
+            <div className="pt-2">
+              <ProductPaymentModule product={product} quantity={quantity} />
             </div>
           </div>
 
