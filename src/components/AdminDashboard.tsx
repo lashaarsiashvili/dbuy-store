@@ -2339,10 +2339,10 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div>
                     <h4 className="text-xs font-bold text-slate-900">
-                      {isKa ? '5-ციფრიანი OTP იმეილ ვერიფიკაცია' : '5-Digit OTP Verification'}
+                      {isKa ? 'უსაფრთხო ავთენტიფიკაცია & პაროლის აღდგენა' : 'Secure Authentication & Password Recovery'}
                     </h4>
                     <p className="text-[11px] text-slate-600 mt-0.5">
-                      {isKa ? 'რეგისტრაციისას იმეილის რეალურობა მოწმდება კრიპტოგრაფიულად გენერირებული 5-ნიშნა კოდით.' : 'Email validity is verified via cryptographically generated 5-digit verification code.'}
+                      {isKa ? 'მომხმარებლის მონაცემები დაცულია დაშიფვრით და პაროლის აღდგენის სისტემით.' : 'User credentials are secured with encryption and recovery verification.'}
                     </p>
                   </div>
                 </div>

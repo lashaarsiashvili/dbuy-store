@@ -38,37 +38,22 @@ setInterval(() => {
 // Helper to configure nodemailer transporter
 function getMailTransporter() {
   const gmailUser = process.env.GMAIL_USER || 'lashaarsiashvili@gmail.com';
-  const gmailAppPass = process.env.GMAIL_APP_PASSWORD || 'kcafmhjfwffmkmtu';
-  const smtpHost = process.env.SMTP_HOST;
+  const gmailAppPass = (process.env.GMAIL_APP_PASSWORD || 'kcafmhjfwffmkmtu').replace(/\s+/g, '');
+  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
   const smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
   const smtpUser = process.env.SMTP_USER || gmailUser;
 
-  if (smtpHost && gmailAppPass) {
-    return nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: gmailAppPass,
-      },
-    });
-  }
-
-  if (gmailAppPass) {
-    // Standard Gmail service using App Password
-    return nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: gmailUser,
-        pass: gmailAppPass,
-      },
-    });
-  }
-
-  // Fallback: If no password is set yet in .env, create JSON/test transport that safely logs delivery
   return nodemailer.createTransport({
-    jsonTransport: true,
+    host: smtpHost,
+    port: smtpPort,
+    secure: smtpPort === 465,
+    auth: {
+      user: smtpUser,
+      pass: gmailAppPass,
+    },
+    tls: {
+      rejectUnauthorized: false,
+    },
   });
 }
 

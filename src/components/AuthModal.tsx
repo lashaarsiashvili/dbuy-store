@@ -47,8 +47,8 @@ export const AuthModal: React.FC = () => {
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [viewMode, setViewMode] = useState<'auth' | 'forgot'>('auth');
   
-  // Registration Multi-Step State: 1 = Personal & Security, 2 = Address & Region, 3 = Email Verification (OTP)
-  const [regStep, setRegStep] = useState<1 | 2 | 3>(1);
+  // Registration Multi-Step State: 1 = Personal & Security, 2 = Address & Region
+  const [regStep, setRegStep] = useState<1 | 2>(1);
 
   // Form Fields
   const [name, setName] = useState('');
@@ -69,13 +69,6 @@ export const AuthModal: React.FC = () => {
   const [zip, setZip] = useState('');
   const [address, setAddress] = useState('');
   const [phone, setPhone] = useState('');
-
-  // OTP 5-digit verification state
-  const [otpDigits, setOtpDigits] = useState<string[]>(['', '', '', '', '']);
-  const [isSendingOtp, setIsSendingOtp] = useState<boolean>(false);
-  const [isVerifyingOtp, setIsVerifyingOtp] = useState<boolean>(false);
-  const [resendCooldown, setResendCooldown] = useState<number>(0);
-  const [verificationError, setVerificationError] = useState<string | null>(null);
 
   // Security / Lockout State
   const [lockoutSec, setLockoutSec] = useState<number>(0);
@@ -112,8 +105,6 @@ export const AuthModal: React.FC = () => {
       setZip('');
       setAddress('');
       setPhone('');
-      setOtpDigits(['', '', '', '', '']);
-      setVerificationError(null);
       setRegStep(1);
       setViewMode('auth');
       setTempPassSentTo(null);
@@ -126,8 +117,6 @@ export const AuthModal: React.FC = () => {
     setRegStep(1);
     setPassword('');
     setConfirmPassword('');
-    setOtpDigits(['', '', '', '', '']);
-    setVerificationError(null);
     setTempPassSentTo(null);
   };
 
@@ -141,53 +130,7 @@ export const AuthModal: React.FC = () => {
     }
   }, [lockoutSec]);
 
-  // Countdown timer for OTP Resend
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setInterval(() => {
-        setResendCooldown(prev => (prev > 0 ? prev - 1 : 0));
-      }, 1000);
-      return () => clearInterval(timer);
-    }
-  }, [resendCooldown]);
-
   if (!isAuthModalOpen) return null;
-
-  // Send 5-digit OTP via server to recipient's email address
-  const sendNewOtp = async (recipientEmail: string) => {
-    const cleanEmail = sanitizeInput(recipientEmail).toLowerCase();
-    setIsSendingOtp(true);
-    setVerificationError(null);
-    setOtpDigits(['', '', '', '', '']);
-
-    try {
-      const response = await fetch('/api/auth/send-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          name: sanitizeInput(name) || 'Customer',
-          language,
-        }),
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
-        setResendCooldown(45);
-        addToast(t('auth.codeSentToast'), 'info');
-      } else {
-        const errorMsg = data.error || 'Failed to dispatch verification code';
-        setVerificationError(errorMsg);
-        addToast(errorMsg, 'error');
-      }
-    } catch (err) {
-      console.error('Error sending OTP:', err);
-      setResendCooldown(45);
-      addToast(t('auth.codeSentToast'), 'info');
-    } finally {
-      setIsSendingOtp(false);
-    }
-  };
 
   const handleLoginSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -282,7 +225,7 @@ export const AuthModal: React.FC = () => {
     setRegStep(2);
   };
 
-  // Step 2 validation: Address, Country, City, Zip
+  // Step 2 validation: Address, Country, City, Zip & direct registration completion
   const handleRegStep2Submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!country.trim()) {
@@ -302,97 +245,18 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
-    // Move to step 3 and send OTP from support@dbuystore.com
-    setRegStep(3);
-    sendNewOtp(email);
-  };
-
-  // Step 3 validation: Verify 5-digit OTP via server
-  const handleOtpVerificationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const enteredCode = otpDigits.join('').trim();
-    
-    if (enteredCode.length < 5) {
-      setVerificationError(t('auth.enterCode'));
-      return;
-    }
-
-    setIsVerifyingOtp(true);
-    setVerificationError(null);
-
-    try {
-      const cleanEmail = sanitizeInput(email).toLowerCase();
-      const response = await fetch('/api/auth/verify-otp', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          email: cleanEmail,
-          code: enteredCode,
-        }),
-      });
-
-      const data = await response.json();
-      if (response.ok && data.verified) {
-        // OTP Verified! Complete registration
-        registerUser({
-          name: sanitizeInput(name),
-          email: cleanEmail,
-          password,
-          country: sanitizeInput(country),
-          city: sanitizeInput(city),
-          zip: sanitizeInput(zip),
-          address: sanitizeInput(address),
-          phone: sanitizeInput(phone),
-        });
-      } else {
-        const errorMsg = data.error || t('auth.invalidOtp');
-        setVerificationError(errorMsg);
-        addToast(errorMsg, 'error');
-      }
-    } catch (err) {
-      console.error('OTP verify error:', err);
-      setVerificationError(t('auth.invalidOtp'));
-      addToast(t('auth.invalidOtp'), 'error');
-    } finally {
-      setIsVerifyingOtp(false);
-    }
-  };
-
-  // Handle individual OTP digit input with auto-focus next
-  const handleDigitChange = (index: number, val: string) => {
-    const numeric = val.replace(/\D/g, '').slice(-1); // only single digit
-    const newDigits = [...otpDigits];
-    newDigits[index] = numeric;
-    setOtpDigits(newDigits);
-    setVerificationError(null);
-
-    if (numeric && index < 4) {
-      const nextInput = document.getElementById(`otp-input-${index + 1}`);
-      nextInput?.focus();
-    }
-  };
-
-  const handleDigitKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
-      const prevInput = document.getElementById(`otp-input-${index - 1}`);
-      prevInput?.focus();
-    }
-  };
-
-  // Support pasting full 5-digit code from email
-  const handlePaste = (e: React.ClipboardEvent) => {
-    e.preventDefault();
-    const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 5);
-    if (pasted) {
-      const newDigits = ['', '', '', '', ''];
-      for (let i = 0; i < pasted.length; i++) {
-        newDigits[i] = pasted[i];
-      }
-      setOtpDigits(newDigits);
-      setVerificationError(null);
-      const nextIdx = Math.min(pasted.length, 4);
-      document.getElementById(`otp-input-${nextIdx}`)?.focus();
-    }
+    // Direct registration without requiring 5-digit email code
+    const cleanEmail = sanitizeInput(email).toLowerCase();
+    registerUser({
+      name: sanitizeInput(name),
+      email: cleanEmail,
+      password,
+      country: sanitizeInput(country),
+      city: sanitizeInput(city),
+      zip: sanitizeInput(zip),
+      address: sanitizeInput(address),
+      phone: sanitizeInput(phone),
+    });
   };
 
   return (
@@ -662,17 +526,15 @@ export const AuthModal: React.FC = () => {
         {/* ---------------- REGISTER MULTI-STEP ---------------- */}
         {tab === 'register' && (
           <div>
-            {/* Steps Progress Indicator */}
+            {/* Steps Progress Indicator (2 Steps) */}
             <div className="mb-6">
               <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-2">
                 <span className={regStep >= 1 ? 'text-blue-600 font-extrabold' : ''}>{t('auth.step1Label')}</span>
                 <span className={regStep >= 2 ? 'text-blue-600 font-extrabold' : ''}>{t('auth.step2Label')}</span>
-                <span className={regStep === 3 ? 'text-blue-600 font-extrabold' : ''}>{t('auth.step3Label')}</span>
               </div>
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-2 gap-2">
                 <div className={`h-1.5 rounded-full transition-all ${regStep >= 1 ? 'bg-blue-600' : 'bg-slate-200'}`} />
                 <div className={`h-1.5 rounded-full transition-all ${regStep >= 2 ? 'bg-blue-600' : 'bg-slate-200'}`} />
-                <div className={`h-1.5 rounded-full transition-all ${regStep === 3 ? 'bg-blue-600' : 'bg-slate-200'}`} />
               </div>
             </div>
 
@@ -788,7 +650,7 @@ export const AuthModal: React.FC = () => {
               </form>
             )}
 
-            {/* STEP 2: Address & Location Details (Mandatory) */}
+            {/* STEP 2: Address & Location Details (Direct Registration) */}
             {regStep === 2 && (
               <form onSubmit={handleRegStep2Submit} className="space-y-3.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -894,143 +756,10 @@ export const AuthModal: React.FC = () => {
                   </button>
                   <button
                     type="submit"
-                    className="w-2/3 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer"
+                    className="w-2/3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer"
                   >
-                    <span>{t('auth.getCode')}</span>
-                    <ArrowRight className="w-4 h-4" />
-                  </button>
-                </div>
-              </form>
-            )}
-
-            {/* STEP 3: 5-Digit Email Verification Code from support@dbuystore.com */}
-            {regStep === 3 && (
-              <form onSubmit={handleOtpVerificationSubmit} className="space-y-4">
-                
-                {/* Official Sender & Verification Notice */}
-                <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 text-left space-y-3">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-2.5">
-                    <div className="flex items-center space-x-2.5">
-                      <div className="p-2 rounded-xl bg-blue-600 text-white shadow-2xs">
-                        <Mail className="w-4 h-4" />
-                      </div>
-                      <div>
-                        <div className="flex items-center space-x-1.5">
-                          <p className="text-xs font-black text-slate-900 leading-tight">
-                            DBUY Store Official Mailer
-                          </p>
-                          <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        </div>
-                        <p className="text-[11px] text-blue-700 font-mono font-bold">
-                          support@dbuystore.com
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-full">
-                      {t('auth.emailSentBadge')}
-                    </span>
-                  </div>
-
-                  <div className="text-xs text-slate-600 space-y-1.5">
-                    <div className="flex items-start space-x-2">
-                      <Inbox className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
-                      <p className="text-[11px] leading-relaxed text-slate-700">
-                        {t('auth.otpDispatchedDesc')}
-                      </p>
-                    </div>
-                    
-                    <div className="pt-1 text-[11px] text-slate-500 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-200/60">
-                      <span>{t('auth.emailTo')} <b className="text-slate-800 font-mono">{email}</b></span>
-                      <span>{t('auth.senderLabel')} <b className="text-blue-700 font-mono">support@dbuystore.com</b></span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* 5-Digit Code Entry */}
-                <div>
-                  <label className="block text-center text-xs font-bold text-slate-700 mb-2.5">
-                    {t('auth.enterCode')}
-                  </label>
-                  
-                  <div 
-                    className="flex justify-center space-x-2.5 sm:space-x-3"
-                    onPaste={handlePaste}
-                  >
-                    {otpDigits.map((digit, idx) => (
-                      <input
-                        key={idx}
-                        id={`otp-input-${idx}`}
-                        type="text"
-                        inputMode="numeric"
-                        maxLength={1}
-                        value={digit}
-                        onChange={e => handleDigitChange(idx, e.target.value)}
-                        onKeyDown={e => handleDigitKeyDown(idx, e)}
-                        autoFocus={idx === 0}
-                        placeholder="•"
-                        className="w-11 h-12 sm:w-12 sm:h-14 text-center text-xl sm:text-2xl font-black font-mono bg-slate-50 border-2 border-slate-200 rounded-2xl focus:bg-white focus:border-blue-600 focus:ring-3 focus:ring-blue-100 focus:outline-hidden transition-all shadow-2xs text-slate-900"
-                      />
-                    ))}
-                  </div>
-
-                  {verificationError && (
-                    <p className="text-center text-xs text-red-600 font-semibold mt-2.5 flex items-center justify-center space-x-1 animate-in fade-in">
-                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-                      <span>{verificationError}</span>
-                    </p>
-                  )}
-                </div>
-
-                {/* Resend Action */}
-                <div className="flex items-center justify-between text-xs text-slate-500 px-1 pt-1">
-                  <span>{t('auth.didntReceive')}</span>
-                  <button
-                    type="button"
-                    disabled={resendCooldown > 0 || isSendingOtp}
-                    onClick={() => sendNewOtp(email)}
-                    className={`font-bold flex items-center space-x-1 transition-colors ${
-                      resendCooldown > 0 || isSendingOtp
-                        ? 'text-slate-400 cursor-not-allowed'
-                        : 'text-blue-600 hover:text-blue-700 cursor-pointer'
-                    }`}
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${isSendingOtp ? 'animate-spin' : ''}`} />
-                    <span>
-                      {isSendingOtp 
-                        ? (language === 'ka' ? 'იგზავნება...' : 'Sending...')
-                        : resendCooldown > 0 
-                        ? t('auth.resendIn', { sec: String(resendCooldown) }) 
-                        : t('auth.resend')}
-                    </span>
-                  </button>
-                </div>
-
-                {/* Action Buttons */}
-                <div className="flex items-center space-x-2 pt-2">
-                  <button
-                    type="button"
-                    onClick={() => setRegStep(2)}
-                    className="w-1/3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer"
-                  >
-                    <ArrowLeft className="w-3.5 h-3.5" />
-                    <span>{t('auth.addressStepBtn')}</span>
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={isVerifyingOtp}
-                    className="w-2/3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer disabled:opacity-75"
-                  >
-                    {isVerifyingOtp ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>{t('auth.verifying')}</span>
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        <span>{t('auth.completeReg')}</span>
-                      </>
-                    )}
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{t('auth.completeReg')}</span>
                   </button>
                 </div>
               </form>
