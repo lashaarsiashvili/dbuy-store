@@ -1,5 +1,6 @@
 import { Product } from '../types';
 import { generateProductSlug } from '../context/StoreContext';
+import { generateProductFeatures } from './productFeatures';
 
 /**
  * Normalizes CSV headers to standard fields
@@ -187,6 +188,7 @@ export function convertPayhipRowsToProducts(rows: Record<string, string>[]): Pro
     const stock = parseInt(rawStock.replace(/[^0-9]/g, ''), 10) || 50;
 
     const customSlug = generateProductSlug(title);
+    const features = generateProductFeatures({ title, description, category, price: cleanPrice });
 
     return {
       id: 'prod-' + Date.now() + '-' + idx + '-' + Math.random().toString(36).substr(2, 4),
@@ -199,6 +201,7 @@ export function convertPayhipRowsToProducts(rows: Record<string, string>[]): Pro
       image: imageUrl,
       images: additionalImages,
       description,
+      features,
       rating: 5.0,
       reviewsCount: Math.floor(Math.random() * 20) + 5,
       badge: origPrice ? 'Sale' : undefined,

@@ -293,31 +293,58 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
           {activeTab === 'guide' && (
             <div className="space-y-4 bg-indigo-50/60 p-5 rounded-2xl border border-indigo-100 text-xs text-indigo-950">
               <h4 className="text-sm font-black text-indigo-900 flex items-center space-x-2">
-                <span>💡 {isKa ? 'როგორ გადმოვიტანოთ Payhip-დან 3 ნაბიჯში:' : 'How to export products from Payhip:'}</span>
+                <span>💡 {isKa ? 'სად არის ექსპორტის ღილაკი Payhip-ში (ნაბიჯ-ნაბიჯ):' : 'Where to find the Export button in Payhip:'}</span>
               </h4>
               
-              <ol className="space-y-3 pl-4 list-decimal font-medium text-slate-700">
-                <li className="leading-relaxed">
-                  <strong>{isKa ? 'შედით Payhip დეშბორდში' : 'Log in to your Payhip Dashboard'}</strong> — 
-                  {isKa ? ' გახსენით ' : ' Go to '} 
-                  <code className="bg-white px-2 py-0.5 rounded-md border text-indigo-700 font-bold">Products</code>
-                  {isKa ? ' განყოფილება.' : ' section.'}
-                </li>
-                <li className="leading-relaxed">
-                  <strong>{isKa ? 'ექსპორტი (CSV Export)' : 'Export CSV'}</strong> — 
-                  {isKa ? ' ზედა მარჯვენა კუთხეში დააჭირეთ ' : ' Click on '} 
-                  <span className="font-bold text-slate-900">"Export"</span> ან <span className="font-bold text-slate-900">"Download CSV"</span>.
-                  {isKa ? ' ფაილში ავტომატურად იქნება პროდუქტის სახელები, ფასები, აღწერები და სურათების ლინკები.' : ' Payhip will generate a file with all your images, titles, prices, and descriptions.'}
-                </li>
-                <li className="leading-relaxed">
-                  <strong>{isKa ? 'ატვირთვა აქ' : 'Upload Here'}</strong> — 
-                  {isKa ? ' გადმოწერილი ფაილი ჩააგდეთ ამ ფანჯარაში („1. ფაილის ატვირთვა“) და დააჭირეთ „იმპორტის დადასტურებას“.' : ' Drop the downloaded CSV into this dialog and confirm import.'}
-                </li>
-              </ol>
+              <div className="space-y-3 font-medium text-slate-700">
+                <div className="p-3.5 bg-white rounded-xl border border-indigo-200 space-y-2">
+                  <div className="flex items-center space-x-2 text-indigo-900 font-bold text-xs">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[11px]">1</span>
+                    <span>{isKa ? 'მეთოდი A: „More ▾“ ჩამოსაშლელი ღილაკი' : 'Method A: "More ▾" dropdown'}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed pl-7">
+                    {isKa 
+                      ? 'თქვენს Products გვერდზე (სადაც 45 პროდუქტი ჩანს), საძიებო ველის მარჯვნივ მოძებნეთ ღილაკი '
+                      : 'On your Products page (showing 45 items), next to Reorder look for the button '}
+                    <strong className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">More ▾</strong>
+                    {isKa 
+                      ? ' („Reorder“-ის გვერდით). დააჭირეთ „More ▾“-ს და ჩამონათვალში აირჩიეთ „Export“ ან „Download CSV“.'
+                      : ' and click it to find "Export" / "Download CSV".'}
+                  </p>
+                </div>
+
+                <div className="p-3.5 bg-white rounded-xl border border-indigo-200 space-y-2">
+                  <div className="flex items-center space-x-2 text-indigo-900 font-bold text-xs">
+                    <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[11px]">2</span>
+                    <span>{isKa ? 'მეთოდი B: Account ▾ მენიუდან' : 'Method B: Via Account ▾ menu'}</span>
+                  </div>
+                  <p className="text-xs text-slate-600 leading-relaxed pl-7">
+                    {isKa 
+                      ? 'ზედა მარჯვენა კუთხეში დააჭირეთ '
+                      : 'In the top right corner click '}
+                    <strong className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">Account ▾</strong>
+                    {isKa 
+                      ? ' $\\rightarrow$ Settings $\\rightarrow$ Export Data / Products.'
+                      : ' $\\rightarrow$ Settings $\\rightarrow$ Export Data.'}
+                  </p>
+                </div>
+
+                <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 space-y-2">
+                  <div className="flex items-center space-x-2 text-emerald-900 font-bold text-xs">
+                    <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[11px]">3</span>
+                    <span>{isKa ? 'მეთოდი C: პირდაპირ მაღაზიის ბმულით (Payhip Storefront)' : 'Method C: Payhip Storefront Link'}</span>
+                  </div>
+                  <p className="text-xs text-emerald-800 leading-relaxed pl-7">
+                    {isKa 
+                      ? 'თუ ექსპორტი მაინც გაგიჭირდათ, შეგიძლიათ მოგვაწოდოთ თქვენი Payhip მაღაზიის საჯარო ბმული (მაგ: payhip.com/თქვენი_სახელი) ან დააკოპიროთ პროდუქტების ტექსტი და პირდაპირ ჩავაშენებთ თქვენს 45-ივე პროდუქტს მაღაზიაში!'
+                      : 'You can also share your public Payhip store URL (e.g. payhip.com/your_store) to directly import all 45 products.'}
+                  </p>
+                </div>
+              </div>
 
               <div className="p-3 bg-white rounded-xl border border-indigo-200 mt-2">
                 <p className="text-[11px] text-indigo-800">
-                  ⚡ <strong>{isKa ? 'სურათების ავტომატური სინქრონიზაცია:' : 'Automatic Photo Sync:'}</strong> {isKa ? 'თქვენი პროდუქტის ფოტოების CDN ბმულები და აღწერები პირდაპირ აისახება მაღაზიაში და მყიდველები უცვლელად დაინახავენ მათ.' : 'Product images and CDN URLs from Payhip will display seamlessly on your storefront with no quality loss.'}
+                  ⚡ <strong>{isKa ? 'სურათების ავტომატური სინქრონიზაცია:' : 'Automatic Photo Sync:'}</strong> {isKa ? 'გადმოტანისას ყველა პროდუქტის ორიგინალი ფოტო და ფასი ავტომატურად ჩაიტვირთება.' : 'Photos and prices will sync automatically.'}
                 </p>
               </div>
             </div>

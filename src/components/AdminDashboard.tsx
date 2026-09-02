@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product, Order, BillboardSlide } from '../types';
+import { generateProductFeatures } from '../utils/productFeatures';
 import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
@@ -42,7 +43,11 @@ import {
   RefreshCw,
   Key,
   Truck,
-  Navigation
+  Navigation,
+  Star,
+  ArrowLeft,
+  ArrowRight,
+  Wand2
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -161,6 +166,7 @@ export const AdminDashboard: React.FC = () => {
   const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('upload');
   const [isDragging, setIsDragging] = useState(false);
   const [uploadedFileInfo, setUploadedFileInfo] = useState<{ name: string; size: string } | null>(null);
+  const [newImageUrl, setNewImageUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [prodForm, setProdForm] = useState({
@@ -173,8 +179,10 @@ export const AdminDashboard: React.FC = () => {
     stock: 20,
     badge: 'New',
     image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
+    images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80'] as string[],
     description: '',
     descriptionKa: '',
+    features: ['', '', '', ''] as string[],
   });
 
   // Product catalog table search & filter
@@ -399,79 +407,171 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const processImageFile = (file: File) => {
-    if (!file.type.startsWith('image/')) {
-      addToast(isKa ? 'გთხოვთ ატვირთოთ ვალიდური სურათის ფაილი (JPG, PNG, WEBP, GIF)' : 'Please upload a valid image file (JPG, PNG, WEBP, GIF)', 'error');
+  const processImageFiles = (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
+
+    const currentCount = prodForm.images.length;
+    const availableSlots = 5 - currentCount;
+    if (availableSlots <= 0) {
+      addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed per product', 'warning');
       return;
     }
 
-    if (file.size > 15 * 1024 * 1024) {
-      addToast(isKa ? 'სურათის ზომა არ უნდა აღემატებოდეს 15MB-ს' : 'Image size must not exceed 15MB', 'error');
-      return;
-    }
+    const filesToProcess = fileArray.slice(0, availableSlots);
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (!result) return;
+    filesToProcess.forEach((file) => {
+      if (!file.type.startsWith('image/')) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        if (!result) return;
 
-      // Optimize image via Canvas to keep preview fast and avoid quota issues
-      const img = new Image();
-      img.onload = () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxDim = 1200;
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          const maxDim = 1200;
 
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
+          if (width > maxDim || height > maxDim) {
+            if (width > height) {
+              height = Math.round((height * maxDim) / width);
+              width = maxDim;
+            } else {
+              width = Math.round((width * maxDim) / height);
+              height = maxDim;
+            }
           }
-        }
 
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
-          setProdForm(prev => ({ ...prev, image: compressedDataUrl }));
-          setUploadedFileInfo({
-            name: file.name,
-            size: `${(file.size / 1024).toFixed(1)} KB`
-          });
-          addToast(isKa ? 'სურათი წარმატებით აიტვირთა!' : 'Image uploaded successfully!', 'success');
-        } else {
-          setProdForm(prev => ({ ...prev, image: result }));
-          setUploadedFileInfo({
-            name: file.name,
-            size: `${(file.size / 1024).toFixed(1)} KB`
-          });
-          addToast(isKa ? 'სურათი წარმატებით აიტვირთა!' : 'Image uploaded successfully!', 'success');
-        }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(img, 0, 0, width, height);
+            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
+            appendProdImage(compressedDataUrl, file.name);
+          } else {
+            appendProdImage(result, file.name);
+          }
+        };
+        img.onerror = () => {
+          appendProdImage(result, file.name);
+        };
+        img.src = result;
       };
-      img.onerror = () => {
-        setProdForm(prev => ({ ...prev, image: result }));
-        setUploadedFileInfo({
-          name: file.name,
-          size: `${(file.size / 1024).toFixed(1)} KB`
-        });
-        addToast(isKa ? 'სურათი აიტვირთა' : 'Image uploaded', 'success');
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const appendProdImage = (url: string, name?: string) => {
+    setProdForm(prev => {
+      const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      if (currentList.length >= 5) {
+        addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed', 'warning');
+        return prev;
+      }
+      if (currentList.includes(url)) return prev;
+      const updated = [...currentList, url];
+      return {
+        ...prev,
+        images: updated,
+        image: updated[0] || prev.image,
       };
-      img.src = result;
-    };
-    reader.readAsDataURL(file);
+    });
+    if (name) {
+      setUploadedFileInfo({ name, size: 'Ready' });
+      addToast(isKa ? `სურათი „${name}“ წარმატებით დაემატა!` : `Image "${name}" added!`, 'success');
+    }
+  };
+
+  const removeProdImage = (indexToRemove: number) => {
+    setProdForm(prev => {
+      const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const updated = currentList.filter((_, idx) => idx !== indexToRemove);
+      return {
+        ...prev,
+        images: updated,
+        image: updated[0] || '',
+      };
+    });
+  };
+
+  const setPrimaryProdImage = (index: number) => {
+    setProdForm(prev => {
+      const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      if (index <= 0 || index >= currentList.length) return prev;
+      const target = currentList[index];
+      const rest = currentList.filter((_, i) => i !== index);
+      const updated = [target, ...rest];
+      return {
+        ...prev,
+        images: updated,
+        image: updated[0],
+      };
+    });
+    addToast(isKa ? 'მთავარი სურათი განახლდა' : 'Primary cover image updated', 'success');
+  };
+
+  const moveProdImage = (fromIndex: number, direction: 'left' | 'right') => {
+    setProdForm(prev => {
+      const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const toIndex = direction === 'left' ? fromIndex - 1 : fromIndex + 1;
+      if (toIndex < 0 || toIndex >= currentList.length) return prev;
+      const updated = [...currentList];
+      const temp = updated[fromIndex];
+      updated[fromIndex] = updated[toIndex];
+      updated[toIndex] = temp;
+      return {
+        ...prev,
+        images: updated,
+        image: updated[0],
+      };
+    });
+  };
+
+  const handleAddImageUrl = () => {
+    if (!newImageUrl.trim()) return;
+    if (!newImageUrl.startsWith('http') && !newImageUrl.startsWith('data:')) {
+      addToast(isKa ? 'გთხოვთ შეიყვანოთ სწორი ბმული (http...)' : 'Please enter a valid URL (http...)', 'warning');
+      return;
+    }
+    appendProdImage(newImageUrl.trim());
+    setNewImageUrl('');
+  };
+
+  const handleAutoGenerateFeatures = () => {
+    const generated = generateProductFeatures({
+      title: prodForm.title || (isKa ? 'ახალი პროდუქტი' : 'New Product'),
+      description: prodForm.description || '',
+      category: prodForm.category,
+      price: prodForm.price,
+    }, isKa ? 'ka' : 'en');
+
+    setProdForm(prev => ({
+      ...prev,
+      features: generated.slice(0, 4),
+    }));
+
+    addToast(isKa ? '4 ძირითადი მახასიათებელი დაგენერირდა!' : '4 Key Features auto-generated!', 'success');
+  };
+
+  const handleFeatureChange = (index: number, value: string) => {
+    setProdForm(prev => {
+      const newFeats = [...(prev.features || ['', '', '', ''])];
+      while (newFeats.length < 4) newFeats.push('');
+      newFeats[index] = value;
+      return { ...prev, features: newFeats };
+    });
   };
 
   const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      processImageFile(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      processImageFiles(files);
     }
+    // reset input so same file can be chosen again if removed
+    e.target.value = '';
   };
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -487,9 +587,9 @@ export const AdminDashboard: React.FC = () => {
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
-    const file = e.dataTransfer.files?.[0];
-    if (file) {
-      processImageFile(file);
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      processImageFiles(files);
     }
   };
 
@@ -497,6 +597,14 @@ export const AdminDashboard: React.FC = () => {
     setEditingProduct(null);
     setUploadedFileInfo(null);
     setImageInputMode('upload');
+    setNewImageUrl('');
+    const defaultImg = 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=800&q=80';
+    const initialFeatures = generateProductFeatures({
+      title: 'Smart Gadget Pro',
+      category: 'tech',
+      description: 'High-grade premium lifestyle and tech essential with superior build quality.',
+    }, isKa ? 'ka' : 'en');
+
     setProdForm({
       title: '',
       titleKa: '',
@@ -506,9 +614,11 @@ export const AdminDashboard: React.FC = () => {
       origPrice: 39.99,
       stock: 25,
       badge: 'New',
-      image: 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=800&q=80',
+      image: defaultImg,
+      images: [defaultImg],
       description: 'High-grade premium lifestyle and tech essential with superior build quality.',
       descriptionKa: 'მაღალი ხარისხის პრემიუმ ტექნიკური აქსესუარი საიმედო კორპუსით.',
+      features: initialFeatures.slice(0, 4),
     });
     setIsProductModalOpen(true);
   };
@@ -517,6 +627,20 @@ export const AdminDashboard: React.FC = () => {
     setEditingProduct(prod);
     setUploadedFileInfo(prod.image?.startsWith('data:') ? { name: 'Uploaded Image', size: 'Local' } : null);
     setImageInputMode(prod.image?.startsWith('data:') ? 'upload' : 'url');
+    setNewImageUrl('');
+
+    const prodImages = (prod.images && prod.images.length > 0)
+      ? prod.images
+      : [prod.image];
+
+    const prodFeatures = (prod.features && prod.features.length >= 3)
+      ? prod.features.slice(0, 4)
+      : generateProductFeatures(prod, isKa ? 'ka' : 'en');
+
+    while (prodFeatures.length < 4) {
+      prodFeatures.push('');
+    }
+
     setProdForm({
       title: prod.title,
       titleKa: prod.titleKa || '',
@@ -526,9 +650,11 @@ export const AdminDashboard: React.FC = () => {
       origPrice: prod.origPrice || 0,
       stock: prod.stock,
       badge: prod.badge || '',
-      image: prod.image,
+      image: prodImages[0] || prod.image,
+      images: prodImages,
       description: prod.description,
       descriptionKa: prod.descriptionKa || '',
+      features: prodFeatures,
     });
     setIsProductModalOpen(true);
   };
@@ -536,11 +662,45 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
     if (!prodForm.title.trim()) {
-      addToast('Product title is required', 'warning');
+      addToast(isKa ? 'პროდუქტის სათაური აუცილებელია' : 'Product title is required', 'warning');
       return;
     }
 
     const finalSlug = prodForm.customSlug?.trim() || generateProductSlug(prodForm.title);
+
+    // Prepare valid images array (up to 5 images)
+    const validImages = prodForm.images
+      .map(img => (img || '').trim())
+      .filter(img => img.length > 0)
+      .slice(0, 5);
+
+    const finalImages = validImages.length > 0
+      ? validImages
+      : (prodForm.image ? [prodForm.image] : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80']);
+    
+    const finalPrimaryImage = finalImages[0];
+
+    // Prepare 4 Key Features (auto-generate if blank)
+    let finalFeatures = (prodForm.features || [])
+      .map(f => (f || '').trim())
+      .filter(f => f.length > 0);
+
+    if (finalFeatures.length < 4) {
+      const generated = generateProductFeatures({
+        title: prodForm.title,
+        description: prodForm.description,
+        category: prodForm.category,
+        price: Number(prodForm.price),
+      }, isKa ? 'ka' : 'en');
+
+      // Fill in remaining slots
+      while (finalFeatures.length < 4 && generated.length > 0) {
+        const nextFeat = generated.shift();
+        if (nextFeat && !finalFeatures.includes(nextFeat)) {
+          finalFeatures.push(nextFeat);
+        }
+      }
+    }
 
     if (editingProduct) {
       updateProduct({
@@ -553,13 +713,13 @@ export const AdminDashboard: React.FC = () => {
         origPrice: prodForm.origPrice ? Number(prodForm.origPrice) : undefined,
         stock: Number(prodForm.stock),
         badge: prodForm.badge || undefined,
-        image: prodForm.image,
-        images: editingProduct.images && editingProduct.images.length > 0
-          ? [prodForm.image, ...editingProduct.images.filter(img => img !== prodForm.image)]
-          : [prodForm.image],
+        image: finalPrimaryImage,
+        images: finalImages,
         description: prodForm.description,
         descriptionKa: prodForm.descriptionKa,
+        features: finalFeatures.slice(0, 4),
       });
+      addToast(isKa ? 'პროდუქტი წარმატებით განახლდა!' : 'Product updated successfully!', 'success');
     } else {
       addProduct({
         title: prodForm.title,
@@ -570,14 +730,15 @@ export const AdminDashboard: React.FC = () => {
         origPrice: prodForm.origPrice ? Number(prodForm.origPrice) : undefined,
         stock: Number(prodForm.stock),
         badge: prodForm.badge || undefined,
-        image: prodForm.image,
-        images: [prodForm.image],
+        image: finalPrimaryImage,
+        images: finalImages,
         description: prodForm.description,
         descriptionKa: prodForm.descriptionKa,
         rating: 5.0,
         reviewsCount: 1,
-        features: ['Premium materials', 'Full warranty included', 'Worldwide tested'],
+        features: finalFeatures.slice(0, 4),
       });
+      addToast(isKa ? 'ახალი პროდუქტი წარმატებით დაემატა!' : 'New product created successfully!', 'success');
     }
     setIsProductModalOpen(false);
   };
@@ -2767,21 +2928,31 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Product Image Section: File Upload or Direct URL */}
-              <div className="space-y-2">
+              {/* Product Images Manager: Up to 5 Images Support */}
+              <div className="space-y-3 bg-slate-50/80 p-4 rounded-3xl border border-slate-200/80">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700">
-                    {isKa ? 'პროდუქტის სურათი *' : 'Product Image *'}
-                  </label>
+                  <div className="flex items-center space-x-2">
+                    <label className="text-xs font-black text-slate-800 flex items-center space-x-1.5">
+                      <ImageIcon className="w-4 h-4 text-blue-600" />
+                      <span>{isKa ? 'პროდუქტის სურათები' : 'Product Images'}</span>
+                    </label>
+                    <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${
+                      prodForm.images.length >= 5
+                        ? 'bg-amber-100 text-amber-800 border border-amber-200'
+                        : 'bg-blue-100 text-blue-700 border border-blue-200'
+                    }`}>
+                      {prodForm.images.length}/5
+                    </span>
+                  </div>
                   
                   {/* Mode switcher */}
-                  <div className="inline-flex p-0.5 bg-slate-100 rounded-lg border border-slate-200 text-[11px]">
+                  <div className="inline-flex p-0.5 bg-white rounded-xl border border-slate-200 text-[11px] shadow-2xs">
                     <button
                       type="button"
                       onClick={() => setImageInputMode('upload')}
-                      className={`px-2.5 py-1 rounded-md font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
                         imageInputMode === 'upload'
-                          ? 'bg-white text-blue-600 shadow-xs'
+                          ? 'bg-blue-600 text-white shadow-xs'
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
@@ -2791,9 +2962,9 @@ export const AdminDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setImageInputMode('url')}
-                      className={`px-2.5 py-1 rounded-md font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
                         imageInputMode === 'url'
-                          ? 'bg-white text-blue-600 shadow-xs'
+                          ? 'bg-blue-600 text-white shadow-xs'
                           : 'text-slate-500 hover:text-slate-800'
                       }`}
                     >
@@ -2803,11 +2974,19 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
+                <p className="text-[11px] text-slate-500 leading-relaxed">
+                  {isKa 
+                    ? 'შეგიძლიათ დაამატოთ 5-მდე სურათი. პირველი სურათი (⭐ მთავარი) გამოჩნდება კატალოგში.'
+                    : 'You can add up to 5 images. The first image (⭐ Primary) is displayed on catalog cards.'}
+                </p>
+
+                {/* Upload or URL Inputs */}
                 {imageInputMode === 'upload' ? (
                   <div className="space-y-2">
                     <input
                       ref={fileInputRef}
                       type="file"
+                      multiple
                       accept="image/png, image/jpeg, image/jpg, image/webp, image/gif, image/svg+xml"
                       onChange={handleFileInputChange}
                       className="hidden"
@@ -2818,110 +2997,247 @@ export const AdminDashboard: React.FC = () => {
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
-                      onClick={() => fileInputRef.current?.click()}
+                      onClick={() => {
+                        if (prodForm.images.length >= 5) {
+                          addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed', 'warning');
+                        } else {
+                          fileInputRef.current?.click();
+                        }
+                      }}
                       className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
                         isDragging
                           ? 'border-blue-500 bg-blue-50/80 scale-[1.01]'
-                          : prodForm.image
-                          ? 'border-emerald-300 bg-emerald-50/30 hover:border-blue-400 hover:bg-slate-50'
-                          : 'border-slate-300 bg-slate-50/70 hover:border-blue-500 hover:bg-blue-50/30'
+                          : prodForm.images.length >= 5
+                          ? 'border-slate-200 bg-slate-100 opacity-80 cursor-not-allowed'
+                          : 'border-slate-300 bg-white hover:border-blue-500 hover:bg-blue-50/30'
                       }`}
                     >
-                      {prodForm.image ? (
-                        <div className="flex items-center space-x-3.5 text-left">
-                          <img
-                            src={prodForm.image}
-                            alt="Preview"
-                            className="w-16 h-16 object-cover rounded-xl border border-slate-200 shrink-0 shadow-xs"
-                          />
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center space-x-1.5 text-xs font-bold text-slate-800">
-                              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                              <span className="truncate">
-                                {uploadedFileInfo?.name || (isKa ? 'სურათი მზადაა' : 'Image ready')}
-                              </span>
-                            </div>
-                            <p className="text-[11px] text-slate-500 mt-0.5">
-                              {uploadedFileInfo?.size ? `${isKa ? 'ზომა' : 'Size'}: ${uploadedFileInfo.size} • ` : ''}
-                              {isKa ? 'დააჭირეთ შესაცვლელად' : 'Click to change'}
-                            </p>
-                            <div className="flex items-center space-x-2 mt-1.5">
-                              <span className="text-[10px] font-bold px-2 py-0.5 bg-blue-100 text-blue-700 rounded-md">
-                                {isKa ? 'შეცვლა' : 'Replace'}
-                              </span>
-                            </div>
-                          </div>
+                      <div className="flex flex-col items-center justify-center space-y-1.5 py-1">
+                        <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
+                          <UploadCloud className="w-4 h-4" />
                         </div>
-                      ) : (
-                        <div className="py-3 flex flex-col items-center justify-center space-y-2">
-                          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center">
-                            <UploadCloud className="w-5 h-5" />
-                          </div>
-                          <div>
-                            <p className="text-xs font-bold text-slate-700">
-                              {isKa ? 'დააჭირეთ ასატვირთად ან გადმოათრიეთ სურათი' : 'Click to upload or drag & drop image'}
-                            </p>
-                            <p className="text-[11px] text-slate-400 mt-0.5">
-                              {isKa ? 'PNG, JPG, WEBP, GIF (მაქს. 15MB)' : 'PNG, JPG, WEBP, GIF (Max 15MB)'}
-                            </p>
-                          </div>
-                        </div>
-                      )}
+                        <p className="text-xs font-bold text-slate-800">
+                          {prodForm.images.length >= 5
+                            ? (isKa ? 'მიღწეულია 5 სურათის ლიმიტი' : '5 images limit reached')
+                            : (isKa ? 'დააჭირეთ ან გადმოათრიეთ სურათები (1-5 ფაილი)' : 'Click to select or drag & drop images (1-5 files)')}
+                        </p>
+                        <p className="text-[10px] text-slate-400">
+                          PNG, JPG, WEBP, GIF (ავტომატური ოპტიმიზაციით)
+                        </p>
+                      </div>
                     </div>
                   </div>
                 ) : (
-                  <div>
-                    <input
-                      type="text"
-                      required
-                      value={prodForm.image ?? ''}
-                      onChange={e => {
-                        setProdForm({ ...prodForm, image: e.target.value });
-                        setUploadedFileInfo(null);
-                      }}
-                      placeholder="https://images.unsplash.com/..."
-                      className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden mb-2"
-                    />
+                  <div className="space-y-2">
+                    <div className="flex items-center space-x-2">
+                      <input
+                        type="text"
+                        value={newImageUrl}
+                        onChange={e => setNewImageUrl(e.target.value)}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            e.preventDefault();
+                            handleAddImageUrl();
+                          }
+                        }}
+                        placeholder="https://images.unsplash.com/..."
+                        disabled={prodForm.images.length >= 5}
+                        className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-hidden disabled:bg-slate-100"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddImageUrl}
+                        disabled={prodForm.images.length >= 5 || !newImageUrl.trim()}
+                        className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs flex items-center space-x-1 transition-all cursor-pointer shrink-0"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>{isKa ? 'დამატება' : 'Add Image'}</span>
+                      </button>
+                    </div>
 
-                    <div className="flex items-center space-x-2 overflow-x-auto pb-1">
-                      {presetImages.map((preset, idx) => (
-                        <button
+                    {/* Presets Quick Selector */}
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-500 block mb-1">
+                        {isKa ? 'სწრაფი ფოტო-შაბლონები (დააჭირეთ დასამატებლად):' : 'Quick image presets (click to add):'}
+                      </span>
+                      <div className="flex items-center space-x-2 overflow-x-auto pb-1">
+                        {presetImages.map((preset, idx) => (
+                          <button
+                            key={idx}
+                            type="button"
+                            onClick={() => appendProdImage(preset.url, preset.label)}
+                            disabled={prodForm.images.length >= 5}
+                            className="shrink-0 p-1 rounded-xl border border-slate-200 bg-white hover:border-blue-500 transition-all disabled:opacity-40 cursor-pointer"
+                            title={preset.label}
+                          >
+                            <img
+                              src={preset.url}
+                              alt={preset.label}
+                              className="w-9 h-9 object-cover rounded-lg"
+                            />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5-Images Gallery Grid Preview */}
+                {prodForm.images.length > 0 && (
+                  <div className="pt-2 border-t border-slate-200/60 space-y-2">
+                    <span className="text-[11px] font-bold text-slate-700 block">
+                      {isKa ? 'დამატებული სურათები (გადაადგილება / მთავარად არჩევა):' : 'Added Gallery Images (Reorder / Set Cover):'}
+                    </span>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                      {prodForm.images.map((imgUrl, idx) => (
+                        <div
                           key={idx}
-                          type="button"
-                          onClick={() => {
-                            setProdForm({ ...prodForm, image: preset.url });
-                            setUploadedFileInfo(null);
-                          }}
-                          className={`shrink-0 p-1 rounded-lg border transition-all ${
-                            prodForm.image === preset.url
-                              ? 'border-blue-600 ring-2 ring-blue-500/20'
-                              : 'border-slate-200 hover:border-blue-400'
+                          className={`relative p-2 rounded-2xl border transition-all flex items-center space-x-2.5 bg-white ${
+                            idx === 0
+                              ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
+                              : 'border-slate-200 hover:border-slate-300'
                           }`}
-                          title={preset.label}
                         >
                           <img
-                            src={preset.url}
-                            alt={preset.label}
-                            className="w-10 h-10 object-cover rounded-md"
+                            src={imgUrl}
+                            alt={`Product img ${idx + 1}`}
+                            className="w-14 h-14 object-cover rounded-xl border border-slate-100 shrink-0"
                           />
-                        </button>
+                          <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                            <div className="flex items-center justify-between">
+                              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                                idx === 0
+                                  ? 'bg-blue-600 text-white'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}>
+                                {idx === 0 ? (isKa ? '⭐ მთავარი' : '⭐ Cover') : `#${idx + 1}`}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => removeProdImage(idx)}
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                title={isKa ? 'სურათის წაშლა' : 'Delete image'}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <div className="flex items-center space-x-1 mt-1.5">
+                              {idx !== 0 && (
+                                <button
+                                  type="button"
+                                  onClick={() => setPrimaryProdImage(idx)}
+                                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                >
+                                  {isKa ? 'მთავარად' : 'Set Cover'}
+                                </button>
+                              )}
+                              <div className="ml-auto flex items-center space-x-0.5">
+                                {idx > 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => moveProdImage(idx, 'left')}
+                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                                    title="Move left"
+                                  >
+                                    <ArrowLeft className="w-3 h-3" />
+                                  </button>
+                                )}
+                                {idx < prodForm.images.length - 1 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => moveProdImage(idx, 'right')}
+                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                                    title="Move right"
+                                  >
+                                    <ArrowRight className="w-3 h-3" />
+                                  </button>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
                       ))}
                     </div>
                   </div>
                 )}
               </div>
 
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  {isKa ? 'აღწერა' : 'Description'}
-                </label>
-                <textarea
-                  rows={2}
-                  value={prodForm.description ?? ''}
-                  onChange={e => setProdForm({ ...prodForm, description: e.target.value })}
-                  placeholder={isKa ? 'პროდუქტის მოკლე აღწერა...' : 'Product description...'}
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                />
+              {/* Descriptions (EN & KA) */}
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKa ? 'პროდუქტის აღწერა (EN)' : 'Product Description (EN)'}
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={prodForm.description ?? ''}
+                    onChange={e => setProdForm({ ...prodForm, description: e.target.value })}
+                    placeholder="Product description in English..."
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                    {isKa ? 'პროდუქტის აღწერა ქართულად (KA)' : 'Product Description in Georgian (KA)'}
+                  </label>
+                  <textarea
+                    rows={2}
+                    value={prodForm.descriptionKa ?? ''}
+                    onChange={e => setProdForm({ ...prodForm, descriptionKa: e.target.value })}
+                    placeholder="პროდუქტის აღწერა ქართულ ენაზე..."
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* 4 Key Features Section: Auto-Generation & Manual Editing */}
+              <div className="bg-blue-50/50 p-4 rounded-3xl border border-blue-100 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-black text-slate-900 flex items-center space-x-1.5">
+                      <Sparkles className="w-4 h-4 text-blue-600" />
+                      <span>{isKa ? '4 ძირითადი მახასიათებელი (Key Features)' : '4 Key Features (Selling Points)'}</span>
+                    </label>
+                    <p className="text-[11px] text-slate-500 mt-0.5">
+                      {isKa 
+                        ? 'მყიდველისთვის მიმზიდველი 4 მთავარი პუნქტი (აისახება პროდუქტის გვერდზე)' 
+                        : 'Attractive highlights displayed on product detail & quick view'}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAutoGenerateFeatures}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer shrink-0"
+                    title={isKa ? 'ავტომატური გენერაცია სათაურისა და აღწერის მიხედვით' : 'Auto-generate 4 features from title & description'}
+                  >
+                    <Wand2 className="w-3.5 h-3.5" />
+                    <span>{isKa ? '🪄 ავტო-გენერაცია' : '🪄 Auto-Generate 4'}</span>
+                  </button>
+                </div>
+
+                <div className="space-y-2">
+                  {[0, 1, 2, 3].map((featIdx) => (
+                    <div key={featIdx} className="flex items-center space-x-2 bg-white p-1.5 pl-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                      <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold text-[10px] shrink-0">
+                        {featIdx + 1}
+                      </div>
+                      <input
+                        type="text"
+                        value={prodForm.features?.[featIdx] ?? ''}
+                        onChange={e => handleFeatureChange(featIdx, e.target.value)}
+                        placeholder={
+                          isKa 
+                            ? `მახასიათებელი #${featIdx + 1} (მაგ: 170° ორმაგი ხედვა, 1080P Full HD...)` 
+                            : `Feature #${featIdx + 1} (e.g. Dual 170° angle lens, 1080P Night Vision...)`
+                        }
+                        className="flex-1 text-xs text-slate-800 focus:outline-hidden"
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
 
               <div className="pt-2 flex justify-end space-x-2">

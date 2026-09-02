@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Product } from '../types';
+import { getProductFeatures } from '../utils/productFeatures';
 import { 
   Star, 
   ShoppingCart, 
@@ -360,21 +361,30 @@ export const ProductDetailPage: React.FC = () => {
           </p>
 
           {/* Feature Highlights */}
-          {product.features && product.features.length > 0 && (
-            <div className="space-y-2">
-              <h4 className="text-xs font-black uppercase tracking-wider text-slate-800">
-                {language === 'ka' ? 'ძირითადი მახასიათებლები:' : 'Key Features:'}
-              </h4>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {product.features.map((feat, idx) => (
-                  <div key={idx} className="flex items-center space-x-2 text-xs text-slate-700 bg-white p-2.5 rounded-xl border border-slate-100 shadow-2xs">
-                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                    <span className="font-medium">{feat}</span>
-                  </div>
-                ))}
+          {(() => {
+            const activeFeatures = getProductFeatures(product, language);
+            if (!activeFeatures || activeFeatures.length === 0) return null;
+            return (
+              <div className="space-y-2.5">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-black uppercase tracking-wider text-slate-800 flex items-center space-x-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                    <span>{language === 'ka' ? 'ძირითადი მახასიათებლები:' : 'Key Features:'}</span>
+                  </h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  {activeFeatures.map((feat, idx) => (
+                    <div key={idx} className="flex items-center space-x-2.5 text-xs text-slate-700 bg-white p-3 rounded-2xl border border-slate-200/80 shadow-2xs hover:border-blue-200 transition-colors">
+                      <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center shrink-0">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="font-semibold text-slate-800 leading-snug">{feat}</span>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* Quantity & Actions Bar */}
           <div className="space-y-4 pt-4 border-t border-slate-100">

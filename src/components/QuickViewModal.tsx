@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
+import { getProductFeatures } from '../utils/productFeatures';
 import { 
   X, 
   Star, 
@@ -8,11 +9,12 @@ import {
   ShieldCheck, 
   Truck, 
   ChevronLeft, 
-  ChevronRight,
-  Lock,
-  Sparkles,
-  Zap,
-  Heart
+  ChevronRight, 
+  Lock, 
+  Sparkles, 
+  Zap, 
+  Heart,
+  CheckCircle2
 } from 'lucide-react';
 
 export const QuickViewModal: React.FC = () => {
@@ -261,22 +263,26 @@ export const QuickViewModal: React.FC = () => {
               </p>
 
               {/* Features List */}
-              {quickViewProduct.features && quickViewProduct.features.length > 0 && (
-                <div className="space-y-2 p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/60">
-                  <span className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
-                    <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-                    <span>{t('quickView.featuresTitle')}</span>
-                  </span>
-                  <ul className="text-xs text-slate-700 space-y-1.5 pl-1">
-                    {quickViewProduct.features.map((feat, idx) => (
-                      <li key={idx} className="flex items-center space-x-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>{feat}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
+              {(() => {
+                const activeFeatures = getProductFeatures(quickViewProduct, language);
+                if (!activeFeatures || activeFeatures.length === 0) return null;
+                return (
+                  <div className="space-y-2 p-3.5 bg-slate-50/80 rounded-2xl border border-slate-200/60">
+                    <span className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-blue-600" />
+                      <span>{t('quickView.featuresTitle')}</span>
+                    </span>
+                    <ul className="text-xs text-slate-700 space-y-1.5 pl-0.5">
+                      {activeFeatures.map((feat, idx) => (
+                        <li key={idx} className="flex items-center space-x-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="font-medium text-slate-800">{feat}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* Actions & Supported Payments */}
