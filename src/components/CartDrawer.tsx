@@ -66,7 +66,7 @@ export const CartDrawer: React.FC = () => {
       />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <aside className="w-screen max-w-md bg-white shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
+        <aside className="w-[calc(100vw-2.5rem)] sm:w-full max-w-md bg-white shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
           
           {/* Header */}
           <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
@@ -288,7 +288,7 @@ export const CartDrawer: React.FC = () => {
               </div>
 
               {/* Action Buttons */}
-              <div className="space-y-2">
+              <div className="space-y-2.5">
                 <button
                   onClick={handleProceedCheckout}
                   className="w-full py-3.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm shadow-md hover:shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer"
@@ -297,10 +297,24 @@ export const CartDrawer: React.FC = () => {
                   <ArrowRight className="w-4 h-4" />
                 </button>
 
+                {/* Instant Express Badges */}
+                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center space-y-1.5">
+                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {language === 'ka' ? 'მყისიერი ექსპრეს გადახდა' : 'Express Checkout Supported'}
+                  </p>
+                  <div className="flex items-center justify-center space-x-1.5 text-xs font-black">
+                    <span className="px-2 py-0.5 rounded-md bg-black text-white text-[10px]">Pay</span>
+                    <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-800 text-[10px]">GPay</span>
+                    <span className="px-2 py-0.5 rounded-md bg-blue-700 text-white text-[10px]">PayPal</span>
+                    <span className="px-1.5 py-0.5 rounded-md bg-blue-900 text-white text-[9px] italic">VISA</span>
+                    <span className="px-1.5 py-0.5 rounded-md bg-amber-500 text-slate-900 text-[9px]">MC</span>
+                  </div>
+                </div>
+
                 <div className="text-center">
                   <button
                     onClick={clearCart}
-                    className="text-[11px] text-slate-400 hover:text-red-600 transition-colors"
+                    className="text-[11px] text-slate-400 hover:text-red-600 transition-colors cursor-pointer"
                   >
                     {t('cart.clear')}
                   </button>

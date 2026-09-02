@@ -16,6 +16,7 @@ import { ALL_COUNTRIES } from '../data/countries';
 export const CheckoutModal: React.FC = () => {
   const {
     t,
+    language,
     isCheckoutOpen,
     setIsCheckoutOpen,
     cart,
@@ -318,6 +319,28 @@ export const CheckoutModal: React.FC = () => {
                       <span>{t('checkout.totalToPay')}</span>
                       <span className="text-blue-600 font-black">{formatPrice(totalAmountUSD)}</span>
                     </div>
+                  </div>
+                </div>
+
+                {/* Accepted Payment Brands Strip */}
+                <div className="p-3 bg-white rounded-2xl border border-slate-200 space-y-2">
+                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
+                    <span>{language === 'ka' ? 'მხარდაჭერილი მეთოდები:' : 'Supported Instant Methods:'}</span>
+                    <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">Verified</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs font-black">
+                    <span className="px-2.5 py-1 rounded-lg bg-black text-white text-[11px] flex items-center space-x-1">
+                      <span></span>
+                      <span>Pay</span>
+                    </span>
+                    <span className="px-2 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-[11px] flex items-center space-x-1">
+                      <span className="text-blue-600 font-extrabold">G</span>
+                      <span>Pay</span>
+                    </span>
+                    <span className="px-2.5 py-1 rounded-lg bg-blue-700 text-white text-[11px] italic">PayPal</span>
+                    <span className="px-2 py-1 rounded-lg bg-blue-900 text-white text-[10px] italic">VISA</span>
+                    <span className="px-2 py-1 rounded-lg bg-amber-500 text-slate-950 text-[10px]">Mastercard</span>
+                    <span className="px-2 py-1 rounded-lg bg-[#006FCF] text-white text-[9px] uppercase">AMEX</span>
                   </div>
                 </div>
 

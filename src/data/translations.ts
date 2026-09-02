@@ -128,6 +128,14 @@ export const translations: Record<Language, Record<string, string>> = {
     // Trust Section
     'trust.title': 'Why Shop With Us',
     'trust.subtitle': 'Guaranteed satisfaction on every single order',
+    'trust.shipping': 'Free Worldwide Shipping',
+    'trust.shippingSub': 'Fast dispatch in 24-48 hours',
+    'trust.guarantee': '30-Day Money Back',
+    'trust.guaranteeSub': '100% Risk-Free Returns',
+    'trust.secure': '256-Bit SSL Encrypted',
+    'trust.secureSub': 'Encrypted & Safe Checkout',
+    'trust.warranty': '2-Year Official Warranty',
+    'trust.warrantySub': 'Full manufacturer coverage',
     'trust.shipping.title': 'Free Shipping',
     'trust.shipping.desc': 'Fast & free delivery on orders over $50',
     'trust.secure.title': 'Secure Checkout',
@@ -137,6 +145,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'trust.support.title': '24/7 Support',
     'trust.support.desc': 'Dedicated human support ready to assist anytime',
     'trust.learnMore': 'Learn more',
+    'cart.expressCheckout': 'Express Checkout',
+    'cart.guaranteedSafe': 'Guaranteed Safe & Instant Checkout',
+    'cart.acceptedPayments': 'Accepted Instant Payment Methods:',
 
     // Footer
     'footer.tagline': 'Curating the highest quality lifestyle, fitness, smart gadgets, and everyday carry gear for modern enthusiasts.',
@@ -527,6 +538,14 @@ export const translations: Record<Language, Record<string, string>> = {
     // Trust Section
     'trust.title': 'რატომ ჩვენ?',
     'trust.subtitle': 'გარანტირებული კმაყოფილება თითოეულ შეკვეთაზე',
+    'trust.shipping': 'უფასო საერთაშორისო მიწოდება',
+    'trust.shippingSub': 'სწრაფი გაგზავნა 24-48 საათში',
+    'trust.guarantee': '30-დღიანი გარანტია',
+    'trust.guaranteeSub': '100% უსაფრთხო დაბრუნება',
+    'trust.secure': '256-ბიტიანი SSL შიფრაცია',
+    'trust.secureSub': 'დაცული და უსაფრთხო გადახდა',
+    'trust.warranty': '2-წლიანი ოფიციალური გარანტია',
+    'trust.warrantySub': 'მწარმოებლის სრული მხარდაჭერა',
     'trust.shipping.title': 'უფასო მიწოდება',
     'trust.shipping.desc': 'სწრაფი და უფასო მიწოდება 50$-ზე მეტ შეკვეთაზე',
     'trust.secure.title': 'უსაფრთხო გადახდა',
@@ -536,6 +555,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'trust.support.title': '24/7 მხარდაჭერა',
     'trust.support.desc': 'მზად ვართ დაგეხმაროთ ნებისმიერ დროს',
     'trust.learnMore': 'გაიგეთ მეტი',
+    'cart.expressCheckout': 'სწრაფი ექსპრეს გადახდა',
+    'cart.guaranteedSafe': 'გარანტირებული უსაფრთხო & მყისიერი გადახდა',
+    'cart.acceptedPayments': 'გადახდის მხარდაჭერილი მეთოდები:',
 
     // Footer
     'footer.tagline': 'უმაღლესი ხარისხის ტექნიკა, ფიტნეს აქსესუარები და ყოველდღიური ნივთები.',
