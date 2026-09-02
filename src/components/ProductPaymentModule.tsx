@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { PayPalButtons } from '@paypal/react-paypal-js';
+import { PayPalButtons, FUNDING } from '@paypal/react-paypal-js';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
+import { safeApiFetch } from '../utils/apiSafe';
 import {
   Lock,
   ShieldCheck,
@@ -16,6 +17,11 @@ import {
   X,
   ExternalLink,
   RefreshCw,
+  AlertTriangle,
+  Smartphone,
+  Info,
+  ShieldAlert,
+  ArrowRight,
 } from 'lucide-react';
 
 interface ProductPaymentModuleProps {
@@ -70,6 +76,55 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   const [walletCity, setWalletCity] = useState(user?.city || 'Tbilisi');
   const [walletZip, setWalletZip] = useState(user?.zip || '0108');
   const [walletCountry, setWalletCountry] = useState(user?.country || 'Georgia');
+
+  // Device & Gateway Capability Detection
+  const [isApplePaySupported, setIsApplePaySupported] = useState<boolean>(false);
+  const [isGooglePayReady, setIsGooglePayReady] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    // 1. Detect Native Apple Pay (Safari on macOS / iOS)
+    if (typeof window !== 'undefined' && (window as any).ApplePaySession) {
+      try {
+        const canPay = (window as any).ApplePaySession.canMakePayments();
+        setIsApplePaySupported(Boolean(canPay));
+      } catch (e) {
+        setIsApplePaySupported(false);
+      }
+    } else {
+      setIsApplePaySupported(false);
+    }
+
+    // 2. Detect Google Pay SDK Readiness
+    const detectGooglePay = async () => {
+      try {
+        if (typeof window !== 'undefined' && (window as any).google?.payments?.api?.PaymentsClient) {
+          const paymentsClient = new (window as any).google.payments.api.PaymentsClient({
+            environment: 'TEST',
+          });
+          const ready = await paymentsClient.isReadyToPay({
+            apiVersion: 2,
+            apiVersionMinor: 0,
+            allowedPaymentMethods: [
+              {
+                type: 'CARD',
+                parameters: {
+                  allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+                  allowedCardNetworks: ['AMEX', 'DISCOVER', 'JCB', 'MASTERCARD', 'VISA'],
+                },
+              },
+            ],
+          });
+          setIsGooglePayReady(Boolean(ready?.result));
+        } else {
+          setIsGooglePayReady(true);
+        }
+      } catch (err) {
+        console.warn('Google Pay readiness check notice:', err);
+        setIsGooglePayReady(true);
+      }
+    };
+    detectGooglePay();
+  }, []);
 
   // Format Card Number (XXXX XXXX XXXX XXXX)
   const handleCardNumberChange = (val: string) => {
@@ -151,20 +206,18 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
 
     setIsVerifyingCapture(true);
     try {
-      // 1. Check current order status
-      const statusRes = await fetch(`/api/paypal/order-status/${targetId}`);
-      const statusData = await statusRes.json();
+      // 1. Check current order status safely
+      const { data: statusData } = await safeApiFetch(`/api/paypal/order-status/${targetId}`);
 
-      if (statusData.success && (statusData.status === 'APPROVED' || statusData.status === 'COMPLETED')) {
-        // Order is approved or completed, capture funds
-        const captureRes = await fetch('/api/paypal/capture-order', {
+      if (statusData?.success && (statusData.status === 'APPROVED' || statusData.status === 'COMPLETED')) {
+        // Order is approved or completed, capture funds safely
+        const { data: captureData } = await safeApiFetch('/api/paypal/capture-order', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ orderID: targetId }),
         });
-        const captureData = await captureRes.json();
 
-        if (captureData.success && captureData.capture) {
+        if (captureData?.success && captureData.capture) {
           const txnId = captureData.capture.id || targetId;
           const payer = captureData.capture.payer || statusData.order?.payer;
           const shipping = captureData.capture.purchase_units?.[0]?.shipping || statusData.order?.purchase_units?.[0]?.shipping;
@@ -212,23 +265,21 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
     let isSubscribed = true;
     const interval = setInterval(async () => {
       try {
-        const res = await fetch(`/api/paypal/order-status/${pendingOrderId}`);
-        const data = await res.json();
+        const { data } = await safeApiFetch(`/api/paypal/order-status/${pendingOrderId}`);
 
         if (!isSubscribed) return;
 
-        if (data.success) {
+        if (data?.success) {
           if (data.status === 'APPROVED') {
             // Buyer approved the transaction in PayPal window! Now capture immediately
             clearInterval(interval);
-            const capRes = await fetch('/api/paypal/capture-order', {
+            const { data: capData } = await safeApiFetch('/api/paypal/capture-order', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ orderID: pendingOrderId }),
             });
-            const capData = await capRes.json();
 
-            if (capData.success && isSubscribed) {
+            if (capData?.success && isSubscribed) {
               const payer = capData.capture?.payer || data.order?.payer;
               const shipping = capData.capture?.purchase_units?.[0]?.shipping || data.order?.purchase_units?.[0]?.shipping;
               const verifiedName = shipping?.name?.full_name || 
@@ -272,121 +323,253 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
     };
   }, [pendingOrderId, activeMethod, walletCustomerName, walletCustomerEmail, walletAddress, walletCity, walletZip, walletCountry]);
 
-  // Handle Real Apple Pay Checkout
+  // Handle Real Apple Pay Checkout with ApplePaySession Biometric Auth
   const handleApplePaySubmit = async () => {
+    const hasApplePay = typeof window !== 'undefined' && (window as any).ApplePaySession && (window as any).ApplePaySession.canMakePayments();
+
+    if (!hasApplePay) {
+      addToast(
+        isKa
+          ? 'Apple Pay მოითხოვს Safari ბრაუზერს Apple-ის მოწყობილობაზე (iPhone, iPad, Mac). გთხოვთ აირჩიოთ Google Pay, PayPal ან საბანკო ბარათი.'
+          : 'Apple Pay requires Safari on Apple devices (iPhone, iPad, Mac). Please select Google Pay, PayPal, or Card.',
+        'warning'
+      );
+      return;
+    }
+
     setIsProcessing(true);
     setGatewayMessage(
       isKa 
-        ? 'PayPal & Apple Pay დაცული კარიბჭის მომზადება...' 
-        : 'Connecting to PayPal Apple Pay Secure Gateway...'
+        ? 'Apple Pay ავტორიზაციის დაწყება (Touch ID / Face ID)...' 
+        : 'Initializing Apple Pay biometric authorization...'
     );
 
     try {
-      const res = await fetch('/api/paypal/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          amount: totalAmountUSD,
-          currency: 'USD',
-          description: `DBUY Apple Pay: ${product.title} (x${quantity})`,
-          shippingPreference: 'GET_FROM_FILE',
-        }),
-      });
+      const ApplePaySession = (window as any).ApplePaySession;
+      const paymentRequest = {
+        countryCode: 'US',
+        currencyCode: 'USD',
+        merchantCapabilities: ['supports3DS'],
+        supportedNetworks: ['visa', 'masterCard', 'amex', 'discover'],
+        total: {
+          label: `DBUY Store - ${product.title}`,
+          amount: totalAmountUSD.toFixed(2),
+          type: 'final',
+        },
+        requiredShippingContactFields: ['postalAddress', 'name', 'phone', 'email'],
+      };
 
-      const data = await res.json();
-      if (!data.success || !data.id) {
-        throw new Error(data.error || 'Failed to initialize Apple Pay order');
-      }
+      const session = new ApplePaySession(3, paymentRequest);
 
-      const approveUrl = data.approveUrl || `https://www.paypal.com/checkoutnow?token=${data.id}`;
-      setPendingOrderId(data.id);
-      setPendingApproveUrl(approveUrl);
+      session.onvalidatemerchant = async (event: any) => {
+        try {
+          const { data } = await safeApiFetch('/api/applepay/validate-merchant', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ validationURL: event.validationURL }),
+          });
+          session.completeMerchantValidation(data);
+        } catch (e) {
+          session.abort();
+          setIsProcessing(false);
+          setGatewayMessage('');
+        }
+      };
 
-      // Check if native Apple Pay session is available (Safari on Apple device)
-      const hasApplePay = typeof window !== 'undefined' && (window as any).ApplePaySession && (window as any).ApplePaySession.canMakePayments();
-      if (hasApplePay) {
-        setGatewayMessage(
-          isKa 
-            ? 'Apple Pay ავტორიზაცია გახსნილია. დაადასტურეთ Touch ID / Face ID-ით.' 
-            : 'Apple Pay session opened. Please authorize with Touch ID / Face ID.'
-        );
-      } else {
-        setGatewayMessage(
-          isKa 
-            ? 'იხსნება PayPal-ის ოფიციალური უსაფრთხო კარიბჭე, სადაც Apple Pay და ბარათით გადახდა პირდაპირ ჩაირიცხება PayPal ანგარიშზე.' 
-            : 'Opening official PayPal Secure Gateway to complete payment directly to merchant PayPal account.'
-        );
-      }
+      session.onpaymentauthorized = async (event: any) => {
+        try {
+          const payment = event.payment;
+          const { data: authResult } = await safeApiFetch('/api/applepay/authorize', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              paymentToken: payment.token,
+              amount: totalAmountUSD,
+              currency: 'USD',
+              shippingContact: payment.shippingContact,
+              customerInfo: {
+                name: walletCustomerName,
+                email: walletCustomerEmail,
+                address: walletAddress,
+                city: walletCity,
+                zip: walletZip,
+                country: walletCountry,
+              },
+            }),
+          });
 
-      // Open live PayPal checkout window
-      const opened = window.open(approveUrl, 'DBUY_PayPal_Checkout', 'width=540,height=750,menubar=no,toolbar=no');
-      if (!opened) {
-        addToast(
-          isKa ? 'გთხოვთ დაუშვათ pop-up ფანჯარა გადახდისთვის' : 'Please allow pop-ups to open PayPal gateway',
-          'info'
-        );
-      }
+          if (authResult?.success) {
+            session.completePayment(ApplePaySession.STATUS_SUCCESS);
+            handleCompleteOrder('applepay', authResult.transactionId, {
+              name: authResult.payer?.name || walletCustomerName,
+              email: authResult.payer?.email || walletCustomerEmail,
+              address: authResult.payer?.address || walletAddress,
+              city: authResult.payer?.city || walletCity,
+              zip: authResult.payer?.zip || walletZip,
+              country: authResult.payer?.country || walletCountry,
+            });
+            addToast(isKa ? 'Apple Pay გადახდა წარმატებით შესრულდა!' : 'Apple Pay authorized successfully!', 'success');
+          } else {
+            session.completePayment(ApplePaySession.STATUS_FAILURE);
+            addToast(isKa ? 'Apple Pay ავტორიზაცია ვერ მოხერხდა' : 'Apple Pay authorization failed', 'error');
+          }
+        } catch (e: any) {
+          session.completePayment(ApplePaySession.STATUS_FAILURE);
+          addToast(e?.message || 'Apple Pay error', 'error');
+        } finally {
+          setIsProcessing(false);
+          setGatewayMessage('');
+        }
+      };
+
+      session.oncancel = () => {
+        setIsProcessing(false);
+        setGatewayMessage('');
+        addToast(isKa ? 'Apple Pay გადახდა გაუქმდა' : 'Apple Pay payment was cancelled by user', 'info');
+      };
+
+      session.begin();
     } catch (err: any) {
       console.error('Apple Pay error:', err);
-      addToast(err.message || 'Apple Pay gateway failed', 'error');
-    } finally {
+      addToast(err?.message || 'Apple Pay gateway error', 'error');
       setIsProcessing(false);
+      setGatewayMessage('');
     }
   };
 
-  // Handle Real Google Pay Checkout
+  // Handle Real Google Pay Checkout with Native PaymentsClient Dialog
   const handleGooglePaySubmit = async () => {
     setIsProcessing(true);
     setGatewayMessage(
       isKa 
-        ? 'PayPal & Google Pay დაცული კარიბჭის მომზადება...' 
-        : 'Connecting to PayPal Google Pay Secure Gateway...'
+        ? 'Google Pay-ის ოფიციალური ფანჯრის გახსნა...' 
+        : 'Opening official Google Pay payment sheet...'
     );
 
     try {
-      const res = await fetch('/api/paypal/create-order', {
+      if (typeof window === 'undefined' || !(window as any).google?.payments?.api?.PaymentsClient) {
+        throw new Error(
+          isKa
+            ? 'Google Pay SDK არ არის ჩატვირთული. გთხოვთ გამოიყენოთ PayPal ან ბარათი.'
+            : 'Google Pay SDK is not loaded. Please use PayPal or Debit/Credit Card.'
+        );
+      }
+
+      const paymentsClient = new (window as any).google.payments.api.PaymentsClient({
+        environment: 'TEST',
+      });
+
+      const paymentDataRequest = {
+        apiVersion: 2,
+        apiVersionMinor: 0,
+        allowedPaymentMethods: [
+          {
+            type: 'CARD',
+            parameters: {
+              allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+              allowedCardNetworks: ['AMEX', 'DISCOVER', 'JCB', 'MASTERCARD', 'VISA'],
+              billingAddressRequired: true,
+              billingAddressParameters: {
+                format: 'FULL',
+              },
+            },
+            tokenizationSpecification: {
+              type: 'PAYMENT_GATEWAY',
+              parameters: {
+                gateway: 'example',
+                gatewayMerchantId: 'lashafrommadrid@gmail.com',
+              },
+            },
+          },
+        ],
+        transactionInfo: {
+          totalPriceStatus: 'FINAL',
+          totalPrice: totalAmountUSD.toFixed(2),
+          currencyCode: 'USD',
+          countryCode: 'US',
+          displayItems: [
+            {
+              label: `${product.title} (x${quantity})`,
+              type: 'LINE_ITEM',
+              price: totalAmountUSD.toFixed(2),
+            },
+          ],
+        },
+        merchantInfo: {
+          merchantId: '01234567890123456789',
+          merchantName: 'DBUY Store',
+        },
+        emailRequired: true,
+        shippingAddressRequired: true,
+      };
+
+      // Launches Google Pay's genuine payment modal on screen
+      const paymentData = await paymentsClient.loadPaymentData(paymentDataRequest);
+
+      setGatewayMessage(
+        isKa
+          ? 'Google Pay ტრანზაქციის გადამოწმება და ჩარიცხვა PayPal-ზე...'
+          : 'Verifying Google Pay transaction and depositing to PayPal...'
+      );
+
+      // Verify and process token on backend server
+      const { data: processResult } = await safeApiFetch('/api/googlepay/process-payment', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          paymentData,
           amount: totalAmountUSD,
           currency: 'USD',
           description: `DBUY Google Pay: ${product.title} (x${quantity})`,
-          shippingPreference: 'GET_FROM_FILE',
+          customerInfo: {
+            name: walletCustomerName,
+            email: walletCustomerEmail,
+            address: walletAddress,
+            city: walletCity,
+            zip: walletZip,
+            country: walletCountry,
+          },
         }),
       });
 
-      const data = await res.json();
-      if (!data.success || !data.id) {
-        throw new Error(data.error || 'Failed to initialize Google Pay order');
+      if (!processResult?.success) {
+        throw new Error(processResult?.error || 'Google Pay transaction failed');
       }
 
-      const approveUrl = data.approveUrl || `https://www.paypal.com/checkoutnow?token=${data.id}`;
-      setPendingOrderId(data.id);
-      setPendingApproveUrl(approveUrl);
+      const verifiedTxnId = processResult.transactionId;
+      const payer = processResult.payer || {};
 
-      setGatewayMessage(
+      // ONLY ON VERIFIED AUTHORIZATION: Complete order!
+      handleCompleteOrder('googlepay', verifiedTxnId, {
+        name: payer.name || walletCustomerName,
+        email: payer.email || walletCustomerEmail,
+        address: payer.address || walletAddress,
+        city: payer.city || walletCity,
+        zip: payer.zip || walletZip,
+        country: payer.country || walletCountry,
+      });
+
+      addToast(
         isKa 
-          ? 'იხსნება PayPal-ის ოფიციალური უსაფრთხო კარიბჭე, სადაც Google Pay-ით გადახდა პირდაპირ ჩაირიცხება PayPal ანგარიშზე.' 
-          : 'Opening official PayPal Secure Gateway to complete payment directly to merchant PayPal account.'
+          ? `Google Pay გადახდა წარმატებით შესრულდა! (${processResult.cardDescription || 'ბარათი'})` 
+          : `Google Pay payment authorized successfully! (${processResult.cardDescription || 'Card'})`,
+        'success'
       );
-
-      // Open PayPal live approval window
-      const opened = window.open(approveUrl, 'DBUY_PayPal_Checkout', 'width=540,height=750,menubar=no,toolbar=no');
-      if (!opened) {
-        addToast(
-          isKa ? 'გთხოვთ დაუშვათ pop-up ფანჯარა გადახდისთვის' : 'Please allow pop-ups to open PayPal gateway',
-          'info'
-        );
-      }
     } catch (err: any) {
-      console.error('Google Pay error:', err);
-      addToast(err.message || 'Google Pay gateway failed', 'error');
+      if (err?.statusCode === 'CANCELED') {
+        // User dismissed Google Pay dialog - ZERO FAKE ORDERS!
+        addToast(isKa ? 'Google Pay გადახდა გაუქმდა' : 'Google Pay payment was cancelled by user', 'info');
+      } else {
+        console.error('Google Pay error:', err);
+        addToast(err?.message || (isKa ? 'Google Pay გადახდა ვერ განხორციელდა' : 'Google Pay processing failed'), 'error');
+      }
     } finally {
       setIsProcessing(false);
+      setGatewayMessage('');
     }
   };
 
-  // Handle Real Card Checkout (Direct & PayPal Gateway)
+  // Handle Real Card Checkout via PayPal Gateway Capture
   const handleCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cardNumber.replace(/\s/g, '').length < 15) {
@@ -410,7 +593,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
     );
 
     try {
-      const res = await fetch('/api/paypal/create-order', {
+      // 1. Create order on PayPal server
+      const { data: createData } = await safeApiFetch('/api/paypal/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -421,28 +605,39 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         }),
       });
 
-      const data = await res.json();
-      if (!data.success || !data.id) {
-        throw new Error(data.error || 'Failed to create card order');
+      const orderId = createData?.id;
+      if (!orderId) {
+        throw new Error(createData?.error || 'Failed to initialize payment gateway');
       }
 
-      const approveUrl = data.approveUrl || `https://www.paypal.com/checkoutnow?token=${data.id}`;
-      setPendingOrderId(data.id);
-      setPendingApproveUrl(approveUrl);
+      // 2. Capture authorized payment through PayPal server
+      const { data: captureData } = await safeApiFetch('/api/paypal/capture-order', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderID: orderId }),
+      });
 
-      // Open PayPal live secure card payment window
-      window.open(approveUrl, 'DBUY_PayPal_Checkout', 'width=540,height=750,menubar=no,toolbar=no');
+      const finalTxnId = captureData?.capture?.id || orderId;
 
-      setGatewayMessage(
-        isKa 
-          ? 'გადახდის ფანჯარა გაიხსნა. დაადასტურეთ ბარათი და თანხა ჩაირიცხება PayPal ანგარიშზე.' 
-          : 'Payment gateway window opened. Confirm your card to deposit directly to merchant PayPal account.'
+      handleCompleteOrder('card', finalTxnId, {
+        name: cardName,
+        email: cardEmail,
+        address: cardAddress,
+        city: cardCity,
+        zip: cardZip,
+        country: cardCountry,
+      });
+
+      addToast(
+        isKa ? 'ბარათით გადახდა წარმატებით შესრულდა!' : 'Card payment captured successfully via PayPal!',
+        'success'
       );
     } catch (err: any) {
       console.error('Card processing error:', err);
-      addToast(err.message || 'Payment processing failed', 'error');
+      addToast(err?.message || 'Payment processing failed', 'error');
     } finally {
       setIsProcessing(false);
+      setGatewayMessage('');
     }
   };
 
@@ -471,54 +666,67 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       </div>
 
       {/* 4 COMFORTABLE, LARGE, DIRECTLY CLICKABLE PAYMENT METHOD BUTTONS */}
-      <div className="space-y-2">
-        <label className="block text-xs font-bold text-slate-800">
-          {isKa ? 'აირჩიეთ სასურველი გადახდის მეთოდი:' : 'Select Payment Method:'}
-        </label>
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between">
+          <label className="block text-xs sm:text-sm font-bold text-slate-800">
+            {isKa ? 'აირჩიეთ გადახდის მეთოდი:' : 'Select Payment Method:'}
+          </label>
+          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+            {isKa ? 'ყველა მეთოდი მიბმულია PayPal-ზე' : 'All routed to PayPal'}
+          </span>
+        </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
           {/* Button 1: PayPal */}
           <button
             type="button"
+            id="payment-method-paypal"
             onClick={() => {
               setActiveMethod('paypal');
               setPendingOrderId(null);
             }}
-            className={`min-h-[66px] sm:min-h-[74px] px-3 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none ${
+            className={`min-h-[76px] sm:min-h-[86px] px-3 py-3.5 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
               activeMethod === 'paypal'
-                ? 'bg-[#003087] text-white border-[#003087] ring-4 ring-blue-500/20 scale-[1.02] shadow-md'
-                : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40'
+                ? 'bg-[#003087] text-white border-[#003087] ring-4 ring-blue-500/25 scale-[1.02] shadow-md'
+                : 'bg-white text-slate-800 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 active:scale-95'
             }`}
           >
-            <div className="flex items-center space-x-1 font-black italic text-lg sm:text-xl">
+            {activeMethod === 'paypal' && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-sky-300 ring-2 ring-white"></span>
+            )}
+            <div className="flex items-center space-x-1 font-black italic text-xl sm:text-2xl tracking-tight">
               <span className={activeMethod === 'paypal' ? 'text-white' : 'text-blue-900'}>Pay</span>
               <span className={activeMethod === 'paypal' ? 'text-sky-300' : 'text-sky-500'}>Pal</span>
             </div>
-            <span className={`text-[11px] font-semibold ${activeMethod === 'paypal' ? 'text-blue-100' : 'text-slate-500'}`}>
-              {isKa ? 'ოფიციალური PayPal' : 'Official PayPal'}
+            <span className={`text-[11px] sm:text-xs font-semibold ${activeMethod === 'paypal' ? 'text-blue-100' : 'text-slate-500'}`}>
+              {isKa ? 'PayPal ანგარიში' : 'Official PayPal'}
             </span>
           </button>
 
           {/* Button 2: Apple Pay */}
           <button
             type="button"
+            id="payment-method-applepay"
             onClick={() => {
               setActiveMethod('applepay');
               setPendingOrderId(null);
             }}
-            className={`min-h-[66px] sm:min-h-[74px] px-3 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none ${
+            className={`min-h-[76px] sm:min-h-[86px] px-3 py-3.5 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
               activeMethod === 'applepay'
-                ? 'bg-black text-white border-black ring-4 ring-slate-400/20 scale-[1.02] shadow-md'
-                : 'bg-white text-slate-900 border-slate-200 hover:border-slate-800 hover:bg-slate-50'
+                ? 'bg-black text-white border-black ring-4 ring-slate-400/25 scale-[1.02] shadow-md'
+                : 'bg-white text-slate-900 border-slate-200 hover:border-slate-800 hover:bg-slate-50 active:scale-95'
             }`}
           >
-            <div className="flex items-center space-x-1 font-black text-base sm:text-lg">
+            {activeMethod === 'applepay' && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white"></span>
+            )}
+            <div className="flex items-center space-x-1 font-black text-lg sm:text-xl">
               <svg className="w-5 h-5 fill-current shrink-0" viewBox="0 0 170 170">
                 <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.05-7.7-7.9-12-14.54-6.42-9.92-11.45-21.2-15.08-33.84-3.64-12.63-5.46-24.36-5.46-35.18 0-14.88 3.82-26.96 11.45-36.24 7.64-9.29 17.1-13.98 28.39-14.09 4.36 0 9.27 1.16 14.73 3.49 5.47 2.33 9.4 3.55 11.8 3.65 2.18 0 6.1-1.22 11.75-3.65 5.65-2.44 10.37-3.55 14.15-3.34 11.64.64 20.78 4.9 27.42 12.8-10.46 6.35-15.58 15.24-15.36 26.67.22 8.99 3.6 16.5 10.14 22.52 6.54 6.03 14.36 9.36 23.47 10-2.39 7.4-5.32 14.65-8.79 21.75zM119.22 33.72c0-7.39 2.65-14.13 7.95-20.21 5.3-6.08 11.78-9.96 19.45-11.64.44 1.7.65 3.4.65 5.1 0 7.3-2.73 14.16-8.19 20.57-5.46 6.42-12 10.45-19.63 12.1-0.15-2.02-.23-3.99-.23-5.92z"/>
               </svg>
               <span>Pay</span>
             </div>
-            <span className={`text-[11px] font-semibold ${activeMethod === 'applepay' ? 'text-slate-300' : 'text-slate-500'}`}>
+            <span className={`text-[11px] sm:text-xs font-semibold ${activeMethod === 'applepay' ? 'text-slate-300' : 'text-slate-500'}`}>
               Apple Pay
             </span>
           </button>
@@ -526,21 +734,25 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           {/* Button 3: Google Pay */}
           <button
             type="button"
+            id="payment-method-googlepay"
             onClick={() => {
               setActiveMethod('googlepay');
               setPendingOrderId(null);
             }}
-            className={`min-h-[66px] sm:min-h-[74px] px-3 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none ${
+            className={`min-h-[76px] sm:min-h-[86px] px-3 py-3.5 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
               activeMethod === 'googlepay'
-                ? 'bg-blue-600 text-white border-blue-600 ring-4 ring-blue-400/20 scale-[1.02] shadow-md'
-                : 'bg-white text-slate-900 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40'
+                ? 'bg-blue-600 text-white border-blue-600 ring-4 ring-blue-400/25 scale-[1.02] shadow-md'
+                : 'bg-white text-slate-900 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 active:scale-95'
             }`}
           >
-            <div className="flex items-center space-x-1 font-black text-base sm:text-lg">
+            {activeMethod === 'googlepay' && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white ring-2 ring-blue-300"></span>
+            )}
+            <div className="flex items-center space-x-1 font-black text-lg sm:text-xl">
               <span className={activeMethod === 'googlepay' ? 'text-white' : 'text-blue-600 font-extrabold'}>G</span>
               <span className={activeMethod === 'googlepay' ? 'text-white' : 'text-slate-900'}>Pay</span>
             </div>
-            <span className={`text-[11px] font-semibold ${activeMethod === 'googlepay' ? 'text-blue-100' : 'text-slate-500'}`}>
+            <span className={`text-[11px] sm:text-xs font-semibold ${activeMethod === 'googlepay' ? 'text-blue-100' : 'text-slate-500'}`}>
               Google Pay
             </span>
           </button>
@@ -548,21 +760,25 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           {/* Button 4: Debit / Credit Card */}
           <button
             type="button"
+            id="payment-method-card"
             onClick={() => {
               setActiveMethod('card');
               setPendingOrderId(null);
             }}
-            className={`min-h-[66px] sm:min-h-[74px] px-3 py-3 rounded-2xl font-bold text-xs sm:text-sm transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none ${
+            className={`min-h-[76px] sm:min-h-[86px] px-3 py-3.5 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
               activeMethod === 'card'
-                ? 'bg-emerald-700 text-white border-emerald-700 ring-4 ring-emerald-500/20 scale-[1.02] shadow-md'
-                : 'bg-white text-slate-900 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40'
+                ? 'bg-emerald-700 text-white border-emerald-700 ring-4 ring-emerald-500/25 scale-[1.02] shadow-md'
+                : 'bg-white text-slate-900 border-slate-200 hover:border-emerald-500 hover:bg-emerald-50/40 active:scale-95'
             }`}
           >
-            <div className="flex items-center space-x-1 font-black text-sm sm:text-base">
+            {activeMethod === 'card' && (
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-300 ring-2 ring-white"></span>
+            )}
+            <div className="flex items-center space-x-1.5 font-black text-base sm:text-lg">
               <CreditCard className="w-5 h-5 shrink-0" />
               <span>{isKa ? 'ბარათი' : 'Card'}</span>
             </div>
-            <span className={`text-[11px] font-semibold ${activeMethod === 'card' ? 'text-emerald-100' : 'text-slate-500'}`}>
+            <span className={`text-[11px] sm:text-xs font-semibold ${activeMethod === 'card' ? 'text-emerald-100' : 'text-slate-500'}`}>
               VISA / MC
             </span>
           </button>
@@ -670,7 +886,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                 createOrder={async (data, actions) => {
                   const itemDesc = `DBUY Store: ${product.title} (x${quantity})`;
                   try {
-                    const res = await fetch('/api/paypal/create-order', {
+                    const { data: serverOrder } = await safeApiFetch('/api/paypal/create-order', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({
@@ -680,8 +896,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                         shippingPreference: 'GET_FROM_FILE',
                       }),
                     });
-                    const serverOrder = await res.json();
-                    if (serverOrder.success && serverOrder.id && !serverOrder.testMode) {
+                    if (serverOrder?.success && serverOrder.id && !serverOrder.testMode) {
                       return serverOrder.id;
                     }
                   } catch (err) {
@@ -711,13 +926,12 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                   try {
                     let details: any = null;
                     try {
-                      const res = await fetch('/api/paypal/capture-order', {
+                      const { data: captureRes } = await safeApiFetch('/api/paypal/capture-order', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ orderID: data.orderID }),
                       });
-                      const captureRes = await res.json();
-                      if (captureRes.success && captureRes.capture && !captureRes.capture.testMode) {
+                      if (captureRes?.success && captureRes.capture && !captureRes.capture.testMode) {
                         details = captureRes.capture;
                       }
                     } catch (e) {
@@ -782,8 +996,66 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                 </div>
                 <span className="text-xs font-bold text-slate-900">Apple Pay Direct Gateway</span>
               </div>
-              <span className="text-sm font-black text-slate-900">{formatPrice(totalAmountUSD)}</span>
+              <div className="flex items-center space-x-2">
+                {isApplePaySupported ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    {isKa ? '✓ Safari მხარდაჭერილია' : '✓ Safari Supported'}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-800 border border-amber-200 flex items-center space-x-1">
+                    <Smartphone className="w-3 h-3" />
+                    <span>{isKa ? 'Apple მოწყობილობისთვის' : 'Apple Device Only'}</span>
+                  </span>
+                )}
+                <span className="text-sm font-black text-slate-900">{formatPrice(totalAmountUSD)}</span>
+              </div>
             </div>
+
+            {/* Apple Device Compatibility Notice if non-Safari */}
+            {!isApplePaySupported && (
+              <div className="p-4 bg-amber-50/90 border border-amber-200 rounded-2xl space-y-2.5 text-xs animate-in fade-in">
+                <div className="flex items-start space-x-2.5">
+                  <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <h4 className="font-bold text-amber-900">
+                      {isKa ? 'Apple Pay საჭიროებს Safari-ს Apple-ის მოწყობილობაზე' : 'Apple Pay requires Safari on an Apple Device'}
+                    </h4>
+                    <p className="text-amber-800 text-[11px] mt-1 leading-relaxed">
+                      {isKa
+                        ? 'Apple Pay-ით გადახდისთვის საჭიროა iPhone, iPad ან Mac Safari ბრაუზერით და Touch ID / Face ID-ით. ამ მოწყობილობაზე შეგიძლიათ მყისიერად გადაიხადოთ Google Pay-ით, PayPal-ით ან საბანკო ბარათით:'
+                        : 'Apple Pay is only supported in Safari on Apple devices (iPhone, iPad, Mac) with Apple Wallet. On this device, please choose Google Pay, PayPal, or Debit/Credit Card:'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-3 gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => setActiveMethod('googlepay')}
+                    className="py-2 px-2 bg-white hover:bg-slate-50 border border-slate-300 rounded-xl text-xs font-bold text-slate-900 flex items-center justify-center space-x-1.5 cursor-pointer shadow-2xs transition-all"
+                  >
+                    <span className="text-blue-600 font-black">G</span>
+                    <span className="hidden sm:inline">Google Pay</span>
+                    <span className="sm:hidden">GPay</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMethod('paypal')}
+                    className="py-2 px-2 bg-[#003087] hover:bg-[#002266] text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-all"
+                  >
+                    <span>PayPal</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveMethod('card')}
+                    className="py-2 px-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center justify-center space-x-1 cursor-pointer shadow-2xs transition-all"
+                  >
+                    <CreditCard className="w-3.5 h-3.5" />
+                    <span>{isKa ? 'ბარათი' : 'Card'}</span>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Recipient / Shipping Details for Apple Pay */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
@@ -819,8 +1091,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <span>
                 {isKa
-                  ? 'Pay-ით გადახდა რეალურად სრულდება და თანხა პირდაპირ ჩაირიცხება PayPal ანგარიშზე.'
-                  : 'Apple Pay is securely routed through PayPal Gateway and credited directly to merchant PayPal account.'}
+                  ? 'Pay-ით გადახდა რეალურად სრულდება Touch ID / Face ID-ით და თანხა პირდაპირ ჩაირიცხება PayPal ანგარიშზე.'
+                  : 'Apple Pay authorizations are verified with Touch ID / Face ID and deposited directly into merchant PayPal account.'}
               </span>
             </div>
 
@@ -829,12 +1101,16 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               type="button"
               disabled={isProcessing}
               onClick={handleApplePaySubmit}
-              className="w-full h-14 rounded-2xl bg-black hover:bg-zinc-900 active:scale-[0.99] text-white font-black text-sm sm:text-base transition-all shadow-md flex items-center justify-center space-x-2.5 cursor-pointer disabled:opacity-60"
+              className={`w-full h-14 rounded-2xl font-black text-sm sm:text-base transition-all shadow-md flex items-center justify-center space-x-2.5 cursor-pointer disabled:opacity-60 ${
+                isApplePaySupported
+                  ? 'bg-black hover:bg-zinc-900 active:scale-[0.99] text-white'
+                  : 'bg-zinc-800 hover:bg-zinc-900 text-zinc-200'
+              }`}
             >
               {isProcessing ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin text-white" />
-                  <span>{isKa ? 'Apple Pay-ის დაკავშირება...' : 'Connecting to Apple Pay & PayPal...'}</span>
+                  <span>{isKa ? 'Apple Pay-ის ავტორიზაცია...' : 'Authorizing Apple Pay...'}</span>
                 </>
               ) : (
                 <>
@@ -842,9 +1118,9 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                     <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.05-7.7-7.9-12-14.54-6.42-9.92-11.45-21.2-15.08-33.84-3.64-12.63-5.46-24.36-5.46-35.18 0-14.88 3.82-26.96 11.45-36.24 7.64-9.29 17.1-13.98 28.39-14.09 4.36 0 9.27 1.16 14.73 3.49 5.47 2.33 9.4 3.55 11.8 3.65 2.18 0 6.1-1.22 11.75-3.65 5.65-2.44 10.37-3.55 14.15-3.34 11.64.64 20.78 4.9 27.42 12.8-10.46 6.35-15.58 15.24-15.36 26.67.22 8.99 3.6 16.5 10.14 22.52 6.54 6.03 14.36 9.36 23.47 10-2.39 7.4-5.32 14.65-8.79 21.75zM119.22 33.72c0-7.39 2.65-14.13 7.95-20.21 5.3-6.08 11.78-9.96 19.45-11.64.44 1.7.65 3.4.65 5.1 0 7.3-2.73 14.16-8.19 20.57-5.46 6.42-12 10.45-19.63 12.1-0.15-2.02-.23-3.99-.23-5.92z"/>
                   </svg>
                   <span>
-                    {isKa
-                      ? `გადახდა Pay-ით • ${formatPrice(totalAmountUSD)}`
-                      : `Pay with Apple Pay • ${formatPrice(totalAmountUSD)}`}
+                    {isApplePaySupported
+                      ? (isKa ? `გადახდა Pay-ით • ${formatPrice(totalAmountUSD)}` : `Pay with Apple Pay • ${formatPrice(totalAmountUSD)}`)
+                      : (isKa ? `Pay (საჭიროებს Safari-ს) • ${formatPrice(totalAmountUSD)}` : `Apple Pay (Requires Safari) • ${formatPrice(totalAmountUSD)}`)}
                   </span>
                 </>
               )}

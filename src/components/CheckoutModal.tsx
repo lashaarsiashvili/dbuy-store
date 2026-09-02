@@ -391,8 +391,9 @@ export const CheckoutModal: React.FC = () => {
                             }),
                           });
 
-                          const serverOrder = await res.json();
-                          if (serverOrder.success && serverOrder.id && !serverOrder.testMode) {
+                          const text = await res.text();
+                          const serverOrder = text ? JSON.parse(text) : null;
+                          if (serverOrder?.success && serverOrder.id && !serverOrder.testMode) {
                             return serverOrder.id;
                           }
                         } catch (err) {
@@ -430,8 +431,9 @@ export const CheckoutModal: React.FC = () => {
                               headers: { 'Content-Type': 'application/json' },
                               body: JSON.stringify({ orderID: data.orderID }),
                             });
-                            const captureResult = await res.json();
-                            if (captureResult.success && captureResult.capture && !captureResult.capture.testMode) {
+                            const text = await res.text();
+                            const captureResult = text ? JSON.parse(text) : null;
+                            if (captureResult?.success && captureResult.capture && !captureResult.capture.testMode) {
                               details = captureResult.capture;
                             }
                           } catch (err) {
