@@ -38,7 +38,7 @@ setInterval(() => {
 // Helper to configure nodemailer transporter
 function getMailTransporter() {
   const gmailUser = process.env.GMAIL_USER || 'lashaarsiashvili@gmail.com';
-  const gmailAppPass = process.env.GMAIL_APP_PASSWORD || process.env.SMTP_PASS || process.env.SMTP_PASSWORD;
+  const gmailAppPass = process.env.GMAIL_APP_PASSWORD || 'kcafmhjfwffmkmtu';
   const smtpHost = process.env.SMTP_HOST;
   const smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
   const smtpUser = process.env.SMTP_USER || gmailUser;
@@ -104,6 +104,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
       attempts: 0,
     });
 
+    const gmailUser = process.env.GMAIL_USER || 'lashaarsiashvili@gmail.com';
     const senderEmail = process.env.SMTP_FROM_EMAIL || 'support@dbuystore.com';
     const senderName = process.env.SMTP_FROM_NAME || 'DBUY Store';
 
@@ -208,7 +209,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const transporter = getMailTransporter();
 
     const mailOptions = {
-      from: `"${senderName}" <${senderEmail}>`,
+      from: `"${senderName}" <${gmailUser}>`,
       replyTo: senderEmail,
       to: normalizedEmail,
       subject,
