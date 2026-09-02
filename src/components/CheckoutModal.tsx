@@ -112,7 +112,7 @@ export const CheckoutModal: React.FC = () => {
         currency: 'USD',
         intent: 'capture',
         components: 'buttons',
-        enableFunding: 'card',
+        enableFunding: 'card,venmo,paylater,applepay',
       }}
     >
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
