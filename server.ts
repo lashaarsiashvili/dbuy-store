@@ -1,8 +1,11 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import { initialProducts } from './src/data/initialProducts';
+import { initialBillboards } from './src/data/initialBillboards';
 
 dotenv.config();
 
@@ -12,7 +15,96 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
+
+// File-backed persistent database
+const DB_DIR = path.join(process.cwd(), 'data');
+const DB_FILE = path.join(DB_DIR, 'store_database.json');
+
+const DEFAULT_THEME = {
+  announcementText: '🚚 Free Shipping on orders over $50 | 🛡️ 14-Day Money Back Guarantee',
+  announcementVisible: true,
+  primaryColor: '#2563eb',
+  heroTitle: 'Quality Products for Modern Living',
+  heroSubtitle: 'Discover premium lifestyle, fitness, and tech accessories curated for your everyday needs.',
+  eurRate: 0.92,
+  gelRate: 2.78,
+  logoStyle: 'geometric-tech',
+};
+
+interface StoreDatabase {
+  products: any[];
+  registeredUsers: Record<string, any>;
+  orders: any[];
+  theme: any;
+  billboards: any[];
+  billboardIntervalSeconds: number;
+  adminSecretSlug: string;
+  adminPasswordHash?: string;
+  adminPasswordSalt?: string;
+  lastUpdated: string;
+}
+
+function initStoreDatabase(): StoreDatabase {
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      return {
+        products: Array.isArray(parsed.products) && parsed.products.length > 0 ? parsed.products : initialProducts,
+        registeredUsers: parsed.registeredUsers || {},
+        orders: Array.isArray(parsed.orders) ? parsed.orders : [],
+        theme: parsed.theme || DEFAULT_THEME,
+        billboards: Array.isArray(parsed.billboards) && parsed.billboards.length > 0 ? parsed.billboards : initialBillboards,
+        billboardIntervalSeconds: parsed.billboardIntervalSeconds || 6,
+        adminSecretSlug: parsed.adminSecretSlug || 'lasha-admin-x98',
+        adminPasswordHash: parsed.adminPasswordHash || '',
+        adminPasswordSalt: parsed.adminPasswordSalt || '',
+        lastUpdated: parsed.lastUpdated || new Date().toISOString(),
+      };
+    }
+  } catch (err) {
+    console.error('Error reading store database, creating default:', err);
+  }
+
+  const initialDb: StoreDatabase = {
+    products: initialProducts,
+    registeredUsers: {},
+    orders: [],
+    theme: DEFAULT_THEME,
+    billboards: initialBillboards,
+    billboardIntervalSeconds: 6,
+    adminSecretSlug: 'lasha-admin-x98',
+    adminPasswordHash: '',
+    adminPasswordSalt: '',
+    lastUpdated: new Date().toISOString(),
+  };
+
+  try {
+    fs.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), 'utf-8');
+  } catch (writeErr) {
+    console.error('Error writing initial store database:', writeErr);
+  }
+
+  return initialDb;
+}
+
+let storeDb: StoreDatabase = initStoreDatabase();
+
+function saveStoreDatabase(): void {
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    storeDb.lastUpdated = new Date().toISOString();
+    fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Failed to save store database to file:', err);
+  }
+}
 
 // In-memory OTP storage with TTL and attempt limits
 interface OtpRecord {
@@ -60,6 +152,283 @@ function getMailTransporter() {
 // API Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ==========================================
+// STORE PERSISTENCE & REAL-TIME SYNC API
+// ==========================================
+
+// GET full synchronized store data (Products, Users, Orders, Theme, Billboards)
+app.get('/api/store/sync', (req, res) => {
+  try {
+    res.json({
+      success: true,
+      data: {
+        products: storeDb.products,
+        registeredUsers: storeDb.registeredUsers,
+        orders: storeDb.orders,
+        theme: storeDb.theme,
+        billboards: storeDb.billboards,
+        billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
+        adminSecretSlug: storeDb.adminSecretSlug,
+        lastUpdated: storeDb.lastUpdated,
+      },
+    });
+  } catch (err) {
+    console.error('Error fetching store data:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch store data' });
+  }
+});
+
+// POST full or partial store sync
+app.post('/api/store/sync', (req, res) => {
+  try {
+    const { products, registeredUsers, orders, theme, billboards, billboardIntervalSeconds, adminSecretSlug } = req.body;
+    
+    if (Array.isArray(products)) {
+      storeDb.products = products;
+    }
+    if (registeredUsers && typeof registeredUsers === 'object') {
+      storeDb.registeredUsers = { ...storeDb.registeredUsers, ...registeredUsers };
+    }
+    if (Array.isArray(orders)) {
+      storeDb.orders = orders;
+    }
+    if (theme && typeof theme === 'object') {
+      storeDb.theme = { ...storeDb.theme, ...theme };
+    }
+    if (Array.isArray(billboards)) {
+      storeDb.billboards = billboards;
+    }
+    if (typeof billboardIntervalSeconds === 'number') {
+      storeDb.billboardIntervalSeconds = billboardIntervalSeconds;
+    }
+    if (typeof adminSecretSlug === 'string' && adminSecretSlug.trim()) {
+      storeDb.adminSecretSlug = adminSecretSlug.trim();
+    }
+
+    saveStoreDatabase();
+
+    res.json({
+      success: true,
+      data: {
+        products: storeDb.products,
+        registeredUsers: storeDb.registeredUsers,
+        orders: storeDb.orders,
+        theme: storeDb.theme,
+        billboards: storeDb.billboards,
+        billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
+        adminSecretSlug: storeDb.adminSecretSlug,
+        lastUpdated: storeDb.lastUpdated,
+      },
+    });
+  } catch (err) {
+    console.error('Error syncing store data:', err);
+    res.status(500).json({ success: false, error: 'Failed to sync store data' });
+  }
+});
+
+// POST: Register / Update user on persistent server
+app.post('/api/store/register-user', (req, res) => {
+  try {
+    const { name, email, country, city, zip, address, phone, passwordHash, passwordSalt, provider, picture } = req.body;
+    
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      res.status(400).json({ success: false, error: 'Valid email is required' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = storeDb.registeredUsers[cleanEmail] || {};
+
+    const updatedUser = {
+      ...existing,
+      name: name?.trim() || existing.name || 'Customer',
+      email: cleanEmail,
+      country: country?.trim() || existing.country || 'Georgia',
+      city: city?.trim() || existing.city || 'Tbilisi',
+      zip: zip?.trim() || existing.zip || '',
+      address: address?.trim() || existing.address || '',
+      phone: phone?.trim() || existing.phone || '',
+      provider: provider || existing.provider || 'email',
+      picture: picture || existing.picture,
+      createdAt: existing.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      role: (cleanEmail === 'lashaarsiashvili@gmail.com' || existing.role === 'admin') ? 'admin' : 'customer',
+      passwordHash: passwordHash || existing.passwordHash || '',
+      passwordSalt: passwordSalt || existing.passwordSalt || '',
+    };
+
+    storeDb.registeredUsers[cleanEmail] = updatedUser;
+    saveStoreDatabase();
+
+    console.log(`[USER-PERSISTED] Registered user saved to server: ${cleanEmail}`);
+
+    res.json({
+      success: true,
+      user: {
+        name: updatedUser.name,
+        email: updatedUser.email,
+        country: updatedUser.country,
+        city: updatedUser.city,
+        zip: updatedUser.zip,
+        address: updatedUser.address,
+        phone: updatedUser.phone,
+        provider: updatedUser.provider,
+        picture: updatedUser.picture,
+        createdAt: updatedUser.createdAt,
+        role: updatedUser.role,
+      },
+      registeredUsers: Object.values(storeDb.registeredUsers).map((u: any) => ({
+        name: u.name,
+        email: u.email,
+        country: u.country,
+        city: u.city,
+        zip: u.zip,
+        address: u.address,
+        phone: u.phone,
+        provider: u.provider || 'email',
+        picture: u.picture,
+        createdAt: u.createdAt,
+        role: u.role,
+      })),
+    });
+  } catch (err) {
+    console.error('Error registering user on server:', err);
+    res.status(500).json({ success: false, error: 'Failed to register user on server' });
+  }
+});
+
+// POST: Delete registered user from server
+app.post('/api/store/delete-user', (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      res.status(400).json({ success: false, error: 'Email is required' });
+      return;
+    }
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail === 'lashaarsiashvili@gmail.com') {
+      res.status(403).json({ success: false, error: 'Cannot delete primary admin account' });
+      return;
+    }
+
+    if (storeDb.registeredUsers[cleanEmail]) {
+      delete storeDb.registeredUsers[cleanEmail];
+      saveStoreDatabase();
+    }
+
+    res.json({
+      success: true,
+      registeredUsers: Object.values(storeDb.registeredUsers).map((u: any) => ({
+        name: u.name,
+        email: u.email,
+        country: u.country,
+        city: u.city,
+        zip: u.zip,
+        address: u.address,
+        phone: u.phone,
+        provider: u.provider || 'email',
+        picture: u.picture,
+        createdAt: u.createdAt,
+        role: u.role,
+      })),
+    });
+  } catch (err) {
+    console.error('Error deleting user:', err);
+    res.status(500).json({ success: false, error: 'Failed to delete user' });
+  }
+});
+
+// POST: Save new order
+app.post('/api/store/order', (req, res) => {
+  try {
+    const newOrder = req.body;
+    if (!newOrder || !newOrder.id) {
+      res.status(400).json({ success: false, error: 'Valid order data required' });
+      return;
+    }
+
+    // Insert order at beginning of array
+    const existingIndex = storeDb.orders.findIndex(o => o.id === newOrder.id);
+    if (existingIndex >= 0) {
+      storeDb.orders[existingIndex] = newOrder;
+    } else {
+      storeDb.orders.unshift(newOrder);
+    }
+
+    saveStoreDatabase();
+    console.log(`[ORDER-PERSISTED] Order ${newOrder.id} saved to server database`);
+
+    res.json({
+      success: true,
+      order: newOrder,
+      orders: storeDb.orders,
+    });
+  } catch (err) {
+    console.error('Error saving order:', err);
+    res.status(500).json({ success: false, error: 'Failed to save order' });
+  }
+});
+
+// POST: Update products array (Add/Edit/Delete)
+app.post('/api/store/products', (req, res) => {
+  try {
+    const { products } = req.body;
+    if (!Array.isArray(products)) {
+      res.status(400).json({ success: false, error: 'Products array is required' });
+      return;
+    }
+    storeDb.products = products;
+    saveStoreDatabase();
+    console.log(`[PRODUCTS-PERSISTED] Updated ${products.length} products on server`);
+
+    res.json({ success: true, products: storeDb.products });
+  } catch (err) {
+    console.error('Error updating products:', err);
+    res.status(500).json({ success: false, error: 'Failed to update products' });
+  }
+});
+
+// POST: Update Theme
+app.post('/api/store/theme', (req, res) => {
+  try {
+    const { theme } = req.body;
+    if (!theme || typeof theme !== 'object') {
+      res.status(400).json({ success: false, error: 'Theme settings required' });
+      return;
+    }
+    storeDb.theme = { ...storeDb.theme, ...theme };
+    saveStoreDatabase();
+
+    res.json({ success: true, theme: storeDb.theme });
+  } catch (err) {
+    console.error('Error updating theme:', err);
+    res.status(500).json({ success: false, error: 'Failed to update theme' });
+  }
+});
+
+// POST: Update Billboards
+app.post('/api/store/billboards', (req, res) => {
+  try {
+    const { billboards, billboardIntervalSeconds } = req.body;
+    if (Array.isArray(billboards)) {
+      storeDb.billboards = billboards;
+    }
+    if (typeof billboardIntervalSeconds === 'number') {
+      storeDb.billboardIntervalSeconds = billboardIntervalSeconds;
+    }
+    saveStoreDatabase();
+
+    res.json({
+      success: true,
+      billboards: storeDb.billboards,
+      billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
+    });
+  } catch (err) {
+    console.error('Error updating billboards:', err);
+    res.status(500).json({ success: false, error: 'Failed to update billboards' });
+  }
 });
 
 // API: Send 5-Digit Verification OTP to Email

@@ -94,11 +94,25 @@ export const AdminDashboard: React.FC = () => {
     isAdmin,
     registeredUsers,
     deleteRegisteredUser,
+    refreshServerStore,
     language,
     t,
   } = useStore();
 
   const isKa = language === 'ka';
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleManualSync = async () => {
+    setIsSyncing(true);
+    try {
+      await refreshServerStore();
+      addToast(isKa ? 'სერვერის მონაცემები წარმატებით სინქრონიზდა!' : 'Server data synced successfully!', 'success');
+    } catch {
+      addToast(isKa ? 'სინქრონიზაციის შეცდომა' : 'Sync error', 'error');
+    } finally {
+      setTimeout(() => setIsSyncing(false), 500);
+    }
+  };
 
   // Secret Slug Management
   const [slugInputValue, setSlugInputValue] = useState(adminSecretSlug);
@@ -887,6 +901,15 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            <button
+              onClick={handleManualSync}
+              disabled={isSyncing}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/40 text-blue-200 text-xs font-semibold flex items-center space-x-1.5 border border-blue-500/40 transition-colors cursor-pointer disabled:opacity-50"
+              title={isKa ? 'მონაცემების სინქრონიზაცია სერვერთან' : 'Sync data with server'}
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-blue-400' : ''}`} />
+              <span>{isSyncing ? (isKa ? 'სინქრონიზდება...' : 'Syncing...') : (isKa ? 'სინქრონიზაცია' : 'Sync Server')}</span>
+            </button>
             <button
               onClick={() => setCurrentPage('home')}
               className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"

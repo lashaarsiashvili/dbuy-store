@@ -61,8 +61,10 @@ export interface Order {
   carrier?: string;
   trackingUrl?: string;
   trackingUpdatedAt?: string;
-  paymentMethod: 'card' | 'paypal' | 'applepay';
+  paymentMethod: 'card' | 'paypal' | 'applepay' | 'googlepay';
   paypalTransactionId?: string;
+  applePayTransactionId?: string;
+  googlePayTransactionId?: string;
 }
 
 export type LogoOptionId = 
@@ -110,6 +112,8 @@ export interface User {
   email: string;
   isLoggedIn: boolean;
   role: 'customer' | 'admin';
+  provider?: 'email' | 'google';
+  picture?: string;
   country?: string;
   city?: string;
   zip?: string;
@@ -121,6 +125,8 @@ export interface User {
 export interface RegisteredUser {
   name: string;
   email: string;
+  provider?: 'email' | 'google';
+  picture?: string;
   country?: string;
   city?: string;
   zip?: string;

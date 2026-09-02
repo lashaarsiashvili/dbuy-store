@@ -109,8 +109,10 @@ interface StoreContextType {
     city: string;
     zip: string;
     country: string;
-    paymentMethod: 'card' | 'paypal' | 'applepay';
+    paymentMethod: 'card' | 'paypal' | 'applepay' | 'googlepay';
     paypalTransactionId?: string;
+    applePayTransactionId?: string;
+    googlePayTransactionId?: string;
   }) => Order;
   updateOrderStatus: (orderId: string, status: Order['status']) => void;
   updateOrderTracking: (
@@ -150,6 +152,16 @@ interface StoreContextType {
   getAdminUrl: () => string;
   copyAdminUrl: () => void;
   loginUser: (email: string, name?: string, password?: string) => boolean;
+  loginWithGoogleProfile: (profile: {
+    email: string;
+    name: string;
+    picture?: string;
+    country?: string;
+    city?: string;
+    zip?: string;
+    address?: string;
+    phone?: string;
+  }) => { isComplete: boolean; user?: User };
   demoLogin: () => void;
   logoutUser: () => void;
   registerUser: (userData: {
@@ -161,12 +173,15 @@ interface StoreContextType {
     zip?: string;
     address?: string;
     phone?: string;
+    provider?: 'email' | 'google';
+    picture?: string;
   }) => boolean;
   changeAdminPassword: (oldPass: string, newPass: string) => boolean;
   resetUserPassword: (email: string, newTempPass: string) => boolean;
   isAdmin: boolean;
   registeredUsers: RegisteredUser[];
   deleteRegisteredUser: (email: string) => void;
+  refreshServerStore: () => Promise<void>;
 
   // Toast Notifications
   toasts: ToastMessage[];
@@ -540,6 +555,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTheme(prev => {
       const updated = { ...prev, ...newSettings };
       localStorage.setItem('dbuy_theme', JSON.stringify(updated));
+      // Asynchronously sync with server
+      fetch('/api/store/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: updated }),
+      }).catch(err => console.error('Error syncing theme to server:', err));
       return updated;
     });
     addToast(t('toasts.themeUpdated'), 'success');
@@ -548,6 +569,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const resetTheme = () => {
     setTheme(defaultTheme);
     localStorage.setItem('dbuy_theme', JSON.stringify(defaultTheme));
+    fetch('/api/store/theme', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ theme: defaultTheme }),
+    }).catch(err => console.error('Error syncing default theme to server:', err));
     addToast(t('toasts.themeReset'), 'info');
   };
 
@@ -576,9 +602,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return 120; // Default 2 minutes (120 seconds) as requested!
   });
 
-  const saveBillboards = (slides: BillboardSlide[]) => {
+  const saveBillboards = (slides: BillboardSlide[], intervalSec?: number) => {
     setBillboards(slides);
     localStorage.setItem('dbuy_billboards', JSON.stringify(slides));
+    const currentInterval = intervalSec !== undefined ? intervalSec : billboardIntervalSeconds;
+    fetch('/api/store/billboards', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ billboards: slides, billboardIntervalSeconds: currentInterval }),
+    }).catch(err => console.error('Error syncing billboards to server:', err));
   };
 
   const updateBillboard = (id: string, updated: Partial<BillboardSlide>) => {
@@ -609,7 +641,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const resetBillboards = () => {
-    saveBillboards(initialBillboards);
+    saveBillboards(initialBillboards, 120);
     setBillboardIntervalSecondsState(120);
     localStorage.setItem('dbuy_billboard_interval', '120');
     addToast('Billboards reset to curated defaults (2-min rotation)', 'info');
@@ -619,6 +651,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const val = Math.max(5, seconds);
     setBillboardIntervalSecondsState(val);
     localStorage.setItem('dbuy_billboard_interval', String(val));
+    saveBillboards(billboards, val);
     addToast(`Billboard auto-rotation set to ${val} seconds (${Math.round(val/60*10)/10}m)`, 'info');
   };
 
@@ -645,6 +678,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const saveProducts = (newProducts: Product[]) => {
     setProducts(newProducts);
     localStorage.setItem('dbuy_products', JSON.stringify(newProducts));
+    // Asynchronously push to persistent server
+    fetch('/api/store/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ products: newProducts }),
+    }).catch(err => console.error('Error syncing products to server:', err));
   };
 
   const addProduct = (prodData: Omit<Product, 'id'>) => {
@@ -867,13 +906,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
-  // Orders (Clean production default, no test orders)
+  // Orders (Clean production default, synced with persistent server)
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('dbuy_orders');
     if (saved) {
       try {
         const parsed: Order[] = JSON.parse(saved);
-        // Filter out legacy mock test order IDs
         if (Array.isArray(parsed)) {
           return parsed.filter(o => o.id !== 'DBUY-10492' && o.id !== 'DBUY-10381');
         }
@@ -893,8 +931,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     city: string;
     zip: string;
     country: string;
-    paymentMethod: 'card' | 'paypal' | 'applepay';
+    paymentMethod: 'card' | 'paypal' | 'applepay' | 'googlepay';
     paypalTransactionId?: string;
+    applePayTransactionId?: string;
+    googlePayTransactionId?: string;
   }): Order => {
     const subtotal = cartSubtotalUSD;
     const discount = (subtotal * promoDiscountPercent) / 100;
@@ -927,14 +967,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       currency,
       status: 'Processing',
       trackingNumber: `TRK-${orderDetails.country.substring(0, 2).toUpperCase()}-${Math.floor(1000000 + Math.random() * 9000000)}`,
-      paymentMethod: 'paypal', // Strictly PayPal
+      paymentMethod: orderDetails.paymentMethod,
       paypalTransactionId: orderDetails.paypalTransactionId,
+      applePayTransactionId: orderDetails.applePayTransactionId,
+      googlePayTransactionId: orderDetails.googlePayTransactionId,
     };
 
     const updated = [newOrder, ...orders];
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
     setLastPlacedOrder(newOrder);
+
+    // Save order to server backend
+    fetch('/api/store/order', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newOrder),
+    }).catch(err => console.error('Error syncing order to server:', err));
 
     // Clear cart after checkout
     setCart([]);
@@ -951,6 +1000,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updated = orders.map(o => (o.id === orderId ? { ...o, status } : o));
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
+    fetch('/api/store/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: updated }),
+    }).catch(err => console.error('Error syncing orders to server:', err));
     addToast(`Order ${orderId} updated to "${status}"`, 'info');
   };
 
@@ -978,6 +1032,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
+    fetch('/api/store/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: updated }),
+    }).catch(err => console.error('Error syncing tracking to server:', err));
     addToast(
       language === 'ka'
         ? `შეკვეთის (${orderId}) თრექინგის მონაცემები წარმატებით განახლდა!`
@@ -990,6 +1049,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updated = orders.filter(o => o.id !== orderId);
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
+    fetch('/api/store/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: updated }),
+    }).catch(err => console.error('Error syncing orders deletion to server:', err));
     if (lastPlacedOrder?.id === orderId) {
       setLastPlacedOrder(null);
     }
@@ -999,6 +1063,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const clearOrderHistory = () => {
     setOrders([]);
     localStorage.removeItem('dbuy_orders');
+    fetch('/api/store/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orders: [] }),
+    }).catch(err => console.error('Error clearing orders on server:', err));
     addToast('Order history cleared', 'info');
   };
 
@@ -1006,7 +1075,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [adminPassword, setAdminPassword] = useState<string>(() => {
     const saved = localStorage.getItem('dbuy_admin_password');
     if (saved) return saved;
-    // Store initial default as salted cryptographic hash
     const initialHash = 'h_001f10c9bd0fb314';
     localStorage.setItem('dbuy_admin_password', initialHash);
     return initialHash;
@@ -1064,7 +1132,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     user.role === 'admin' || user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com'
   );
 
-  // Registered Users (Exposed strictly without password hashes for privacy)
+  // Helper to load registered users store
+  const getRegisteredUsersMap = (): Record<string, any> => {
+    try {
+      const raw = localStorage.getItem('dbuy_registered_users');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  };
+
+  // Registered Users mapping
   const mapRegisteredUsersList = (map: Record<string, any>): RegisteredUser[] => {
     return Object.values(map).map((u: any) => ({
       name: u.name || 'Customer',
@@ -1076,17 +1154,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       phone: u.phone || '',
       createdAt: u.createdAt || new Date().toISOString(),
       role: (u.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' || u.role === 'admin') ? 'admin' : 'customer',
+      provider: u.provider || 'email',
+      picture: u.picture,
     }));
-  };
-
-  // Helper to load registered users store
-  const getRegisteredUsersMap = (): Record<string, any> => {
-    try {
-      const raw = localStorage.getItem('dbuy_registered_users');
-      return raw ? JSON.parse(raw) : {};
-    } catch {
-      return {};
-    }
   };
 
   const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>(() => {
@@ -1099,6 +1169,73 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setRegisteredUsers(mapRegisteredUsersList(map));
   };
 
+  // Synchronize entire store with server (Products, Users, Orders, Theme, Billboards)
+  const refreshServerStore = async (): Promise<void> => {
+    try {
+      const res = await fetch('/api/store/sync');
+      if (!res.ok) return;
+      const json = await res.json();
+      if (json.success && json.data) {
+        const d = json.data;
+        if (Array.isArray(d.products) && d.products.length > 0) {
+          setProducts(d.products);
+          localStorage.setItem('dbuy_products', JSON.stringify(d.products));
+        }
+        if (d.registeredUsers && typeof d.registeredUsers === 'object') {
+          localStorage.setItem('dbuy_registered_users', JSON.stringify(d.registeredUsers));
+          setRegisteredUsers(mapRegisteredUsersList(d.registeredUsers));
+        }
+        if (Array.isArray(d.orders)) {
+          setOrders(d.orders);
+          localStorage.setItem('dbuy_orders', JSON.stringify(d.orders));
+        }
+        if (d.theme && typeof d.theme === 'object') {
+          setTheme(prev => ({ ...prev, ...d.theme }));
+          localStorage.setItem('dbuy_theme', JSON.stringify(d.theme));
+        }
+        if (Array.isArray(d.billboards) && d.billboards.length > 0) {
+          setBillboards(d.billboards);
+          localStorage.setItem('dbuy_billboards', JSON.stringify(d.billboards));
+        }
+        if (typeof d.billboardIntervalSeconds === 'number') {
+          setBillboardIntervalSecondsState(d.billboardIntervalSeconds);
+          localStorage.setItem('dbuy_billboard_interval', String(d.billboardIntervalSeconds));
+        }
+        if (d.adminSecretSlug) {
+          setAdminSecretSlug(d.adminSecretSlug);
+          localStorage.setItem('dbuy_admin_secret_slug', d.adminSecretSlug);
+        }
+      }
+    } catch (err) {
+      console.warn('[STORE-SYNC] Server sync notice:', err);
+    }
+  };
+
+  // Initial load sync + periodic auto-sync across desktop, mobile and tablet devices
+  useEffect(() => {
+    refreshServerStore();
+
+    // Poll every 6 seconds to keep mobile & desktop perfectly synchronized
+    const interval = setInterval(() => {
+      refreshServerStore();
+    }, 6000);
+
+    // Sync on tab focus / phone screen wakeup
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        refreshServerStore();
+      }
+    };
+    window.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('focus', handleVisibilityChange);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('focus', handleVisibilityChange);
+    };
+  }, []);
+
   const deleteRegisteredUser = (targetEmail: string) => {
     const trimmed = targetEmail.toLowerCase().trim();
     if (trimmed === 'lashaarsiashvili@gmail.com') {
@@ -1110,8 +1247,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       delete map[trimmed];
       localStorage.setItem('dbuy_registered_users', JSON.stringify(map));
       refreshRegisteredUsers();
-      addToast(language === 'ka' ? 'მომხმარებლის ანგარიში წაიშალა' : 'User account removed successfully', 'info');
     }
+    fetch('/api/store/delete-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email: trimmed }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.registeredUsers)) {
+          setRegisteredUsers(data.registeredUsers);
+        }
+      })
+      .catch(err => console.error('Error deleting user on server:', err));
+
+    addToast(language === 'ka' ? 'მომხმარებლის ანგარიში წაიშალა' : 'User account removed successfully', 'info');
   };
 
   const loginUser = (email: string, name = 'Customer', password?: string): boolean => {
@@ -1168,12 +1318,56 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       address: existingAccount.address || '',
       phone: existingAccount.phone || '',
       createdAt: existingAccount.createdAt,
+      provider: existingAccount.provider || 'email',
+      picture: existingAccount.picture,
     };
     setUser(loggedUser);
     localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
     setIsAuthModalOpen(false);
     addToast(t('toasts.welcome', { name: loggedUser.name }), 'success');
     return true;
+  };
+
+  // Google Login profile helper
+  const loginWithGoogleProfile = (profile: {
+    email: string;
+    name: string;
+    picture?: string;
+    country?: string;
+    city?: string;
+    zip?: string;
+    address?: string;
+    phone?: string;
+  }): { isComplete: boolean; user?: User } => {
+    const cleanEmail = profile.email.toLowerCase().trim();
+    const registeredMap = getRegisteredUsersMap();
+    const existing = registeredMap[cleanEmail];
+
+    // If account exists and has mandatory address data
+    if (existing && existing.address && existing.city && existing.country) {
+      const loggedUser: User = {
+        name: existing.name || profile.name || 'Customer',
+        email: cleanEmail,
+        isLoggedIn: true,
+        role: (cleanEmail === 'lashaarsiashvili@gmail.com' || existing.role === 'admin') ? 'admin' : 'customer',
+        country: existing.country,
+        city: existing.city,
+        zip: existing.zip || '',
+        address: existing.address,
+        phone: existing.phone || '',
+        createdAt: existing.createdAt || new Date().toISOString(),
+        provider: 'google',
+        picture: profile.picture || existing.picture,
+      };
+      setUser(loggedUser);
+      localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
+      setIsAuthModalOpen(false);
+      addToast(t('toasts.welcome', { name: loggedUser.name }), 'success');
+      return { isComplete: true, user: loggedUser };
+    }
+
+    // Otherwise, needs to complete required address info
+    return { isComplete: false };
   };
 
   const demoLogin = () => {
@@ -1204,6 +1398,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     zip?: string;
     address?: string;
     phone?: string;
+    provider?: 'email' | 'google';
+    picture?: string;
   }): boolean => {
     const trimmedEmail = userData.email.trim().toLowerCase();
     const isAdminEmail = trimmedEmail === 'lashaarsiashvili@gmail.com';
@@ -1219,10 +1415,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       zip: userData.zip || '',
       address: userData.address || '',
       phone: userData.phone || '',
+      provider: userData.provider || 'email',
+      picture: userData.picture,
       createdAt: new Date().toISOString(),
     };
 
-    // Save in persistent registered users store with salted cryptographic hash
+    // Save in persistent registered users store
     const registeredMap = getRegisteredUsersMap();
     registeredMap[trimmedEmail] = {
       ...newUser,
@@ -1230,6 +1428,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
     refreshRegisteredUsers();
+
+    // Send to persistent server backend
+    fetch('/api/store/register-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: newUser.name,
+        email: newUser.email,
+        country: newUser.country,
+        city: newUser.city,
+        zip: newUser.zip,
+        address: newUser.address,
+        phone: newUser.phone,
+        provider: newUser.provider,
+        picture: newUser.picture,
+        passwordHash: hashedPassword,
+      }),
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success && Array.isArray(data.registeredUsers)) {
+          setRegisteredUsers(data.registeredUsers);
+        }
+      })
+      .catch(err => console.error('Error syncing user registration to server:', err));
 
     // If admin registered or updated password
     if (isAdminEmail && hashedPassword) {
@@ -1271,6 +1494,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
       refreshRegisteredUsers();
     }
+    fetch('/api/store/register-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: trimmedEmail,
+        passwordHash: hashedTempPass,
+      }),
+    }).catch(err => console.error('Error saving reset password to server:', err));
+
     return true;
   };
 
@@ -1568,6 +1800,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         getAdminUrl,
         copyAdminUrl,
         loginUser,
+        loginWithGoogleProfile,
         demoLogin,
         logoutUser,
         registerUser,
@@ -1576,6 +1809,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         isAdmin,
         registeredUsers,
         deleteRegisteredUser,
+        refreshServerStore,
         toasts,
         addToast,
         removeToast,

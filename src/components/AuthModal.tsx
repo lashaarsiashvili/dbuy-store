@@ -38,6 +38,7 @@ export const AuthModal: React.FC = () => {
     isAuthModalOpen,
     setIsAuthModalOpen,
     loginUser,
+    loginWithGoogleProfile,
     registerUser,
     resetUserPassword,
     theme,
@@ -56,6 +57,10 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [authProvider, setAuthProvider] = useState<'email' | 'google'>('email');
+  const [googlePromptOpen, setGooglePromptOpen] = useState(false);
+  const [googlePromptEmail, setGooglePromptEmail] = useState('');
+  const [googlePromptName, setGooglePromptName] = useState('');
   
   // Forgot Password / Recovery State
   const [forgotEmail, setForgotEmail] = useState('');
@@ -245,18 +250,46 @@ export const AuthModal: React.FC = () => {
       return;
     }
 
-    // Direct registration without requiring 5-digit email code
+    // Direct registration with mandatory address info
     const cleanEmail = sanitizeInput(email).toLowerCase();
     registerUser({
       name: sanitizeInput(name),
       email: cleanEmail,
-      password,
+      password: authProvider === 'google' ? undefined : password,
+      provider: authProvider,
       country: sanitizeInput(country),
       city: sanitizeInput(city),
       zip: sanitizeInput(zip),
       address: sanitizeInput(address),
       phone: sanitizeInput(phone),
     });
+  };
+
+  const handleGoogleAccountSelected = (gEmail: string, gName: string) => {
+    const cleanEmail = gEmail.trim().toLowerCase();
+    const result = loginWithGoogleProfile({
+      email: cleanEmail,
+      name: gName,
+    });
+
+    if (result.isComplete) {
+      setGooglePromptOpen(false);
+      return;
+    }
+
+    // Account requires mandatory address details to finish registration
+    setName(gName);
+    setEmail(cleanEmail);
+    setAuthProvider('google');
+    setTab('register');
+    setRegStep(2);
+    setGooglePromptOpen(false);
+    addToast(
+      language === 'ka'
+        ? 'Google პროფილი დაკავშირებულია! გთხოვთ მიუთითოთ თქვენი მისამართი რეგისტრაციის დასასრულებლად.'
+        : 'Google account linked! Please enter your mandatory shipping address to complete registration.',
+      'info'
+    );
   };
 
   return (
@@ -520,6 +553,47 @@ export const AuthModal: React.FC = () => {
                   <Lock className="w-4 h-4" />
                   <span>{t('auth.signInTab')}</span>
                 </button>
+
+                {/* Google Sign-in Divider & Button */}
+                <div className="pt-2">
+                  <div className="relative flex items-center justify-center py-2">
+                    <div className="border-t border-slate-200 w-full" />
+                    <span className="bg-white px-3 text-[11px] text-slate-400 font-medium shrink-0 uppercase tracking-wider">
+                      {language === 'ka' ? 'ან გააგრძელეთ' : 'or continue with'}
+                    </span>
+                    <div className="border-t border-slate-200 w-full" />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGooglePromptName('');
+                      setGooglePromptEmail('');
+                      setGooglePromptOpen(true);
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 active:scale-98 text-slate-700 font-bold text-xs transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer mt-1"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <span>{language === 'ka' ? 'Google-ით შესვლა' : 'Sign in with Google'}</span>
+                  </button>
+                </div>
               </form>
             )}
 
@@ -647,12 +721,68 @@ export const AuthModal: React.FC = () => {
                   <span>{t('auth.nextAddress')}</span>
                   <ArrowRight className="w-4 h-4" />
                 </button>
+
+                {/* Google Quick Register Option */}
+                <div className="pt-2">
+                  <div className="relative flex items-center justify-center py-2">
+                    <div className="border-t border-slate-200 w-full" />
+                    <span className="bg-white px-3 text-[11px] text-slate-400 font-medium shrink-0 uppercase tracking-wider">
+                      {language === 'ka' ? 'ან რეგისტრაცია' : 'or register with'}
+                    </span>
+                    <div className="border-t border-slate-200 w-full" />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setGooglePromptName('');
+                      setGooglePromptEmail('');
+                      setGooglePromptOpen(true);
+                    }}
+                    className="w-full py-2.5 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 active:scale-98 text-slate-700 font-bold text-xs transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer mt-1"
+                  >
+                    <svg className="w-4 h-4" viewBox="0 0 24 24">
+                      <path
+                        fill="#4285F4"
+                        d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                      />
+                      <path
+                        fill="#34A853"
+                        d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                      />
+                      <path
+                        fill="#FBBC05"
+                        d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                      />
+                      <path
+                        fill="#EA4335"
+                        d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                      />
+                    </svg>
+                    <span>{language === 'ka' ? 'Google-ით რეგისტრაცია' : 'Register with Google'}</span>
+                  </button>
+                </div>
               </form>
             )}
 
             {/* STEP 2: Address & Location Details (Direct Registration) */}
             {regStep === 2 && (
               <form onSubmit={handleRegStep2Submit} className="space-y-3.5">
+                {authProvider === 'google' && (
+                  <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-2xl flex items-start space-x-2 text-xs text-blue-900">
+                    <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold">
+                        {language === 'ka' ? 'Google პროფილი მიბმულია' : 'Google Account Verified'} ({email})
+                      </p>
+                      <p className="text-[11px] text-blue-700 mt-0.5">
+                        {language === 'ka' 
+                          ? 'მისამართის ყველა მონაცემის შეყვანა აუცილებელია შეკვეთების მისაღებად.' 
+                          : 'All shipping address details are mandatory for order deliveries.'}
+                      </p>
+                    </div>
+                  </div>
+                )}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-semibold text-slate-700 mb-1">
@@ -767,6 +897,111 @@ export const AuthModal: React.FC = () => {
           </div>
         )}
         </>
+      )}
+
+      {/* Google Account Selector Dialog */}
+      {googlePromptOpen && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="relative w-full max-w-sm bg-white rounded-3xl p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div className="flex items-center space-x-2">
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path
+                    fill="#4285F4"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="#34A853"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="#FBBC05"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
+                  />
+                  <path
+                    fill="#EA4335"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
+                  />
+                </svg>
+                <span className="text-xs font-bold text-slate-800">
+                  {language === 'ka' ? 'Google ანგარიშით ავტორიზაცია' : 'Sign in with Google'}
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setGooglePromptOpen(false)}
+                className="p-1 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-500">
+              {language === 'ka'
+                ? 'აირჩიეთ ან შეიყვანეთ თქვენი Google-ის სახელი და ელ-ფოსტა DBUY Store-ში შესასვლელად:'
+                : 'Enter your Google email and name to link with DBUY Store:'}
+            </p>
+
+            <form
+              onSubmit={e => {
+                e.preventDefault();
+                if (!googlePromptEmail.trim() || !googlePromptName.trim()) {
+                  addToast(
+                    language === 'ka' ? 'გთხოვთ შეავსოთ სახელი და ელ-ფოსტა' : 'Please enter your name and email',
+                    'warning'
+                  );
+                  return;
+                }
+                handleGoogleAccountSelected(googlePromptEmail, googlePromptName);
+              }}
+              className="space-y-3"
+            >
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  {language === 'ka' ? 'სრული სახელი (Google Name)' : 'Google Full Name'}
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={googlePromptName}
+                  onChange={e => setGooglePromptName(e.target.value)}
+                  placeholder="Lasha Arsiashvili"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  {language === 'ka' ? 'Gmail / Google ელ-ფოსტა' : 'Google Email'}
+                </label>
+                <input
+                  type="email"
+                  required
+                  value={googlePromptEmail}
+                  onChange={e => setGooglePromptEmail(e.target.value)}
+                  placeholder="user@gmail.com"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setGooglePromptOpen(false)}
+                  className="w-1/2 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                >
+                  {language === 'ka' ? 'გაუქმება' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  className="w-1/2 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                >
+                  {language === 'ka' ? 'გაგრძელება' : 'Continue'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
       </div>
     </div>

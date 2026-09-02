@@ -322,25 +322,109 @@ export const CheckoutModal: React.FC = () => {
                   </div>
                 </div>
 
-                {/* Accepted Payment Brands Strip */}
-                <div className="p-3 bg-white rounded-2xl border border-slate-200 space-y-2">
-                  <div className="flex items-center justify-between text-[11px] font-bold text-slate-700">
-                    <span>{language === 'ka' ? 'მხარდაჭერილი მეთოდები:' : 'Supported Instant Methods:'}</span>
-                    <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold">Verified</span>
+                {/* Accepted Payment Brands Strip & Fast Digital Wallets */}
+                <div className="p-4 bg-white rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center justify-between text-xs font-bold text-slate-800">
+                    <span>{language === 'ka' ? 'სწრაფი ციფრული საფულეები (Instant Pay)' : 'Express Digital Wallets'}</span>
+                    <span className="text-[10px] text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full font-semibold border border-emerald-200">
+                      ⚡ 1-Click Pay
+                    </span>
                   </div>
-                  <div className="flex flex-wrap items-center gap-1.5 text-xs font-black">
-                    <span className="px-2.5 py-1 rounded-lg bg-black text-white text-[11px] flex items-center space-x-1">
-                      <span></span>
-                      <span>Pay</span>
+
+                  {/* Apple Pay & Google Pay Express Buttons */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    {/* Apple Pay Button */}
+                    <button
+                      type="button"
+                      disabled={isProcessingPayment}
+                      onClick={() => {
+                        setIsProcessingPayment(true);
+                        addToast(
+                          language === 'ka' ? 'Apple Pay-ს ავტორიზაცია მიმდინარეობს...' : 'Connecting to Apple Pay...',
+                          'info'
+                        );
+                        setTimeout(() => {
+                          const appleTxnId = `AP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+                          const createdOrder = placeOrder({
+                            customerName: formData.name.trim() || 'Apple Pay User',
+                            email: formData.email.trim() || 'applepay@user.com',
+                            address: formData.address.trim(),
+                            city: formData.city.trim(),
+                            zip: formData.zip.trim(),
+                            country: formData.country.trim(),
+                            paymentMethod: 'applepay',
+                            applePayTransactionId: appleTxnId,
+                          });
+                          setIsProcessingPayment(false);
+                          setStep(3);
+                          addToast(
+                            language === 'ka'
+                              ? `Apple Pay გადახდა წარმატებით შესრულდა! შეკვეთა: ${createdOrder.id}`
+                              : `Apple Pay payment successful! Order: ${createdOrder.id}`,
+                            'success'
+                          );
+                        }, 1200);
+                      }}
+                      className="w-full py-3 px-4 rounded-xl bg-black hover:bg-zinc-900 active:scale-98 text-white font-semibold text-xs transition-all shadow-md flex items-center justify-center space-x-2 cursor-pointer border border-black"
+                    >
+                      <span className="text-base leading-none"></span>
+                      <span className="font-bold text-sm tracking-tight">Pay</span>
+                      <span className="text-[10px] text-zinc-400 pl-1 font-normal">
+                        ({formatPrice(totalAmountUSD)})
+                      </span>
+                    </button>
+
+                    {/* Google Pay Button */}
+                    <button
+                      type="button"
+                      disabled={isProcessingPayment}
+                      onClick={() => {
+                        setIsProcessingPayment(true);
+                        addToast(
+                          language === 'ka' ? 'Google Pay-ს ავტორიზაცია მიმდინარეობს...' : 'Connecting to Google Pay...',
+                          'info'
+                        );
+                        setTimeout(() => {
+                          const gpayTxnId = `GP-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`;
+                          const createdOrder = placeOrder({
+                            customerName: formData.name.trim() || 'Google Pay User',
+                            email: formData.email.trim() || 'googlepay@user.com',
+                            address: formData.address.trim(),
+                            city: formData.city.trim(),
+                            zip: formData.zip.trim(),
+                            country: formData.country.trim(),
+                            paymentMethod: 'googlepay',
+                            googlePayTransactionId: gpayTxnId,
+                          });
+                          setIsProcessingPayment(false);
+                          setStep(3);
+                          addToast(
+                            language === 'ka'
+                              ? `Google Pay გადახდა წარმატებით შესრულდა! შეკვეთა: ${createdOrder.id}`
+                              : `Google Pay payment successful! Order: ${createdOrder.id}`,
+                            'success'
+                          );
+                        }, 1200);
+                      }}
+                      className="w-full py-3 px-4 rounded-xl bg-white hover:bg-slate-50 active:scale-98 text-slate-800 font-semibold text-xs transition-all shadow-md flex items-center justify-center space-x-2 cursor-pointer border border-slate-300"
+                    >
+                      <span className="font-black text-blue-600 text-sm">G</span>
+                      <span className="font-bold text-sm text-slate-900 tracking-tight">Pay</span>
+                      <span className="text-[10px] text-slate-500 pl-1 font-normal">
+                        ({formatPrice(totalAmountUSD)})
+                      </span>
+                    </button>
+                  </div>
+
+                  <div className="pt-1 flex flex-wrap items-center justify-between gap-1 text-[11px] text-slate-500">
+                    <span className="font-medium">
+                      {language === 'ka' ? 'ან აირჩიეთ PayPal / საბანკო ბარათი:' : 'Or pay securely with PayPal / Debit & Credit Card:'}
                     </span>
-                    <span className="px-2 py-1 rounded-lg bg-white border border-slate-300 text-slate-800 text-[11px] flex items-center space-x-1">
-                      <span className="text-blue-600 font-extrabold">G</span>
-                      <span>Pay</span>
-                    </span>
-                    <span className="px-2.5 py-1 rounded-lg bg-blue-700 text-white text-[11px] italic">PayPal</span>
-                    <span className="px-2 py-1 rounded-lg bg-blue-900 text-white text-[10px] italic">VISA</span>
-                    <span className="px-2 py-1 rounded-lg bg-amber-500 text-slate-950 text-[10px]">Mastercard</span>
-                    <span className="px-2 py-1 rounded-lg bg-[#006FCF] text-white text-[9px] uppercase">AMEX</span>
+                    <div className="flex items-center space-x-1 font-black text-[10px]">
+                      <span className="px-1.5 py-0.5 rounded bg-blue-900 text-white italic">VISA</span>
+                      <span className="px-1.5 py-0.5 rounded bg-amber-500 text-slate-950">MC</span>
+                      <span className="px-1.5 py-0.5 rounded bg-[#006FCF] text-white">AMEX</span>
+                    </div>
                   </div>
                 </div>
 
@@ -498,9 +582,27 @@ export const CheckoutModal: React.FC = () => {
 
                   {lastPlacedOrder.paypalTransactionId && (
                     <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                      <span className="text-slate-500">{t('checkout.transactionId')}</span>
+                      <span className="text-slate-500">{t('checkout.transactionId')} (PayPal)</span>
                       <span className="font-mono text-[11px] font-semibold text-slate-700">
                         {lastPlacedOrder.paypalTransactionId}
+                      </span>
+                    </div>
+                  )}
+
+                  {lastPlacedOrder.applePayTransactionId && (
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                      <span className="text-slate-500">{t('checkout.transactionId')} (Apple Pay)</span>
+                      <span className="font-mono text-[11px] font-semibold text-slate-700">
+                        {lastPlacedOrder.applePayTransactionId}
+                      </span>
+                    </div>
+                  )}
+
+                  {lastPlacedOrder.googlePayTransactionId && (
+                    <div className="flex justify-between items-center border-b border-slate-200 pb-2">
+                      <span className="text-slate-500">{t('checkout.transactionId')} (Google Pay)</span>
+                      <span className="font-mono text-[11px] font-semibold text-slate-700">
+                        {lastPlacedOrder.googlePayTransactionId}
                       </span>
                     </div>
                   )}
