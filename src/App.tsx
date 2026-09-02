@@ -91,7 +91,7 @@ export function App() {
           currency: 'USD',
           intent: 'capture',
           components: 'buttons',
-          enableFunding: 'card,venmo,paylater,applepay',
+          enableFunding: 'card,paylater,venmo',
         }}
       >
         <MainLayout />
