@@ -12,6 +12,7 @@ import {
   ExternalLink,
   ShieldCheck,
   Zap,
+  FolderArchive,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 
@@ -338,6 +339,53 @@ export const StoreSyncModal: React.FC<StoreSyncModalProps> = ({
                 </button>
               </div>
             )}
+          </div>
+
+          {/* Section 4: Full Site ZIP Archive Download */}
+          <div className="bg-gradient-to-br from-blue-900 to-indigo-950 text-white rounded-2xl p-5 border border-blue-700/50 space-y-4 shadow-lg">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-blue-500/20 text-blue-300 border border-blue-400/30">
+                  <FolderArchive className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-xs sm:text-sm font-bold text-white">
+                    {isKa ? '4. მთელი საიტის ZIP ფაილად ჩამოტვირთვა' : '4. Download Entire Site as ZIP Archive'}
+                  </h3>
+                  <p className="text-[11px] text-blue-200">
+                    dbuy-store-project.zip (React + Vite + Express + Database)
+                  </p>
+                </div>
+              </div>
+              <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-400/30">
+                {isKa ? 'მზადაა' : 'Ready'}
+              </span>
+            </div>
+
+            <p className="text-xs text-blue-100/90 leading-relaxed">
+              {isKa
+                ? 'მთელი პროექტი (ყველა საწყისი ფაილი, კომპონენტები, სერვერი, მონაცემთა ბაზა, სურათები და პარამეტრები) შეკუმშულია ერთ ZIP არქივში. შეგიძლიათ პირდაპირ ჩამოტვირთოთ კომპიუტერში.'
+                : 'The entire project (all source files, components, server, database, assets and configurations) is packaged into a complete ZIP archive. Download it to your computer with a single click.'}
+            </p>
+
+            <a
+              id="download-project-zip-btn"
+              href="/api/download-zip"
+              download="dbuy-store-project.zip"
+              className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-600 hover:to-teal-600 text-white text-xs sm:text-sm font-bold flex items-center justify-center space-x-2 shadow-md hover:shadow-lg transition-all cursor-pointer"
+            >
+              <DownloadCloud className="w-4 h-4" />
+              <span>{isKa ? 'საიტის ZIP ფაილის ჩამოტვირთვა (.zip)' : 'Download Full Website ZIP (.zip)'}</span>
+            </a>
+
+            <div className="text-[11px] text-blue-300/80 bg-white/5 rounded-xl p-3 border border-white/10 flex items-start space-x-2">
+              <AlertCircle className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+              <span>
+                {isKa
+                  ? 'ასევე Google AI Studio-ს ზედა მარჯვენა მენიუდან (Settings / პარამეტრები) შეგიძლიათ გამოიყენოთ „Export to ZIP“ ან „Export to GitHub“ ფუნქცია.'
+                  : 'You can also use the AI Studio top Settings menu to export directly to ZIP or GitHub.'}
+              </span>
+            </div>
           </div>
         </div>
 

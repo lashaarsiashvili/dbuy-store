@@ -925,6 +925,15 @@ export const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="flex items-center space-x-3">
+            <a
+              href="/api/download-zip"
+              download="dbuy-store-project.zip"
+              className="px-3 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 text-xs font-semibold flex items-center space-x-1.5 border border-emerald-500/40 transition-colors cursor-pointer"
+              title={isKa ? 'მთელი საიტის ZIP ფაილად ჩამოტვირთვა' : 'Download full site project as ZIP archive'}
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span>{isKa ? 'ZIP გადმოწერა' : 'Download ZIP'}</span>
+            </a>
             <button
               onClick={() => setIsSyncModalOpen(true)}
               className="px-3.5 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 text-xs font-semibold flex items-center space-x-1.5 border border-blue-500/40 transition-colors cursor-pointer"

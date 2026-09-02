@@ -16,7 +16,7 @@ import {
   DailyStat,
   BillboardSlide
 } from '../types';
-import { initialProducts, initialOrders } from '../data/initialProducts';
+import { initialProducts } from '../data/initialProducts';
 import { initialBillboards } from '../data/initialBillboards';
 import { translations } from '../data/translations';
 import { 
@@ -700,13 +700,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (saved) {
       try {
         const parsed: Product[] = JSON.parse(saved);
-        return parsed.map(p => {
-          const init = initialProducts.find(ip => ip.id === p.id);
-          if (init && (!p.images || p.images.length === 0)) {
-            return { ...p, images: init.images || [p.image] };
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          const parsedIds = new Set(parsed.map(p => p.id));
+          const combined = [...parsed];
+          for (const ip of initialProducts) {
+            if (!parsedIds.has(ip.id)) {
+              combined.push(ip);
+            }
           }
-          return { ...p, images: p.images && p.images.length > 0 ? p.images : [p.image] };
-        });
+          return combined.map(p => {
+            const init = initialProducts.find(ip => ip.id === p.id);
+            if (init && (!p.images || p.images.length === 0)) {
+              return { ...p, images: init.images || [p.image] };
+            }
+            return { ...p, images: p.images && p.images.length > 0 ? p.images : [p.image] };
+          });
+        }
       } catch (e) {
         console.error('Error parsing products', e);
       }
