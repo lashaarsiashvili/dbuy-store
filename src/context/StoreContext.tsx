@@ -182,6 +182,10 @@ interface StoreContextType {
   registeredUsers: RegisteredUser[];
   deleteRegisteredUser: (email: string) => void;
   refreshServerStore: () => Promise<void>;
+  syncWithRemoteStore: (remoteUrl: string) => Promise<{ success: boolean; message: string; count?: number }>;
+  exportFullDatabase: () => void;
+  importFullDatabase: (jsonContent: string) => Promise<{ success: boolean; message: string }>;
+  persistCatalogToCode: () => Promise<{ success: boolean; message: string }>;
 
   // Toast Notifications
   toasts: ToastMessage[];
@@ -551,29 +555,64 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return defaultTheme;
   });
 
-  const updateTheme = (newSettings: Partial<ThemeSettings>) => {
-    setTheme(prev => {
-      const updated = { ...prev, ...newSettings };
-      localStorage.setItem('dbuy_theme', JSON.stringify(updated));
-      // Asynchronously sync with server
-      fetch('/api/store/theme', {
+  // Synchronize CSS variable with theme primary color
+  useEffect(() => {
+    if (theme?.primaryColor) {
+      document.documentElement.style.setProperty('--theme-primary', theme.primaryColor);
+    }
+  }, [theme?.primaryColor]);
+
+  const updateTheme = async (newSettings: Partial<ThemeSettings>) => {
+    const updated = { ...theme, ...newSettings };
+    setTheme(updated);
+    localStorage.setItem('dbuy_theme', JSON.stringify(updated));
+    if (updated.primaryColor) {
+      document.documentElement.style.setProperty('--theme-primary', updated.primaryColor);
+    }
+
+    try {
+      await fetch('/api/store/theme', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ theme: updated }),
-      }).catch(err => console.error('Error syncing theme to server:', err));
-      return updated;
-    });
-    addToast(t('toasts.themeUpdated'), 'success');
+      });
+      await fetch('/api/store/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: updated }),
+      });
+    } catch (err) {
+      console.error('Error syncing theme to server:', err);
+    }
+
+    addToast(
+      language === 'ka' 
+        ? 'დიზაინის ცვლილებები შენახულია და გავრცელებულია ყველასთვის!' 
+        : 'Theme updated and live for all visitors!', 
+      'success'
+    );
   };
 
-  const resetTheme = () => {
+  const resetTheme = async () => {
     setTheme(defaultTheme);
     localStorage.setItem('dbuy_theme', JSON.stringify(defaultTheme));
-    fetch('/api/store/theme', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ theme: defaultTheme }),
-    }).catch(err => console.error('Error syncing default theme to server:', err));
+    if (defaultTheme.primaryColor) {
+      document.documentElement.style.setProperty('--theme-primary', defaultTheme.primaryColor);
+    }
+    try {
+      await fetch('/api/store/theme', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: defaultTheme }),
+      });
+      await fetch('/api/store/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ theme: defaultTheme }),
+      });
+    } catch (err) {
+      console.error('Error syncing default theme to server:', err);
+    }
     addToast(t('toasts.themeReset'), 'info');
   };
 
@@ -678,11 +717,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const saveProducts = (newProducts: Product[]) => {
     setProducts(newProducts);
     localStorage.setItem('dbuy_products', JSON.stringify(newProducts));
-    // Asynchronously push to persistent server
+
+    // Broadcast immediately to other open tabs/windows
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('dbuy_store_sync');
+        bc.postMessage({ type: 'PRODUCTS_UPDATED', products: newProducts, timestamp: Date.now() });
+        bc.close();
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    // Asynchronously push to persistent server and broadcast to all devices
     fetch('/api/store/products', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ products: newProducts }),
+    }).then(() => {
+      fetch('/api/store/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: newProducts }),
+      }).catch(e => console.error(e));
     }).catch(err => console.error('Error syncing products to server:', err));
   };
 
@@ -1177,7 +1234,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const json = await res.json();
       if (json.success && json.data) {
         const d = json.data;
-        if (Array.isArray(d.products) && d.products.length > 0) {
+        if (Array.isArray(d.products)) {
           setProducts(d.products);
           localStorage.setItem('dbuy_products', JSON.stringify(d.products));
         }
@@ -1190,7 +1247,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           localStorage.setItem('dbuy_orders', JSON.stringify(d.orders));
         }
         if (d.theme && typeof d.theme === 'object') {
-          setTheme(prev => ({ ...prev, ...d.theme }));
+          setTheme(prev => {
+            const nextTheme = { ...prev, ...d.theme };
+            if (nextTheme.primaryColor) {
+              document.documentElement.style.setProperty('--theme-primary', nextTheme.primaryColor);
+            }
+            return nextTheme;
+          });
           localStorage.setItem('dbuy_theme', JSON.stringify(d.theme));
         }
         if (Array.isArray(d.billboards) && d.billboards.length > 0) {
@@ -1211,14 +1274,219 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  // Initial load sync + periodic auto-sync across desktop, mobile and tablet devices
+  // Pull and sync full store from remote URL (e.g. running live site)
+  const syncWithRemoteStore = async (remoteUrl: string): Promise<{ success: boolean; message: string; count?: number }> => {
+    try {
+      addToast(language === 'ka' ? 'მიმდინარეობს სინქრონიზაცია გაშვებული საიტიდან...' : 'Syncing with running site...', 'info');
+      const res = await fetch('/api/store/pull-remote', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ remoteUrl }),
+      });
+      const json = await res.json();
+      if (json.success && json.data) {
+        const d = json.data;
+        if (Array.isArray(d.products)) {
+          setProducts(d.products);
+          localStorage.setItem('dbuy_products', JSON.stringify(d.products));
+        }
+        if (d.theme) {
+          setTheme(prev => ({ ...prev, ...d.theme }));
+          localStorage.setItem('dbuy_theme', JSON.stringify(d.theme));
+        }
+        if (Array.isArray(d.billboards)) {
+          setBillboards(d.billboards);
+          localStorage.setItem('dbuy_billboards', JSON.stringify(d.billboards));
+        }
+        if (Array.isArray(d.orders)) {
+          setOrders(d.orders);
+          localStorage.setItem('dbuy_orders', JSON.stringify(d.orders));
+        }
+        // Broadcast to other tabs
+        if (typeof BroadcastChannel !== 'undefined') {
+          try {
+            const bc = new BroadcastChannel('dbuy_store_sync');
+            bc.postMessage({ type: 'STORE_REFRESH' });
+            bc.close();
+          } catch {}
+        }
+        addToast(
+          language === 'ka' 
+            ? `წარმატებით გადმოტანილია ${d.products?.length || 0} პროდუქტი და საიტის პარამეტრები!` 
+            : `Successfully imported ${d.products?.length || 0} products and store settings!`,
+          'success'
+        );
+        return { success: true, message: json.message, count: d.products?.length };
+      } else {
+        throw new Error(json.error || 'Failed to sync with remote store');
+      }
+    } catch (err: any) {
+      const msg = err.message || 'Connection error';
+      addToast(
+        language === 'ka' ? `სინქრონიზაციის შეცდომა: ${msg}` : `Sync error: ${msg}`,
+        'error'
+      );
+      return { success: false, message: msg };
+    }
+  };
+
+  // Export complete JSON backup
+  const exportFullDatabase = () => {
+    try {
+      const backupData = {
+        exportedAt: new Date().toISOString(),
+        version: '1.0',
+        products,
+        theme,
+        billboards,
+        billboardIntervalSeconds,
+        orders,
+      };
+      const jsonStr = JSON.stringify(backupData, null, 2);
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `dbuy_store_backup_${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      addToast(
+        language === 'ka' ? 'ბაზის სრული ბექაფი ჩამოტვირთულია!' : 'Full store database backup exported!',
+        'success'
+      );
+    } catch (e) {
+      addToast('Failed to export backup', 'error');
+    }
+  };
+
+  // Import complete JSON backup
+  const importFullDatabase = async (jsonContent: string): Promise<{ success: boolean; message: string }> => {
+    try {
+      const parsed = JSON.parse(jsonContent);
+      const newProducts = Array.isArray(parsed.products) ? parsed.products : [];
+      const newTheme = parsed.theme || theme;
+      const newBillboards = Array.isArray(parsed.billboards) ? parsed.billboards : billboards;
+      const newInterval = typeof parsed.billboardIntervalSeconds === 'number' ? parsed.billboardIntervalSeconds : billboardIntervalSeconds;
+      const newOrders = Array.isArray(parsed.orders) ? parsed.orders : orders;
+
+      if (newProducts.length > 0) {
+        setProducts(newProducts);
+        localStorage.setItem('dbuy_products', JSON.stringify(newProducts));
+      }
+      setTheme(newTheme);
+      localStorage.setItem('dbuy_theme', JSON.stringify(newTheme));
+      setBillboards(newBillboards);
+      localStorage.setItem('dbuy_billboards', JSON.stringify(newBillboards));
+      setOrders(newOrders);
+      localStorage.setItem('dbuy_orders', JSON.stringify(newOrders));
+
+      // Push to server
+      await fetch('/api/store/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          products: newProducts,
+          theme: newTheme,
+          billboards: newBillboards,
+          billboardIntervalSeconds: newInterval,
+          orders: newOrders,
+        }),
+      });
+
+      // Broadcast
+      if (typeof BroadcastChannel !== 'undefined') {
+        try {
+          const bc = new BroadcastChannel('dbuy_store_sync');
+          bc.postMessage({ type: 'STORE_REFRESH' });
+          bc.close();
+        } catch {}
+      }
+
+      addToast(
+        language === 'ka'
+          ? `წარმატებით იმპორტირებულია: ${newProducts.length} პროდუქტი!`
+          : `Successfully restored ${newProducts.length} products and settings!`,
+        'success'
+      );
+      return { success: true, message: 'Database imported successfully' };
+    } catch (err: any) {
+      const msg = err.message || 'Invalid JSON format';
+      addToast(language === 'ka' ? `იმპორტის შეცდომა: ${msg}` : `Import error: ${msg}`, 'error');
+      return { success: false, message: msg };
+    }
+  };
+
+  // Permanently bake current catalog into codebase (src/data/initialProducts.ts)
+  const persistCatalogToCode = async (): Promise<{ success: boolean; message: string }> => {
+    try {
+      const res = await fetch('/api/store/persist-to-code', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        addToast(
+          language === 'ka'
+            ? `პროდუქტები (${products.length}) მუდმივად ჩაიწერა კოდში (initialProducts.ts)!`
+            : `Products (${products.length}) permanently saved to codebase!`,
+          'success'
+        );
+        return { success: true, message: json.message };
+      }
+      throw new Error(json.error || 'Failed to persist');
+    } catch (e: any) {
+      addToast(`Error saving to code: ${e.message || String(e)}`, 'error');
+      return { success: false, message: e.message || 'Error' };
+    }
+  };
+
+  // Initial load sync + periodic auto-sync + BroadcastChannel across desktop, mobile and tablet devices
   useEffect(() => {
     refreshServerStore();
 
-    // Poll every 6 seconds to keep mobile & desktop perfectly synchronized
+    // BroadcastChannel cross-tab real-time sync
+    let bc: BroadcastChannel | null = null;
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        bc = new BroadcastChannel('dbuy_store_sync');
+        bc.onmessage = (event) => {
+          if (event.data?.type === 'PRODUCTS_UPDATED' && Array.isArray(event.data.products)) {
+            setProducts(event.data.products);
+            localStorage.setItem('dbuy_products', JSON.stringify(event.data.products));
+          } else if (event.data?.type === 'THEME_UPDATED' && event.data.theme) {
+            setTheme(prev => ({ ...prev, ...event.data.theme }));
+            localStorage.setItem('dbuy_theme', JSON.stringify(event.data.theme));
+          } else if (event.data?.type === 'STORE_REFRESH') {
+            refreshServerStore();
+          }
+        };
+      } catch {}
+    }
+
+    // Storage event for same-browser other tabs
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'dbuy_products' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) setProducts(parsed);
+        } catch {}
+      }
+      if (e.key === 'dbuy_theme' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (parsed) setTheme(prev => ({ ...prev, ...parsed }));
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorageChange);
+
+    // Poll every 3 seconds to keep mobile & desktop synchronized in real time
     const interval = setInterval(() => {
       refreshServerStore();
-    }, 6000);
+    }, 3000);
 
     // Sync on tab focus / phone screen wakeup
     const handleVisibilityChange = () => {
@@ -1231,6 +1499,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     return () => {
       clearInterval(interval);
+      if (bc) bc.close();
+      window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);
     };
@@ -1810,6 +2080,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         registeredUsers,
         deleteRegisteredUser,
         refreshServerStore,
+        syncWithRemoteStore,
+        exportFullDatabase,
+        importFullDatabase,
+        persistCatalogToCode,
         toasts,
         addToast,
         removeToast,

@@ -1,11 +1,12 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
-import { Product, Order, BillboardSlide } from '../types';
+import { Product, Order, BillboardSlide, LogoOptionId } from '../types';
 import { generateProductFeatures } from '../utils/productFeatures';
 import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
+import { StoreSyncModal } from './StoreSyncModal';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -27,6 +28,7 @@ import {
   Upload,
   UploadCloud,
   Download,
+  Database,
   ImageIcon,
   Link as LinkIcon,
   CheckCircle2,
@@ -145,6 +147,7 @@ export const AdminDashboard: React.FC = () => {
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
+  const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
   // Tracking Number Management Modal
   const [trackingModalOrder, setTrackingModalOrder] = useState<Order | null>(null);
@@ -212,7 +215,7 @@ export const AdminDashboard: React.FC = () => {
     heroSubtitle: string;
     eurRate: number;
     gelRate: number;
-    logoStyle: 'dynamic' | 'shopping' | 'minimal' | 'prism';
+    logoStyle: LogoOptionId;
   }>({
     announcementText: theme?.announcementText || '',
     announcementVisible: theme?.announcementVisible ?? true,
@@ -221,8 +224,23 @@ export const AdminDashboard: React.FC = () => {
     heroSubtitle: theme?.heroSubtitle || '',
     eurRate: theme?.eurRate ?? 0.92,
     gelRate: theme?.gelRate ?? 2.78,
-    logoStyle: theme?.logoStyle || 'dynamic',
+    logoStyle: (theme?.logoStyle as LogoOptionId) || 'geometric-tech',
   });
+
+  useEffect(() => {
+    if (theme) {
+      setThemeForm({
+        announcementText: theme.announcementText || '',
+        announcementVisible: theme.announcementVisible ?? true,
+        primaryColor: theme.primaryColor || '#2563eb',
+        heroTitle: theme.heroTitle || '',
+        heroSubtitle: theme.heroSubtitle || '',
+        eurRate: theme.eurRate ?? 0.92,
+        gelRate: theme.gelRate ?? 2.78,
+        logoStyle: (theme.logoStyle as LogoOptionId) || 'geometric-tech',
+      });
+    }
+  }, [theme]);
 
   // Billboard Management State
   const [isBillboardModalOpen, setIsBillboardModalOpen] = useState(false);
@@ -757,8 +775,14 @@ export const AdminDashboard: React.FC = () => {
     setIsProductModalOpen(false);
   };
 
-  const handleSaveTheme = () => {
-    updateTheme(themeForm);
+  const handleSaveTheme = async () => {
+    await updateTheme(themeForm);
+    addToast(
+      isKa
+        ? 'საიტის თემა და დიზაინი წარმატებით შეინახა და გავრცელდა ყველა მოწყობილობაზე!'
+        : 'Store visual design saved and broadcast live to all devices!',
+      'success'
+    );
   };
 
   // Filtered products in admin table
@@ -902,13 +926,12 @@ export const AdminDashboard: React.FC = () => {
 
           <div className="flex items-center space-x-3">
             <button
-              onClick={handleManualSync}
-              disabled={isSyncing}
-              className="px-3.5 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/40 text-blue-200 text-xs font-semibold flex items-center space-x-1.5 border border-blue-500/40 transition-colors cursor-pointer disabled:opacity-50"
-              title={isKa ? 'მონაცემების სინქრონიზაცია სერვერთან' : 'Sync data with server'}
+              onClick={() => setIsSyncModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 text-xs font-semibold flex items-center space-x-1.5 border border-blue-500/40 transition-colors cursor-pointer"
+              title={isKa ? 'ცოცხალი საიტის სინქრონიზაცია & ბაზა' : 'Live site sync & database'}
             >
-              <RefreshCw className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin text-blue-400' : ''}`} />
-              <span>{isSyncing ? (isKa ? 'სინქრონიზდება...' : 'Syncing...') : (isKa ? 'სინქრონიზაცია' : 'Sync Server')}</span>
+              <Database className="w-3.5 h-3.5 text-blue-400" />
+              <span>{isKa ? 'საიტის სინქრონიზაცია' : 'Live Sync'}</span>
             </button>
             <button
               onClick={() => setCurrentPage('home')}
@@ -1123,6 +1146,14 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+                <button
+                  onClick={() => setIsSyncModalOpen(true)}
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
+                  title={isKa ? 'გაშვებული საიტიდან მონაცემების გადმოტანა, ბექაფი და კოდში დაფიქსირება' : 'Sync with running live site, backup or commit to code'}
+                >
+                  <Database className="w-4 h-4 text-emerald-400" />
+                  <span>{isKa ? 'საიტის სინქრონიზაცია' : 'Live Sync'}</span>
+                </button>
                 <button
                   onClick={() => setIsImportModalOpen(true)}
                   className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
@@ -1568,15 +1599,82 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Announcement text */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
-                  📢 Top Announcement Banner
-                </label>
+              {/* Brand Accent / Theme Primary Color Picker */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800">
+                      🎨 საიტის ძირითადი ფერი / Brand Theme Color
+                    </label>
+                    <p className="text-[11px] text-slate-500">
+                      ეს ფერი ავტომატურად აისახება ყველა მომხმარებლისთვის (ღილაკები, ბანერები, ძებნა)
+                    </p>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <span className="w-5 h-5 rounded-full border border-slate-300 shadow-xs" style={{ backgroundColor: themeForm.primaryColor || '#2563eb' }} />
+                    <span className="text-xs font-mono font-bold text-slate-700">{themeForm.primaryColor || '#2563eb'}</span>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  {[
+                    { color: '#2563eb', name: 'Cobalt Blue' },
+                    { color: '#4f46e5', name: 'Electric Indigo' },
+                    { color: '#7c3aed', name: 'Cyber Purple' },
+                    { color: '#059669', name: 'Emerald' },
+                    { color: '#e11d48', name: 'Rose Red' },
+                    { color: '#d97706', name: 'Amber Gold' },
+                    { color: '#0f172a', name: 'Obsidian' },
+                  ].map(preset => (
+                    <button
+                      key={preset.color}
+                      type="button"
+                      onClick={() => setThemeForm(prev => ({ ...prev, primaryColor: preset.color }))}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-2 border transition-all cursor-pointer ${
+                        themeForm.primaryColor === preset.color
+                          ? 'border-slate-900 bg-white text-slate-900 shadow-sm ring-2 ring-blue-500/40'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
+                      }`}
+                    >
+                      <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: preset.color }} />
+                      <span>{preset.name}</span>
+                    </button>
+                  ))}
+
+                  <div className="flex items-center space-x-1.5 ml-auto">
+                    <span className="text-[11px] text-slate-500 font-semibold">Custom:</span>
+                    <input
+                      type="color"
+                      value={themeForm.primaryColor || '#2563eb'}
+                      onChange={e => setThemeForm(prev => ({ ...prev, primaryColor: e.target.value }))}
+                      className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 p-0.5 bg-white"
+                      title="Custom color picker"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Announcement text & toggle */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold text-slate-700">
+                    📢 Top Announcement Banner
+                  </label>
+                  <label className="flex items-center space-x-2 text-xs font-semibold text-slate-600 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={themeForm.announcementVisible}
+                      onChange={e => setThemeForm(prev => ({ ...prev, announcementVisible: e.target.checked }))}
+                      className="rounded text-blue-600 focus:ring-blue-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span>ჩართულია (Visible)</span>
+                  </label>
+                </div>
                 <input
                   type="text"
                   value={themeForm.announcementText ?? ''}
                   onChange={e => setThemeForm({ ...themeForm, announcementText: e.target.value })}
+                  placeholder="მაგალითად: ⚡ FLASH SALE: მიიღეთ 25% ფასდაკლება..."
                   className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -3353,6 +3451,13 @@ export const AdminDashboard: React.FC = () => {
         currentProductsCount={products.length}
         isKa={isKa}
         allProducts={products}
+      />
+
+      {/* Live Site Sync & Database Management Modal */}
+      <StoreSyncModal
+        isOpen={isSyncModalOpen}
+        onClose={() => setIsSyncModalOpen(false)}
+        isKa={isKa}
       />
 
       {/* Order Tracking Management Modal */}

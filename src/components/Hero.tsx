@@ -21,7 +21,8 @@ export const Hero: React.FC = () => {
     navigateToProduct,
     formatPrice,
     billboards,
-    billboardIntervalSeconds
+    billboardIntervalSeconds,
+    theme,
   } = useStore();
 
   const activeBillboards = billboards.filter(b => b.isActive);
@@ -82,13 +83,22 @@ export const Hero: React.FC = () => {
     ? products.find(p => p.id === currentSlide.productId) 
     : undefined;
 
-  const slideTitle = (language === 'ka' && currentSlide?.titleKa) 
+  const defaultSlideTitle = (language === 'ka' && currentSlide?.titleKa) 
     ? currentSlide.titleKa 
     : currentSlide?.title;
 
-  const slideSubtitle = (language === 'ka' && currentSlide?.subtitleKa) 
+  const defaultSlideSubtitle = (language === 'ka' && currentSlide?.subtitleKa) 
     ? currentSlide.subtitleKa 
     : currentSlide?.subtitle;
+
+  // Use admin custom theme title/subtitle if configured
+  const slideTitle = (theme.heroTitle && theme.heroTitle.trim() && currentIndex === 0)
+    ? theme.heroTitle
+    : defaultSlideTitle;
+
+  const slideSubtitle = (theme.heroSubtitle && theme.heroSubtitle.trim() && currentIndex === 0)
+    ? theme.heroSubtitle
+    : defaultSlideSubtitle;
 
   const slideBadge = (language === 'ka' && currentSlide?.badgeKa) 
     ? currentSlide.badgeKa 
@@ -184,7 +194,8 @@ export const Hero: React.FC = () => {
               <button
                 id="billboard-primary-cta"
                 onClick={handleAction}
-                className="px-7 py-3.5 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-extrabold text-sm shadow-xl shadow-blue-600/30 transition-all flex items-center space-x-2.5 cursor-pointer hover:scale-102"
+                style={{ backgroundColor: theme.primaryColor || '#2563eb' }}
+                className="px-7 py-3.5 rounded-2xl bg-blue-600 hover:opacity-95 text-white font-extrabold text-sm shadow-xl shadow-blue-600/30 transition-all flex items-center space-x-2.5 cursor-pointer hover:scale-102"
               >
                 <ShoppingBag className="w-4 h-4" />
                 <span>{slideBtnText}</span>

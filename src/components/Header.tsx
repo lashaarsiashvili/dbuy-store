@@ -76,7 +76,10 @@ export const Header: React.FC = () => {
     <header className="sticky top-0 z-40 w-full bg-white shadow-xs">
       {/* 1. Top Announcement Bar */}
       {theme.announcementVisible && !announcementClosed && (
-        <div className="relative flex items-center justify-between px-4 py-2 text-xs md:text-sm font-medium text-white transition-colors bg-gradient-to-r from-blue-700 via-indigo-700 to-blue-600">
+        <div 
+          style={{ backgroundColor: theme.primaryColor || '#2563eb' }}
+          className="relative flex items-center justify-between px-4 py-2 text-xs md:text-sm font-medium text-white transition-colors"
+        >
           <div className="flex items-center justify-center flex-1 space-x-2 text-center">
             <Sparkles className="w-4 h-4 text-amber-300 animate-pulse shrink-0" />
             <span className="truncate">{theme.announcementText}</span>
@@ -168,7 +171,10 @@ export const Header: React.FC = () => {
         </a>
 
         {/* eBay-Style Search Container */}
-        <div className="hidden sm:flex flex-1 max-w-2xl items-center border-2 border-blue-600 rounded-lg overflow-hidden bg-white shadow-xs focus-within:ring-2 focus-within:ring-blue-300">
+        <div 
+          style={{ borderColor: theme.primaryColor || '#2563eb' }}
+          className="hidden sm:flex flex-1 max-w-2xl items-center border-2 rounded-lg overflow-hidden bg-white shadow-xs focus-within:ring-2 focus-within:ring-blue-300"
+        >
           <select
             value={selectedCategory}
             onChange={e => handleCategorySelect(e.target.value as Category)}
@@ -206,7 +212,8 @@ export const Header: React.FC = () => {
             onClick={() => {
               if (currentPage !== 'home') setCurrentPage('home');
             }}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white font-semibold text-sm hover:bg-blue-700 transition-colors"
+            style={{ backgroundColor: theme.primaryColor || '#2563eb' }}
+            className="flex items-center px-4 py-2 bg-blue-600 text-white font-semibold text-sm hover:opacity-90 transition-opacity"
           >
             <Search className="w-4 h-4 mr-1.5" />
             <span>{t('nav.search')}</span>

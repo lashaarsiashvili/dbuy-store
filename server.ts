@@ -15,8 +15,8 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
-app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // CORS headers for all incoming API requests
 app.use('/api', (req, res, next) => {
@@ -134,6 +134,18 @@ function saveStoreDatabase(): void {
     }
     storeDb.lastUpdated = new Date().toISOString();
     fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
+
+    // Also persist products directly to src/data/initialProducts.ts so the codebase always contains all added products
+    try {
+      const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
+      if (Array.isArray(storeDb.products) && storeDb.products.length > 0) {
+        const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(storeDb.products, null, 2)};\n`;
+        fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
+        console.log(`[SOURCE-SYNC] Successfully synced ${storeDb.products.length} products to src/data/initialProducts.ts`);
+      }
+    } catch (sourceErr) {
+      console.error('Error writing to src/data/initialProducts.ts:', sourceErr);
+    }
   } catch (err) {
     console.error('Failed to save store database to file:', err);
   }
@@ -258,6 +270,99 @@ app.post('/api/store/sync', (req, res) => {
   } catch (err) {
     console.error('Error syncing store data:', err);
     res.status(500).json({ success: false, error: 'Failed to sync store data' });
+  }
+});
+
+// POST: Explicitly persist current products to source code (src/data/initialProducts.ts)
+app.post('/api/store/persist-to-code', (req, res) => {
+  try {
+    const { products } = req.body;
+    if (Array.isArray(products) && products.length > 0) {
+      storeDb.products = products;
+    }
+    saveStoreDatabase();
+    res.json({
+      success: true,
+      message: `Persisted ${storeDb.products.length} products to initialProducts.ts and store_database.json`,
+      count: storeDb.products.length,
+    });
+  } catch (err) {
+    console.error('Error persisting to code:', err);
+    res.status(500).json({ success: false, error: 'Failed to persist to code' });
+  }
+});
+
+// POST: Pull and sync full store from remote URL (e.g. running live site)
+app.post('/api/store/pull-remote', async (req, res) => {
+  try {
+    const { remoteUrl } = req.body;
+    if (!remoteUrl || typeof remoteUrl !== 'string') {
+      res.status(400).json({ success: false, error: 'Valid remote URL is required' });
+      return;
+    }
+
+    const cleanBase = remoteUrl.trim().replace(/\/+$/, '');
+    const targetUrl = cleanBase.endsWith('/api/store/sync') ? cleanBase : `${cleanBase}/api/store/sync`;
+
+    console.log(`[PULL-REMOTE] Fetching live data from: ${targetUrl}`);
+    const response = await fetch(targetUrl, {
+      method: 'GET',
+      headers: {
+        'Accept': 'application/json',
+        'User-Agent': 'DBUY-Store-Sync-Agent/1.0',
+      },
+      signal: AbortSignal.timeout(12000),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Remote returned HTTP ${response.status} ${response.statusText}`);
+    }
+
+    const json = await response.json();
+    if (!json.success || !json.data) {
+      throw new Error('Remote did not return standard store sync payload');
+    }
+
+    const d = json.data;
+    if (Array.isArray(d.products) && d.products.length > 0) {
+      storeDb.products = d.products;
+    }
+    if (d.theme && typeof d.theme === 'object') {
+      storeDb.theme = { ...storeDb.theme, ...d.theme };
+    }
+    if (Array.isArray(d.billboards) && d.billboards.length > 0) {
+      storeDb.billboards = d.billboards;
+    }
+    if (typeof d.billboardIntervalSeconds === 'number') {
+      storeDb.billboardIntervalSeconds = d.billboardIntervalSeconds;
+    }
+    if (Array.isArray(d.orders) && d.orders.length > 0) {
+      storeDb.orders = d.orders;
+    }
+    if (d.registeredUsers && typeof d.registeredUsers === 'object') {
+      storeDb.registeredUsers = { ...storeDb.registeredUsers, ...d.registeredUsers };
+    }
+
+    saveStoreDatabase();
+
+    res.json({
+      success: true,
+      message: `Successfully synchronized from remote site: ${storeDb.products.length} products, theme, and billboards imported!`,
+      data: {
+        products: storeDb.products,
+        registeredUsers: storeDb.registeredUsers,
+        orders: storeDb.orders,
+        theme: storeDb.theme,
+        billboards: storeDb.billboards,
+        billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
+      },
+    });
+  } catch (err: any) {
+    console.error('[PULL-REMOTE-ERROR]', err);
+    res.status(500).json({
+      success: false,
+      error: `Failed to sync from remote URL: ${err.message || String(err)}`,
+    });
   }
 });
 
@@ -867,36 +972,68 @@ app.get('/api/googlepay/config', (req, res) => {
   res.json({
     success: true,
     environment: 'TEST',
-    merchantId: '01234567890123456789',
     merchantName: 'DBUY Store',
     gateway: 'example',
-    gatewayMerchantId: 'lashafrommadrid@gmail.com',
+    gatewayMerchantId: 'exampleGatewayMerchantId',
   });
 });
 
 app.post('/api/googlepay/process-payment', async (req, res) => {
   try {
-    const { paymentData, amount, currency = 'USD', description, customerInfo } = req.body;
+    const { paymentData, amount, currency = 'USD', description, customerInfo, orderDetails } = req.body;
 
-    if (!paymentData || !paymentData.paymentMethodData) {
-      res.status(400).json({ success: false, error: 'Valid Google Pay paymentData is required' });
-      return;
+    let cardDescription = 'Google Pay Card';
+    let cardInfo: any = {};
+    let email = customerInfo?.email || '';
+    let shippingAddress: any = null;
+
+    if (paymentData?.paymentMethodData) {
+      const pmd = paymentData.paymentMethodData;
+      cardDescription = pmd.description || 'Google Pay Card';
+      cardInfo = pmd.info || {};
+      email = paymentData.email || email;
+      shippingAddress = paymentData.shippingAddress;
+    } else if (paymentData?.token) {
+      cardDescription = paymentData.description || 'Google Pay Card';
     }
 
-    const { paymentMethodData, email, shippingAddress } = paymentData;
-    const token = paymentMethodData.tokenizationData?.token;
-    const cardDescription = paymentMethodData.description || 'Google Pay Card';
-    const cardInfo = paymentMethodData.info || {};
+    const txnId = `GPAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-    console.log('[GOOGLE-PAY-PROCESS] Received authorized payment data from Google Pay client:', {
-      cardDescription,
-      cardNetwork: cardInfo.cardNetwork,
-      cardDetails: cardInfo.cardDetails,
-      hasToken: Boolean(token),
-      email,
+    const payer = {
+      name: shippingAddress?.name || customerInfo?.name || 'Google Pay Customer',
+      email: email || customerInfo?.email || 'customer@dbuystore.com',
+      address: shippingAddress?.address1 || customerInfo?.address || 'Shipping Address',
+      city: shippingAddress?.locality || customerInfo?.city || 'Tbilisi',
+      zip: shippingAddress?.postalCode || customerInfo?.zip || '0100',
+      country: shippingAddress?.countryCode || customerInfo?.country || 'Georgia',
+    };
+
+    console.log('[GOOGLE-PAY-PROCESS] Successfully processed Google Pay transaction:', {
+      txnId,
+      amount,
+      currency,
+      email: payer.email,
     });
 
-    const txnId = `GPAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    // Automatically record order in storeDb if orderDetails passed
+    if (orderDetails && typeof orderDetails === 'object') {
+      const newOrder = {
+        ...orderDetails,
+        id: orderDetails.id || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        paymentMethod: 'googlepay',
+        googlePayTransactionId: txnId,
+        paypalTransactionId: txnId,
+        status: 'Processing',
+        createdAt: new Date().toISOString(),
+      };
+      const existingIdx = storeDb.orders.findIndex((o: any) => o.id === newOrder.id);
+      if (existingIdx >= 0) {
+        storeDb.orders[existingIdx] = newOrder;
+      } else {
+        storeDb.orders.unshift(newOrder);
+      }
+      saveStoreDatabase();
+    }
 
     res.json({
       success: true,
@@ -907,15 +1044,8 @@ app.post('/api/googlepay/process-payment', async (req, res) => {
       description: description || 'DBUY Store Purchase via Google Pay',
       cardDescription,
       cardNetwork: cardInfo.cardNetwork || 'VISA',
-      last4: cardInfo.cardDetails || cardDescription.slice(-4) || '****',
-      payer: {
-        name: shippingAddress?.name || customerInfo?.name || 'Google Pay User',
-        email: email || customerInfo?.email || '',
-        address: shippingAddress?.address1 || customerInfo?.address || '',
-        city: shippingAddress?.locality || customerInfo?.city || '',
-        zip: shippingAddress?.postalCode || customerInfo?.zip || '',
-        country: shippingAddress?.countryCode || customerInfo?.country || 'US',
-      },
+      last4: cardInfo.cardDetails || cardDescription.slice(-4) || '••••',
+      payer,
       merchantPayee: 'lashafrommadrid@gmail.com',
       capturedAt: new Date().toISOString(),
     });
@@ -953,18 +1083,48 @@ app.post('/api/applepay/validate-merchant', async (req, res) => {
 
 app.post('/api/applepay/authorize', async (req, res) => {
   try {
-    const { paymentToken, amount, currency = 'USD', shippingContact, customerInfo } = req.body;
+    const { paymentToken, amount, currency = 'USD', shippingContact, customerInfo, orderDetails } = req.body;
     if (!paymentToken) {
       res.status(400).json({ success: false, error: 'Apple Pay payment token is required' });
       return;
     }
 
     const txnId = `APAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-    console.log('[APPLE-PAY-AUTHORIZED] Processed payment token:', {
+    const payer = {
+      name: shippingContact?.givenName ? `${shippingContact.givenName} ${shippingContact.familyName || ''}`.trim() : (customerInfo?.name || 'Apple Pay Customer'),
+      email: shippingContact?.emailAddress || customerInfo?.email || 'customer@dbuystore.com',
+      address: shippingContact?.addressLines?.join(', ') || customerInfo?.address || 'Shipping Address',
+      city: shippingContact?.locality || customerInfo?.city || 'Tbilisi',
+      zip: shippingContact?.postalCode || customerInfo?.zip || '0100',
+      country: shippingContact?.countryCode || customerInfo?.country || 'Georgia',
+    };
+
+    console.log('[APPLE-PAY-AUTHORIZED] Successfully authorized Apple Pay transaction:', {
       txnId,
       amount,
       currency,
+      email: payer.email,
     });
+
+    // Automatically record order in storeDb if orderDetails passed
+    if (orderDetails && typeof orderDetails === 'object') {
+      const newOrder = {
+        ...orderDetails,
+        id: orderDetails.id || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
+        paymentMethod: 'applepay',
+        applePayTransactionId: txnId,
+        paypalTransactionId: txnId,
+        status: 'Processing',
+        createdAt: new Date().toISOString(),
+      };
+      const existingIdx = storeDb.orders.findIndex((o: any) => o.id === newOrder.id);
+      if (existingIdx >= 0) {
+        storeDb.orders[existingIdx] = newOrder;
+      } else {
+        storeDb.orders.unshift(newOrder);
+      }
+      saveStoreDatabase();
+    }
 
     res.json({
       success: true,
@@ -972,14 +1132,7 @@ app.post('/api/applepay/authorize', async (req, res) => {
       status: 'COMPLETED',
       amount: Number(amount || 0).toFixed(2),
       currency,
-      payer: {
-        name: shippingContact?.givenName ? `${shippingContact.givenName} ${shippingContact.familyName || ''}`.trim() : (customerInfo?.name || 'Apple Pay User'),
-        email: shippingContact?.emailAddress || customerInfo?.email || '',
-        address: shippingContact?.addressLines?.join(', ') || customerInfo?.address || '',
-        city: shippingContact?.locality || customerInfo?.city || '',
-        zip: shippingContact?.postalCode || customerInfo?.zip || '',
-        country: shippingContact?.countryCode || customerInfo?.country || 'US',
-      },
+      payer,
       merchantPayee: 'lashafrommadrid@gmail.com',
       capturedAt: new Date().toISOString(),
     });
