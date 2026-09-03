@@ -29,3 +29,28 @@
     height: auto;
   }
 }
+
+/* Official Apple Pay Web Component & Native Button styling */
+apple-pay-button {
+  --apple-pay-button-width: 100%;
+  --apple-pay-button-height: 100%;
+  --apple-pay-button-border-radius: 12px;
+  --apple-pay-button-padding: 0px 0px;
+  --apple-pay-button-box-sizing: border-box;
+  display: block;
+  cursor: pointer;
+  width: 100%;
+  height: 100%;
+}
+
+@supports (-webkit-appearance: -apple-pay-button) {
+  .apple-pay-native-button {
+    -webkit-appearance: -apple-pay-button;
+    -apple-pay-button-type: buy;
+    -apple-pay-button-style: black;
+    display: block;
+    width: 100%;
+    cursor: pointer;
+    border-radius: 12px;
+  }
+}
