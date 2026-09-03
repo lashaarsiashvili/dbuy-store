@@ -701,13 +701,10 @@ export const CheckoutModal: React.FC = () => {
                     }`}
                   >
                     <div className="h-5 flex items-center justify-center">
-                      {activePaymentMethod === "paypal" ? (
-                        <span className="font-extrabold italic text-sm text-white tracking-wider">
-                          PayPal
-                        </span>
-                      ) : (
-                        <PayPalLogo className="h-4 w-auto" />
-                      )}
+                      <PayPalLogo
+                        className="h-4 w-auto"
+                        isWhite={activePaymentMethod === "paypal"}
+                      />
                     </div>
                     <span className="text-[10px] font-bold tracking-tight">PayPal</span>
                   </button>

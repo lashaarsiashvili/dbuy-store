@@ -211,6 +211,7 @@ const defaultTheme: ThemeSettings = {
   heroSubtitle: 'Discover premium lifestyle, fitness, and tech accessories curated for your everyday needs.',
   eurRate: 0.92,
   gelRate: 2.73,
+  logoStyle: 'bag-cart',
 };
 
 const defaultUser: User = {
@@ -257,9 +258,9 @@ const parseRouteFromLocation = (
   if (!clean || lower === 'home') {
     return { page: 'home', productId: null };
   }
-  if (lower.startsWith('product/') || lower.startsWith('products/')) {
+  if (lower.startsWith('b/') || lower.startsWith('product/') || lower.startsWith('products/')) {
     const segments = clean.split('/');
-    // Handles /product/:id or /product/:id/:titleSlug
+    // Handles /b/:slug, /product/:id or /product/:id/:titleSlug
     const rawId = segments[1] ? decodeURIComponent(segments[1]) : null;
     return { page: 'product', productId: rawId };
   }
@@ -385,9 +386,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setActiveProductId(null);
     } else if (page === 'product') {
       if (activeProductId) {
-        const prod = products.find(p => p.id === activeProductId);
+        const prod = products.find(p => p.id === activeProductId || p.customSlug === activeProductId || (p.customSlug && p.customSlug.toLowerCase() === activeProductId.toLowerCase()));
         const slug = prod?.customSlug?.trim() || (prod ? generateProductSlug(prod.title) : '');
-        targetPath = slug ? `/product/${activeProductId}/${encodeURIComponent(slug)}` : `/product/${activeProductId}`;
+        const id = prod?.id || activeProductId;
+        targetPath = prod?.customSlug ? `/b/${encodeURIComponent(slug)}` : (slug ? `/product/${id}/${encodeURIComponent(slug)}` : `/product/${id}`);
       } else {
         targetPath = '/';
       }
@@ -407,9 +409,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const navigateToProduct = (productId: string) => {
     setActiveProductId(productId);
     setCurrentPageState('product');
-    const prod = products.find(p => p.id === productId);
+    const prod = products.find(p => p.id === productId || p.customSlug === productId || (p.customSlug && p.customSlug.toLowerCase() === productId.toLowerCase()));
     const slug = prod?.customSlug?.trim() || (prod ? generateProductSlug(prod.title) : '');
-    const targetPath = slug ? `/product/${productId}/${encodeURIComponent(slug)}` : `/product/${productId}`;
+    const id = prod?.id || productId;
+    const targetPath = prod?.customSlug ? `/b/${encodeURIComponent(slug)}` : (slug ? `/product/${id}/${encodeURIComponent(slug)}` : `/product/${id}`);
     if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
       window.history.pushState({ page: 'product', productId }, '', targetPath);
     }
@@ -417,9 +420,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const getProductUrl = (productId: string): string => {
-    const prod = products.find(p => p.id === productId);
+    const prod = products.find(p => p.id === productId || p.customSlug === productId || (p.customSlug && p.customSlug.toLowerCase() === productId.toLowerCase()));
     const slug = prod?.customSlug?.trim() || (prod ? generateProductSlug(prod.title) : '');
-    const path = slug ? `/product/${productId}/${encodeURIComponent(slug)}` : `/product/${productId}`;
+    const id = prod?.id || productId;
+    const path = prod?.customSlug ? `/b/${encodeURIComponent(slug)}` : (slug ? `/product/${id}/${encodeURIComponent(slug)}` : `/product/${id}`);
     if (typeof window !== 'undefined') {
       return `${window.location.origin}${path}`;
     }
@@ -547,7 +551,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const saved = localStorage.getItem('dbuy_theme');
     if (saved) {
       try {
-        return { ...defaultTheme, ...JSON.parse(saved) };
+        const parsed = JSON.parse(saved);
+        const resolvedLogo = (!parsed.logoStyle || parsed.logoStyle === 'geometric-tech') ? 'bag-cart' : parsed.logoStyle;
+        return { ...defaultTheme, ...parsed, logoStyle: resolvedLogo };
       } catch (e) {
         console.error('Error parsing theme', e);
       }
@@ -710,10 +716,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
           return combined.map(p => {
             const init = initialProducts.find(ip => ip.id === p.id);
+            const customSlug = p.customSlug || init?.customSlug;
+            const titleKa = p.titleKa || init?.titleKa;
+            const descriptionKa = p.descriptionKa || init?.descriptionKa;
+            const features = (p.features && p.features.length > 0) ? p.features : init?.features;
+            let images = p.images && p.images.length > 0 ? p.images : [p.image];
             if (init && (!p.images || p.images.length === 0)) {
-              return { ...p, images: init.images || [p.image] };
+              images = init.images || [p.image];
             }
-            return { ...p, images: p.images && p.images.length > 0 ? p.images : [p.image] };
+            return {
+              ...p,
+              customSlug,
+              titleKa,
+              descriptionKa,
+              features,
+              images
+            };
           });
         }
       } catch (e) {

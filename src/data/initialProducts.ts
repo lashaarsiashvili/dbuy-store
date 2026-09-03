@@ -224,5 +224,65 @@ export const initialProducts: Product[] = [
       "Airline travel certified safe"
     ],
     "isDeal": false
+  },
+  {
+    "id": "prod-9",
+    "title": "HD Dual Lens Car Dash Cam Black Box (Front & Interior GPS WiFi)",
+    "titleKa": "ავტომობილის ორმაგი ვიდეორეგისტრატორი HD Double Lens Dash Cam (Front & Interior GPS WiFi)",
+    "customSlug": "new-hd-inch-car-black-box-front-and-interior-double-lens-wide-angle-gps-wifi-loop-recording-dash-cam-night-vision",
+    "category": "tech",
+    "price": 54.99,
+    "origPrice": 79.99,
+    "stock": 24,
+    "badge": "Hot Deal",
+    "image": "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=1000&q=80",
+    "images": [
+      "https://images.unsplash.com/photo-1549399542-7e3f8b79c341?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1502877338535-766e1452684a?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1511919884226-fd3cad34687c?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1492144534655-ae79c964c9d7?auto=format&fit=crop&w=1000&q=80"
+    ],
+    "description": "Dual-channel HD car black box dash cam recording both the front road (170° ultra-wide) and vehicle interior cabin simultaneously. Features infrared night vision, built-in GPS trajectory & speed tracking, high-speed WiFi for mobile app live view, seamless loop recording, and G-sensor collision emergency video lock.",
+    "descriptionKa": "ორმაგი ლინზის მქონე HD ავტომობილის ვიდეორეგისტრატორი, რომელიც ერთდროულად იწერს როგორც გზას (170° ფართო კუთხით), ისე მანქანის სალონს. აღჭურვილია ინფრაწითელი ღამის ხედვით, ჩაშენებული GPS-ით, WiFi მობილური აპლიკაციით სამართავად, უწყვეტი ციკლური ჩაწერით (Loop Recording) და G-სენსორით ავარიის დროს ვიდეოს ავტომატური დაბლოკვისთვის.",
+    "rating": 4.9,
+    "reviewsCount": 128,
+    "features": [
+      "Dual 170° ultra-wide front & cabin interior camera recording",
+      "Enhanced Infrared Night Vision & WDR dynamic exposure balance",
+      "Built-in GPS tracking for real-time speed & route telemetry",
+      "WiFi app connectivity for instant playback & download",
+      "Emergency G-Sensor collision auto-lock & 24/7 parking guard"
+    ],
+    "isDeal": true
+  },
+  {
+    "id": "prod-10",
+    "title": "Andery MagSafe Car Phone Mount - 360° Magnetic Folding Holder",
+    "titleKa": "Andery მაგნიტური MagSafe მანქანის ტელეფონის სამაგრი 360° ბრუნვით",
+    "customSlug": "andery-car-phone-holder-for-magsafe-phone-holders-for-your-car-for-iphone",
+    "category": "accessories",
+    "price": 28.99,
+    "origPrice": 42.99,
+    "stock": 38,
+    "badge": "Trending",
+    "image": "https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?auto=format&fit=crop&w=1000&q=80",
+    "images": [
+      "https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1580910051074-3eb694886505?auto=format&fit=crop&w=1000&q=80",
+      "https://images.unsplash.com/photo-1552519507-da3b142c6e3d?auto=format&fit=crop&w=1000&q=80"
+    ],
+    "description": "Heavy-duty magnetic car phone holder engineered for iPhone MagSafe and all smartphones. Features 22 N55 military-grade magnets holding up to 78 lbs, multi-layer nano gel rotating vacuum suction cup, 360° rotation with 210° folding dual-axis alloy arms, and circular heat dissipation cooling airflow.",
+    "descriptionKa": "პრემიუმ კლასის მაგნიტური მანქანის ტელეფონის სამაგრი MagSafe-ით iPhone-ისთვის და ყველა სმარტფონისთვის. აღჭურვილია 22 N55 ძლიერი ნეოდიმის მაგნიტით (35 კგ-მდე გამძლეობა), მრავალფენიანი ნანო-გელის ვაკუუმური მისაწოვებით, 360° მბრუნავი და 210° დაკეცვადი მეტალის მკლავით და გაგრილების სპეციალური ჰაერგამტარი დიზაინით.",
+    "rating": 4.8,
+    "reviewsCount": 94,
+    "features": [
+      "22x N55 Military-grade magnets with 2,400gf (78 lbs) holding force",
+      "Multi-layer nano gel vacuum suction cup withstands -40°F to 300°F",
+      "360° rotating base & 210° dual-axis folding metal alloy arms",
+      "Official MagSafe snap compatibility & universal metal ring included",
+      "Anti-shake bumpy road stabilization with circular cooling design"
+    ],
+    "isDeal": true
   }
 ];

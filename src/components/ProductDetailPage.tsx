@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useStore } from '../context/StoreContext';
+import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product } from '../types';
 import { getProductFeatures } from '../utils/productFeatures';
 import { ProductPaymentModule } from './ProductPaymentModule';
@@ -50,8 +50,14 @@ export const ProductDetailPage: React.FC = () => {
   const [justAdded, setJustAdded] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  // Find product by activeProductId
-  const product: Product | undefined = products.find(p => p.id === activeProductId);
+  // Find product by activeProductId (supports ID, customSlug, or title slug)
+  const product: Product | undefined = products.find(p => 
+    p.id === activeProductId ||
+    p.customSlug === activeProductId ||
+    (p.customSlug && activeProductId && p.customSlug.toLowerCase() === activeProductId.toLowerCase()) ||
+    generateProductSlug(p.title) === activeProductId ||
+    (activeProductId && generateProductSlug(p.title).toLowerCase() === activeProductId.toLowerCase())
+  );
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });

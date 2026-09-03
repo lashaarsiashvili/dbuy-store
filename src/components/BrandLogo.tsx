@@ -16,7 +16,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
   showText = true,
   className = '',
   circularBadge = false,
-  styleOverride = 'geometric-tech',
+  styleOverride = 'bag-cart',
 }) => {
   // Height / scale configurations
   const config = {
@@ -38,36 +38,28 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         <div className="relative flex items-center justify-center shrink-0">
           <svg viewBox="0 0 100 100" className="w-9 h-9 sm:w-10 sm:h-10 drop-shadow-md" fill="none">
             <defs>
-              <linearGradient id="db-pure-grad" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stopColor="#3b82f6" />
-                <stop offset="50%" stopColor="#6366f1" />
-                <stop offset="100%" stopColor="#a855f7" />
+              <linearGradient id="db-bag-icon-badge" x1="0%" y1="100%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#2563eb" />
+                <stop offset="100%" stopColor="#38bdf8" />
               </linearGradient>
             </defs>
-            <circle cx="50" cy="50" r="48" fill="#090d16" stroke="#1e293b" strokeWidth="2.5" />
-            <circle cx="50" cy="50" r="44" stroke="url(#db-pure-grad)" strokeWidth="1.5" strokeOpacity="0.4" />
-            <text
-              x="32"
-              y="59"
-              fontFamily="system-ui, -apple-system, sans-serif"
-              fontSize="32"
-              fontWeight="900"
-              fill="#ffffff"
-              textAnchor="middle"
-            >
-              D
-            </text>
-            <text
-              x="66"
-              y="59"
-              fontFamily="system-ui, -apple-system, sans-serif"
-              fontSize="32"
-              fontWeight="900"
-              fill="url(#db-pure-grad)"
-              textAnchor="middle"
-            >
-              B
-            </text>
+            <circle cx="50" cy="50" r="48" fill="#0f172a" stroke="#1e293b" strokeWidth="2.5" />
+            <path
+              d="M 39 36 V 29 C 39 23, 44 19, 50 19 C 56 19, 61 23, 61 29 V 36"
+              stroke="#38bdf8"
+              strokeWidth="4"
+              strokeLinecap="round"
+            />
+            <path
+              d="M 28 36 H 72 L 67 78 C 66 81, 63 83, 60 83 H 40 C 37 83, 34 81, 33 78 Z"
+              fill="url(#db-bag-icon-badge)"
+            />
+            <path
+              d="M 44 48 C 44 48, 50 56, 56 48"
+              stroke="#ffffff"
+              strokeWidth="3.5"
+              strokeLinecap="round"
+            />
           </svg>
         </div>
       );
@@ -247,7 +239,24 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
           </div>
         );
 
+      case 'geometric-tech':
+        return (
+          <div className="flex flex-col">
+            <div className={`flex items-baseline font-black tracking-tight leading-none ${config.textSize}`}>
+              <span className={isDark ? 'text-white' : 'text-slate-950'}>D</span>
+              <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
+                B
+              </span>
+              <span className={isDark ? 'text-slate-100' : 'text-slate-900'}>uy</span>
+            </div>
+            <span className={`font-black tracking-[0.26em] uppercase ${config.subText} ${textMuted} mt-0.5`}>
+              Smart Living Store
+            </span>
+          </div>
+        );
+
       case 'bag-cart':
+      default:
         return (
           <div className="flex flex-col">
             <div className={`flex items-baseline font-black tracking-tight leading-none ${config.textSize}`}>
@@ -273,23 +282,6 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
             </div>
             <span className={`font-black tracking-[0.28em] uppercase ${config.subText} ${textMuted} mt-0.5`}>
               Tech Innovation
-            </span>
-          </div>
-        );
-
-      case 'geometric-tech':
-      default:
-        return (
-          <div className="flex flex-col">
-            <div className={`flex items-baseline font-black tracking-tight leading-none ${config.textSize}`}>
-              <span className={isDark ? 'text-white' : 'text-slate-950'}>D</span>
-              <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
-                B
-              </span>
-              <span className={isDark ? 'text-slate-100' : 'text-slate-900'}>uy</span>
-            </div>
-            <span className={`font-black tracking-[0.26em] uppercase ${config.subText} ${textMuted} mt-0.5`}>
-              Smart Living Store
             </span>
           </div>
         );

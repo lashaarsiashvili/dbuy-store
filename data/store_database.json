@@ -85,62 +85,6 @@
       "isDeal": true
     },
     {
-      "id": "prod-4",
-      "title": "Studio Broadcast USB Condenser Mic",
-      "titleKa": "სტუდიური USB კონდენსატორული მიკროფონი",
-      "category": "tech",
-      "price": 64.99,
-      "origPrice": 79.99,
-      "stock": 19,
-      "badge": "New",
-      "image": "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=1000&q=80",
-      "images": [
-        "https://images.unsplash.com/photo-1590658268037-6bf12165a8df?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1546776310-eef45dd6d63c?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1598488035139-bdbb2231ce04?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1520523839898-507127053c39?auto=format&fit=crop&w=1000&q=80"
-      ],
-      "description": "Studio-grade cardioid polar pattern USB condenser microphone with zero-latency monitoring jack, gain dial, and pop filter.",
-      "descriptionKa": "პროფესიონალური სტუდიური USB მიკროფონი კარდიოიდული ჩაწერით, ყურსასმენის მონიტორინგით და ხმაურის ფილტრით.",
-      "rating": 4.9,
-      "reviewsCount": 64,
-      "features": [
-        "192kHz/24-Bit Studio Bitrate",
-        "One-touch Mute with LED indicator",
-        "Built-in Anti-vibration Shock Mount",
-        "Plug & Play on PC, Mac, and PS5"
-      ],
-      "isDeal": false
-    },
-    {
-      "id": "prod-5",
-      "title": "Compact Ultra-Bright EDC Flashlight",
-      "titleKa": "ტაქტიკური კომპაქტური EDC ფანარი 2000LM",
-      "category": "everyday",
-      "price": 29.99,
-      "origPrice": 39.99,
-      "stock": 42,
-      "badge": "Sale",
-      "image": "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1000&q=80",
-      "images": [
-        "https://images.unsplash.com/photo-1542291026-7eec264c27ff?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1517646287270-a5a9ca602e5c?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1516962215378-7fa2e137ae93?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1508873696983-2df5293cb32f?auto=format&fit=crop&w=1000&q=80"
-      ],
-      "description": "Aircraft-grade anodized aluminum tactical torch with 2000 Lumens peak output, USB-C rechargeability, and magnetic base.",
-      "descriptionKa": "ავიაციური ალუმინის კორპუსი, 2000 ლუმენი, USB-C დამუხტვა, მაგნიტური ძირი და წყალგამძლეობა.",
-      "rating": 4.8,
-      "reviewsCount": 110,
-      "features": [
-        "2000 Lumens Turbo Beam",
-        "Magnetic Tailcap for hands-free work",
-        "IPX8 Waterproof Submersible",
-        "USB-C fast direct charging"
-      ],
-      "isDeal": true
-    },
-    {
       "id": "prod-6",
       "title": "Handcrafted Vegan Leather Tech Folio",
       "titleKa": "პრემიუმ ტყავის ორგაიზერი პლანშეტისთვის",
@@ -195,38 +139,47 @@
         "Multipoint Bluetooth connection"
       ],
       "isDeal": true
-    },
-    {
-      "id": "prod-8",
-      "title": "Magnetic 10,000mAh Fast Power Bank",
-      "titleKa": "მაგნიტური MagSafe Power Bank 10,000mAh",
-      "category": "accessories",
-      "price": 39.99,
-      "origPrice": 49.99,
-      "stock": 31,
-      "badge": "New",
-      "image": "https://images.unsplash.com/photo-1609592424368-24959db23485?auto=format&fit=crop&w=1000&q=80",
-      "images": [
-        "https://images.unsplash.com/photo-1609592424368-24959db23485?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1580910051074-3eb694886505?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1583863788434-e58a36330cf0?auto=format&fit=crop&w=1000&q=80",
-        "https://images.unsplash.com/photo-1519389950473-47ba0277781c?auto=format&fit=crop&w=1000&q=80"
-      ],
-      "description": "Ultra-slim wireless magnetic power bank with 15W MagSafe charging, 20W PD Type-C output, and built-in kickstand.",
-      "descriptionKa": "თხელი მაგნიტური პორტატული დამტენი 15W უსადენო დამუხტვით, 20W PD Type-C პორტით და დასადგამით.",
-      "rating": 4.8,
-      "reviewsCount": 78,
-      "features": [
-        "Strong N52 Snap Magnet",
-        "15W Fast Qi Wireless + 20W PD Wired",
-        "Foldable viewing kickstand",
-        "Airline travel certified safe"
-      ],
-      "isDeal": false
     }
   ],
-  "registeredUsers": {},
+  "registeredUsers": {
+    "lashafrommadrid@gmail.com": {
+      "name": "Lasha Arsia",
+      "email": "lashafrommadrid@gmail.com",
+      "country": "Georgia",
+      "city": "Tbilisi",
+      "zip": "ჩ/!/",
+      "address": "BJOLETI 31",
+      "phone": "",
+      "provider": "google",
+      "createdAt": "2026-09-03T19:50:14.635Z",
+      "updatedAt": "2026-09-03T19:50:14.635Z",
+      "role": "customer",
+      "passwordHash": "",
+      "passwordSalt": ""
+    }
+  },
   "orders": [
+    {
+      "id": "DBUY-91759",
+      "date": "2026-09-03",
+      "customerName": "Guest",
+      "email": "buyer@gmail.com",
+      "address": "Main Delivery Address",
+      "city": "Tbilisi",
+      "zip": "0100",
+      "country": "Georgia",
+      "items": [],
+      "subtotal": 0,
+      "discount": 0,
+      "shipping": 5.99,
+      "tax": 0,
+      "total": 5.99,
+      "currency": "USD",
+      "status": "Processing",
+      "trackingNumber": "TRK-GE-9510642",
+      "paymentMethod": "card",
+      "paypalTransactionId": "0K373324TX946040M"
+    },
     {
       "id": "DBUY-77134",
       "date": "2026-09-02",
@@ -404,7 +357,7 @@
     "heroSubtitle": "Discover premium lifestyle, fitness, and tech accessories curated for your everyday needs.",
     "eurRate": 0.92,
     "gelRate": 2.78,
-    "logoStyle": "geometric-tech"
+    "logoStyle": "bag-cart"
   },
   "billboards": [
     {
@@ -496,5 +449,5 @@
   "adminSecretSlug": "lasha-admin-x98",
   "adminPasswordHash": "",
   "adminPasswordSalt": "",
-  "lastUpdated": "2026-09-02T19:05:30.651Z"
+  "lastUpdated": "2026-09-03T20:17:24.517Z"
 }

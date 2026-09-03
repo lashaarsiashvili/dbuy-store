@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product, Order, BillboardSlide, LogoOptionId } from '../types';
 import { generateProductFeatures } from '../utils/productFeatures';
+import { generateProductAdCopy } from '../utils/adCopyGenerator';
 import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
@@ -49,7 +50,8 @@ import {
   Star,
   ArrowLeft,
   ArrowRight,
-  Wand2
+  Wand2,
+  Loader2
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -191,12 +193,12 @@ export const AdminDashboard: React.FC = () => {
     titleKa: '',
     customSlug: '',
     category: 'tech' as Product['category'],
-    price: 49.99,
-    origPrice: 69.99 as number | undefined,
-    stock: 20,
-    badge: 'New',
-    image: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80',
-    images: ['https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=800&q=80'] as string[],
+    price: '' as unknown as number,
+    origPrice: '' as unknown as number | undefined,
+    stock: '' as unknown as number,
+    badge: '',
+    image: '',
+    images: [] as string[],
     description: '',
     descriptionKa: '',
     features: ['', '', '', ''] as string[],
@@ -224,7 +226,7 @@ export const AdminDashboard: React.FC = () => {
     heroSubtitle: theme?.heroSubtitle || '',
     eurRate: theme?.eurRate ?? 0.92,
     gelRate: theme?.gelRate ?? 2.78,
-    logoStyle: (theme?.logoStyle as LogoOptionId) || 'geometric-tech',
+    logoStyle: (theme?.logoStyle as LogoOptionId) || 'bag-cart',
   });
 
   useEffect(() => {
@@ -237,7 +239,7 @@ export const AdminDashboard: React.FC = () => {
         heroSubtitle: theme.heroSubtitle || '',
         eurRate: theme.eurRate ?? 0.92,
         gelRate: theme.gelRate ?? 2.78,
-        logoStyle: (theme.logoStyle as LogoOptionId) || 'geometric-tech',
+        logoStyle: (theme.logoStyle as LogoOptionId) || 'bag-cart',
       });
     }
   }, [theme]);
@@ -572,6 +574,80 @@ export const AdminDashboard: React.FC = () => {
     setNewImageUrl('');
   };
 
+  // AI Product Ad Copywriter & Marketing Description Generator
+  const [isGeneratingCopy, setIsGeneratingCopy] = useState(false);
+  const [adTone, setAdTone] = useState<'high-converting' | 'tech' | 'luxury'>('high-converting');
+
+  const handleGenerateAdCopy = async (fieldTarget: 'all' | 'descriptionEn' | 'descriptionKa' | 'features' = 'all') => {
+    const currentTitle = prodForm.title?.trim() || prodForm.titleKa?.trim();
+    if (!currentTitle && prodForm.images.length === 0) {
+      addToast(
+        isKa
+          ? 'გთხოვთ შეიყვანოთ პროდუქტის სათაური ან ატვირთოთ სურათი სარეკლამო აღწერის დასაგენერირებლად'
+          : 'Please enter a product title or upload an image to generate advertising copy',
+        'warning'
+      );
+      return;
+    }
+
+    setIsGeneratingCopy(true);
+    try {
+      const result = await generateProductAdCopy({
+        title: prodForm.title || '',
+        titleKa: prodForm.titleKa || '',
+        category: prodForm.category,
+        price: prodForm.price,
+        images: prodForm.images,
+        tone: adTone,
+        language: isKa ? 'ka' : 'both',
+      });
+
+      setProdForm(prev => {
+        const next = { ...prev };
+        if (fieldTarget === 'descriptionEn') {
+          if (result.descriptionEn) next.description = result.descriptionEn;
+        } else if (fieldTarget === 'descriptionKa') {
+          if (result.descriptionKa) next.descriptionKa = result.descriptionKa;
+        } else if (fieldTarget === 'features') {
+          if (isKa && result.featuresKa && result.featuresKa.length > 0) {
+            next.features = result.featuresKa.slice(0, 4);
+          } else if (result.featuresEn && result.featuresEn.length > 0) {
+            next.features = result.featuresEn.slice(0, 4);
+          }
+        } else {
+          // all
+          if (result.descriptionEn) next.description = result.descriptionEn;
+          if (result.descriptionKa) next.descriptionKa = result.descriptionKa;
+          if (isKa && result.featuresKa && result.featuresKa.length > 0) {
+            next.features = result.featuresKa.slice(0, 4);
+          } else if (result.featuresEn && result.featuresEn.length > 0) {
+            next.features = result.featuresEn.slice(0, 4);
+          }
+          if (!prev.titleKa && result.titleKa) next.titleKa = result.titleKa;
+          if (!prev.title && result.titleEn) next.title = result.titleEn;
+          if (!prev.customSlug && result.customSlug) next.customSlug = result.customSlug;
+          if (result.badge && (!prev.badge || prev.badge === 'New')) next.badge = result.badge;
+        }
+        return next;
+      });
+
+      addToast(
+        isKa
+          ? '✨ სარეკლამო აღწერა და მახასიათებლები წარმატებით ჩაისვა!'
+          : '✨ High-converting ad copy and selling points generated & inserted!',
+        'success'
+      );
+    } catch (err) {
+      console.error('Ad copy generation error:', err);
+      addToast(
+        isKa ? 'აღწერის გენერირება ვერ მოხერხდა' : 'Failed to generate ad copy',
+        'error'
+      );
+    } finally {
+      setIsGeneratingCopy(false);
+    }
+  };
+
   const handleAutoGenerateFeatures = () => {
     const generated = generateProductFeatures({
       title: prodForm.title || (isKa ? 'ახალი პროდუქტი' : 'New Product'),
@@ -630,27 +706,21 @@ export const AdminDashboard: React.FC = () => {
     setUploadedFileInfo(null);
     setImageInputMode('upload');
     setNewImageUrl('');
-    const defaultImg = 'https://images.unsplash.com/photo-1546868871-7041f2a55e12?auto=format&fit=crop&w=800&q=80';
-    const initialFeatures = generateProductFeatures({
-      title: 'Smart Gadget Pro',
-      category: 'tech',
-      description: 'High-grade premium lifestyle and tech essential with superior build quality.',
-    }, isKa ? 'ka' : 'en');
 
     setProdForm({
       title: '',
       titleKa: '',
       customSlug: '',
       category: 'tech',
-      price: 29.99,
-      origPrice: 39.99,
-      stock: 25,
-      badge: 'New',
-      image: defaultImg,
-      images: [defaultImg],
-      description: 'High-grade premium lifestyle and tech essential with superior build quality.',
-      descriptionKa: 'მაღალი ხარისხის პრემიუმ ტექნიკური აქსესუარი საიმედო კორპუსით.',
-      features: initialFeatures.slice(0, 4),
+      price: '' as unknown as number,
+      origPrice: '' as unknown as number | undefined,
+      stock: '' as unknown as number,
+      badge: '',
+      image: '',
+      images: [],
+      description: '',
+      descriptionKa: '',
+      features: ['', '', '', ''],
     });
     setIsProductModalOpen(true);
   };
@@ -693,15 +763,16 @@ export const AdminDashboard: React.FC = () => {
 
   const handleSaveProduct = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prodForm.title.trim()) {
+    const effectiveTitle = (prodForm.title || prodForm.titleKa || '').trim();
+    if (!effectiveTitle) {
       addToast(isKa ? 'პროდუქტის სათაური აუცილებელია' : 'Product title is required', 'warning');
       return;
     }
 
-    const finalSlug = prodForm.customSlug?.trim() || generateProductSlug(prodForm.title);
+    const finalSlug = prodForm.customSlug?.trim() || generateProductSlug(effectiveTitle);
 
     // Prepare valid images array (up to 5 images)
-    const validImages = prodForm.images
+    const validImages = (prodForm.images || [])
       .map(img => (img || '').trim())
       .filter(img => img.length > 0)
       .slice(0, 5);
@@ -712,17 +783,17 @@ export const AdminDashboard: React.FC = () => {
     
     const finalPrimaryImage = finalImages[0];
 
-    // Prepare 4 Key Features (auto-generate if blank)
+    // Prepare 4 Key Features (auto-generate only if blank and description exists)
     let finalFeatures = (prodForm.features || [])
       .map(f => (f || '').trim())
       .filter(f => f.length > 0);
 
-    if (finalFeatures.length < 4) {
+    if (finalFeatures.length < 4 && prodForm.description) {
       const generated = generateProductFeatures({
-        title: prodForm.title,
+        title: effectiveTitle,
         description: prodForm.description,
         category: prodForm.category,
-        price: Number(prodForm.price),
+        price: Number(prodForm.price) || 0,
       }, isKa ? 'ka' : 'en');
 
       // Fill in remaining slots
@@ -734,16 +805,20 @@ export const AdminDashboard: React.FC = () => {
       }
     }
 
+    const numPrice = Number(prodForm.price) || 0;
+    const numOrigPrice = prodForm.origPrice !== '' && prodForm.origPrice !== undefined ? Number(prodForm.origPrice) : undefined;
+    const numStock = prodForm.stock !== '' && prodForm.stock !== undefined ? Number(prodForm.stock) : 0;
+
     if (editingProduct) {
       updateProduct({
         ...editingProduct,
-        title: prodForm.title,
+        title: prodForm.title || prodForm.titleKa || 'Product',
         titleKa: prodForm.titleKa,
         customSlug: finalSlug,
         category: prodForm.category,
-        price: Number(prodForm.price),
-        origPrice: prodForm.origPrice ? Number(prodForm.origPrice) : undefined,
-        stock: Number(prodForm.stock),
+        price: numPrice,
+        origPrice: numOrigPrice,
+        stock: numStock,
         badge: prodForm.badge || undefined,
         image: finalPrimaryImage,
         images: finalImages,
@@ -754,13 +829,13 @@ export const AdminDashboard: React.FC = () => {
       addToast(isKa ? 'პროდუქტი წარმატებით განახლდა!' : 'Product updated successfully!', 'success');
     } else {
       addProduct({
-        title: prodForm.title,
+        title: prodForm.title || prodForm.titleKa || 'Product',
         titleKa: prodForm.titleKa,
         customSlug: finalSlug,
         category: prodForm.category,
-        price: Number(prodForm.price),
-        origPrice: prodForm.origPrice ? Number(prodForm.origPrice) : undefined,
-        stock: Number(prodForm.stock),
+        price: numPrice,
+        origPrice: numOrigPrice,
+        stock: numStock,
         badge: prodForm.badge || undefined,
         image: finalPrimaryImage,
         images: finalImages,
@@ -1568,13 +1643,13 @@ export const AdminDashboard: React.FC = () => {
                 {/* 5 Quick Selection Cards */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {[
-                    { id: 'geometric-tech', name: '1. Clean DBuy Wordmark', desc: 'სუფთა DBuy ლოგო ჩარჩოების გარეშე' },
-                    { id: 'cyber-d', name: '2. Cyber Dynamic D', desc: 'აეროდინამიკური ენერგია + ისარი' },
-                    { id: 'bag-cart', name: '3. Smart Shopping Bag', desc: 'E-commerce სავაჭრო ჩანთის D' },
+                    { id: 'bag-cart', name: '⭐ 1. ოფიციალური — Smart Commerce', desc: 'ოფიციალური ლოგო: ლურჯი ჩანთის ემბლემა + Shop ბეიჯი' },
+                    { id: 'geometric-tech', name: '2. Clean DBuy Wordmark', desc: 'სუფთა DBuy ლოგო ჩარჩოების გარეშე' },
+                    { id: 'cyber-d', name: '3. Cyber Dynamic D', desc: 'აეროდინამიკური ენერგია + ისარი' },
                     { id: 'infinity-loop', name: '4. Infinity Loop D-B', desc: 'D და B-ს უსასრულო მარყუჟი' },
                     { id: 'circle-monogram', name: '5. Luxury Obsidian Badge', desc: 'შავი ობსიდიანის წრიული ემბლემა' },
                   ].map((logoOpt) => {
-                    const isSelected = (themeForm.logoStyle || 'geometric-tech') === logoOpt.id;
+                    const isSelected = (themeForm.logoStyle || 'bag-cart') === logoOpt.id;
                     return (
                       <button
                         key={logoOpt.id}
@@ -2928,7 +3003,7 @@ export const AdminDashboard: React.FC = () => {
                   required
                   value={prodForm.title ?? ''}
                   onChange={e => setProdForm({ ...prodForm, title: e.target.value })}
-                  placeholder="e.g. Wireless Ergonomic Mouse"
+                  placeholder=""
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -2941,7 +3016,7 @@ export const AdminDashboard: React.FC = () => {
                   type="text"
                   value={prodForm.titleKa ?? ''}
                   onChange={e => setProdForm({ ...prodForm, titleKa: e.target.value })}
-                  placeholder="მაგ: ერგონომიული უსადენო მაუსი"
+                  placeholder=""
                   className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
@@ -2955,7 +3030,7 @@ export const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => {
-                      const autoSlug = generateProductSlug(prodForm.title || 'product');
+                      const autoSlug = generateProductSlug(prodForm.title || prodForm.titleKa || 'product');
                       setProdForm({ ...prodForm, customSlug: autoSlug });
                     }}
                     className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline flex items-center space-x-1 cursor-pointer"
@@ -2968,9 +3043,9 @@ export const AdminDashboard: React.FC = () => {
                   <span className="text-xs text-slate-400 select-none font-mono">/product/{editingProduct ? editingProduct.id : 'prod-id'}/</span>
                   <input
                     type="text"
-                    value={prodForm.customSlug || generateProductSlug(prodForm.title)}
+                    value={prodForm.customSlug || ''}
                     onChange={e => setProdForm({ ...prodForm, customSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
-                    placeholder="custom-product-url-slug"
+                    placeholder=""
                     className="flex-1 text-xs font-mono text-slate-800 focus:outline-hidden"
                   />
                 </div>
@@ -3026,8 +3101,9 @@ export const AdminDashboard: React.FC = () => {
                     type="number"
                     step="0.01"
                     required
-                    value={prodForm.price ?? ''}
-                    onChange={e => setProdForm({ ...prodForm, price: e.target.value === '' ? 0 : Number(e.target.value) })}
+                    value={prodForm.price === '' || prodForm.price === 0 ? '' : prodForm.price}
+                    onChange={e => setProdForm({ ...prodForm, price: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
+                    placeholder=""
                     className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -3039,8 +3115,9 @@ export const AdminDashboard: React.FC = () => {
                   <input
                     type="number"
                     step="0.01"
-                    value={prodForm.origPrice ?? ''}
-                    onChange={e => setProdForm({ ...prodForm, origPrice: e.target.value === '' ? undefined : Number(e.target.value) })}
+                    value={prodForm.origPrice === '' || prodForm.origPrice === undefined || prodForm.origPrice === 0 ? '' : prodForm.origPrice}
+                    onChange={e => setProdForm({ ...prodForm, origPrice: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
+                    placeholder=""
                     className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -3051,8 +3128,9 @@ export const AdminDashboard: React.FC = () => {
                   </label>
                   <input
                     type="number"
-                    value={prodForm.stock ?? ''}
-                    onChange={e => setProdForm({ ...prodForm, stock: e.target.value === '' ? 0 : Number(e.target.value) })}
+                    value={prodForm.stock === '' || prodForm.stock === undefined ? '' : prodForm.stock}
+                    onChange={e => setProdForm({ ...prodForm, stock: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
+                    placeholder=""
                     className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                   />
                 </div>
@@ -3170,7 +3248,7 @@ export const AdminDashboard: React.FC = () => {
                             handleAddImageUrl();
                           }
                         }}
-                        placeholder="https://images.unsplash.com/..."
+                        placeholder=""
                         disabled={prodForm.images.length >= 5}
                         className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-hidden disabled:bg-slate-100"
                       />
@@ -3293,31 +3371,133 @@ export const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
+              {/* AI Marketing Ad Copywriter Banner */}
+              <div className="bg-gradient-to-br from-blue-900 via-indigo-900 to-slate-900 p-4 rounded-3xl text-white shadow-xl border border-blue-500/30 space-y-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="space-y-1">
+                    <div className="flex items-center space-x-2">
+                      <div className="p-1.5 rounded-xl bg-blue-500/20 border border-blue-400/30 text-amber-300">
+                        <Sparkles className="w-4 h-4 animate-pulse" />
+                      </div>
+                      <span className="font-extrabold text-sm tracking-wide text-white">
+                        {isKa ? 'AI აღწერების გენერატორი (სურათებისა და სათაურის მიხედვით)' : 'AI Description Generator (From Images & Title)'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-blue-200 leading-relaxed max-w-xl">
+                      {isKa 
+                        ? 'ატვირთული სურათებისა და სათაურის მიხედვით ქმნის გაყიდვებზე ორიენტირებულ მიმზიდველ სარეკლამო აღწერას (ქართულად & ინგლისურად), 4 მთავარ მახასიათებელს და SEO ბმულს.'
+                        : 'Analyzes your uploaded photos and title to craft high-converting, benefit-driven product descriptions (EN & KA), 4 key selling points, and SEO slug.'}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={isGeneratingCopy || (!prodForm.title?.trim() && !prodForm.titleKa?.trim() && prodForm.images.length === 0)}
+                    onClick={() => handleGenerateAdCopy('all')}
+                    className="px-4 py-2.5 bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white font-extrabold text-xs rounded-2xl shadow-lg hover:shadow-blue-500/25 border border-white/20 flex items-center justify-center space-x-2 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0 active:scale-95"
+                  >
+                    {isGeneratingCopy ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin text-white" />
+                        <span>{isKa ? 'მიმდინარეობს გენერირება...' : 'Generating Description...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="w-4 h-4 text-amber-300" />
+                        <span>{isKa ? '✨ აღწერის გენერაცია (სურათებით & სათაურით)' : '✨ Generate Description from Images & Title'}</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Copy Style / Tone selector pills */}
+                <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10 text-[11px]">
+                  <span className="text-blue-200 font-semibold">{isKa ? 'სარეკლამო სტილი:' : 'Ad Copy Style:'}</span>
+                  <button
+                    type="button"
+                    onClick={() => setAdTone('high-converting')}
+                    className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
+                      adTone === 'high-converting' 
+                        ? 'bg-white text-blue-900 shadow-md font-extrabold' 
+                        : 'bg-white/10 text-white/90 hover:bg-white/20'
+                    }`}
+                  >
+                    🔥 {isKa ? 'მაღალკონვერსიული რეკლამა' : 'High-Converting Sales'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdTone('tech')}
+                    className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
+                      adTone === 'tech' 
+                        ? 'bg-white text-blue-900 shadow-md font-extrabold' 
+                        : 'bg-white/10 text-white/90 hover:bg-white/20'
+                    }`}
+                  >
+                    ⚡ {isKa ? 'ტექნიკური & დეტალური' : 'Tech & Specs'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAdTone('luxury')}
+                    className={`px-3 py-1 rounded-xl font-bold transition-all cursor-pointer ${
+                      adTone === 'luxury' 
+                        ? 'bg-white text-blue-900 shadow-md font-extrabold' 
+                        : 'bg-white/10 text-white/90 hover:bg-white/20'
+                    }`}
+                  >
+                    💎 {isKa ? 'პრემიუმ / ელიტარული' : 'Luxury & Premium'}
+                  </button>
+                </div>
+              </div>
+
               {/* Descriptions (EN & KA) */}
               <div className="space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {isKa ? 'პროდუქტის აღწერა (EN)' : 'Product Description (EN)'}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      {isKa ? 'პროდუქტის სარეკლამო აღწერა (EN)' : 'Product Description (EN)'}
+                    </label>
+                    <button
+                      type="button"
+                      disabled={isGeneratingCopy}
+                      onClick={() => handleGenerateAdCopy('descriptionEn')}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+                      title="Generate English advertising copy"
+                    >
+                      <Sparkles className="w-3 h-3 text-blue-500" />
+                      <span>{isKa ? '✨ AI აღწერა (EN)' : '✨ AI Copy (EN)'}</span>
+                    </button>
+                  </div>
                   <textarea
-                    rows={2}
+                    rows={3}
                     value={prodForm.description ?? ''}
                     onChange={e => setProdForm({ ...prodForm, description: e.target.value })}
-                    placeholder="Product description in English..."
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    placeholder=""
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    {isKa ? 'პროდუქტის აღწერა ქართულად (KA)' : 'Product Description in Georgian (KA)'}
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="block text-xs font-bold text-slate-700">
+                      {isKa ? 'პროდუქტის სარეკლამო აღწერა ქართულად (KA)' : 'Product Description in Georgian (KA)'}
+                    </label>
+                    <button
+                      type="button"
+                      disabled={isGeneratingCopy}
+                      onClick={() => handleGenerateAdCopy('descriptionKa')}
+                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+                      title="Generate Georgian advertising copy"
+                    >
+                      <Sparkles className="w-3 h-3 text-blue-500" />
+                      <span>{isKa ? '✨ AI ქართული რეკლამა' : '✨ AI Georgian Copy'}</span>
+                    </button>
+                  </div>
                   <textarea
-                    rows={2}
+                    rows={3}
                     value={prodForm.descriptionKa ?? ''}
                     onChange={e => setProdForm({ ...prodForm, descriptionKa: e.target.value })}
-                    placeholder="პროდუქტის აღწერა ქართულ ენაზე..."
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    placeholder=""
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed"
                   />
                 </div>
               </div>
@@ -3339,12 +3519,13 @@ export const AdminDashboard: React.FC = () => {
 
                   <button
                     type="button"
-                    onClick={handleAutoGenerateFeatures}
-                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer shrink-0"
+                    disabled={isGeneratingCopy}
+                    onClick={() => handleGenerateAdCopy('features')}
+                    className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer shrink-0 disabled:opacity-50"
                     title={isKa ? 'ავტომატური გენერაცია სათაურისა და აღწერის მიხედვით' : 'Auto-generate 4 features from title & description'}
                   >
-                    <Wand2 className="w-3.5 h-3.5" />
-                    <span>{isKa ? '🪄 ავტო-გენერაცია' : '🪄 Auto-Generate 4'}</span>
+                    <Wand2 className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{isKa ? '🪄 AI 4 მახასიათებელი' : '🪄 AI 4 Features'}</span>
                   </button>
                 </div>
 
@@ -3358,11 +3539,7 @@ export const AdminDashboard: React.FC = () => {
                         type="text"
                         value={prodForm.features?.[featIdx] ?? ''}
                         onChange={e => handleFeatureChange(featIdx, e.target.value)}
-                        placeholder={
-                          isKa 
-                            ? `მახასიათებელი #${featIdx + 1} (მაგ: 170° ორმაგი ხედვა, 1080P Full HD...)` 
-                            : `Feature #${featIdx + 1} (e.g. Dual 170° angle lens, 1080P Night Vision...)`
-                        }
+                        placeholder=""
                         className="flex-1 text-xs text-slate-800 focus:outline-hidden"
                       />
                     </div>
@@ -3394,7 +3571,7 @@ export const AdminDashboard: React.FC = () => {
       <LogoPreviewModal
         isOpen={showLogoModal}
         onClose={() => setShowLogoModal(false)}
-        currentLogo={(themeForm.logoStyle as any) || 'geometric-tech'}
+        currentLogo={(themeForm.logoStyle as any) || 'bag-cart'}
         onSelectLogo={(newId) => {
           setThemeForm(prev => ({ ...prev, logoStyle: newId }));
           updateTheme({ logoStyle: newId });

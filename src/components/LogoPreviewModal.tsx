@@ -29,28 +29,28 @@ export const LogoPreviewModal: React.FC<LogoPreviewModalProps> = ({
     tag: string;
   }[] = [
     {
+      id: 'bag-cart',
+      name: isKa ? '1. ⭐ ოფიციალური ლოგო — Smart Commerce (DBuy Shop)' : '1. ⭐ Official Logo — Smart Commerce (DBuy Shop)',
+      description: isKa
+        ? 'ოფიციალური ემბლემა: სავაჭრო ჩანთის ნეონის კონტურით, ცისფერი Shop ბეიჯითა და Smart Commerce სლოგანით.'
+        : 'Official site brand: circular emblem with glowing shopping bag, sky-blue Shop badge, and Smart Commerce tagline.',
+      tag: isKa ? '⭐ ოფიციალური ლოგო' : '⭐ Official Logo',
+    },
+    {
       id: 'geometric-tech',
-      name: isKa ? '1. Clean Modern Wordmark (სუფთა თანამედროვე DBuy)' : '1. Clean Modern Wordmark (Direct DBuy Branding)',
+      name: isKa ? '2. Clean Modern Wordmark (სუფთა DBuy)' : '2. Clean Modern Wordmark (Direct DBuy Branding)',
       description: isKa 
-        ? 'სუფთა და მკაფიო DBuy ლოგო გრადიენტული B ასოთი და Smart Living Store სლოგანით (ზედმეტი ჩარჩოების გარეშე).'
+        ? 'სუფთა და მკაფიო DBuy ლოგო გრადიენტული B ასოთი და Smart Living Store სლოგანით.'
         : 'Clean and crisp DBuy typography with gradient letter accents and tagline.',
       tag: isKa ? 'სუფთა & მაქსიმალური კითხვადობა' : 'Clean & High Contrast',
     },
     {
       id: 'cyber-d',
-      name: isKa ? '2. Cyber Dynamic D (აეროდინამიკური ენერგია)' : '2. Cyber Dynamic D (Aerodynamic Energy)',
+      name: isKa ? '3. Cyber Dynamic D (აეროდინამიკური ენერგია)' : '3. Cyber Dynamic D (Aerodynamic Energy)',
       description: isKa
         ? 'ფუტურისტული D-ს ფორმის წრიული ემბლემა სისწრაფის ისრით და ცოცხალი ნეონის გრადიენტით.'
         : 'Futuristic circular D-shaped emblem with dynamic arrow styling.',
       tag: isKa ? 'ენერგიული & ინოვაციური' : 'Vibrant & Modern',
-    },
-    {
-      id: 'bag-cart',
-      name: isKa ? '3. Smart Shopping Bag (ონლაინ შოპინგი)' : '3. Smart Shopping Bag (E-Commerce Focus)',
-      description: isKa
-        ? 'თანამედროვე სავაჭრო ჩანთის და კალათის სტილიზებული კონტური D-ს ფორმით.'
-        : 'Modern stylized shopping bag geometry combined with the signature D form.',
-      tag: 'E-Commerce Focus',
     },
     {
       id: 'infinity-loop',

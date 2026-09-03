@@ -7,6 +7,7 @@ import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
 import {
   ApplePayLogo,
+  AppleLogoIcon,
   GooglePayLogo,
   PayPalLogo,
   VisaLogo,
@@ -1050,13 +1051,10 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-sky-300 ring-2 ring-white"></span>
             )}
             <div className="h-6 flex items-center justify-center">
-              {activeMethod === "paypal" ? (
-                <span className="font-extrabold italic text-lg text-white tracking-wide">
-                  PayPal
-                </span>
-              ) : (
-                <PayPalLogo className="h-5 w-auto" />
-              )}
+              <PayPalLogo
+                className="h-5 w-auto"
+                isWhite={activeMethod === "paypal"}
+              />
             </div>
             <span
               className={`text-[11px] font-bold tracking-tight ${
@@ -1409,12 +1407,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center space-x-2">
                 <div className="w-6 h-6 rounded-lg bg-black text-white flex items-center justify-center">
-                  <svg
-                    className="w-3.5 h-3.5 fill-current"
-                    viewBox="0 0 170 170"
-                  >
-                    <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.05-7.7-7.9-12-14.54-6.42-9.92-11.45-21.2-15.08-33.84-3.64-12.63-5.46-24.36-5.46-35.18 0-14.88 3.82-26.96 11.45-36.24 7.64-9.29 17.1-13.98 28.39-14.09 4.36 0 9.27 1.16 14.73 3.49 5.47 2.33 9.4 3.55 11.8 3.65 2.18 0 6.1-1.22 11.75-3.65 5.65-2.44 10.37-3.55 14.15-3.34 11.64.64 20.78 4.9 27.42 12.8-10.46 6.35-15.58 15.24-15.36 26.67.22 8.99 3.6 16.5 10.14 22.52 6.54 6.03 14.36 9.36 23.47 10-2.39 7.4-5.32 14.65-8.79 21.75zM119.22 33.72c0-7.39 2.65-14.13 7.95-20.21 5.3-6.08 11.78-9.96 19.45-11.64.44 1.7.65 3.4.65 5.1 0 7.3-2.73 14.16-8.19 20.57-5.46 6.42-12 10.45-19.63 12.1-0.15-2.02-.23-3.99-.23-5.92z" />
-                  </svg>
+                  <AppleLogoIcon className="w-3.5 h-3.5 fill-current" />
                 </div>
                 <span className="text-xs font-bold text-slate-900">
                   Apple Pay Direct Gateway

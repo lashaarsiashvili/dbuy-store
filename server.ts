@@ -5,6 +5,7 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import { GoogleGenAI } from '@google/genai';
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 
@@ -63,7 +64,7 @@ const DEFAULT_THEME = {
   heroSubtitle: 'Discover premium lifestyle, fitness, and tech accessories curated for your everyday needs.',
   eurRate: 0.92,
   gelRate: 2.78,
-  logoStyle: 'geometric-tech',
+  logoStyle: 'bag-cart',
 };
 
 interface StoreDatabase {
@@ -198,6 +199,169 @@ function getMailTransporter() {
 // API Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// ==========================================
+// AI PRODUCT AD COPYWRITER & DESCRIPTION API
+// ==========================================
+let geminiClient: GoogleGenAI | null = null;
+function getGeminiClient(): GoogleGenAI | null {
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
+    return null;
+  }
+  if (!geminiClient) {
+    geminiClient = new GoogleGenAI({
+      apiKey,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        },
+      },
+    });
+  }
+  return geminiClient;
+}
+
+app.post('/api/generate-product-copy', async (req, res) => {
+  try {
+    const { title, titleKa, category, price, images, tone, language } = req.body;
+    const rawTitle = (title || titleKa || 'Smart Living Essential').trim();
+
+    const ai = getGeminiClient();
+    if (ai) {
+      try {
+        const contents: any[] = [];
+
+        // Attach up to 3 images (base64 data URLs or fetched URLs) for deep visual analysis
+        if (Array.isArray(images)) {
+          for (const img of images.slice(0, 3)) {
+            if (typeof img === 'string') {
+              if (img.startsWith('data:image/')) {
+                const match = img.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+                if (match) {
+                  contents.push({
+                    inlineData: {
+                      mimeType: match[1],
+                      data: match[2],
+                    },
+                  });
+                }
+              } else if (img.startsWith('http://') || img.startsWith('https://')) {
+                try {
+                  const imgRes = await fetch(img, { signal: AbortSignal.timeout(3500) });
+                  if (imgRes.ok) {
+                    const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+                    const arrayBuffer = await imgRes.arrayBuffer();
+                    const base64 = Buffer.from(arrayBuffer).toString('base64');
+                    contents.push({
+                      inlineData: {
+                        mimeType: contentType.split(';')[0],
+                        data: base64,
+                      },
+                    });
+                  }
+                } catch (fetchErr) {
+                  console.warn('Could not fetch remote image for Gemini visual inspection:', fetchErr);
+                }
+              }
+            }
+          }
+        }
+
+        const promptText = `You are a world-class e-commerce conversion copywriter and product marketing director for DBUY Store (Smart Commerce).
+Your task is to craft an accurate, persuasive, high-converting product description, key features, and titles directly based on the uploaded product photos and the product title.
+
+Input Details:
+- English Title: "${title || ''}"
+- Georgian Title: "${titleKa || ''}"
+- Category: "${category || 'tech'}"
+- Price: "$${price || ''}"
+- Tone: "${tone || 'high-converting-ad'}"
+
+Core Instructions:
+1. Visual & Title Synthesis:
+   - Carefully inspect the attached product image(s): identify what product it is, its physical materials, build quality, buttons, connectors/ports, shape, color, and functionality.
+   - Combine the visual insights from the images with the title to craft a benefit-driven description that truly describes the actual item.
+   - If no title was provided, deduce the correct English and Georgian title directly from the product seen in the images.
+2. "descriptionEn": A captivating, benefit-rich 2-4 sentence advertising description in English. Highlight the real problem it solves, build quality, and everyday convenience to drive strong buying desire.
+3. "descriptionKa": An authentic, grammatically correct and compelling Georgian advertising description (ქართულად გამართული, მიმზიდველი სარეკლამო აღწერა, რომელიც ზუსტად ემთხვევა სურათზე ნაჩვენებ პროდუქტსა და სათაურს).
+4. "featuresEn": Exactly 4 punchy, benefit-first selling points in English (e.g. "⚡ 15W Fast Wireless Charging — Powers up in half the time") matching the physical product.
+5. "featuresKa": Exactly 4 punchy, benefit-first selling points in Georgian matching the physical product.
+6. "titleEn": A polished, clean English title.
+7. "titleKa": A natural Georgian translation of the product title.
+8. "customSlug": A clean, SEO-optimized URL slug (lowercase letters, numbers, and hyphens only).
+9. "badge": A catchy badge (e.g. "Best Seller", "Hot Deal", "Trending", or "New").
+
+Return ONLY a valid JSON object matching this schema without any markdown code fence:
+{
+  "titleEn": string,
+  "titleKa": string,
+  "descriptionEn": string,
+  "descriptionKa": string,
+  "featuresEn": string[],
+  "featuresKa": string[],
+  "customSlug": string,
+  "badge": string
+}`;
+
+        contents.push({ text: promptText });
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+
+        if (response && response.text) {
+          try {
+            const parsed = JSON.parse(response.text);
+            return res.json({ success: true, data: parsed });
+          } catch (jsonErr) {
+            console.warn('Could not parse Gemini JSON response, falling back:', jsonErr);
+          }
+        }
+      } catch (geminiErr) {
+        console.warn('Gemini API call failed or timed out, using fallback copywriter:', geminiErr);
+      }
+    }
+
+    // Server-side smart fallback if Gemini API is offline or not configured
+    const cleanSlug = rawTitle
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '');
+
+    const fallbackData = {
+      titleEn: rawTitle,
+      titleKa: titleKa || rawTitle,
+      descriptionEn: `Experience the ideal combination of premium durability and effortless everyday performance. Engineered for discerning users who demand reliability, the ${rawTitle} delivers exceptional convenience, modern styling, and long-lasting quality that elevates your routine.`,
+      descriptionKa: `აღმოაჩინეთ უმაღლესი ხარისხისა და პრაქტიკულობის იდეალური შერწყმა. პრემიუმ მასალებით შექმნილი ${titleKa || rawTitle} თქვენს ყოველდღიურობას ხდის უფრო მარტივს, თანამედროვესა და კომფორტულს. საუკეთესო არჩევანი მათთვის, ვინც აფასებს გამძლეობასა და სანდოობას.`,
+      featuresEn: [
+        '⭐ High-Grade Materials — Built for durability and long-lasting daily use',
+        '✨ Ergonomic & Modern Design — Sleek profile that complements any setup',
+        '🎯 Reliable Performance — Extensively tested for seamless functionality',
+        '🛡️ DBUY Quality Guarantee — Backed by fast dispatch and full store support',
+      ],
+      featuresKa: [
+        '⭐ პრემიუმ ხარისხის მასალები — გამძლე კონსტრუქცია ხანგრძლივი გამოყენებისთვის',
+        '✨ თანამედროვე ერგონომიული დიზაინი — დახვეწილი სტილი ნებისმიერ გარემოში',
+        '🎯 მაღალი საიმედოობა — შემოწმებული და სტაბილური მუშაობა',
+        '🛡️ DBUY-ის ხარისხის გარანტია — სწრაფი მიწოდება და საიმედო მხარდაჭერა',
+      ],
+      customSlug: cleanSlug || 'smart-living-product',
+      badge: 'Hot Deal',
+    };
+
+    return res.json({ success: true, data: fallbackData });
+  } catch (err: any) {
+    console.error('Error generating product copy:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Generation failed' });
+  }
 });
 
 // ==========================================
