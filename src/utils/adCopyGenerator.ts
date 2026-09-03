@@ -20,8 +20,34 @@ export interface GenerateAdCopyParams {
   category?: string;
   price?: number;
   images?: string[];
+  imageTitles?: string[];
   tone?: 'high-converting' | 'tech' | 'luxury';
   language?: 'en' | 'ka' | 'both';
+}
+
+/**
+ * Extracts a readable product title from an image filename or URL.
+ * e.g. "Wireless_Bluetooth_Headphones_ANC_black.jpg" -> "Wireless Bluetooth Headphones ANC Black"
+ */
+export function cleanImageTitle(rawName: string): string {
+  if (!rawName) return '';
+  // Remove file extension
+  let clean = rawName.replace(/\.[a-zA-Z0-9]{2,5}(\?.*)?$/i, '');
+  // Remove data: prefixes or url paths if present
+  clean = clean.split('/').pop() || clean;
+  // Replace underscores, hyphens, plus signs with spaces
+  clean = clean.replace(/[-_+]/g, ' ');
+  // Remove redundant noise words like "image", "img", "photo", "pic", dimensions like 1200x800
+  clean = clean.replace(/\b\d{3,4}x\d{3,4}\b/gi, '');
+  clean = clean.replace(/\b(img|image|photo|pic|picture|dsc|screenshot|product|item)\b/gi, '');
+  // Clean multiple spaces
+  clean = clean.replace(/\s+/g, ' ').trim();
+  // Capitalize words
+  if (!clean) return '';
+  return clean
+    .split(' ')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
 }
 
 /**
@@ -42,12 +68,16 @@ export function cleanSlug(text: string): string {
  * Generates compelling e-commerce advertising copy when offline or if API key is not configured.
  */
 export function generateSmartOfflineAdCopy(params: GenerateAdCopyParams): GeneratedAdCopy {
-  const rawTitle = (params.title || params.titleKa || 'Smart Living Essential').trim();
-  const lower = rawTitle.toLowerCase();
+  const primaryImageTitle = params.imageTitles && params.imageTitles.length > 0
+    ? params.imageTitles.filter(Boolean)[0]
+    : '';
+
+  const rawTitle = (params.title || params.titleKa || primaryImageTitle || 'Smart Living Essential').trim();
+  const lower = (rawTitle + ' ' + (params.imageTitles?.join(' ') || '')).toLowerCase();
   const category = params.category || 'tech';
   const price = params.price || 29.99;
 
-  let titleEn = params.title?.trim() || '';
+  let titleEn = params.title?.trim() || primaryImageTitle || '';
   let titleKa = params.titleKa?.trim() || '';
   let descriptionEn = '';
   let descriptionKa = '';
@@ -232,6 +262,7 @@ export async function generateProductAdCopy(params: GenerateAdCopyParams): Promi
         category: params.category,
         price: params.price,
         images: params.images?.slice(0, 3),
+        imageTitles: params.imageTitles,
         tone: params.tone || 'high-converting',
         language: params.language || 'both',
       }),

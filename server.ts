@@ -225,8 +225,8 @@ function getGeminiClient(): GoogleGenAI | null {
 
 app.post('/api/generate-product-copy', async (req, res) => {
   try {
-    const { title, titleKa, category, price, images, tone, language } = req.body;
-    const rawTitle = (title || titleKa || 'Smart Living Essential').trim();
+    const { title, titleKa, category, price, images, imageTitles, tone, language } = req.body;
+    const rawTitle = (title || titleKa || (Array.isArray(imageTitles) ? imageTitles[0] : '') || 'Smart Living Essential').trim();
 
     const ai = getGeminiClient();
     if (ai) {
@@ -270,9 +270,10 @@ app.post('/api/generate-product-copy', async (req, res) => {
         }
 
         const promptText = `You are a world-class e-commerce conversion copywriter and product marketing director for DBUY Store (Smart Commerce).
-Your task is to craft an accurate, persuasive, high-converting product description, key features, and titles directly based on the uploaded product photos and the product title.
+Your task is to craft an accurate, persuasive, high-converting product description, key features, and titles directly based on the uploaded product photos, image titles/filenames, and the product title.
 
 Input Details:
+- Image Titles / File Names: "${Array.isArray(imageTitles) && imageTitles.length > 0 ? imageTitles.join(', ') : 'None'}"
 - English Title: "${title || ''}"
 - Georgian Title: "${titleKa || ''}"
 - Category: "${category || 'tech'}"
@@ -280,10 +281,10 @@ Input Details:
 - Tone: "${tone || 'high-converting-ad'}"
 
 Core Instructions:
-1. Visual & Title Synthesis:
-   - Carefully inspect the attached product image(s): identify what product it is, its physical materials, build quality, buttons, connectors/ports, shape, color, and functionality.
-   - Combine the visual insights from the images with the title to craft a benefit-driven description that truly describes the actual item.
-   - If no title was provided, deduce the correct English and Georgian title directly from the product seen in the images.
+1. Image Titles & Visual Synthesis:
+   - Carefully inspect the image titles/filenames (e.g. "Apple AirPods Max", "Insulated Water Bottle", "Wireless Charging Stand") and the attached photo(s).
+   - Use the image titles and visual details as primary foundation to describe the exact product, its purpose, materials, and benefits.
+   - If the main title is empty, deduce the English and Georgian titles directly from the image title/filename.
 2. "descriptionEn": A captivating, benefit-rich 2-4 sentence advertising description in English. Highlight the real problem it solves, build quality, and everyday convenience to drive strong buying desire.
 3. "descriptionKa": An authentic, grammatically correct and compelling Georgian advertising description (ქართულად გამართული, მიმზიდველი სარეკლამო აღწერა, რომელიც ზუსტად ემთხვევა სურათზე ნაჩვენებ პროდუქტსა და სათაურს).
 4. "featuresEn": Exactly 4 punchy, benefit-first selling points in English (e.g. "⚡ 15W Fast Wireless Charging — Powers up in half the time") matching the physical product.
@@ -780,7 +781,7 @@ app.post('/api/store/billboards', (req, res) => {
 // PAYPAL v6 WEB SDK SERVER INTEGRATION
 // ==========================================
 
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_SANDBOX_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || '';
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_SANDBOX_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
 const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_SANDBOX_CLIENT_SECRET || process.env.PAYPAL_CLIENT_SECRET || '';
 const PAYPAL_ENV_RAW = (process.env.PAYPAL_ENVIRONMENT || '').trim().toLowerCase();
 let PAYPAL_BASE_URL = (PAYPAL_ENV_RAW === 'sandbox' || PAYPAL_ENV_RAW === 'test')
@@ -1241,6 +1242,18 @@ app.post('/api/googlepay/process-payment', async (req, res) => {
       saveStoreDatabase();
     }
 
+    try {
+      const transporter = getMailTransporter();
+      transporter.sendMail({
+        from: '"DBUY Payments" <support@dbuystore.com>',
+        to: 'lashaarsiashvili@gmail.com',
+        subject: `[DBUY Order] Google Pay Payment: $${Number(amount || 0).toFixed(2)} (${txnId})`,
+        text: `A new order has been paid via Google Pay!\n\nTransaction ID: ${txnId}\nAmount: $${Number(amount || 0).toFixed(2)} ${currency}\nCustomer: ${payer.name} (${payer.email})\nAddress: ${payer.address}, ${payer.city}, ${payer.country}\nPayee: lashafrommadrid@gmail.com\n\nDBUY Store`,
+      }).catch(err => console.warn('[EMAIL-NOTICE] Google Pay email notice:', err?.message));
+    } catch (e) {
+      // ignore
+    }
+
     res.json({
       success: true,
       transactionId: txnId,
@@ -1334,6 +1347,18 @@ app.post('/api/applepay/authorize', async (req, res) => {
         storeDb.orders.unshift(newOrder);
       }
       saveStoreDatabase();
+    }
+
+    try {
+      const transporter = getMailTransporter();
+      transporter.sendMail({
+        from: '"DBUY Payments" <support@dbuystore.com>',
+        to: 'lashaarsiashvili@gmail.com',
+        subject: `[DBUY Order] Apple Pay Payment: $${Number(amount || 0).toFixed(2)} (${txnId})`,
+        text: `A new order has been authorized via Apple Pay!\n\nTransaction ID: ${txnId}\nAmount: $${Number(amount || 0).toFixed(2)} ${currency}\nCustomer: ${payer.name} (${payer.email})\nAddress: ${payer.address}, ${payer.city}, ${payer.country}\nPayee: lashafrommadrid@gmail.com\n\nDBUY Store`,
+      }).catch(err => console.warn('[EMAIL-NOTICE] Apple Pay email notice:', err?.message));
+    } catch (e) {
+      // ignore
     }
 
     res.json({

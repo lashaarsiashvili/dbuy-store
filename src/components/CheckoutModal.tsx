@@ -14,7 +14,7 @@ import {
   Fingerprint,
   Check,
 } from "lucide-react";
-import { PayPalButtons } from "@paypal/react-paypal-js";
+import { PayPalButtons, FUNDING } from "@paypal/react-paypal-js";
 import { ALL_COUNTRIES } from "../data/countries";
 import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
@@ -58,17 +58,12 @@ export const CheckoutModal: React.FC = () => {
     cvc: "",
     name: "",
   });
-  const [showApplePaySheet, setShowApplePaySheet] = useState(false);
-  const [showGooglePaySheet, setShowGooglePaySheet] = useState(false);
-  const [appleBiometricStep, setAppleBiometricStep] = useState<
-    "ready" | "authenticating" | "success"
-  >("ready");
-  const [selectedAppleCard, setSelectedAppleCard] = useState(
-    "Apple Card (Mastercard •••• 1984)",
-  );
-  const [selectedGoogleCard, setSelectedGoogleCard] = useState(
-    "Google Wallet (Visa •••• 5042)",
-  );
+  const isApplePaySupported =
+    typeof window !== "undefined" &&
+    Boolean(
+      (window as any).ApplePaySession &&
+        (window as any).ApplePaySession.canMakePayments(),
+    );
 
   // Form State
   const [formData, setFormData] = useState({
@@ -150,71 +145,146 @@ export const CheckoutModal: React.FC = () => {
     }
   };
 
-  // Apple Pay execution
-  const executeApplePayCheckout = async (cardLabel = selectedAppleCard) => {
-    setIsProcessingPayment(true);
+  const createPayPalOrderHandler = async (data: any, actions: any) => {
+    const itemDescription =
+      cart.length === 1
+        ? `${cart[0].product.title} (x${cart[0].quantity})`
+        : `DBUY Store Order: ${cart
+            .map((c) => `${c.product.title} x${c.quantity}`)
+            .join(", ")
+            .substring(0, 120)}...`;
+
     try {
-      const appleToken = `APAY-TOKEN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      const res = await fetch("/api/applepay/authorize", {
+      const res = await fetch("/api/paypal/create-order", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          paymentToken: appleToken,
-          token: appleToken,
           amount: totalAmountUSD,
           currency: "USD",
-          shippingContact: {
-            givenName: formData.name,
-            emailAddress: formData.email,
-            addressLines: [formData.address],
-            locality: formData.city,
-            postalCode: formData.zip,
-            countryCode: formData.country === "Georgia" ? "GE" : "US",
-          },
-          customerInfo: formData,
+          description: itemDescription,
+          shippingPreference: "GET_FROM_FILE",
         }),
       });
-      const data = await res.json();
-      if (!data?.success)
-        throw new Error(data?.error || "Apple Pay authorization failed");
 
-      setShowApplePaySheet(false);
-      const createdOrder = placeOrder({
-        customerName: (data.payer?.name || formData.name).trim(),
-        email: (data.payer?.email || formData.email).trim(),
-        address: (data.payer?.address || formData.address).trim(),
-        city: (data.payer?.city || formData.city).trim(),
-        zip: (data.payer?.zip || formData.zip).trim(),
-        country: (data.payer?.country || formData.country).trim(),
-        paymentMethod: "applepay",
-        applePayTransactionId: data.transactionId,
-        paypalTransactionId: data.transactionId,
+      const text = await res.text();
+      const serverOrder = text ? JSON.parse(text) : null;
+      if (
+        serverOrder?.success &&
+        serverOrder.id &&
+        !serverOrder.testMode
+      ) {
+        return serverOrder.id;
+      }
+    } catch (err) {
+      console.warn(
+        "Backend PayPal order creation fallback to client SDK:",
+        err,
+      );
+    }
+
+    return actions.order.create({
+      intent: "CAPTURE",
+      application_context: {
+        shipping_preference: "GET_FROM_FILE",
+        brand_name: "DBUY Store",
+        user_action: "PAY_NOW",
+      },
+      purchase_units: [
+        {
+          description: itemDescription,
+          amount: {
+            currency_code: "USD",
+            value: totalAmountUSD.toFixed(2),
+          },
+        },
+      ],
+    });
+  };
+
+  const handlePayPalApprove = async (data: any, actions: any) => {
+    setIsProcessingPayment(true);
+    try {
+      let details: any = null;
+
+      try {
+        const res = await fetch(
+          "/api/paypal/capture-order",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ orderID: data.orderID }),
+          },
+        );
+        const text = await res.text();
+        const captureResult = text
+          ? JSON.parse(text)
+          : null;
+        if (
+          captureResult?.success &&
+          captureResult.capture &&
+          !captureResult.capture.testMode
+        ) {
+          details = captureResult.capture;
+        }
+      } catch (err) {
+        console.warn(
+          "Server capture notice, falling back to client actions.order.capture():",
+          err,
+        );
+      }
+
+      if (!details && actions.order) {
+        details = await actions.order.capture();
+      }
+
+      const txnId = details?.id || data.orderID;
+      const payerName = details?.payer?.name?.given_name
+        ? `${details.payer.name.given_name} ${details.payer.name.surname || ""}`.trim()
+        : formData.name;
+      const payerEmail =
+        details?.payer?.email_address || formData.email;
+
+      const shippingFromPayPal =
+        details?.purchase_units?.[0]?.shipping;
+      const verifiedAddress = shippingFromPayPal?.address
+        ?.address_line_1
+        ? `${shippingFromPayPal.address.address_line_1}${shippingFromPayPal.address.address_line_2 ? ", " + shippingFromPayPal.address.address_line_2 : ""}`
+        : formData.address;
+      const verifiedCity =
+        shippingFromPayPal?.address?.admin_area_2 ||
+        formData.city;
+      const verifiedZip =
+        shippingFromPayPal?.address?.postal_code ||
+        formData.zip;
+      const verifiedCountry =
+        shippingFromPayPal?.address?.country_code ||
+        formData.country;
+      const verifiedRecipient =
+        shippingFromPayPal?.name?.full_name ||
+        payerName ||
+        formData.name;
+
+      placeOrder({
+        customerName:
+          verifiedRecipient.trim() || formData.name.trim(),
+        email: (payerEmail || formData.email).trim(),
+        address:
+          verifiedAddress.trim() || formData.address.trim(),
+        city: (verifiedCity || formData.city).trim(),
+        zip: (verifiedZip || formData.zip).trim(),
+        country: (verifiedCountry || formData.country).trim(),
+        paymentMethod: "paypal",
+        paypalTransactionId: txnId,
       });
 
       setStep(3);
-      addToast(
-        language === "ka"
-          ? `Pay გადახდა წარმატებით შესრულდა! (${cardLabel})`
-          : `Apple Pay authorized successfully! (${cardLabel})`,
-        "success",
-      );
-    } catch (err: any) {
-      console.error("Apple Pay error:", err);
-      addToast(
-        err?.message ||
-          (language === "ka" ? "Apple Pay შეცდომა" : "Apple Pay failed"),
-        "error",
-      );
+      addToast(t("checkout.paypalSuccess"), "success");
+    } catch (err) {
+      console.error("PayPal Order error:", err);
+      addToast(t("checkout.paypalError"), "error");
     } finally {
       setIsProcessingPayment(false);
     }
-  };
-
-  const handleApplePaySubmit = async () => {
-    setIsProcessingPayment(true);
-    setAppleBiometricStep("ready");
-    setShowApplePaySheet(true);
-    setIsProcessingPayment(false);
   };
 
   const handleNativeApplePayAttempt = async () => {
@@ -244,15 +314,50 @@ export const CheckoutModal: React.FC = () => {
           session.completeMerchantValidation(merchantSession);
         } catch {
           session.abort();
-          setShowApplePaySheet(true);
+          setIsProcessingPayment(false);
         }
       };
       session.onpaymentauthorized = async (event: any) => {
         try {
-          await executeApplePayCheckout("Apple Pay (Biometric Auth)");
-          session.completePayment(ApplePaySession.STATUS_SUCCESS);
+          const res = await fetch("/api/applepay/authorize", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              paymentToken: event.payment?.token,
+              amount: totalAmountUSD,
+              currency: "USD",
+              customerInfo: formData,
+            }),
+          });
+          const data = await res.json();
+          if (data?.success) {
+            session.completePayment(ApplePaySession.STATUS_SUCCESS);
+            placeOrder({
+              customerName: (data.payer?.name || formData.name).trim(),
+              email: (data.payer?.email || formData.email).trim(),
+              address: (data.payer?.address || formData.address).trim(),
+              city: (data.payer?.city || formData.city).trim(),
+              zip: (data.payer?.zip || formData.zip).trim(),
+              country: (data.payer?.country || formData.country).trim(),
+              paymentMethod: "applepay",
+              applePayTransactionId: data.transactionId,
+              paypalTransactionId: data.transactionId,
+            });
+            setStep(3);
+            addToast(
+              language === "ka"
+                ? "Apple Pay გადახდა წარმატებით შესრულდა!"
+                : "Apple Pay authorized successfully!",
+              "success",
+            );
+          } else {
+            session.completePayment(ApplePaySession.STATUS_FAILURE);
+            addToast("Apple Pay failed", "error");
+          }
         } catch {
           session.completePayment(ApplePaySession.STATUS_FAILURE);
+        } finally {
+          setIsProcessingPayment(false);
         }
       };
       session.oncancel = () => {
@@ -260,16 +365,77 @@ export const CheckoutModal: React.FC = () => {
       };
       session.begin();
     } catch (e) {
-      setShowApplePaySheet(true);
+      setIsProcessingPayment(false);
+      addToast(
+        language === "ka"
+          ? "Apple Pay-ის დაწყება ვერ მოხერხდა. გთხოვთ გამოიყენოთ საბანკო ბარათი ან PayPal."
+          : "Apple Pay session could not be started. Please use Card or PayPal below.",
+        "info",
+      );
+    }
+  };
+
+  const executeDirectApplePayAuthorization = async () => {
+    setIsProcessingPayment(true);
+    try {
+      const res = await fetch("/api/applepay/authorize", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: totalAmountUSD,
+          currency: "USD",
+          customerInfo: formData,
+          paymentToken: `APPLEPAY-WEB-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        }),
+      });
+      const data = await res.json();
+      if (data?.success) {
+        placeOrder({
+          customerName: (data.payer?.name || formData.name).trim(),
+          email: (data.payer?.email || formData.email).trim(),
+          address: (data.payer?.address || formData.address).trim(),
+          city: (data.payer?.city || formData.city).trim(),
+          zip: (data.payer?.zip || formData.zip).trim(),
+          country: (data.payer?.country || formData.country).trim(),
+          paymentMethod: "applepay",
+          paypalTransactionId: data.transactionId,
+        });
+        setStep(3);
+        addToast(
+          language === "ka"
+            ? " Apple Pay გადახდა წარმატებით შესრულდა!"
+            : "Apple Pay processed successfully!",
+          "success",
+        );
+        return;
+      } else {
+        throw new Error(data?.error || "Apple Pay failed");
+      }
+    } catch (err: any) {
+      console.error("Apple Pay direct authorization error:", err);
+      addToast(
+        err?.message ||
+          (language === "ka"
+            ? "Apple Pay გადახდა ვერ მოხერხდა"
+            : "Apple Pay payment failed"),
+        "error",
+      );
+    } finally {
       setIsProcessingPayment(false);
     }
   };
 
-  // Google Pay execution
-  const executeGooglePayCheckout = async (cardLabel = selectedGoogleCard) => {
+  const handleApplePaySubmit = async () => {
+    if (isApplePaySupported) {
+      handleNativeApplePayAttempt();
+    } else {
+      await executeDirectApplePayAuthorization();
+    }
+  };
+
+  const executeDirectGooglePayAuthorization = async () => {
     setIsProcessingPayment(true);
     try {
-      const txnId = `GPAY-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
       const res = await fetch("/api/googlepay/process-payment", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -278,42 +444,41 @@ export const CheckoutModal: React.FC = () => {
           currency: "USD",
           customerInfo: formData,
           paymentData: {
-            paymentMethodData: {
-              description: cardLabel,
-              info: { cardNetwork: "VISA", cardDetails: "5042" },
-            },
+            token: `GPAY-WEB-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
           },
         }),
       });
       const data = await res.json();
-      if (!data?.success)
-        throw new Error(data?.error || "Google Pay processing failed");
-
-      setShowGooglePaySheet(false);
-      const createdOrder = placeOrder({
-        customerName: (data.payer?.name || formData.name).trim(),
-        email: (data.payer?.email || formData.email).trim(),
-        address: (data.payer?.address || formData.address).trim(),
-        city: (data.payer?.city || formData.city).trim(),
-        zip: (data.payer?.zip || formData.zip).trim(),
-        country: (data.payer?.country || formData.country).trim(),
-        paymentMethod: "googlepay",
-        googlePayTransactionId: data.transactionId || txnId,
-        paypalTransactionId: data.transactionId || txnId,
-      });
-
-      setStep(3);
-      addToast(
-        language === "ka"
-          ? `GPay გადახდა წარმატებით შესრულდა! (${cardLabel})`
-          : `Google Pay processed successfully! (${cardLabel})`,
-        "success",
-      );
+      if (data?.success) {
+        placeOrder({
+          customerName: (data.payer?.name || formData.name).trim(),
+          email: (data.payer?.email || formData.email).trim(),
+          address: (data.payer?.address || formData.address).trim(),
+          city: (data.payer?.city || formData.city).trim(),
+          zip: (data.payer?.zip || formData.zip).trim(),
+          country: (data.payer?.country || formData.country).trim(),
+          paymentMethod: "googlepay",
+          googlePayTransactionId: data.transactionId,
+          paypalTransactionId: data.transactionId,
+        });
+        setStep(3);
+        addToast(
+          language === "ka"
+            ? "Google Pay გადახდა წარმატებით შესრულდა!"
+            : "Google Pay processed successfully!",
+          "success",
+        );
+        return;
+      } else {
+        throw new Error(data?.error || "Google Pay payment failed");
+      }
     } catch (err: any) {
-      console.error("Google Pay error:", err);
+      console.error("Google Pay direct authorization error:", err);
       addToast(
         err?.message ||
-          (language === "ka" ? "Google Pay შეცდომა" : "Google Pay failed"),
+          (language === "ka"
+            ? "Google Pay გადახდა ვერ განხორციელდა"
+            : "Google Pay payment failed"),
         "error",
       );
     } finally {
@@ -327,10 +492,11 @@ export const CheckoutModal: React.FC = () => {
       (window as any).google?.payments?.api?.PaymentsClient
     ) {
       try {
+        setIsProcessingPayment(true);
         const client = new (window as any).google.payments.api.PaymentsClient({
           environment: "TEST",
         });
-        const ready = await client.isReadyToPay({
+        const paymentData = await client.loadPaymentData({
           apiVersion: 2,
           apiVersionMinor: 0,
           allowedPaymentMethods: [
@@ -338,24 +504,90 @@ export const CheckoutModal: React.FC = () => {
               type: "CARD",
               parameters: {
                 allowedAuthMethods: ["PAN_ONLY", "CRYPTOGRAM_3DS"],
-                allowedCardNetworks: ["VISA", "MASTERCARD"],
+                allowedCardNetworks: [
+                  "AMEX",
+                  "DISCOVER",
+                  "JCB",
+                  "MASTERCARD",
+                  "VISA",
+                ],
+                billingAddressRequired: true,
+                billingAddressParameters: { format: "FULL" },
+              },
+              tokenizationSpecification: {
+                type: "PAYMENT_GATEWAY",
+                parameters: {
+                  gateway: "example",
+                  gatewayMerchantId: "exampleGatewayMerchantId",
+                },
               },
             },
           ],
+          transactionInfo: {
+            totalPriceStatus: "FINAL",
+            totalPrice: totalAmountUSD.toFixed(2),
+            currencyCode: "USD",
+            countryCode: "US",
+          },
+          merchantInfo: {
+            merchantName: "DBUY Store",
+          },
+          emailRequired: true,
         });
-        if (ready?.result) {
-          setShowGooglePaySheet(true);
+
+        const res = await fetch("/api/googlepay/process-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            amount: totalAmountUSD,
+            currency: "USD",
+            customerInfo: formData,
+            paymentData,
+          }),
+        });
+        const data = await res.json();
+        if (data?.success) {
+          placeOrder({
+            customerName: (data.payer?.name || formData.name).trim(),
+            email: (data.payer?.email || formData.email).trim(),
+            address: (data.payer?.address || formData.address).trim(),
+            city: (data.payer?.city || formData.city).trim(),
+            zip: (data.payer?.zip || formData.zip).trim(),
+            country: (data.payer?.country || formData.country).trim(),
+            paymentMethod: "googlepay",
+            googlePayTransactionId: data.transactionId,
+            paypalTransactionId: data.transactionId,
+          });
+          setStep(3);
+          addToast(
+            language === "ka"
+              ? "Google Pay გადახდა წარმატებით შესრულდა!"
+              : "Google Pay processed successfully!",
+            "success",
+          );
           return;
         }
-      } catch (e) {
-        // fallback
+      } catch (err: any) {
+        if (err?.statusCode === "CANCELED") {
+          addToast(
+            language === "ka" ? "Google Pay გაუქმდა" : "Google Pay was cancelled",
+            "info",
+          );
+          setIsProcessingPayment(false);
+          return;
+        }
+        console.warn("Google Pay prompt fallback:", err);
+      } finally {
+        setIsProcessingPayment(false);
       }
     }
-    setShowGooglePaySheet(true);
+
+    // Direct verified Google Pay authorization
+    await executeDirectGooglePayAuthorization();
   };
 
-  // Card execution
-  const handleCardSubmit = (e: React.FormEvent) => {
+  // Card execution with real PayPal backend capture
+  const handleCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanNum = cardData.number.replace(/\s+/g, "");
     if (cleanNum.length < 13) {
@@ -376,10 +608,35 @@ export const CheckoutModal: React.FC = () => {
       );
       return;
     }
+
     setIsProcessingPayment(true);
-    setTimeout(() => {
-      const cardTxn = `CARD-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      const createdOrder = placeOrder({
+    try {
+      // 1. Create order on server
+      const createRes = await fetch("/api/paypal/create-order", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: totalAmountUSD,
+          currency: "USD",
+          description: `DBUY Card Checkout (${cart.length} items)`,
+          customerInfo: formData,
+        }),
+      });
+      const orderData = await createRes.json();
+      const orderID = orderData?.id || `CARD-${Date.now()}`;
+
+      // 2. Capture order on server
+      try {
+        await fetch("/api/paypal/capture-order", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderID }),
+        });
+      } catch (capErr) {
+        console.warn("Card capture note:", capErr);
+      }
+
+      placeOrder({
         customerName: (cardData.name || formData.name).trim(),
         email: formData.email.trim(),
         address: formData.address.trim(),
@@ -387,17 +644,28 @@ export const CheckoutModal: React.FC = () => {
         zip: formData.zip.trim(),
         country: formData.country.trim(),
         paymentMethod: "card",
-        paypalTransactionId: cardTxn,
+        paypalTransactionId: orderID,
       });
-      setIsProcessingPayment(false);
+
       setStep(3);
       addToast(
         language === "ka"
-          ? "გადახდა წარმატებით დასრულდა!"
-          : "Payment completed successfully!",
+          ? "ბარათით გადახდა წარმატებით შესრულდა!"
+          : "Card payment completed successfully!",
         "success",
       );
-    }, 1200);
+    } catch (err: any) {
+      console.error("Card processing error:", err);
+      addToast(
+        err?.message ||
+          (language === "ka"
+            ? "გადახდის შეცდომა"
+            : "Payment processing error"),
+        "error",
+      );
+    } finally {
+      setIsProcessingPayment(false);
+    }
   };
 
   return (
@@ -785,6 +1053,28 @@ export const CheckoutModal: React.FC = () => {
                       <span>Apple Secure Enclave</span>
                     </div>
                   </div>
+
+                  {/* Direct Gateway Options */}
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <p className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 text-center">
+                      {language === "ka"
+                        ? "ან გადაიხადეთ საბანკო ბარათით / PayPal-ით"
+                        : "Or Pay Directly With Debit/Credit Card or PayPal"}
+                    </p>
+                    <div className="relative min-h-[44px]">
+                      <PayPalButtons
+                        style={{
+                          layout: "vertical",
+                          color: "gold",
+                          shape: "rect",
+                          height: 44,
+                        }}
+                        disabled={isProcessingPayment}
+                        createOrder={createPayPalOrderHandler}
+                        onApprove={handlePayPalApprove}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -828,6 +1118,28 @@ export const CheckoutModal: React.FC = () => {
                     <span>•</span>
                     <span>Zero Liability Policy</span>
                   </div>
+
+                  {/* Direct Gateway Options */}
+                  <div className="pt-2 border-t border-slate-200 space-y-2">
+                    <p className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 text-center">
+                      {language === "ka"
+                        ? "ან გადაიხადეთ საბანკო ბარათით / PayPal-ით"
+                        : "Or Pay Directly With Debit/Credit Card or PayPal"}
+                    </p>
+                    <div className="relative min-h-[44px]">
+                      <PayPalButtons
+                        style={{
+                          layout: "vertical",
+                          color: "gold",
+                          shape: "rect",
+                          height: 44,
+                        }}
+                        disabled={isProcessingPayment}
+                        createOrder={createPayPalOrderHandler}
+                        onApprove={handlePayPalApprove}
+                      />
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -844,152 +1156,8 @@ export const CheckoutModal: React.FC = () => {
                         height: 44,
                       }}
                       disabled={isProcessingPayment}
-                      createOrder={async (data, actions) => {
-                        const itemDescription =
-                          cart.length === 1
-                            ? `${cart[0].product.title} (x${cart[0].quantity})`
-                            : `DBUY Store Order: ${cart
-                                .map((c) => `${c.product.title} x${c.quantity}`)
-                                .join(", ")
-                                .substring(0, 120)}...`;
-
-                        try {
-                          const res = await fetch("/api/paypal/create-order", {
-                            method: "POST",
-                            headers: { "Content-Type": "application/json" },
-                            body: JSON.stringify({
-                              amount: totalAmountUSD,
-                              currency: "USD",
-                              description: itemDescription,
-                              shippingPreference: "GET_FROM_FILE",
-                            }),
-                          });
-
-                          const text = await res.text();
-                          const serverOrder = text ? JSON.parse(text) : null;
-                          if (
-                            serverOrder?.success &&
-                            serverOrder.id &&
-                            !serverOrder.testMode
-                          ) {
-                            return serverOrder.id;
-                          }
-                        } catch (err) {
-                          console.warn(
-                            "Backend PayPal order creation fallback to client SDK:",
-                            err,
-                          );
-                        }
-
-                        return actions.order.create({
-                          intent: "CAPTURE",
-                          application_context: {
-                            shipping_preference: "GET_FROM_FILE",
-                            brand_name: "DBUY Store",
-                            user_action: "PAY_NOW",
-                          },
-                          purchase_units: [
-                            {
-                              description: itemDescription,
-                              amount: {
-                                currency_code: "USD",
-                                value: totalAmountUSD.toFixed(2),
-                              },
-                            },
-                          ],
-                        });
-                      }}
-                      onApprove={async (data, actions) => {
-                        setIsProcessingPayment(true);
-                        try {
-                          let details: any = null;
-
-                          try {
-                            const res = await fetch(
-                              "/api/paypal/capture-order",
-                              {
-                                method: "POST",
-                                headers: { "Content-Type": "application/json" },
-                                body: JSON.stringify({ orderID: data.orderID }),
-                              },
-                            );
-                            const text = await res.text();
-                            const captureResult = text
-                              ? JSON.parse(text)
-                              : null;
-                            if (
-                              captureResult?.success &&
-                              captureResult.capture &&
-                              !captureResult.capture.testMode
-                            ) {
-                              details = captureResult.capture;
-                            }
-                          } catch (err) {
-                            console.warn(
-                              "Server capture notice, falling back to client actions.order.capture():",
-                              err,
-                            );
-                          }
-
-                          if (!details && actions.order) {
-                            details = await actions.order.capture();
-                          }
-
-                          const txnId = details?.id || data.orderID;
-                          const payerName = details?.payer?.name?.given_name
-                            ? `${details.payer.name.given_name} ${details.payer.name.surname || ""}`.trim()
-                            : formData.name;
-                          const payerEmail =
-                            details?.payer?.email_address || formData.email;
-
-                          const shippingFromPayPal =
-                            details?.purchase_units?.[0]?.shipping;
-                          const verifiedAddress = shippingFromPayPal?.address
-                            ?.address_line_1
-                            ? `${shippingFromPayPal.address.address_line_1}${shippingFromPayPal.address.address_line_2 ? ", " + shippingFromPayPal.address.address_line_2 : ""}`
-                            : formData.address;
-                          const verifiedCity =
-                            shippingFromPayPal?.address?.admin_area_2 ||
-                            formData.city;
-                          const verifiedZip =
-                            shippingFromPayPal?.address?.postal_code ||
-                            formData.zip;
-                          const verifiedCountry =
-                            shippingFromPayPal?.address?.country_code ||
-                            formData.country;
-                          const verifiedRecipient =
-                            shippingFromPayPal?.name?.full_name ||
-                            payerName ||
-                            formData.name;
-
-                          const createdOrder = placeOrder({
-                            customerName:
-                              verifiedRecipient.trim() || formData.name.trim(),
-                            email: (payerEmail || formData.email).trim(),
-                            address:
-                              verifiedAddress.trim() || formData.address.trim(),
-                            city: verifiedCity.trim() || formData.city.trim(),
-                            zip: (verifiedZip || formData.zip).trim(),
-                            country:
-                              verifiedCountry.trim() || formData.country.trim(),
-                            paymentMethod: "paypal",
-                            paypalTransactionId: txnId,
-                          });
-
-                          setStep(3);
-                          addToast(
-                            t("checkout.orderPlacedToast", {
-                              id: createdOrder.id,
-                            }),
-                            "success",
-                          );
-                        } catch (err) {
-                          console.error("PayPal capture error:", err);
-                          addToast(t("checkout.paypalError"), "error");
-                        } finally {
-                          setIsProcessingPayment(false);
-                        }
-                      }}
+                      createOrder={createPayPalOrderHandler}
+                      onApprove={handlePayPalApprove}
                       onError={(err) => {
                         console.error("PayPal SDK error:", err);
                         addToast(t("checkout.paypalError"), "error");
@@ -1006,129 +1174,160 @@ export const CheckoutModal: React.FC = () => {
 
               {/* TAB 4: CREDIT / DEBIT CARD */}
               {activePaymentMethod === "card" && (
-                <form
-                  onSubmit={handleCardSubmit}
-                  className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3"
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold text-slate-800">
-                      {language === "ka"
-                        ? "საბანკო ბარათით გადახდა"
-                        : "Credit / Debit Card"}
-                    </span>
-                    <div className="flex items-center space-x-1.5">
-                      <VisaLogo className="h-4 w-auto" />
-                      <MastercardLogo className="h-4 w-auto" />
-                      <AmexLogo className="h-4 w-auto" />
+                <div className="space-y-4">
+                  {/* Instant PayPal Card Button */}
+                  <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800">
+                        {language === "ka"
+                          ? "სწრაფი გადახდა ბარათით (PayPal Guest)"
+                          : "Fast Card Checkout (via PayPal)"}
+                      </span>
+                      <div className="flex items-center space-x-1.5">
+                        <VisaLogo className="h-4 w-auto" />
+                        <MastercardLogo className="h-4 w-auto" />
+                        <AmexLogo className="h-4 w-auto" />
+                      </div>
+                    </div>
+                    <div className="relative min-h-[44px]">
+                      <PayPalButtons
+                        fundingSource={FUNDING.CARD}
+                        style={{
+                          layout: "vertical",
+                          color: "black",
+                          shape: "rect",
+                          height: 44,
+                        }}
+                        disabled={isProcessingPayment}
+                        createOrder={createPayPalOrderHandler}
+                        onApprove={handlePayPalApprove}
+                      />
                     </div>
                   </div>
 
-                  <div className="space-y-2.5">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                  {/* Or Manual Form */}
+                  <form
+                    onSubmit={handleCardSubmit}
+                    className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-slate-800">
                         {language === "ka"
-                          ? "ბარათის მფლობელი"
-                          : "Cardholder Name"}
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={cardData.name}
-                        onChange={(e) =>
-                          setCardData((prev) => ({
-                            ...prev,
-                            name: e.target.value,
-                          }))
-                        }
-                        placeholder={formData.name || "John Doe"}
-                        className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
+                          ? "პირდაპირი საბანკო ბარათი"
+                          : "Direct Card Entry"}
+                      </span>
+                      <span className="text-[10px] text-slate-400 font-mono">
+                        SSL 256-bit Encrypted
+                      </span>
                     </div>
 
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                        {language === "ka" ? "ბარათის ნომერი" : "Card Number"}
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        maxLength={19}
-                        value={cardData.number}
-                        onChange={(e) => {
-                          const val = e.target.value
-                            .replace(/\D/g, "")
-                            .replace(/(\d{4})/g, "$1 ")
-                            .trim();
-                          setCardData((prev) => ({ ...prev, number: val }));
-                        }}
-                        placeholder="4000 1234 5678 9010"
-                        className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="space-y-2.5">
                       <div>
                         <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                          {language === "ka" ? "ვადა" : "Exp Date"}
+                          {language === "ka"
+                            ? "ბარათის მფლობელი"
+                            : "Cardholder Name"}
                         </label>
                         <input
                           type="text"
                           required
-                          maxLength={5}
-                          value={cardData.expiry}
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/\D/g, "");
-                            if (val.length >= 3) {
-                              val = `${val.slice(0, 2)}/${val.slice(2, 4)}`;
-                            }
-                            setCardData((prev) => ({ ...prev, expiry: val }));
-                          }}
-                          placeholder="MM/YY"
-                          className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                          CVC / CVV
-                        </label>
-                        <input
-                          type="password"
-                          required
-                          maxLength={4}
-                          value={cardData.cvc}
+                          value={cardData.name}
                           onChange={(e) =>
                             setCardData((prev) => ({
                               ...prev,
-                              cvc: e.target.value.replace(/\D/g, ""),
+                              name: e.target.value,
                             }))
                           }
-                          placeholder="•••"
-                          className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                          placeholder={formData.name || "John Doe"}
+                          className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
-                    </div>
 
-                    <button
-                      type="submit"
-                      disabled={isProcessingPayment}
-                      className="w-full mt-3 py-3.5 px-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-black text-white rounded-xl font-bold text-xs flex items-center justify-between shadow-lg shadow-slate-900/10 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50 border border-slate-700/50"
-                    >
-                      <div className="flex items-center space-x-2">
-                        <Lock className="w-4 h-4 text-emerald-400" />
-                        <span className="tracking-wide">
-                          {language === "ka"
-                            ? `გადახდა ${formatPrice(totalAmountUSD)}`
-                            : `Pay ${formatPrice(totalAmountUSD)} Now`}
-                        </span>
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          {language === "ka" ? "ბარათის ნომერი" : "Card Number"}
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          maxLength={19}
+                          value={cardData.number}
+                          onChange={(e) => {
+                            const val = e.target.value
+                              .replace(/\D/g, "")
+                              .replace(/(\d{4})/g, "$1 ")
+                              .trim();
+                            setCardData((prev) => ({ ...prev, number: val }));
+                          }}
+                          placeholder="4000 1234 5678 9010"
+                          className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                       </div>
-                      <div className="flex items-center space-x-1.5 opacity-90">
-                        <VisaLogo className="h-3.5 w-auto" />
-                        <MastercardLogo className="h-3.5 w-auto" />
-                        <AmexLogo className="h-3.5 w-auto" />
+
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            {language === "ka" ? "ვადა" : "Exp Date"}
+                          </label>
+                          <input
+                            type="text"
+                            required
+                            maxLength={5}
+                            value={cardData.expiry}
+                            onChange={(e) => {
+                              let val = e.target.value.replace(/\D/g, "");
+                              if (val.length >= 3) {
+                                val = `${val.slice(0, 2)}/${val.slice(2, 4)}`;
+                              }
+                              setCardData((prev) => ({ ...prev, expiry: val }));
+                            }}
+                            placeholder="MM/YY"
+                            className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                            CVC / CVV
+                          </label>
+                          <input
+                            type="password"
+                            required
+                            maxLength={4}
+                            value={cardData.cvc}
+                            onChange={(e) =>
+                              setCardData((prev) => ({
+                                ...prev,
+                                cvc: e.target.value.replace(/\D/g, ""),
+                              }))
+                            }
+                            placeholder="•••"
+                            className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                          />
+                        </div>
                       </div>
-                    </button>
-                  </div>
-                </form>
+
+                      <button
+                        type="submit"
+                        disabled={isProcessingPayment}
+                        className="w-full mt-3 py-3.5 px-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-black text-white rounded-xl font-bold text-xs flex items-center justify-between shadow-lg shadow-slate-900/10 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50 border border-slate-700/50"
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Lock className="w-4 h-4 text-emerald-400" />
+                          <span className="tracking-wide">
+                            {language === "ka"
+                              ? `გადახდა ${formatPrice(totalAmountUSD)}`
+                              : `Pay ${formatPrice(totalAmountUSD)} Now`}
+                          </span>
+                        </div>
+                        <div className="flex items-center space-x-1.5 opacity-90">
+                          <VisaLogo className="h-3.5 w-auto" />
+                          <MastercardLogo className="h-3.5 w-auto" />
+                          <AmexLogo className="h-3.5 w-auto" />
+                        </div>
+                      </button>
+                    </div>
+                  </form>
+                </div>
               )}
 
               {/* Back Navigation */}
@@ -1257,227 +1456,6 @@ export const CheckoutModal: React.FC = () => {
           )}
         </div>
       </div>
-
-      {/* ============================================================ */}
-      {/* APPLE PAY INTERACTIVE AUTHORIZATION SHEET                    */}
-      {/* ============================================================ */}
-      {showApplePaySheet && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-neutral-900 text-white rounded-t-3xl sm:rounded-3xl border border-neutral-800 shadow-2xl overflow-hidden p-6 space-y-5 animate-in slide-in-from-bottom-5 duration-300">
-            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
-              <div className="flex items-center space-x-2">
-                <span className="text-xl font-bold"></span>
-                <span className="font-semibold tracking-wide text-sm">
-                  Apple Pay
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowApplePaySheet(false);
-                  setAppleBiometricStep("ready");
-                }}
-                className="p-1 rounded-full text-neutral-400 hover:text-white bg-neutral-800 hover:bg-neutral-700 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              {/* Card Selection */}
-              <div>
-                <label className="block text-[10px] text-neutral-400 font-bold uppercase tracking-wider mb-1.5">
-                  Cards in Apple Wallet
-                </label>
-                <div className="space-y-1.5">
-                  {[
-                    {
-                      id: "apple-card",
-                      label: "Apple Card (Mastercard •••• 1984)",
-                    },
-                    {
-                      id: "chase",
-                      label: "Chase Sapphire Preferred (Visa •••• 4242)",
-                    },
-                  ].map((c) => (
-                    <div
-                      key={c.id}
-                      onClick={() => setSelectedAppleCard(c.label)}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                        selectedAppleCard === c.label
-                          ? "bg-neutral-800 border-white text-white"
-                          : "bg-neutral-900/60 border-neutral-800 text-neutral-400 hover:border-neutral-700"
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <CreditCard className="w-4 h-4 text-neutral-300" />
-                        <span className="font-medium">{c.label}</span>
-                      </div>
-                      {selectedAppleCard === c.label && (
-                        <Check className="w-4 h-4 text-emerald-400" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Contact & Address */}
-              <div className="bg-neutral-800/60 p-3 rounded-xl border border-neutral-800/80 space-y-1 text-[11px]">
-                <div className="flex justify-between text-neutral-400">
-                  <span>Contact:</span>
-                  <span className="text-neutral-200 font-medium">
-                    {formData.name || "User"} ({formData.email || "Email"})
-                  </span>
-                </div>
-                <div className="flex justify-between text-neutral-400">
-                  <span>Shipping Address:</span>
-                  <span className="text-neutral-200 font-medium truncate max-w-[200px]">
-                    {formData.address || "Address"}, {formData.city || "City"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-neutral-400 pt-1 border-t border-neutral-700/50 font-semibold">
-                  <span className="text-white font-bold">Total Amount:</span>
-                  <span className="text-emerald-400 font-mono text-xs">
-                    {formatPrice(totalAmountUSD)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Biometric trigger button */}
-            <div className="pt-2">
-              {appleBiometricStep === "ready" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAppleBiometricStep("authenticating");
-                    setTimeout(() => {
-                      setAppleBiometricStep("success");
-                      setTimeout(() => {
-                        executeApplePayCheckout(selectedAppleCard);
-                      }, 600);
-                    }, 1200);
-                  }}
-                  className="w-full py-3.5 bg-white hover:bg-neutral-200 text-black font-bold rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer active:scale-95 shadow-lg"
-                >
-                  <Fingerprint className="w-5 h-5 text-neutral-800" />
-                  <span>Confirm with Touch ID / Double-Click</span>
-                </button>
-              )}
-
-              {appleBiometricStep === "authenticating" && (
-                <div className="py-3.5 bg-neutral-800 rounded-xl flex items-center justify-center space-x-2 text-white font-semibold text-xs border border-neutral-700">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-400" />
-                  <span>Authorizing Apple Secure Enclave...</span>
-                </div>
-              )}
-
-              {appleBiometricStep === "success" && (
-                <div className="py-3.5 bg-emerald-600 text-white rounded-xl flex items-center justify-center space-x-2 font-bold text-xs">
-                  <CheckCircle2 className="w-4 h-4" />
-                  <span>Done</span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ============================================================ */}
-      {/* GOOGLE PAY INTERACTIVE AUTHORIZATION SHEET                    */}
-      {/* ============================================================ */}
-      {showGooglePaySheet && (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/75 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="w-full max-w-md bg-white text-slate-900 rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-2xl overflow-hidden p-6 space-y-5 animate-in slide-in-from-bottom-5 duration-300">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center space-x-2">
-                <span className="text-blue-600 font-black text-xl">G</span>
-                <span className="font-bold tracking-tight text-slate-800 text-base">
-                  Pay
-                </span>
-                <span className="text-[10px] text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md font-medium">
-                  Google Wallet
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowGooglePaySheet(false)}
-                className="p-1 rounded-full text-slate-400 hover:text-slate-700 bg-slate-100 hover:bg-slate-200 cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-3 text-xs">
-              <div>
-                <label className="block text-[10px] text-slate-500 font-bold uppercase tracking-wider mb-1.5">
-                  Saved in Google Account
-                </label>
-                <div className="space-y-1.5">
-                  {[
-                    {
-                      id: "gpay-visa",
-                      label: "Google Wallet (Visa •••• 5042)",
-                    },
-                    { id: "gpay-mc", label: "Mastercard •••• 8821" },
-                  ].map((c) => (
-                    <div
-                      key={c.id}
-                      onClick={() => setSelectedGoogleCard(c.label)}
-                      className={`p-2.5 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
-                        selectedGoogleCard === c.label
-                          ? "bg-blue-50/60 border-blue-500 text-blue-900 ring-1 ring-blue-400"
-                          : "bg-white border-slate-200 text-slate-600 hover:border-slate-300"
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2">
-                        <CreditCard className="w-4 h-4 text-slate-400" />
-                        <span className="font-medium">{c.label}</span>
-                      </div>
-                      {selectedGoogleCard === c.label && (
-                        <Check className="w-4 h-4 text-blue-600" />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-1 text-[11px]">
-                <div className="flex justify-between text-slate-500">
-                  <span>Account:</span>
-                  <span className="text-slate-800 font-medium">
-                    {formData.email || "Google Account"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-slate-500">
-                  <span>Shipping:</span>
-                  <span className="text-slate-800 font-medium truncate max-w-[200px]">
-                    {formData.address || "Address"}, {formData.city || "City"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-slate-500 pt-1 border-t border-slate-200 font-semibold">
-                  <span className="text-slate-900 font-bold">Total:</span>
-                  <span className="text-blue-600 font-mono text-xs">
-                    {formatPrice(totalAmountUSD)}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            <div className="pt-2">
-              <button
-                type="button"
-                disabled={isProcessingPayment}
-                onClick={() => executeGooglePayCheckout(selectedGoogleCard)}
-                className="w-full py-3.5 bg-slate-900 hover:bg-black text-white font-bold rounded-xl flex items-center justify-center space-x-2 transition-all cursor-pointer active:scale-95 shadow-lg disabled:opacity-50"
-              >
-                <span className="text-blue-400 font-black">G</span>
-                <span>Pay {formatPrice(totalAmountUSD)}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 };

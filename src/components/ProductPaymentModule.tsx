@@ -108,18 +108,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
     null,
   );
 
-  // Digital Wallet Interactive Sheets
-  const [showApplePayModal, setShowApplePayModal] = useState<boolean>(false);
-  const [showGooglePayModal, setShowGooglePayModal] = useState<boolean>(false);
-  const [applePayBiometricStep, setApplePayBiometricStep] = useState<
-    "ready" | "authenticating" | "success"
-  >("ready");
-  const [selectedAppleCard, setSelectedAppleCard] = useState<string>(
-    "Apple Card (Mastercard •••• 1984)",
-  );
-  const [selectedGoogleCard, setSelectedGoogleCard] = useState<string>(
-    "Google Wallet (Visa •••• 5042)",
-  );
+  // Digital Wallet support states
 
   useEffect(() => {
     // 1. Detect Native Apple Pay (Safari on macOS / iOS)
@@ -421,7 +410,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   ]);
 
   // Execute verified Apple Pay payment authorization
-  const executeApplePayPayment = async (cardLabel = selectedAppleCard) => {
+  const executeApplePayPayment = async () => {
     setIsProcessing(true);
     setGatewayMessage(
       isKa
@@ -486,7 +475,6 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         throw new Error(authResult?.error || "Apple Pay authorization failed");
       }
 
-      setShowApplePayModal(false);
       handleCompleteOrder("applepay", authResult.transactionId, {
         name: authResult.payer?.name || walletCustomerName,
         email: authResult.payer?.email || walletCustomerEmail,
@@ -498,8 +486,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
 
       addToast(
         isKa
-          ? `Pay გადახდა წარმატებით შესრულდა! (${cardLabel})`
-          : `Apple Pay authorized successfully! (${cardLabel})`,
+          ? ` Apple Pay გადახდა წარმატებით შესრულდა!`
+          : `Apple Pay authorized successfully!`,
         "success",
       );
     } catch (err: any) {
@@ -525,9 +513,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       (window as any).ApplePaySession.canMakePayments();
 
     if (!hasApplePay) {
-      // Direct Web Apple Pay Sheet for Chrome, Windows, Android, or browsers without native Apple Wallet
-      setApplePayBiometricStep("ready");
-      setShowApplePayModal(true);
+      await executeApplePayPayment();
       return;
     }
 
@@ -575,8 +561,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           session.abort();
           setIsProcessing(false);
           setGatewayMessage("");
-          // Fallback to Web Apple Pay Sheet if merchant certificate rejected
-          setShowApplePayModal(true);
+          await executeApplePayPayment();
         }
       };
 
@@ -653,18 +638,17 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       session.begin();
     } catch (err: any) {
       console.warn(
-        "Native Apple Pay not permitted in this context, opening Apple Pay Sheet:",
+        "Native Apple Pay not permitted in this context, authorizing directly:",
         err,
       );
       setIsProcessing(false);
       setGatewayMessage("");
-      setApplePayBiometricStep("ready");
-      setShowApplePayModal(true);
+      await executeApplePayPayment();
     }
   };
 
   // Execute verified Google Pay payment authorization
-  const executeGooglePayPayment = async (cardLabel = selectedGoogleCard) => {
+  const executeGooglePayPayment = async () => {
     setIsProcessing(true);
     setGatewayMessage(
       isKa
@@ -681,7 +665,6 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           body: JSON.stringify({
             paymentData: {
               token: `GPAY-TOKEN-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-              description: cardLabel,
             },
             amount: totalAmountUSD,
             currency: "USD",
@@ -725,7 +708,6 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         );
       }
 
-      setShowGooglePayModal(false);
       const verifiedTxnId = processResult.transactionId;
       const payer = processResult.payer || {};
 
@@ -740,8 +722,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
 
       addToast(
         isKa
-          ? `Google Pay გადახდა წარმატებით შესრულდა! (${processResult.cardDescription || cardLabel})`
-          : `Google Pay payment authorized successfully! (${processResult.cardDescription || cardLabel})`,
+          ? `Google Pay გადახდა წარმატებით შესრულდა!`
+          : `Google Pay payment authorized successfully!`,
         "success",
       );
     } catch (err: any) {
@@ -759,7 +741,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
     }
   };
 
-  // Handle Google Pay Checkout with Native PaymentsClient Dialog or Web Sheet fallback
+  // Handle Google Pay Checkout with Native PaymentsClient Dialog or direct fallback
   const handleGooglePaySubmit = async () => {
     // If native PaymentsClient is available, attempt official dialog
     if (
@@ -873,8 +855,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
 
         addToast(
           isKa
-            ? `Google Pay გადახდა წარმატებით შესრულდა! (${processResult.cardDescription || "Card"})`
-            : `Google Pay payment authorized successfully! (${processResult.cardDescription || "Card"})`,
+            ? `Google Pay გადახდა წარმატებით შესრულდა!`
+            : `Google Pay payment authorized successfully!`,
           "success",
         );
         return;
@@ -886,10 +868,12 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               : "Google Pay payment was cancelled by user",
             "info",
           );
+          setIsProcessing(false);
+          setGatewayMessage("");
           return;
         }
         console.warn(
-          "Native Google Pay prompt did not complete, switching to Google Pay Sheet:",
+          "Native Google Pay prompt did not complete, authorizing directly:",
           err,
         );
       } finally {
@@ -898,8 +882,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       }
     }
 
-    // Fallback: Show Google Pay interactive sheet
-    setShowGooglePayModal(true);
+    // Direct verified Google Pay authorization fallback
+    await executeGooglePayPayment();
   };
 
   // Handle Real Card Checkout via PayPal Gateway Capture
@@ -1715,305 +1699,6 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           </span>
         </div>
       </div>
-
-      {/* APPLE PAY INTERACTIVE SHEET MODAL */}
-      {showApplePayModal && (
-        <div className="fixed inset-0 z-80 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-[#161617] text-white rounded-3xl shadow-2xl border border-zinc-800 p-6 space-y-4 animate-in zoom-in-95">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-zinc-800/80 pb-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-7 h-7 rounded-lg bg-white text-black flex items-center justify-center">
-                  <svg className="w-4 h-4 fill-current" viewBox="0 0 170 170">
-                    <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.7-3.05-7.7-7.9-12-14.54-6.42-9.92-11.45-21.2-15.08-33.84-3.64-12.63-5.46-24.36-5.46-35.18 0-14.88 3.82-26.96 11.45-36.24 7.64-9.29 17.1-13.98 28.39-14.09 4.36 0 9.27 1.16 14.73 3.49 5.47 2.33 9.4 3.55 11.8 3.65 2.18 0 6.1-1.22 11.75-3.65 5.65-2.44 10.37-3.55 14.15-3.34 11.64.64 20.78 4.9 27.42 12.8-10.46 6.35-15.58 15.24-15.36 26.67.22 8.99 3.6 16.5 10.14 22.52 6.54 6.03 14.36 9.36 23.47 10-2.39 7.4-5.32 14.65-8.79 21.75zM119.22 33.72c0-7.39 2.65-14.13 7.95-20.21 5.3-6.08 11.78-9.96 19.45-11.64.44 1.7.65 3.4.65 5.1 0 7.3-2.73 14.16-8.19 20.57-5.46 6.42-12 10.45-19.63 12.1-0.15-2.02-.23-3.99-.23-5.92z" />
-                  </svg>
-                </div>
-                <div>
-                  <h4 className="text-sm font-bold tracking-tight text-white flex items-center space-x-1">
-                    <span>Apple Pay</span>
-                    <span className="text-[10px] text-zinc-400 font-normal">
-                      • DBUY Store
-                    </span>
-                  </h4>
-                  <p className="text-[10px] text-zinc-400">
-                    dbuystore.com • Secure Checkout
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowApplePayModal(false);
-                  setApplePayBiometricStep("ready");
-                }}
-                className="w-7 h-7 rounded-full bg-zinc-800 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Merchant & Item Summary */}
-            <div className="p-3.5 bg-zinc-900/90 rounded-2xl border border-zinc-800 space-y-2 text-xs">
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-zinc-400 text-[11px] block">
-                    {isKa ? "პროდუქტი" : "Item"}
-                  </span>
-                  <span className="font-semibold text-white line-clamp-1">
-                    {product.title} (x{quantity})
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-zinc-400 text-[11px] block">
-                    {isKa ? "სულ" : "Total"}
-                  </span>
-                  <span className="text-base font-black text-emerald-400">
-                    {formatPrice(totalAmountUSD)}
-                  </span>
-                </div>
-              </div>
-              <div className="pt-2 border-t border-zinc-800/80 flex justify-between items-center text-[11px] text-zinc-300">
-                <span>{isKa ? "მიმღები / მიწოდება:" : "Deliver to:"}</span>
-                <span className="font-medium text-white truncate max-w-[200px]">
-                  {walletCustomerName}, {walletCity}
-                </span>
-              </div>
-            </div>
-
-            {/* Card Selection */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-zinc-400">
-                {isKa
-                  ? "აირჩიეთ ბარათი Apple Wallet-იდან"
-                  : "Select Apple Wallet Card"}
-              </label>
-              <div className="grid grid-cols-1 gap-2">
-                {[
-                  {
-                    label: "Apple Card (Mastercard •••• 1984)",
-                    icon: " Card",
-                  },
-                  {
-                    label: "Chase Sapphire Reserve (Visa •••• 4242)",
-                    icon: "VISA",
-                  },
-                  { label: "Bank of Georgia (Visa •••• 8821)", icon: "BOG" },
-                ].map((c) => (
-                  <button
-                    key={c.label}
-                    type="button"
-                    onClick={() => setSelectedAppleCard(c.label)}
-                    className={`px-3.5 py-2.5 rounded-xl border text-xs text-left flex items-center justify-between transition-all cursor-pointer ${
-                      selectedAppleCard === c.label
-                        ? "bg-zinc-800 border-emerald-500 text-white shadow-sm"
-                        : "bg-zinc-900 border-zinc-800 text-zinc-300 hover:bg-zinc-850"
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2.5">
-                      <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-[10px] font-bold border border-zinc-700">
-                        {c.icon}
-                      </span>
-                      <span className="font-medium text-[11px]">{c.label}</span>
-                    </div>
-                    {selectedAppleCard === c.label && (
-                      <Check className="w-3.5 h-3.5 text-emerald-400" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Biometric Trigger Action */}
-            <div className="pt-2 space-y-2">
-              {applePayBiometricStep === "ready" && (
-                <button
-                  type="button"
-                  disabled={isProcessing}
-                  onClick={() => {
-                    setApplePayBiometricStep("authenticating");
-                    setTimeout(() => {
-                      setApplePayBiometricStep("success");
-                      setTimeout(() => {
-                        executeApplePayPayment(selectedAppleCard);
-                      }, 500);
-                    }, 900);
-                  }}
-                  className="w-full h-14 bg-white hover:bg-zinc-100 active:scale-[0.99] text-black font-black text-sm rounded-2xl flex items-center justify-center space-x-2.5 cursor-pointer shadow-lg transition-all"
-                >
-                  <Fingerprint className="w-5 h-5 text-emerald-600 animate-pulse" />
-                  <span>
-                    {isKa
-                      ? "ორმაგი შეხება ან Touch ID • გადახდა"
-                      : "Double-Click or Touch ID to Pay"}
-                  </span>
-                </button>
-              )}
-
-              {applePayBiometricStep === "authenticating" && (
-                <div className="w-full h-14 bg-zinc-800 text-zinc-100 rounded-2xl flex items-center justify-center space-x-2.5 animate-pulse">
-                  <Fingerprint className="w-6 h-6 text-emerald-400 animate-bounce" />
-                  <span className="text-xs font-bold">
-                    {isKa
-                      ? "Touch ID / Face ID ამოცნობა..."
-                      : "Verifying Biometrics..."}
-                  </span>
-                </div>
-              )}
-
-              {applePayBiometricStep === "success" && (
-                <div className="w-full h-14 bg-emerald-600 text-white rounded-2xl flex items-center justify-center space-x-2.5">
-                  <CheckCircle2 className="w-6 h-6" />
-                  <span className="text-xs font-black">
-                    {isKa ? "ავტორიზაცია მიღებულია!" : "Biometric Confirmed!"}
-                  </span>
-                </div>
-              )}
-
-              <p className="text-[10px] text-zinc-400 text-center">
-                {isKa
-                  ? "დადასტურების შემდეგ შეკვეთა დაუყოვნებლივ გატარდება"
-                  : "Secured with Apple Secure Enclave tokenization"}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* GOOGLE PAY INTERACTIVE SHEET MODAL */}
-      {showGooglePayModal && (
-        <div className="fixed inset-0 z-80 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="relative w-full max-w-md bg-white text-slate-900 rounded-3xl shadow-2xl border border-slate-200 p-6 space-y-4 animate-in zoom-in-95">
-            {/* Header */}
-            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
-              <div className="flex items-center space-x-2">
-                <div className="w-8 h-8 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-center">
-                  <span className="text-blue-600 font-extrabold text-base">
-                    G
-                  </span>
-                </div>
-                <div>
-                  <h4 className="text-sm font-black tracking-tight text-slate-900 flex items-center space-x-1">
-                    <span>Google Pay</span>
-                    <span className="text-[11px] font-medium text-slate-500">
-                      • DBUY Store
-                    </span>
-                  </h4>
-                  <p className="text-[10px] text-slate-500">
-                    Official PayPal Gateway Direct Capture
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowGooglePayModal(false)}
-                className="w-7 h-7 rounded-full bg-slate-100 text-slate-500 hover:text-slate-900 flex items-center justify-center cursor-pointer transition-colors"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            {/* Order Preview */}
-            <div className="p-3.5 bg-blue-50/70 rounded-2xl border border-blue-100 space-y-2 text-xs">
-              <div className="flex justify-between items-start">
-                <div>
-                  <span className="text-blue-800 text-[11px] block">
-                    {isKa ? "პროდუქტი" : "Item"}
-                  </span>
-                  <span className="font-semibold text-slate-900 line-clamp-1">
-                    {product.title} (x{quantity})
-                  </span>
-                </div>
-                <div className="text-right">
-                  <span className="text-blue-800 text-[11px] block">
-                    {isKa ? "სულ" : "Total"}
-                  </span>
-                  <span className="text-base font-black text-blue-700">
-                    {formatPrice(totalAmountUSD)}
-                  </span>
-                </div>
-              </div>
-              <div className="pt-2 border-t border-blue-200/60 flex justify-between items-center text-[11px] text-slate-600">
-                <span>{isKa ? "მიწოდება:" : "Deliver to:"}</span>
-                <span className="font-medium text-slate-900 truncate max-w-[200px]">
-                  {walletCustomerName}, {walletCity}
-                </span>
-              </div>
-            </div>
-
-            {/* Select Google Wallet Card */}
-            <div className="space-y-1.5">
-              <label className="text-[11px] font-semibold text-slate-700">
-                {isKa
-                  ? "აირჩიეთ ბარათი Google Wallet-იდან"
-                  : "Select Google Wallet Card"}
-              </label>
-              <div className="grid grid-cols-1 gap-2">
-                {[
-                  { label: "Google Wallet (Visa •••• 5042)", icon: "VISA" },
-                  { label: "Google Wallet (Mastercard •••• 3128)", icon: "MC" },
-                ].map((c) => (
-                  <button
-                    key={c.label}
-                    type="button"
-                    onClick={() => setSelectedGoogleCard(c.label)}
-                    className={`px-3.5 py-2.5 rounded-xl border text-xs text-left flex items-center justify-between transition-all cursor-pointer ${
-                      selectedGoogleCard === c.label
-                        ? "bg-blue-50 border-blue-500 text-blue-900 font-semibold shadow-2xs"
-                        : "bg-slate-50 border-slate-200 text-slate-700 hover:bg-slate-100"
-                    }`}
-                  >
-                    <div className="flex items-center space-x-2">
-                      <span className="px-1.5 py-0.5 rounded bg-white text-[10px] font-bold border border-slate-300">
-                        {c.icon}
-                      </span>
-                      <span className="text-[11px]">{c.label}</span>
-                    </div>
-                    {selectedGoogleCard === c.label && (
-                      <Check className="w-3.5 h-3.5 text-blue-600" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Action Button */}
-            <div className="pt-2 space-y-2">
-              <button
-                type="button"
-                disabled={isProcessing}
-                onClick={() => executeGooglePayPayment(selectedGoogleCard)}
-                className="w-full h-14 bg-[#1a73e8] hover:bg-[#1557b0] active:scale-[0.99] text-white font-black text-sm rounded-2xl flex items-center justify-center space-x-2.5 cursor-pointer shadow-md transition-all disabled:opacity-60"
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="w-5 h-5 animate-spin text-white" />
-                    <span>
-                      {isKa
-                        ? "ტრანზაქციის დამუშავება..."
-                        : "Processing Payment..."}
-                    </span>
-                  </>
-                ) : (
-                  <>
-                    <span className="text-white font-black text-lg">G</span>
-                    <span>
-                      {isKa
-                        ? `გადახდა Google Pay-ით • ${formatPrice(totalAmountUSD)}`
-                        : `Pay with Google Pay • ${formatPrice(totalAmountUSD)}`}
-                    </span>
-                  </>
-                )}
-              </button>
-
-              <p className="text-[10px] text-slate-500 text-center">
-                {isKa
-                  ? "✓ დაცულია Google Pay და PayPal გარანტიით"
-                  : "✓ Protected by Google Pay & PayPal Buyer Protection"}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* SUCCESS CONFIRMATION MODAL */}
       {successOrderModal && lastPlacedOrder && (
