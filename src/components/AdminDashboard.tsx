@@ -3,6 +3,7 @@ import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product, Order, BillboardSlide, LogoOptionId } from '../types';
 import { generateProductFeatures } from '../utils/productFeatures';
 import { generateProductAdCopy } from '../utils/adCopyGenerator';
+import { handleImageError } from '../utils/imageFallback';
 import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
@@ -1286,6 +1287,8 @@ export const AdminDashboard: React.FC = () => {
                         <img
                           src={prod.image}
                           alt={prod.title}
+                          referrerPolicy="no-referrer"
+                          onError={handleImageError}
                           className="w-12 h-12 object-cover rounded-xl bg-slate-100"
                         />
                       </td>
@@ -3309,6 +3312,8 @@ export const AdminDashboard: React.FC = () => {
                           <img
                             src={imgUrl}
                             alt={`Product img ${idx + 1}`}
+                            referrerPolicy="no-referrer"
+                            onError={handleImageError}
                             className="w-14 h-14 object-cover rounded-xl border border-slate-100 shrink-0"
                           />
                           <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">

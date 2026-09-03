@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { getProductFeatures } from '../utils/productFeatures';
+import { handleImageError } from '../utils/imageFallback';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { 
   X, 
@@ -113,6 +114,8 @@ export const QuickViewModal: React.FC = () => {
                 <img
                   src={currentImage}
                   alt={`${displayTitle} - photo ${activeImageIndex + 1}`}
+                  referrerPolicy="no-referrer"
+                  onError={handleImageError}
                   className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
                 />
 
@@ -190,6 +193,8 @@ export const QuickViewModal: React.FC = () => {
                       <img
                         src={imgUrl}
                         alt={`Thumbnail ${idx + 1}`}
+                        referrerPolicy="no-referrer"
+                        onError={handleImageError}
                         className="w-full h-full object-cover"
                       />
                       {activeImageIndex === idx && (

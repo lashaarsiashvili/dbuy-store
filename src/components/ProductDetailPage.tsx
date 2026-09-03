@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product } from '../types';
 import { getProductFeatures } from '../utils/productFeatures';
+import { handleImageError } from '../utils/imageFallback';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { 
   Star, 
@@ -212,6 +213,8 @@ export const ProductDetailPage: React.FC = () => {
             <img
               src={currentImage}
               alt={displayTitle}
+              referrerPolicy="no-referrer"
+              onError={handleImageError}
               className="absolute inset-0 w-full h-full object-contain p-4 sm:p-6 transition-all duration-300"
             />
 
@@ -278,6 +281,8 @@ export const ProductDetailPage: React.FC = () => {
                   <img
                     src={imgUrl}
                     alt={`${displayTitle} - photo ${idx + 1}`}
+                    referrerPolicy="no-referrer"
+                    onError={handleImageError}
                     className="w-full h-full object-cover p-1"
                   />
                 </button>
@@ -612,6 +617,8 @@ export const ProductDetailPage: React.FC = () => {
                     <img
                       src={rel.image}
                       alt={relTitle}
+                      referrerPolicy="no-referrer"
+                      onError={handleImageError}
                       className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>

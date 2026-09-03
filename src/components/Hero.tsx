@@ -10,6 +10,7 @@ import {
   Zap
 } from 'lucide-react';
 import { Product, BillboardSlide } from '../types';
+import { handleImageError } from '../utils/imageFallback';
 
 export const Hero: React.FC = () => {
   const { 
@@ -243,6 +244,8 @@ export const Hero: React.FC = () => {
                     key={currentSlide.id + currentSlide.image}
                     src={currentSlide.image}
                     alt={slideTitle}
+                    referrerPolicy="no-referrer"
+                    onError={handleImageError}
                     className="w-full h-full object-cover group-hover/img:scale-106 transition-transform duration-700 ease-out animate-fadeIn"
                   />
                   
