@@ -110,7 +110,7 @@ export const AdminDashboard: React.FC = () => {
   const handleManualSync = async () => {
     setIsSyncing(true);
     try {
-      await refreshServerStore();
+      await refreshServerStore(true);
       addToast(isKa ? 'სერვერის მონაცემები წარმატებით სინქრონიზდა!' : 'Server data synced successfully!', 'success');
     } catch {
       addToast(isKa ? 'სინქრონიზაციის შეცდომა' : 'Sync error', 'error');

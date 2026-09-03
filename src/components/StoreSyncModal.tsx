@@ -67,7 +67,7 @@ export const StoreSyncModal: React.FC<StoreSyncModalProps> = ({
   const handleManualRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await refreshServerStore();
+      await refreshServerStore(true);
       addToast(
         isKa ? 'სერვერული მონაცემები განახლებულია!' : 'Server data refreshed successfully!',
         'success'

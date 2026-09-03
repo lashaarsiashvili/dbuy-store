@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Product, 
   CartItem, 
@@ -181,7 +181,7 @@ interface StoreContextType {
   isAdmin: boolean;
   registeredUsers: RegisteredUser[];
   deleteRegisteredUser: (email: string) => void;
-  refreshServerStore: () => Promise<void>;
+  refreshServerStore: (force?: boolean) => Promise<void>;
   syncWithRemoteStore: (remoteUrl: string) => Promise<{ success: boolean; message: string; count?: number }>;
   exportFullDatabase: () => void;
   importFullDatabase: (jsonContent: string) => Promise<{ success: boolean; message: string }>;
@@ -582,11 +582,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ theme: updated }),
       });
-      await fetch('/api/store/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme: updated }),
-      });
     } catch (err) {
       console.error('Error syncing theme to server:', err);
     }
@@ -607,11 +602,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     try {
       await fetch('/api/store/theme', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ theme: defaultTheme }),
-      });
-      await fetch('/api/store/sync', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ theme: defaultTheme }),
@@ -761,12 +751,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ products: newProducts }),
-    }).then(() => {
-      fetch('/api/store/sync', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: newProducts }),
-      }).catch(e => console.error(e));
     }).catch(err => console.error('Error syncing products to server:', err));
   };
 
@@ -1253,14 +1237,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setRegisteredUsers(mapRegisteredUsersList(map));
   };
 
+  const isSyncingRef = useRef(false);
+  const lastSyncTimestampRef = useRef<string>('');
+
   // Synchronize entire store with server (Products, Users, Orders, Theme, Billboards)
-  const refreshServerStore = async (): Promise<void> => {
+  const refreshServerStore = async (force: boolean = false): Promise<void> => {
+    // Avoid concurrent overlapping syncs
+    if (isSyncingRef.current) return;
+    // Don't attempt to sync when offline
+    if (typeof window !== 'undefined' && !window.navigator.onLine) return;
+
+    isSyncingRef.current = true;
     try {
-      const res = await fetch('/api/store/sync');
+      const url = (!force && lastSyncTimestampRef.current)
+        ? `/api/store/sync?since=${encodeURIComponent(lastSyncTimestampRef.current)}`
+        : '/api/store/sync';
+
+      const res = await fetch(url, {
+        headers: { 'Cache-Control': 'no-cache' },
+      });
       if (!res.ok) return;
       const json = await res.json();
-      if (json.success && json.data) {
+      if (!json.success) return;
+
+      // Server indicates no modifications since last sync
+      if (json.notModified) {
+        return;
+      }
+
+      if (json.data) {
         const d = json.data;
+        if (d.lastUpdated) {
+          lastSyncTimestampRef.current = d.lastUpdated;
+        }
         if (Array.isArray(d.products)) {
           setProducts(d.products);
           localStorage.setItem('dbuy_products', JSON.stringify(d.products));
@@ -1296,8 +1305,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           localStorage.setItem('dbuy_admin_secret_slug', d.adminSecretSlug);
         }
       }
-    } catch (err) {
-      console.warn('[STORE-SYNC] Server sync notice:', err);
+    } catch {
+      // Quietly handle transient network interruptions without alarming the UI or console
+    } finally {
+      isSyncingRef.current = false;
     }
   };
 
@@ -1510,23 +1521,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // Poll every 3 seconds to keep mobile & desktop synchronized in real time
+    // Periodic auto-sync only when tab is active
     const interval = setInterval(() => {
-      refreshServerStore();
-    }, 3000);
+      if (document.visibilityState === 'visible') {
+        refreshServerStore();
+      }
+    }, 12000);
 
-    // Sync on tab focus / phone screen wakeup
+    // Sync on tab focus / phone screen wakeup / network reconnect
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
         refreshServerStore();
       }
     };
+    const handleOnline = () => {
+      refreshServerStore(true);
+    };
+
+    window.addEventListener('online', handleOnline);
     window.addEventListener('visibilitychange', handleVisibilityChange);
     window.addEventListener('focus', handleVisibilityChange);
 
     return () => {
       clearInterval(interval);
       if (bc) bc.close();
+      window.removeEventListener('online', handleOnline);
       window.removeEventListener('storage', handleStorageChange);
       window.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('focus', handleVisibilityChange);

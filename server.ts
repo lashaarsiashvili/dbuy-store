@@ -136,18 +136,6 @@ function saveStoreDatabase(): void {
     }
     storeDb.lastUpdated = new Date().toISOString();
     fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
-
-    // Also persist products directly to src/data/initialProducts.ts so the codebase always contains all added products
-    try {
-      const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
-      if (Array.isArray(storeDb.products) && storeDb.products.length > 0) {
-        const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(storeDb.products, null, 2)};\n`;
-        fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
-        console.log(`[SOURCE-SYNC] Successfully synced ${storeDb.products.length} products to src/data/initialProducts.ts`);
-      }
-    } catch (sourceErr) {
-      console.error('Error writing to src/data/initialProducts.ts:', sourceErr);
-    }
   } catch (err) {
     console.error('Failed to save store database to file:', err);
   }
@@ -372,6 +360,16 @@ Return ONLY a valid JSON object matching this schema without any markdown code f
 // GET full synchronized store data (Products, Users, Orders, Theme, Billboards)
 app.get('/api/store/sync', (req, res) => {
   try {
+    const clientSince = req.query.since as string | undefined;
+    if (clientSince && clientSince === storeDb.lastUpdated) {
+      res.json({
+        success: true,
+        notModified: true,
+        lastUpdated: storeDb.lastUpdated,
+      });
+      return;
+    }
+
     res.json({
       success: true,
       data: {
@@ -447,6 +445,18 @@ app.post('/api/store/persist-to-code', (req, res) => {
       storeDb.products = products;
     }
     saveStoreDatabase();
+
+    try {
+      const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
+      if (Array.isArray(storeDb.products) && storeDb.products.length > 0) {
+        const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(storeDb.products, null, 2)};\n`;
+        fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
+        console.log(`[SOURCE-SYNC] Successfully synced ${storeDb.products.length} products to src/data/initialProducts.ts`);
+      }
+    } catch (sourceErr) {
+      console.error('Error writing to src/data/initialProducts.ts:', sourceErr);
+    }
+
     res.json({
       success: true,
       message: `Persisted ${storeDb.products.length} products to initialProducts.ts and store_database.json`,
