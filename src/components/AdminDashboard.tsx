@@ -62,8 +62,6 @@ export const AdminDashboard: React.FC = () => {
     bulkImportProducts,
     updateProduct,
     deleteProduct,
-    clearAllProducts,
-    resetDefaultProducts,
     orders,
     updateOrderStatus,
     updateOrderTracking,
@@ -1253,14 +1251,6 @@ export const AdminDashboard: React.FC = () => {
                 >
                   <Plus className="w-4 h-4" />
                   <span>{isKa ? 'პროდუქტის დამატება' : 'Add New Product'}</span>
-                </button>
-                <button
-                  onClick={resetDefaultProducts}
-                  className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
-                  title="Reset to initial 8 products"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  <span>{isKa ? 'საწყისი კატალოგი' : 'Reset'}</span>
                 </button>
               </div>
             </div>

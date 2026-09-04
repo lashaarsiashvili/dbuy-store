@@ -213,7 +213,7 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
     const googlePaySession = googlePaySdk?.session;
     const googlePayConfig = googlePaySdk?.config;
 
-    // Use PRODUCTION for live transactions
+    // Use PRODUCTION environment for live real payments
     const paymentsClient = new google.payments.api.PaymentsClient({
       environment: 'PRODUCTION',
       paymentDataCallbacks: {
@@ -340,8 +340,10 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
       apiVersion: googlePayConfig?.apiVersion || 2,
       apiVersionMinor: googlePayConfig?.apiVersionMinor || 0,
       allowedPaymentMethods,
-      merchantInfo: googlePayConfig?.merchantInfo || {
-        merchantName: 'DBUY Store',
+      merchantInfo: {
+        merchantId: 'BCR2DN6DVKZOLJDJ',
+        merchantName: 'Dbuy store',
+        ...(googlePayConfig?.merchantInfo || {}),
       },
       transactionInfo: {
         displayItems: [
@@ -368,8 +370,12 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
     };
 
     // Prompt user with Google Pay native sheet
-    const paymentData = await paymentsClient.loadPaymentData(paymentDataRequest);
-    console.log('[PAYPAL-v6-GOOGLEPAY] loadPaymentData response:', paymentData);
+    try {
+      const paymentData = await paymentsClient.loadPaymentData(paymentDataRequest);
+      console.log('[PAYPAL-v6-GOOGLEPAY] loadPaymentData response:', paymentData);
+    } catch (gpayErr: any) {
+      throw gpayErr;
+    }
   } catch (err: any) {
     if (err?.statusCode === 'CANCELED') {
       console.log('[PAYPAL-v6-GOOGLEPAY] Google Pay cancelled by user');

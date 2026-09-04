@@ -937,7 +937,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             </span>
           </button>
 
-          {/* Button 3: Google Pay */}
+          {/* Button 3: Google Pay (Google Brand Guidelines compliant) */}
           <button
             type="button"
             id="payment-method-googlepay"
@@ -947,22 +947,22 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             }}
             className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
               activeMethod === "googlepay"
-                ? "bg-slate-900 text-white border-slate-900 ring-4 ring-slate-900/25 scale-[1.02] shadow-md"
+                ? "bg-black text-white border-black ring-4 ring-black/20 scale-[1.02] shadow-md"
                 : "bg-white text-slate-900 border-slate-200 hover:border-slate-400 hover:bg-slate-50 active:scale-95"
             }`}
           >
             {activeMethod === "googlepay" && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-blue-400 ring-2 ring-white"></span>
+              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white"></span>
             )}
             <div className="h-6 flex items-center justify-center">
               <GooglePayLogo
-                isDark={activeMethod === "googlepay"}
+                useCapsule={true}
                 className="scale-95"
               />
             </div>
             <span
               className={`text-[11px] font-bold tracking-tight ${
-                activeMethod === "googlepay" ? "text-blue-100" : "text-slate-700"
+                activeMethod === "googlepay" ? "text-slate-200" : "text-slate-700"
               }`}
             >
               Google Pay

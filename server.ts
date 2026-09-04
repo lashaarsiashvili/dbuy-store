@@ -80,6 +80,20 @@ interface StoreDatabase {
   lastUpdated: string;
 }
 
+// Helper to sync catalog to initialProducts.ts file so it persists forever in the code
+function syncCatalogToInitialProducts(products: any[]): void {
+  try {
+    const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
+    if (Array.isArray(products) && products.length > 0) {
+      const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(products, null, 2)};\n`;
+      fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
+      console.log(`[SOURCE-SYNC] Auto-persisted ${products.length} products to src/data/initialProducts.ts`);
+    }
+  } catch (err) {
+    console.error('Error auto-syncing initialProducts.ts:', err);
+  }
+}
+
 function initStoreDatabase(): StoreDatabase {
   try {
     if (!fs.existsSync(DB_DIR)) {
@@ -89,7 +103,7 @@ function initStoreDatabase(): StoreDatabase {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
       const parsed = JSON.parse(raw);
       return {
-        products: Array.isArray(parsed.products) && parsed.products.length > 0 ? parsed.products : initialProducts,
+        products: Array.isArray(parsed.products) ? parsed.products : initialProducts,
         registeredUsers: parsed.registeredUsers || {},
         orders: Array.isArray(parsed.orders) ? parsed.orders : [],
         theme: parsed.theme || DEFAULT_THEME,
@@ -396,6 +410,7 @@ app.post('/api/store/sync', (req, res) => {
     
     if (Array.isArray(products)) {
       storeDb.products = products;
+      syncCatalogToInitialProducts(products);
     }
     if (registeredUsers && typeof registeredUsers === 'object') {
       storeDb.registeredUsers = { ...storeDb.registeredUsers, ...registeredUsers };
@@ -736,7 +751,8 @@ app.post('/api/store/products', (req, res) => {
     }
     storeDb.products = products;
     saveStoreDatabase();
-    console.log(`[PRODUCTS-PERSISTED] Updated ${products.length} products on server`);
+    syncCatalogToInitialProducts(products);
+    console.log(`[PRODUCTS-PERSISTED] Updated ${products.length} products on server and source file`);
 
     res.json({ success: true, products: storeDb.products });
   } catch (err) {
@@ -1190,15 +1206,16 @@ app.post('/paypal-api/checkout/orders/:orderId/capture', async (req, res) => {
 });
 
 // ==========================================
-// GOOGLE PAY GATEWAY ENDPOINTS
+// GOOGLE PAY GATEWAY ENDPOINTS (PRODUCTION)
 // ==========================================
 app.get('/api/googlepay/config', (req, res) => {
   res.json({
     success: true,
     environment: 'PRODUCTION',
-    merchantName: 'DBUY Store',
-    gateway: 'example',
-    gatewayMerchantId: 'exampleGatewayMerchantId',
+    merchantId: 'BCR2DN6DVKZOLJDJ',
+    merchantName: 'Dbuy store',
+    gateway: 'paypal',
+    gatewayMerchantId: 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8',
   });
 });
 

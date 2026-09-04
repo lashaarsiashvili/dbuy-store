@@ -38,7 +38,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
       if (google?.payments?.api?.PaymentsClient && containerRef.current) {
         if (checkInterval) clearInterval(checkInterval);
         try {
-          // Use PRODUCTION environment so it allows real Google accounts and card binding
+          // Use PRODUCTION environment for live Google Pay payments
           const paymentsClient = new google.payments.api.PaymentsClient({
             environment: 'PRODUCTION',
           });

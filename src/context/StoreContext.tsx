@@ -66,7 +66,6 @@ interface StoreContextType {
   updateProduct: (product: Product) => void;
   deleteProduct: (id: string) => void;
   clearAllProducts: () => void;
-  resetDefaultProducts: () => void;
 
   // Wishlist
   wishlist: string[];
@@ -690,44 +689,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(`Billboard auto-rotation set to ${val} seconds (${Math.round(val/60*10)/10}m)`, 'info');
   };
 
-  // Products
+  // Products - Durable persistence: relies strictly on localStorage or server data.
+  // Never merges or resets to initialProducts so added and deleted products remain permanent.
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('dbuy_products');
-    if (saved) {
+    if (saved !== null) {
       try {
-        const parsed: Product[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          const parsedIds = new Set(parsed.map(p => p.id));
-          const combined = [...parsed];
-          for (const ip of initialProducts) {
-            if (!parsedIds.has(ip.id)) {
-              combined.push(ip);
-            }
-          }
-          return combined.map(p => {
-            const init = initialProducts.find(ip => ip.id === p.id);
-            const customSlug = p.customSlug || init?.customSlug;
-            const titleKa = p.titleKa || init?.titleKa;
-            const descriptionKa = p.descriptionKa || init?.descriptionKa;
-            const features = (p.features && p.features.length > 0) ? p.features : init?.features;
-            let images = p.images && p.images.length > 0 ? p.images : [p.image];
-            if (init && (!p.images || p.images.length === 0)) {
-              images = init.images || [p.image];
-            }
-            return {
-              ...p,
-              customSlug,
-              titleKa,
-              descriptionKa,
-              features,
-              images
-            };
-          });
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          return parsed;
         }
       } catch (e) {
-        console.error('Error parsing products', e);
+        console.error('Error parsing saved products from localStorage:', e);
       }
     }
+    // Only used on very first clean install when localStorage is completely empty
     return initialProducts;
   });
 
@@ -797,11 +773,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const newProducts = products.filter(p => p.id !== id);
     saveProducts(newProducts);
     addToast(`Deleted "${deleted?.title || 'Product'}"`, 'info');
-  };
-
-  const resetDefaultProducts = () => {
-    saveProducts(initialProducts);
-    addToast('Catalog reset to default 8 items', 'info');
   };
 
   // Filters & Sorting
@@ -2063,7 +2034,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateProduct,
         deleteProduct,
         clearAllProducts,
-        resetDefaultProducts,
         wishlist,
         toggleWishlist,
         removeFromWishlist,
