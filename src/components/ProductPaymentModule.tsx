@@ -5,6 +5,8 @@ import { useStore } from "../context/StoreContext";
 import { safeApiFetch } from "../utils/apiSafe";
 import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
+import { PayPalV6CardFields } from "./PayPalV6CardFields";
+import { startPayPalV6ApplePayCheckout, startPayPalV6GooglePayCheckout } from "../utils/paypalV6";
 import {
   ApplePayLogo,
   AppleLogoIcon,
@@ -133,7 +135,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           const paymentsClient = new (
             window as any
           ).google.payments.api.PaymentsClient({
-            environment: "TEST",
+            environment: "PRODUCTION",
           });
           const ready = await paymentsClient.isReadyToPay({
             apiVersion: 2,
@@ -520,125 +522,60 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
     setIsProcessing(true);
     setGatewayMessage(
       isKa
-        ? "Apple Pay ავტორიზაციის დაწყება (Touch ID / Face ID)..."
-        : "Initializing Apple Pay biometric authorization...",
+        ? "Apple Pay ავტორიზაციის დაწყება (PayPal v6 / Face ID)..."
+        : "Initializing Apple Pay authorization (PayPal v6 / Face ID)...",
     );
 
     try {
-      const ApplePaySession = (window as any).ApplePaySession;
-      const paymentRequest = {
-        countryCode: "US",
-        currencyCode: "USD",
-        merchantCapabilities: ["supports3DS"],
-        supportedNetworks: ["visa", "masterCard", "amex", "discover"],
-        total: {
-          label: `DBUY Store - ${product.title}`,
-          amount: totalAmountUSD.toFixed(2),
-          type: "final",
+      await startPayPalV6ApplePayCheckout({
+        amountUSD: totalAmountUSD,
+        label: `DBUY Store - ${product.title}`,
+        customerInfo: {
+          name: walletCustomerName,
+          email: walletCustomerEmail,
+          address: walletAddress,
+          city: walletCity,
+          zip: walletZip,
+          country: walletCountry,
         },
-        requiredShippingContactFields: [
-          "postalAddress",
-          "name",
-          "phone",
-          "email",
-        ],
-      };
-
-      const session = new ApplePaySession(3, paymentRequest);
-
-      session.onvalidatemerchant = async (event: any) => {
-        try {
-          const { data } = await safeApiFetch(
-            "/api/applepay/validate-merchant",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ validationURL: event.validationURL }),
-            },
+        onSuccess: (details) => {
+          setIsProcessing(false);
+          setGatewayMessage("");
+          handleCompleteOrder("applepay", details.transactionId, {
+            name: details.payer?.name || walletCustomerName,
+            email: details.payer?.email || walletCustomerEmail,
+            address: details.payer?.address || walletAddress,
+            city: details.payer?.city || walletCity,
+            zip: details.payer?.zip || walletZip,
+            country: details.payer?.country || walletCountry,
+          });
+          addToast(
+            isKa
+              ? "Apple Pay გადახდა წარმატებით შესრულდა PayPal v6 არხით!"
+              : "Apple Pay authorized successfully via PayPal v6!",
+            "success",
           );
-          session.completeMerchantValidation(data);
-        } catch (e) {
-          session.abort();
+        },
+        onError: async (err) => {
+          console.warn("[PRODUCT-APPLEPAY] PayPal v6 Apple Pay error, falling back:", err);
           setIsProcessing(false);
           setGatewayMessage("");
           await executeApplePayPayment();
-        }
-      };
-
-      session.onpaymentauthorized = async (event: any) => {
-        try {
-          const payment = event.payment;
-          const { data: authResult } = await safeApiFetch(
-            "/api/applepay/authorize",
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                paymentToken: payment.token,
-                amount: totalAmountUSD,
-                currency: "USD",
-                shippingContact: payment.shippingContact,
-                customerInfo: {
-                  name: walletCustomerName,
-                  email: walletCustomerEmail,
-                  address: walletAddress,
-                  city: walletCity,
-                  zip: walletZip,
-                  country: walletCountry,
-                },
-              }),
-            },
-          );
-
-          if (authResult?.success) {
-            session.completePayment(ApplePaySession.STATUS_SUCCESS);
-            handleCompleteOrder("applepay", authResult.transactionId, {
-              name: authResult.payer?.name || walletCustomerName,
-              email: authResult.payer?.email || walletCustomerEmail,
-              address: authResult.payer?.address || walletAddress,
-              city: authResult.payer?.city || walletCity,
-              zip: authResult.payer?.zip || walletZip,
-              country: authResult.payer?.country || walletCountry,
-            });
-            addToast(
-              isKa
-                ? "Apple Pay გადახდა წარმატებით შესრულდა!"
-                : "Apple Pay authorized successfully!",
-              "success",
-            );
-          } else {
-            session.completePayment(ApplePaySession.STATUS_FAILURE);
-            addToast(
-              isKa
-                ? "Apple Pay ავტორიზაცია ვერ მოხერხდა"
-                : "Apple Pay authorization failed",
-              "error",
-            );
-          }
-        } catch (e: any) {
-          session.completePayment(ApplePaySession.STATUS_FAILURE);
-          addToast(e?.message || "Apple Pay error", "error");
-        } finally {
+        },
+        onCancel: () => {
           setIsProcessing(false);
           setGatewayMessage("");
-        }
-      };
-
-      session.oncancel = () => {
-        setIsProcessing(false);
-        setGatewayMessage("");
-        addToast(
-          isKa
-            ? "Apple Pay გადახდა გაუქმდა"
-            : "Apple Pay payment was cancelled by user",
-          "info",
-        );
-      };
-
-      session.begin();
+          addToast(
+            isKa
+              ? "Apple Pay გადახდა გაუქმდა"
+              : "Apple Pay payment was cancelled by user",
+            "info",
+          );
+        },
+      });
     } catch (err: any) {
       console.warn(
-        "Native Apple Pay not permitted in this context, authorizing directly:",
+        "Native Apple Pay error, authorizing directly:",
         err,
       );
       setIsProcessing(false);
@@ -741,149 +678,68 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
     }
   };
 
-  // Handle Google Pay Checkout with Native PaymentsClient Dialog or direct fallback
+  // Handle Google Pay Checkout with PayPal v6 PaymentsClient or fallback
   const handleGooglePaySubmit = async () => {
-    // If native PaymentsClient is available, attempt official dialog
-    if (
-      typeof window !== "undefined" &&
-      (window as any).google?.payments?.api?.PaymentsClient
-    ) {
-      try {
-        setIsProcessing(true);
-        setGatewayMessage(
-          isKa
-            ? "Google Pay-ის ოფიციალური ფანჯრის გახსნა..."
-            : "Opening official Google Pay payment sheet...",
-        );
+    setIsProcessing(true);
+    setGatewayMessage(
+      isKa
+        ? "Google Pay ავტორიზაცია (PayPal v6 Live)..."
+        : "Google Pay authorization (PayPal v6 Live)...",
+    );
 
-        const paymentsClient = new (
-          window as any
-        ).google.payments.api.PaymentsClient({
-          environment: "TEST",
-        });
-
-        const paymentDataRequest = {
-          apiVersion: 2,
-          apiVersionMinor: 0,
-          allowedPaymentMethods: [
-            {
-              type: "CARD",
-              parameters: {
-                allowedAuthMethods: ["PAN_ONLY", "CRYPTOGRAM_3DS"],
-                allowedCardNetworks: [
-                  "AMEX",
-                  "DISCOVER",
-                  "JCB",
-                  "MASTERCARD",
-                  "VISA",
-                ],
-                billingAddressRequired: true,
-                billingAddressParameters: {
-                  format: "FULL",
-                },
-              },
-              tokenizationSpecification: {
-                type: "PAYMENT_GATEWAY",
-                parameters: {
-                  gateway: "example",
-                  gatewayMerchantId: "exampleGatewayMerchantId",
-                },
-              },
-            },
-          ],
-          transactionInfo: {
-            totalPriceStatus: "FINAL",
-            totalPrice: totalAmountUSD.toFixed(2),
-            currencyCode: "USD",
-            countryCode: "US",
-          },
-          merchantInfo: {
-            merchantName: "DBUY Store",
-          },
-          emailRequired: true,
-          shippingAddressRequired: false,
-        };
-
-        const paymentData =
-          await paymentsClient.loadPaymentData(paymentDataRequest);
-
-        setGatewayMessage(
-          isKa
-            ? "Google Pay ტრანზაქციის გადამოწმება და ჩარიცხვა..."
-            : "Verifying Google Pay transaction...",
-        );
-
-        const { data: processResult } = await safeApiFetch(
-          "/api/googlepay/process-payment",
-          {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              paymentData,
-              amount: totalAmountUSD,
-              currency: "USD",
-              description: `DBUY Google Pay: ${product.title} (x${quantity})`,
-              customerInfo: {
-                name: walletCustomerName,
-                email: walletCustomerEmail,
-                address: walletAddress,
-                city: walletCity,
-                zip: walletZip,
-                country: walletCountry,
-              },
-            }),
-          },
-        );
-
-        if (!processResult?.success) {
-          throw new Error(
-            processResult?.error || "Google Pay transaction failed",
+    try {
+      await startPayPalV6GooglePayCheckout({
+        amountUSD: totalAmountUSD,
+        label: `DBUY Store - ${product.title}`,
+        customerInfo: {
+          name: walletCustomerName,
+          email: walletCustomerEmail,
+          address: walletAddress,
+          city: walletCity,
+          zip: walletZip,
+          country: walletCountry,
+        },
+        onSuccess: (details) => {
+          setIsProcessing(false);
+          setGatewayMessage("");
+          handleCompleteOrder("googlepay", details.transactionId, {
+            name: details.payer?.name || walletCustomerName,
+            email: details.payer?.email || walletCustomerEmail,
+            address: details.payer?.address || walletAddress,
+            city: details.payer?.city || walletCity,
+            zip: details.payer?.zip || walletZip,
+            country: details.payer?.country || walletCountry,
+          });
+          addToast(
+            isKa
+              ? "Google Pay გადახდა წარმატებით შესრულდა PayPal-ის ანგარიშზე!"
+              : "Google Pay payment processed successfully to PayPal account!",
+            "success",
           );
-        }
-
-        const verifiedTxnId = processResult.transactionId;
-        const payer = processResult.payer || {};
-
-        handleCompleteOrder("googlepay", verifiedTxnId, {
-          name: payer.name || walletCustomerName,
-          email: payer.email || walletCustomerEmail,
-          address: payer.address || walletAddress,
-          city: payer.city || walletCity,
-          zip: payer.zip || walletZip,
-          country: payer.country || walletCountry,
-        });
-
-        addToast(
-          isKa
-            ? `Google Pay გადახდა წარმატებით შესრულდა!`
-            : `Google Pay payment authorized successfully!`,
-          "success",
-        );
-        return;
-      } catch (err: any) {
-        if (err?.statusCode === "CANCELED") {
+        },
+        onError: async (err) => {
+          console.warn("[PRODUCT-GOOGLEPAY] PayPal v6 error, falling back:", err);
+          setIsProcessing(false);
+          setGatewayMessage("");
+          await executeGooglePayPayment();
+        },
+        onCancel: () => {
+          setIsProcessing(false);
+          setGatewayMessage("");
           addToast(
             isKa
               ? "Google Pay გადახდა გაუქმდა"
               : "Google Pay payment was cancelled by user",
             "info",
           );
-          setIsProcessing(false);
-          setGatewayMessage("");
-          return;
-        }
-        console.warn(
-          "Native Google Pay prompt did not complete, authorizing directly:",
-          err,
-        );
-      } finally {
-        setIsProcessing(false);
-        setGatewayMessage("");
-      }
+        },
+      });
+    } catch (err: any) {
+      console.warn("Google Pay prompt notice:", err);
+      setIsProcessing(false);
+      setGatewayMessage("");
+      await executeGooglePayPayment();
     }
-
-    // Direct verified Google Pay authorization fallback
-    await executeGooglePayPayment();
   };
 
   // Handle Real Card Checkout via PayPal Gateway Capture
@@ -1552,131 +1408,170 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
 
         {/* Method 4: DEBIT & CREDIT CARD DIRECT PAYMENT */}
         {activeMethod === "card" && (
-          <form
-            onSubmit={handleCardSubmit}
-            className="space-y-3.5 animate-in fade-in duration-200"
-          >
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-              <div className="flex items-center space-x-2">
-                <CreditCard className="w-4 h-4 text-blue-700" />
-                <span className="text-xs font-bold text-slate-900">
-                  {isKa
-                    ? "საბანკო ბარათით გადახდა (PayPal Gateway)"
-                    : "Debit / Credit Card Checkout (via PayPal)"}
-                </span>
-              </div>
-              <div className="flex items-center space-x-1.5">
-                <VisaLogo className="h-4 w-auto" />
-                <MastercardLogo className="h-4 w-auto" />
-                <AmexLogo className="h-4 w-auto" />
-              </div>
+          <div className="space-y-4 animate-in fade-in duration-200">
+            {/* Official PayPal v6 Hosted Card Fields */}
+            <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200">
+              <PayPalV6CardFields
+                amountUSD={totalAmountUSD}
+                postalCode={cardZip || "0100"}
+                cardholderName={cardName || walletCustomerName}
+                isKa={isKa}
+                onSuccess={({ orderId, capture }) => {
+                  handleCompleteOrder(
+                    "card",
+                    capture?.capture?.id || capture?.id || orderId,
+                    {
+                      name: cardName || walletCustomerName,
+                      email: walletCustomerEmail,
+                      address: walletAddress,
+                      city: walletCity,
+                      zip: cardZip,
+                      country: cardCountry,
+                    },
+                  );
+                  addToast(
+                    isKa
+                      ? "ბარათით გადახდა წარმატებით შესრულდა PayPal-ის ანგარიშზე!"
+                      : "Card payment captured successfully via PayPal v6!",
+                    "success",
+                  );
+                }}
+                onError={(err) => {
+                  console.warn("[PRODUCT-CARDFIELDS] v6 notice:", err);
+                }}
+                onFallbackDirect={() => {
+                  console.log("[PRODUCT-CARDFIELDS] Direct form active");
+                }}
+              />
             </div>
 
-            <div className="space-y-2.5">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                  {isKa ? "ბარათის მფლობელის სახელი" : "Name on Card"}
-                </label>
-                <input
-                  type="text"
-                  required
-                  value={cardName}
-                  onChange={(e) => setCardName(e.target.value)}
-                  placeholder="Full Name"
-                  className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-medium"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                  <span>{isKa ? "ბარათის ნომერი" : "Card Number"}</span>
-                  {getCardBrand() && (
-                    <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                      {getCardBrand()}
-                    </span>
-                  )}
-                </label>
-                <div className="relative">
-                  <input
-                    type="text"
-                    required
-                    value={cardNumber}
-                    onChange={(e) => handleCardNumberChange(e.target.value)}
-                    placeholder="4000 1234 5678 9010"
-                    maxLength={19}
-                    className="w-full px-3.5 py-2.5 pl-10 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
-                  />
-                  <CreditCard className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2.5">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    {isKa ? "ვადა (MM/YY)" : "Expiry (MM/YY)"}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={cardExpiry}
-                    onChange={(e) => handleExpiryChange(e.target.value)}
-                    placeholder="12/28"
-                    maxLength={5}
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    CVC / CVV
-                  </label>
-                  <input
-                    type="password"
-                    required
-                    value={cardCvc}
-                    onChange={(e) => setCardCvc(e.target.value.slice(0, 4))}
-                    placeholder="•••"
-                    maxLength={4}
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Large Card Pay Button */}
-            <button
-              type="submit"
-              disabled={isProcessing}
-              className="w-full h-14 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-black active:scale-[0.99] text-white font-bold text-sm sm:text-base transition-all shadow-lg shadow-slate-900/10 flex items-center justify-between px-5 cursor-pointer disabled:opacity-60 border border-slate-700/50"
+            {/* Alternative Direct Card Form */}
+            <form
+              onSubmit={handleCardSubmit}
+              className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3.5"
             >
-              {isProcessing ? (
-                <div className="w-full flex items-center justify-center space-x-2">
-                  <Loader2 className="w-5 h-5 animate-spin text-white" />
-                  <span>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                <div className="flex items-center space-x-2">
+                  <CreditCard className="w-4 h-4 text-blue-700" />
+                  <span className="text-xs font-bold text-slate-900">
                     {isKa
-                      ? "ბარათის დამუშავება..."
-                      : "Processing Card Payment..."}
+                      ? "საბანკო ბარათის ალტერნატიული ფორმა (Manual Entry)"
+                      : "Alternative Card Gateway (Manual Entry)"}
                   </span>
                 </div>
-              ) : (
-                <>
-                  <div className="flex items-center space-x-2.5">
-                    <Lock className="w-4 h-4 text-emerald-400" />
+                <div className="flex items-center space-x-1.5">
+                  <VisaLogo className="h-4 w-auto" />
+                  <MastercardLogo className="h-4 w-auto" />
+                  <AmexLogo className="h-4 w-auto" />
+                </div>
+              </div>
+
+              <div className="space-y-2.5">
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                    {isKa ? "ბარათის მფლობელის სახელი" : "Name on Card"}
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={cardName}
+                    onChange={(e) => setCardName(e.target.value)}
+                    placeholder="Full Name"
+                    className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-medium"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center justify-between">
+                    <span>{isKa ? "ბარათის ნომერი" : "Card Number"}</span>
+                    {getCardBrand() && (
+                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                        {getCardBrand()}
+                      </span>
+                    )}
+                  </label>
+                  <div className="relative">
+                    <input
+                      type="text"
+                      required
+                      value={cardNumber}
+                      onChange={(e) => handleCardNumberChange(e.target.value)}
+                      placeholder="4000 1234 5678 9010"
+                      maxLength={19}
+                      className="w-full px-3.5 py-2.5 pl-10 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
+                    />
+                    <CreditCard className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5">
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      {isKa ? "ვადა (MM/YY)" : "Expiry (MM/YY)"}
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={cardExpiry}
+                      onChange={(e) => handleExpiryChange(e.target.value)}
+                      placeholder="12/28"
+                      maxLength={5}
+                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                      CVC / CVV
+                    </label>
+                    <input
+                      type="password"
+                      required
+                      value={cardCvc}
+                      onChange={(e) => setCardCvc(e.target.value.slice(0, 4))}
+                      placeholder="•••"
+                      maxLength={4}
+                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Large Card Pay Button */}
+              <button
+                type="submit"
+                disabled={isProcessing}
+                className="w-full h-14 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-black active:scale-[0.99] text-white font-bold text-sm sm:text-base transition-all shadow-lg shadow-slate-900/10 flex items-center justify-between px-5 cursor-pointer disabled:opacity-60 border border-slate-700/50"
+              >
+                {isProcessing ? (
+                  <div className="w-full flex items-center justify-center space-x-2">
+                    <Loader2 className="w-5 h-5 animate-spin text-white" />
                     <span>
                       {isKa
-                        ? `გადახდა: ${formatPrice(totalAmountUSD)}`
-                        : `Pay with Card • ${formatPrice(totalAmountUSD)}`}
+                        ? "ბარათის დამუშავება..."
+                        : "Processing Card Payment..."}
                     </span>
                   </div>
-                  <div className="flex items-center space-x-1.5 opacity-90">
-                    <VisaLogo className="h-3.5 w-auto" />
-                    <MastercardLogo className="h-3.5 w-auto" />
-                    <AmexLogo className="h-3.5 w-auto" />
-                  </div>
-                </>
-              )}
-            </button>
-          </form>
+                ) : (
+                  <>
+                    <div className="flex items-center space-x-2.5">
+                      <Lock className="w-4 h-4 text-emerald-400" />
+                      <span>
+                        {isKa
+                          ? `გადახდა: ${formatPrice(totalAmountUSD)}`
+                          : `Pay with Card • ${formatPrice(totalAmountUSD)}`}
+                      </span>
+                    </div>
+                    <div className="flex items-center space-x-1.5 opacity-90">
+                      <VisaLogo className="h-3.5 w-auto" />
+                      <MastercardLogo className="h-3.5 w-auto" />
+                      <AmexLogo className="h-3.5 w-auto" />
+                    </div>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
         )}
       </div>
 

@@ -18,6 +18,8 @@ import { PayPalButtons, FUNDING } from "@paypal/react-paypal-js";
 import { ALL_COUNTRIES } from "../data/countries";
 import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
+import { PayPalV6CardFields } from "./PayPalV6CardFields";
+import { startPayPalV6ApplePayCheckout, startPayPalV6GooglePayCheckout } from "../utils/paypalV6";
 import {
   ApplePayLogo,
   GooglePayLogo,
@@ -290,80 +292,45 @@ export const CheckoutModal: React.FC = () => {
   const handleNativeApplePayAttempt = async () => {
     setIsProcessingPayment(true);
     try {
-      const ApplePaySession = (window as any).ApplePaySession;
-      const paymentRequest = {
-        countryCode: "US",
-        currencyCode: "USD",
-        merchantCapabilities: ["supports3DS"],
-        supportedNetworks: ["visa", "masterCard", "amex", "discover"],
-        total: {
-          label: "DBUY Store Checkout",
-          amount: totalAmountUSD.toFixed(2),
-          type: "final",
+      await startPayPalV6ApplePayCheckout({
+        amountUSD: totalAmountUSD,
+        label: "DBUY Store Checkout",
+        customerInfo: formData,
+        onSuccess: (details) => {
+          placeOrder({
+            customerName: (details.payer?.name || formData.name).trim(),
+            email: (details.payer?.email || formData.email).trim(),
+            address: (details.payer?.address || formData.address).trim(),
+            city: (details.payer?.city || formData.city).trim(),
+            zip: (details.payer?.zip || formData.zip).trim(),
+            country: (details.payer?.country || formData.country).trim(),
+            paymentMethod: "applepay",
+            applePayTransactionId: details.transactionId,
+            paypalTransactionId: details.orderId || details.transactionId,
+          });
+          setIsProcessingPayment(false);
+          setStep(3);
+          addToast(
+            language === "ka"
+              ? "Apple Pay გადახდა წარმატებით შესრულდა PayPal v6 არხით!"
+              : "Apple Pay authorized successfully via PayPal v6!",
+            "success",
+          );
         },
-      };
-      const session = new ApplePaySession(3, paymentRequest);
-      session.onvalidatemerchant = async (event: any) => {
-        try {
-          const res = await fetch("/api/applepay/validate-merchant", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ validationURL: event.validationURL }),
-          });
-          const merchantSession = await res.json();
-          session.completeMerchantValidation(merchantSession);
-        } catch {
-          session.abort();
+        onError: (err) => {
           setIsProcessingPayment(false);
-        }
-      };
-      session.onpaymentauthorized = async (event: any) => {
-        try {
-          const res = await fetch("/api/applepay/authorize", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              paymentToken: event.payment?.token,
-              amount: totalAmountUSD,
-              currency: "USD",
-              customerInfo: formData,
-            }),
-          });
-          const data = await res.json();
-          if (data?.success) {
-            session.completePayment(ApplePaySession.STATUS_SUCCESS);
-            placeOrder({
-              customerName: (data.payer?.name || formData.name).trim(),
-              email: (data.payer?.email || formData.email).trim(),
-              address: (data.payer?.address || formData.address).trim(),
-              city: (data.payer?.city || formData.city).trim(),
-              zip: (data.payer?.zip || formData.zip).trim(),
-              country: (data.payer?.country || formData.country).trim(),
-              paymentMethod: "applepay",
-              applePayTransactionId: data.transactionId,
-              paypalTransactionId: data.transactionId,
-            });
-            setStep(3);
-            addToast(
-              language === "ka"
-                ? "Apple Pay გადახდა წარმატებით შესრულდა!"
-                : "Apple Pay authorized successfully!",
-              "success",
-            );
-          } else {
-            session.completePayment(ApplePaySession.STATUS_FAILURE);
-            addToast("Apple Pay failed", "error");
-          }
-        } catch {
-          session.completePayment(ApplePaySession.STATUS_FAILURE);
-        } finally {
+          console.warn("[CHECKOUT-APPLEPAY] PayPal v6 Apple Pay error:", err);
+          addToast(
+            language === "ka"
+              ? "Apple Pay-ის დაწყება ვერ მოხერხდა. გთხოვთ გამოიყენოთ საბანკო ბარათი ან PayPal."
+              : "Apple Pay session could not be completed. Please use Card or PayPal.",
+            "info",
+          );
+        },
+        onCancel: () => {
           setIsProcessingPayment(false);
-        }
-      };
-      session.oncancel = () => {
-        setIsProcessingPayment(false);
-      };
-      session.begin();
+        },
+      });
     } catch (e) {
       setIsProcessingPayment(false);
       addToast(
@@ -487,103 +454,49 @@ export const CheckoutModal: React.FC = () => {
   };
 
   const handleGooglePaySubmit = async () => {
-    if (
-      typeof window !== "undefined" &&
-      (window as any).google?.payments?.api?.PaymentsClient
-    ) {
-      try {
-        setIsProcessingPayment(true);
-        const client = new (window as any).google.payments.api.PaymentsClient({
-          environment: "TEST",
-        });
-        const paymentData = await client.loadPaymentData({
-          apiVersion: 2,
-          apiVersionMinor: 0,
-          allowedPaymentMethods: [
-            {
-              type: "CARD",
-              parameters: {
-                allowedAuthMethods: ["PAN_ONLY", "CRYPTOGRAM_3DS"],
-                allowedCardNetworks: [
-                  "AMEX",
-                  "DISCOVER",
-                  "JCB",
-                  "MASTERCARD",
-                  "VISA",
-                ],
-                billingAddressRequired: true,
-                billingAddressParameters: { format: "FULL" },
-              },
-              tokenizationSpecification: {
-                type: "PAYMENT_GATEWAY",
-                parameters: {
-                  gateway: "example",
-                  gatewayMerchantId: "exampleGatewayMerchantId",
-                },
-              },
-            },
-          ],
-          transactionInfo: {
-            totalPriceStatus: "FINAL",
-            totalPrice: totalAmountUSD.toFixed(2),
-            currencyCode: "USD",
-            countryCode: "US",
-          },
-          merchantInfo: {
-            merchantName: "DBUY Store",
-          },
-          emailRequired: true,
-        });
-
-        const res = await fetch("/api/googlepay/process-payment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: totalAmountUSD,
-            currency: "USD",
-            customerInfo: formData,
-            paymentData,
-          }),
-        });
-        const data = await res.json();
-        if (data?.success) {
+    setIsProcessingPayment(true);
+    try {
+      await startPayPalV6GooglePayCheckout({
+        amountUSD: totalAmountUSD,
+        label: "DBUY Store Checkout",
+        customerInfo: formData,
+        onSuccess: (details) => {
           placeOrder({
-            customerName: (data.payer?.name || formData.name).trim(),
-            email: (data.payer?.email || formData.email).trim(),
-            address: (data.payer?.address || formData.address).trim(),
-            city: (data.payer?.city || formData.city).trim(),
-            zip: (data.payer?.zip || formData.zip).trim(),
-            country: (data.payer?.country || formData.country).trim(),
+            customerName: (details.payer?.name || formData.name).trim(),
+            email: (details.payer?.email || formData.email).trim(),
+            address: (details.payer?.address || formData.address).trim(),
+            city: (details.payer?.city || formData.city).trim(),
+            zip: (details.payer?.zip || formData.zip).trim(),
+            country: (details.payer?.country || formData.country).trim(),
             paymentMethod: "googlepay",
-            googlePayTransactionId: data.transactionId,
-            paypalTransactionId: data.transactionId,
+            googlePayTransactionId: details.transactionId,
+            paypalTransactionId: details.orderId || details.transactionId,
           });
+          setIsProcessingPayment(false);
           setStep(3);
           addToast(
             language === "ka"
-              ? "Google Pay გადახდა წარმატებით შესრულდა!"
-              : "Google Pay processed successfully!",
+              ? "Google Pay გადახდა წარმატებით შესრულდა PayPal-ის ანგარიშზე!"
+              : "Google Pay payment processed successfully to PayPal account!",
             "success",
           );
-          return;
-        }
-      } catch (err: any) {
-        if (err?.statusCode === "CANCELED") {
+        },
+        onError: async (err) => {
+          console.warn("[CHECKOUT-GOOGLEPAY] PayPal v6 error, falling back:", err);
+          await executeDirectGooglePayAuthorization();
+        },
+        onCancel: () => {
+          setIsProcessingPayment(false);
           addToast(
             language === "ka" ? "Google Pay გაუქმდა" : "Google Pay was cancelled",
             "info",
           );
-          setIsProcessingPayment(false);
-          return;
-        }
-        console.warn("Google Pay prompt fallback:", err);
-      } finally {
-        setIsProcessingPayment(false);
-      }
+        },
+      });
+    } catch (err: any) {
+      console.warn("Google Pay prompt fallback:", err);
+      await executeDirectGooglePayAuthorization();
     }
-
-    // Direct verified Google Pay authorization
-    await executeDirectGooglePayAuthorization();
   };
 
   // Card execution with real PayPal backend capture
@@ -1175,13 +1088,48 @@ export const CheckoutModal: React.FC = () => {
               {/* TAB 4: CREDIT / DEBIT CARD */}
               {activePaymentMethod === "card" && (
                 <div className="space-y-4">
-                  {/* Instant PayPal Card Button */}
+                  {/* Official PayPal v6 Hosted Card Fields (Number, Expiry, CVV + 3DS) */}
+                  <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200">
+                    <PayPalV6CardFields
+                      amountUSD={totalAmountUSD}
+                      postalCode={formData.zip || "0100"}
+                      cardholderName={formData.name}
+                      isKa={language === "ka"}
+                      onSuccess={({ orderId, capture }) => {
+                        placeOrder({
+                          customerName: (cardData.name || formData.name).trim(),
+                          email: formData.email.trim(),
+                          address: formData.address.trim(),
+                          city: formData.city.trim(),
+                          zip: formData.zip.trim(),
+                          country: formData.country.trim(),
+                          paymentMethod: "card",
+                          paypalTransactionId: capture?.capture?.id || capture?.id || orderId,
+                        });
+                        setStep(3);
+                        addToast(
+                          language === "ka"
+                            ? "ბარათით გადახდა წარმატებით შესრულდა PayPal-ის ანგარიშზე!"
+                            : "Card payment captured successfully via PayPal v6!",
+                          "success",
+                        );
+                      }}
+                      onError={(err) => {
+                        console.warn("[CHECKOUT-CARDFIELDS] v6 notice:", err);
+                      }}
+                      onFallbackDirect={() => {
+                        console.log("[CHECKOUT-CARDFIELDS] Direct form active");
+                      }}
+                    />
+                  </div>
+
+                  {/* Alternative Instant PayPal Guest Card Button */}
                   <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-800">
                         {language === "ka"
-                          ? "სწრაფი გადახდა ბარათით (PayPal Guest)"
-                          : "Fast Card Checkout (via PayPal)"}
+                          ? "სწრაფი გადახდა ბარათით (PayPal Guest Checkout)"
+                          : "Fast Card Checkout (PayPal Guest Checkout)"}
                       </span>
                       <div className="flex items-center space-x-1.5">
                         <VisaLogo className="h-4 w-auto" />
@@ -1205,7 +1153,7 @@ export const CheckoutModal: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Or Manual Form */}
+                  {/* Direct Card Fallback Form */}
                   <form
                     onSubmit={handleCardSubmit}
                     className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3"
@@ -1213,8 +1161,8 @@ export const CheckoutModal: React.FC = () => {
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-bold text-slate-800">
                         {language === "ka"
-                          ? "პირდაპირი საბანკო ბარათი"
-                          : "Direct Card Entry"}
+                          ? "პირდაპირი საბანკო ბარათი (Manual Fallback)"
+                          : "Direct Card Entry (Manual Fallback)"}
                       </span>
                       <span className="text-[10px] text-slate-400 font-mono">
                         SSL 256-bit Encrypted

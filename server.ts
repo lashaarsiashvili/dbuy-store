@@ -788,12 +788,19 @@ app.post('/api/store/billboards', (req, res) => {
 
 // ==========================================
 // ==========================================
-// PAYPAL v6 WEB SDK SERVER INTEGRATION
+// PAYPAL v6 WEB SDK SERVER INTEGRATION (LIVE PRODUCTION READY)
 // ==========================================
 
-const PAYPAL_CLIENT_ID = process.env.PAYPAL_SANDBOX_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
-const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_SANDBOX_CLIENT_SECRET || process.env.PAYPAL_CLIENT_SECRET || '';
-const PAYPAL_ENV_RAW = (process.env.PAYPAL_ENVIRONMENT || '').trim().toLowerCase();
+if (!process.env.PAYPAL_CLIENT_ID && (process.env.PAYPAL_SANDBOX_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID)) {
+  process.env.PAYPAL_CLIENT_ID = process.env.PAYPAL_SANDBOX_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID;
+}
+if (!process.env.PAYPAL_CLIENT_SECRET && process.env.PAYPAL_SANDBOX_CLIENT_SECRET) {
+  process.env.PAYPAL_CLIENT_SECRET = process.env.PAYPAL_SANDBOX_CLIENT_SECRET;
+}
+
+const PAYPAL_CLIENT_ID = process.env.PAYPAL_LIVE_CLIENT_ID || process.env.PAYPAL_CLIENT_ID || process.env.PAYPAL_SANDBOX_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID || 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
+const PAYPAL_CLIENT_SECRET = process.env.PAYPAL_LIVE_CLIENT_SECRET || process.env.PAYPAL_CLIENT_SECRET || process.env.PAYPAL_SANDBOX_CLIENT_SECRET || '';
+const PAYPAL_ENV_RAW = (process.env.PAYPAL_ENVIRONMENT || 'live').trim().toLowerCase();
 let PAYPAL_BASE_URL = (PAYPAL_ENV_RAW === 'sandbox' || PAYPAL_ENV_RAW === 'test')
   ? 'https://api-m.sandbox.paypal.com'
   : 'https://api-m.paypal.com';
@@ -1002,7 +1009,7 @@ app.post('/api/paypal/create-order', async (req, res) => {
 });
 
 // v6 API route alias for order creation
-app.post('/paypal-api/checkout/orders/create', async (req, res) => {
+app.post(['/paypal-api/checkout/orders/create', '/paypal-api/checkout/orders/create-with-sample-data'], async (req, res) => {
   try {
     const { purchaseUnits, purchase_units, amount, currency = 'USD', description } = req.body;
     const orderAmt = amount || purchaseUnits?.[0]?.amount?.value || purchase_units?.[0]?.amount?.value || '10.00';
@@ -1188,7 +1195,7 @@ app.post('/paypal-api/checkout/orders/:orderId/capture', async (req, res) => {
 app.get('/api/googlepay/config', (req, res) => {
   res.json({
     success: true,
-    environment: 'TEST',
+    environment: 'PRODUCTION',
     merchantName: 'DBUY Store',
     gateway: 'example',
     gatewayMerchantId: 'exampleGatewayMerchantId',

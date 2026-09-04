@@ -18,12 +18,20 @@ import { GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPage
 import { MyOrdersPage } from './components/MyOrdersPage';
 import { ProductDetailPage } from './components/ProductDetailPage';
 import { ToastContainer } from './components/ToastContainer';
+import { getPayPalV6Instance } from './utils/paypalV6';
 
 const LIVE_PAYPAL_CLIENT_ID = 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
 const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || LIVE_PAYPAL_CLIENT_ID;
 
 const MainLayout: React.FC = () => {
   const { currentPage, recordVisit } = useStore();
+
+  // Initialize PayPal Web SDK v6 core instance
+  useEffect(() => {
+    getPayPalV6Instance(paypalClientId).catch((err) => {
+      console.warn('PayPal Web SDK v6 initialization notice:', err);
+    });
+  }, []);
 
   // Scroll to top on page change and log view
   useEffect(() => {
