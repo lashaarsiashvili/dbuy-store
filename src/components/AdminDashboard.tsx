@@ -198,15 +198,24 @@ export const AdminDashboard: React.FC = () => {
   const [studioModal, setStudioModal] = useState<{
     isOpen: boolean;
     imageSrc: string;
+    originalImageSrc?: string;
+    isOptimized?: boolean;
     imageIndex: number;
+    productTitle?: string;
+    targetType?: 'productForm' | 'tableProduct' | 'billboard';
+    targetId?: string;
   }>({
     isOpen: false,
     imageSrc: '',
+    originalImageSrc: '',
+    isOptimized: false,
     imageIndex: 0,
+    productTitle: '',
+    targetType: 'productForm',
   });
 
-  // Auto-optimize on upload & bulk optimization state
-  const [autoStudioOptimizeOnUpload, setAutoStudioOptimizeOnUpload] = useState<boolean>(true);
+  // Auto-optimize on upload: strictly optional, FALSE by default so all images remain pure original
+  const [autoStudioOptimizeOnUpload, setAutoStudioOptimizeOnUpload] = useState<boolean>(false);
   const [isBulkOptimizing, setIsBulkOptimizing] = useState<boolean>(false);
 
   const [prodForm, setProdForm] = useState({
@@ -220,6 +229,9 @@ export const AdminDashboard: React.FC = () => {
     badge: '',
     image: '',
     images: [] as string[],
+    originalImage: '',
+    originalImages: [] as string[],
+    isOptimized: false,
     description: '',
     descriptionKa: '',
     features: ['', '', '', ''] as string[],
@@ -426,9 +438,9 @@ export const AdminDashboard: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
-          const optimized = canvas.toDataURL('image/jpeg', 0.85);
-          setBillboardForm(prev => ({ ...prev, image: optimized }));
-          addToast(isKa ? 'ბილბორდის სურათი წარმატებით აიტვირთა!' : 'Billboard image uploaded successfully!', 'success');
+          const raw = canvas.toDataURL('image/jpeg', 0.90);
+          setBillboardForm(prev => ({ ...prev, image: raw, originalImage: raw, isOptimized: false }));
+          addToast(isKa ? 'ბილბორდის სურათი წარმატებით აიტვირთა (ორიგინალი)!' : 'Billboard image uploaded successfully (original)!', 'success');
         }
       };
       img.src = result;
@@ -510,12 +522,13 @@ export const AdminDashboard: React.FC = () => {
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            let finalUrl = canvas.toDataURL('image/jpeg', 0.88);
+            const rawUrl = canvas.toDataURL('image/jpeg', 0.90);
+            let finalUrl = rawUrl;
 
-            // If auto-optimize is turned on, run the studio optimizer on upload
+            // Only if user explicitly enabled auto-optimize, run studio optimizer on upload
             if (autoStudioOptimizeOnUpload) {
               try {
-                finalUrl = await optimizeProductImage(finalUrl, {
+                finalUrl = await optimizeProductImage(rawUrl, {
                   style: 'studio-clean',
                   brightness: 6,
                   contrast: 12,
@@ -527,16 +540,17 @@ export const AdminDashboard: React.FC = () => {
                 });
               } catch (optErr) {
                 console.warn('Auto studio optimization fallback to original:', optErr);
+                finalUrl = rawUrl;
               }
             }
 
-            appendProdImage(finalUrl, file.name);
+            appendProdImage(finalUrl, file.name, rawUrl);
           } else {
-            appendProdImage(result, file.name);
+            appendProdImage(result, file.name, result);
           }
         };
         img.onerror = () => {
-          appendProdImage(result, file.name);
+          appendProdImage(result, file.name, result);
         };
         img.src = result;
       };
@@ -544,19 +558,30 @@ export const AdminDashboard: React.FC = () => {
     });
   };
 
-  const appendProdImage = (url: string, name?: string) => {
+  const appendProdImage = (url: string, name?: string, originalUrl?: string) => {
+    const orig = originalUrl || url;
     setProdForm(prev => {
       const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const currentOriginals = prev.originalImages && prev.originalImages.length > 0
+        ? [...prev.originalImages]
+        : [...currentList];
+
       if (currentList.length >= 10) {
         addToast(isKa ? 'მაქსიმუმ 10 სურათია დაშვებული' : 'Maximum 10 images allowed', 'warning');
         return prev;
       }
       if (currentList.includes(url)) return prev;
+
       const updated = [...currentList, url];
+      const updatedOriginals = [...currentOriginals, orig];
+
       return {
         ...prev,
         images: updated,
         image: updated[0] || prev.image,
+        originalImages: updatedOriginals,
+        originalImage: updatedOriginals[0] || orig,
+        isOptimized: Boolean(prev.isOptimized || (orig !== url)),
       };
     });
 
@@ -564,8 +589,8 @@ export const AdminDashboard: React.FC = () => {
       setUploadedFileInfo({ name, size: 'Ready' });
       addToast(
         isKa
-          ? `სურათი „${name}“ დაემატა${autoStudioOptimizeOnUpload ? ' (სტუდიურად ოპტიმიზებული)' : ''}!`
-          : `Image "${name}" added${autoStudioOptimizeOnUpload ? ' (studio-optimized)' : ''}!`,
+          ? `სურათი „${name}“ დაემატა (საწყისი ორიგინალი)!`
+          : `Image "${name}" added (original)!`,
         'success'
       );
     }
@@ -595,21 +620,111 @@ export const AdminDashboard: React.FC = () => {
   };
 
   // Open Studio Optimizer for a specific image index
-  const handleOpenStudioForImage = (idx: number) => {
+  const handleOpenStudioForImage = (idx: number, optProduct?: Product) => {
+    if (optProduct) {
+      const targetUrl = optProduct.images?.[idx] || (idx === 0 ? optProduct.image : '');
+      if (!targetUrl) return;
+      const origUrl = optProduct.originalImages?.[idx] || (idx === 0 ? optProduct.originalImage : targetUrl) || targetUrl;
+      const isOpt = Boolean(optProduct.isOptimized || (origUrl && origUrl !== targetUrl));
+      setStudioModal({
+        isOpen: true,
+        imageSrc: targetUrl,
+        originalImageSrc: origUrl,
+        isOptimized: isOpt,
+        imageIndex: idx,
+        productTitle: optProduct.titleKa || optProduct.title,
+        targetType: 'tableProduct',
+        targetId: optProduct.id,
+      });
+      return;
+    }
+
     const targetUrl = prodForm.images[idx] || (idx === 0 ? prodForm.image : '');
     if (!targetUrl) return;
+    const origUrl = prodForm.originalImages?.[idx] || (idx === 0 ? prodForm.originalImage : targetUrl) || targetUrl;
+    const isOpt = Boolean(prodForm.isOptimized || (origUrl && origUrl !== targetUrl));
 
     setStudioModal({
       isOpen: true,
       imageSrc: targetUrl,
+      originalImageSrc: origUrl,
+      isOptimized: isOpt,
       imageIndex: idx,
+      productTitle: prodForm.title || prodForm.titleKa || 'Product',
+      targetType: 'productForm',
     });
   };
 
-  // Apply optimized image strictly to its corresponding index
+  // Apply optimized image strictly to its corresponding index while retaining original
   const handleApplyStudioOptimization = (optimizedDataUrl: string, targetIdx: number) => {
+    // If optimizing directly from products table
+    if (studioModal.targetType === 'tableProduct' && studioModal.targetId) {
+      const prod = products.find(p => p.id === studioModal.targetId);
+      if (prod) {
+        const currentImages = prod.images && prod.images.length > 0 ? [...prod.images] : [prod.image];
+        const currentOriginals = prod.originalImages && prod.originalImages.length > 0
+          ? [...prod.originalImages]
+          : (prod.originalImage ? [prod.originalImage] : [...currentImages]);
+
+        const updatedImages = [...currentImages];
+        if (targetIdx >= 0 && targetIdx < updatedImages.length) {
+          updatedImages[targetIdx] = optimizedDataUrl;
+        } else {
+          updatedImages[0] = optimizedDataUrl;
+        }
+
+        const updatedOriginals = [...currentOriginals];
+        while (updatedOriginals.length < updatedImages.length) {
+          updatedOriginals.push(updatedImages[updatedOriginals.length]);
+        }
+
+        updateProduct({
+          ...prod,
+          image: targetIdx === 0 ? optimizedDataUrl : (updatedImages[0] || prod.image),
+          images: updatedImages,
+          originalImage: updatedOriginals[0] || prod.originalImage || prod.image,
+          originalImages: updatedOriginals,
+          isOptimized: true,
+        });
+
+        addToast(
+          isKa ? 'პროდუქტის სურათი წარმატებით ოპტიმიზდა!' : 'Product image optimized successfully!',
+          'success'
+        );
+      }
+      return;
+    }
+
+    // If optimizing directly from billboards
+    if (studioModal.targetType === 'billboardSlide' && studioModal.targetId) {
+      const slide = billboards.find(b => b.id === studioModal.targetId);
+      if (slide) {
+        updateBillboard({
+          ...slide,
+          image: optimizedDataUrl,
+          originalImage: slide.originalImage || slide.image,
+          isOptimized: true,
+        });
+        addToast(
+          isKa ? 'ბილბორდის სურათი წარმატებით ოპტიმიზდა (ორიგინალი შენახულია)!' : 'Billboard image optimized (original preserved)!',
+          'success'
+        );
+      }
+      return;
+    }
+
+    // Otherwise apply to current product form
     setProdForm(prev => {
       const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const currentOriginals = prev.originalImages && prev.originalImages.length > 0
+        ? [...prev.originalImages]
+        : [...currentList];
+
+      const updatedOriginals = [...currentOriginals];
+      if (!updatedOriginals[targetIdx] && currentList[targetIdx]) {
+        updatedOriginals[targetIdx] = currentList[targetIdx];
+      }
+
       const updatedList = [...currentList];
       if (targetIdx >= 0 && targetIdx < updatedList.length) {
         updatedList[targetIdx] = optimizedDataUrl;
@@ -620,13 +735,16 @@ export const AdminDashboard: React.FC = () => {
         ...prev,
         images: updatedList,
         image: targetIdx === 0 ? optimizedDataUrl : (updatedList[0] || prev.image),
+        originalImages: updatedOriginals,
+        originalImage: updatedOriginals[0] || prev.originalImage || (updatedList[0] || prev.image),
+        isOptimized: true,
       };
     });
 
     addToast(
       isKa
-        ? `სურათი #${targetIdx + 1} წარმატებით ოპტიმიზდა (ფონი, ცენტრირება, ხარისხი)!`
-        : `Image #${targetIdx + 1} studio optimized!`,
+        ? `სურათი #${targetIdx + 1} წარმატებით ოპტიმიზდა (ორიგინალი შენახულია)!`
+        : `Image #${targetIdx + 1} studio optimized (original preserved)!`,
       'success'
     );
 
@@ -654,7 +772,101 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  // Bulk optimize all images currently in prodForm
+  // Revert a single image back to original default
+  const handleRevertStudioImage = (targetIdx: number) => {
+    if (studioModal.targetType === 'tableProduct' && studioModal.targetId) {
+      const prod = products.find(p => p.id === studioModal.targetId);
+      if (prod) {
+        const origImg = prod.originalImages?.[targetIdx] || (targetIdx === 0 ? prod.originalImage : undefined) || prod.image;
+        const currentImages = prod.images && prod.images.length > 0 ? [...prod.images] : [prod.image];
+        const updatedImages = [...currentImages];
+        if (targetIdx >= 0 && targetIdx < updatedImages.length) {
+          updatedImages[targetIdx] = origImg;
+        }
+
+        const stillOptimized = prod.originalImages && prod.originalImages.length > 0
+          ? updatedImages.some((img, i) => prod.originalImages![i] && prod.originalImages![i] !== img)
+          : false;
+
+        updateProduct({
+          ...prod,
+          image: targetIdx === 0 ? origImg : (updatedImages[0] || prod.image),
+          images: updatedImages,
+          isOptimized: stillOptimized,
+        });
+
+        addToast(
+          isKa ? 'სურათი დაბრუნდა საწყის დეფოლტზე!' : 'Image reverted to default original!',
+          'success'
+        );
+      }
+      return;
+    }
+
+    if (studioModal.targetType === 'billboardSlide' && studioModal.targetId) {
+      const slide = billboards.find(b => b.id === studioModal.targetId);
+      if (slide) {
+        const origImg = slide.originalImage || slide.image;
+        updateBillboard({
+          ...slide,
+          image: origImg,
+          isOptimized: false,
+        });
+        addToast(
+          isKa ? 'ბილბორდის სურათი დაბრუნდა საწყის დეფოლტზე!' : 'Billboard image reverted to default original!',
+          'success'
+        );
+      }
+      return;
+    }
+
+    // Revert inside prodForm
+    setProdForm(prev => {
+      const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const origImg = prev.originalImages?.[targetIdx] || (targetIdx === 0 ? prev.originalImage : undefined);
+      if (!origImg) return prev;
+
+      const updatedList = [...currentList];
+      if (targetIdx >= 0 && targetIdx < updatedList.length) {
+        updatedList[targetIdx] = origImg;
+      }
+
+      const stillOptimized = prev.originalImages && prev.originalImages.length > 0
+        ? updatedList.some((img, i) => prev.originalImages[i] && prev.originalImages[i] !== img)
+        : false;
+
+      return {
+        ...prev,
+        images: updatedList,
+        image: targetIdx === 0 ? origImg : (updatedList[0] || prev.image),
+        isOptimized: stillOptimized,
+      };
+    });
+
+    addToast(
+      isKa ? 'სურათი დაბრუნდა საწყის დეფოლტზე!' : 'Image reverted to default original!',
+      'success'
+    );
+  };
+
+  // Revert all images in prodForm to original default
+  const handleRevertAllImagesToOriginal = () => {
+    setProdForm(prev => {
+      if (!prev.originalImages || prev.originalImages.length === 0) return prev;
+      return {
+        ...prev,
+        images: [...prev.originalImages],
+        image: prev.originalImages[0] || prev.originalImage || prev.image,
+        isOptimized: false,
+      };
+    });
+    addToast(
+      isKa ? 'ყველა სურათი დაბრუნდა საწყის დეფოლტზე!' : 'All images reverted to default originals!',
+      'success'
+    );
+  };
+
+  // Bulk optimize all images currently in prodForm while preserving originals
   const handleAutoOptimizeAllImages = async () => {
     if (prodForm.images.length === 0) {
       addToast(isKa ? 'გთხოვთ ჯერ ატვირთოთ სურათები' : 'Please upload images first', 'warning');
@@ -670,9 +882,14 @@ export const AdminDashboard: React.FC = () => {
     );
 
     try {
+      // Store current images as originals if not already set
+      const baseOriginals = prodForm.originalImages && prodForm.originalImages.length === prodForm.images.length
+        ? [...prodForm.originalImages]
+        : [...prodForm.images];
+
       const optimizedImages: string[] = [];
       for (let i = 0; i < prodForm.images.length; i++) {
-        const raw = prodForm.images[i];
+        const raw = baseOriginals[i] || prodForm.images[i];
         const res = await optimizeProductImage(raw, {
           style: 'studio-clean',
           brightness: 6,
@@ -704,12 +921,15 @@ export const AdminDashboard: React.FC = () => {
         ...prev,
         images: optimizedImages,
         image: optimizedImages[0] || prev.image,
+        originalImages: baseOriginals,
+        originalImage: baseOriginals[0] || prev.originalImage || baseOriginals[0],
+        isOptimized: true,
       }));
 
       addToast(
         isKa
-          ? `ყველა სურათი (${optimizedImages.length}) წარმატებით ოპტიმიზდა!`
-          : `All ${optimizedImages.length} images studio-optimized successfully!`,
+          ? `ყველა სურათი (${optimizedImages.length}) წარმატებით ოპტიმიზდა (ორიგინალები შენახულია)!`
+          : `All ${optimizedImages.length} images studio-optimized successfully (originals saved)!`,
         'success'
       );
     } catch (err) {
@@ -723,11 +943,15 @@ export const AdminDashboard: React.FC = () => {
   const removeProdImage = (indexToRemove: number) => {
     setProdForm(prev => {
       const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const currentOriginals = prev.originalImages && prev.originalImages.length > 0 ? [...prev.originalImages] : [...currentList];
       const updated = currentList.filter((_, idx) => idx !== indexToRemove);
+      const updatedOrigs = currentOriginals.filter((_, idx) => idx !== indexToRemove);
       return {
         ...prev,
         images: updated,
         image: updated[0] || '',
+        originalImages: updatedOrigs,
+        originalImage: updatedOrigs[0] || '',
       };
     });
   };
@@ -735,14 +959,22 @@ export const AdminDashboard: React.FC = () => {
   const setPrimaryProdImage = (index: number) => {
     setProdForm(prev => {
       const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const currentOriginals = prev.originalImages && prev.originalImages.length > 0 ? [...prev.originalImages] : [...currentList];
       if (index <= 0 || index >= currentList.length) return prev;
       const target = currentList[index];
       const rest = currentList.filter((_, i) => i !== index);
       const updated = [target, ...rest];
+
+      const targetOrig = currentOriginals[index] || target;
+      const restOrig = currentOriginals.filter((_, i) => i !== index);
+      const updatedOrigs = [targetOrig, ...restOrig];
+
       return {
         ...prev,
         images: updated,
         image: updated[0],
+        originalImages: updatedOrigs,
+        originalImage: updatedOrigs[0] || updated[0],
       };
     });
     addToast(isKa ? 'მთავარი სურათი განახლდა' : 'Primary cover image updated', 'success');
@@ -751,16 +983,27 @@ export const AdminDashboard: React.FC = () => {
   const moveProdImage = (fromIndex: number, direction: 'left' | 'right') => {
     setProdForm(prev => {
       const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const currentOriginals = prev.originalImages && prev.originalImages.length > 0 ? [...prev.originalImages] : [...currentList];
       const toIndex = direction === 'left' ? fromIndex - 1 : fromIndex + 1;
       if (toIndex < 0 || toIndex >= currentList.length) return prev;
       const updated = [...currentList];
       const temp = updated[fromIndex];
       updated[fromIndex] = updated[toIndex];
       updated[toIndex] = temp;
+
+      const updatedOrigs = [...currentOriginals];
+      if (fromIndex < updatedOrigs.length && toIndex < updatedOrigs.length) {
+        const tempOrig = updatedOrigs[fromIndex];
+        updatedOrigs[fromIndex] = updatedOrigs[toIndex];
+        updatedOrigs[toIndex] = tempOrig;
+      }
+
       return {
         ...prev,
         images: updated,
         image: updated[0],
+        originalImages: updatedOrigs,
+        originalImage: updatedOrigs[0] || updated[0],
       };
     });
   };
@@ -919,6 +1162,9 @@ export const AdminDashboard: React.FC = () => {
       badge: '',
       image: '',
       images: [],
+      originalImage: '',
+      originalImages: [],
+      isOptimized: false,
       description: '',
       descriptionKa: '',
       features: ['', '', '', ''],
@@ -935,6 +1181,12 @@ export const AdminDashboard: React.FC = () => {
     const prodImages = (prod.images && prod.images.length > 0)
       ? prod.images
       : [prod.image];
+
+    const origImages = (prod.originalImages && prod.originalImages.length > 0)
+      ? prod.originalImages
+      : (prod.originalImage ? [prod.originalImage] : prodImages);
+    const origImage = prod.originalImage || origImages[0] || prodImages[0] || prod.image;
+    const isOpt = Boolean(prod.isOptimized || (origImage !== (prodImages[0] || prod.image)));
 
     const prodFeatures = (prod.features && prod.features.length >= 3)
       ? prod.features.slice(0, 4)
@@ -955,6 +1207,9 @@ export const AdminDashboard: React.FC = () => {
       badge: prod.badge || '',
       image: prodImages[0] || prod.image,
       images: prodImages,
+      originalImage: origImage,
+      originalImages: origImages,
+      isOptimized: isOpt,
       description: prod.description,
       descriptionKa: prod.descriptionKa || '',
       features: prodFeatures,
@@ -983,6 +1238,12 @@ export const AdminDashboard: React.FC = () => {
       : (prodForm.image ? [prodForm.image] : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80']);
     
     const finalPrimaryImage = finalImages[0];
+
+    const origImage = prodForm.originalImage || (prodForm.originalImages && prodForm.originalImages[0]) || finalPrimaryImage;
+    const origImages = (prodForm.originalImages && prodForm.originalImages.length > 0)
+      ? prodForm.originalImages
+      : (origImage ? [origImage] : finalImages);
+    const isOpt = Boolean(prodForm.isOptimized || (origImage !== finalPrimaryImage));
 
     // Prepare 4 Key Features (auto-generate only if blank and description exists)
     let finalFeatures = (prodForm.features || [])
@@ -1023,6 +1284,9 @@ export const AdminDashboard: React.FC = () => {
         badge: prodForm.badge || undefined,
         image: finalPrimaryImage,
         images: finalImages,
+        originalImage: origImage,
+        originalImages: origImages,
+        isOptimized: isOpt,
         description: prodForm.description,
         descriptionKa: prodForm.descriptionKa,
         features: finalFeatures.slice(0, 4),
@@ -1040,6 +1304,9 @@ export const AdminDashboard: React.FC = () => {
         badge: prodForm.badge || undefined,
         image: finalPrimaryImage,
         images: finalImages,
+        originalImage: origImage,
+        originalImages: origImages,
+        isOptimized: isOpt,
         description: prodForm.description,
         descriptionKa: prodForm.descriptionKa,
         rating: 5.0,
@@ -1731,6 +1998,14 @@ export const AdminDashboard: React.FC = () => {
                                 onError={handleImageError}
                                 className="w-full h-full object-cover transition-transform group-hover/thumb:scale-110"
                               />
+                              {(prod.isOptimized || (prod.originalImage && prod.originalImage !== prod.image)) && (
+                                <span 
+                                  className="absolute bottom-0.5 right-0.5 bg-amber-500/90 text-white text-[9px] font-black px-1 rounded-sm shadow-xs"
+                                  title={isKa ? 'სტუდიურად ოპტიმიზებული (საწყისი შენახულია)' : 'Studio optimized (original saved)'}
+                                >
+                                  Opt
+                                </span>
+                              )}
                             </div>
                           </td>
                           <td className="p-4 max-w-xs">
@@ -1826,14 +2101,31 @@ export const AdminDashboard: React.FC = () => {
                             >
                               <ExternalLink className="w-4 h-4" />
                             </button>
+                            {(prod.originalImage && prod.originalImage !== prod.image) && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateProduct({
+                                    ...prod,
+                                    image: prod.originalImage || prod.image,
+                                    images: prod.originalImages && prod.originalImages.length > 0 ? [...prod.originalImages] : (prod.images || [prod.image]),
+                                    isOptimized: false,
+                                  });
+                                  addToast(
+                                    isKa 
+                                      ? `პროდუქტის „${prod.title}“ სურათი დაბრუნდა საწყის დეფოლტზე!` 
+                                      : `Product "${prod.title}" image reverted to default original!`, 
+                                    'success'
+                                  );
+                                }}
+                                className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-100/80 bg-amber-50 border border-amber-200 transition-colors cursor-pointer"
+                                title={isKa ? 'საწყის ორიგინალ სურათზე დაბრუნება (დეფოლტი)' : 'Revert to original default image'}
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            )}
                             <button
-                              onClick={() => {
-                                setStudioModal({
-                                  isOpen: true,
-                                  imageSrc: prod.image,
-                                  imageIndex: 0,
-                                });
-                              }}
+                              onClick={() => handleOpenStudioForImage(0, prod)}
                               className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
                               title={isKa ? 'სურათის სტუდიური ოპტიმიზაცია' : 'Studio Image Optimizer'}
                             >
@@ -2030,6 +2322,14 @@ export const AdminDashboard: React.FC = () => {
                               alt={slide.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
+                            {(slide.isOptimized || (slide.originalImage && slide.originalImage !== slide.image)) && (
+                              <span 
+                                className="absolute top-2 left-2 px-1.5 py-0.5 rounded-md bg-amber-500/90 text-white text-[9px] font-black uppercase shadow-xs z-10"
+                                title={isKa ? 'სტუდიურად ოპტიმიზებული (საწყისი შენახულია)' : 'Studio optimized'}
+                              >
+                                ✨ Opt
+                              </span>
+                            )}
                             {slide.discountTag && (
                               <span className="absolute top-2 right-2 px-2 py-0.5 rounded-md bg-rose-600 text-white text-[10px] font-black uppercase shadow-xs">
                                 {slide.discountTag}
@@ -2078,12 +2378,38 @@ export const AdminDashboard: React.FC = () => {
                       </span>
 
                       <div className="flex items-center space-x-2">
+                        {(slide.originalImage && slide.originalImage !== slide.image) && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              updateBillboard({
+                                ...slide,
+                                image: slide.originalImage || slide.image,
+                                isOptimized: false,
+                              });
+                              addToast(
+                                isKa ? 'ბილბორდის სურათი დაბრუნდა საწყის დეფოლტზე!' : 'Billboard image reverted to default original!',
+                                'success'
+                              );
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl border border-amber-200 bg-amber-50 text-amber-700 hover:bg-amber-100 text-xs font-bold transition-all flex items-center space-x-1 cursor-pointer"
+                            title={isKa ? 'საწყის დეფოლტზე დაბრუნება' : 'Revert to original default'}
+                          >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>{isKa ? 'დეფოლტი' : 'Revert'}</span>
+                          </button>
+                        )}
                         <button
                           onClick={() => {
                             setStudioModal({
                               isOpen: true,
                               imageSrc: slide.image,
+                              originalImageSrc: slide.originalImage || slide.image,
+                              isOptimized: Boolean(slide.isOptimized || (slide.originalImage && slide.originalImage !== slide.image)),
                               imageIndex: 0,
+                              productTitle: slide.titleKa || slide.title,
+                              targetType: 'billboardSlide',
+                              targetId: slide.id,
                             });
                           }}
                           className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-colors cursor-pointer"
@@ -3969,116 +4295,153 @@ export const AdminDashboard: React.FC = () => {
                 {/* 10-Images Gallery Grid Preview with Studio Optimization Controls */}
                 {prodForm.images.length > 0 && (
                   <div className="pt-2 border-t border-slate-200/60 space-y-2">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="text-[11px] font-bold text-slate-700 block">
                         {isKa ? `დამატებული სურათები (${prodForm.images.length}/10):` : `Added Gallery Images (${prodForm.images.length}/10):`}
                       </span>
-                      <button
-                        type="button"
-                        onClick={handleAutoOptimizeAllImages}
-                        disabled={isBulkOptimizing || prodForm.images.length === 0}
-                        className="text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-xl flex items-center space-x-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
-                        title={isKa ? 'ყველა სურათის სტუდიური ოპტიმიზაცია' : 'Studio optimize all images'}
-                      >
-                        {isBulkOptimizing ? (
-                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
-                        ) : (
-                          <Wand2 className="w-3.5 h-3.5 text-amber-600" />
+                      <div className="flex items-center space-x-2">
+                        {/* Revert All to Defaults if any image is optimized */}
+                        {(prodForm.isOptimized || (prodForm.originalImages && prodForm.originalImages.some((orig, i) => orig && prodForm.images[i] && orig !== prodForm.images[i]))) && (
+                          <button
+                            type="button"
+                            onClick={handleRevertAllImagesToOriginal}
+                            className="text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 border border-slate-300 px-2.5 py-1 rounded-xl flex items-center space-x-1.5 transition-all cursor-pointer shadow-2xs"
+                            title={isKa ? 'ყველა სურათის საწყის დეფოლტზე დაბრუნება' : 'Revert all images to original defaults'}
+                          >
+                            <RotateCcw className="w-3 h-3 text-slate-600" />
+                            <span>{isKa ? '↺ დეფოლტზე დაბრუნება' : '↺ Revert to Defaults'}</span>
+                          </button>
                         )}
-                        <span>{isBulkOptimizing ? (isKa ? 'ოპტიმიზაცია...' : 'Optimizing...') : (isKa ? '⚡ ყველა სურათის ოპტიმიზაცია' : '⚡ Auto-Optimize All')}</span>
-                      </button>
+                        <button
+                          type="button"
+                          onClick={handleAutoOptimizeAllImages}
+                          disabled={isBulkOptimizing || prodForm.images.length === 0}
+                          className="text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-xl flex items-center space-x-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
+                          title={isKa ? 'ყველა სურათის სტუდიური ოპტიმიზაცია' : 'Studio optimize all images'}
+                        >
+                          {isBulkOptimizing ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                          ) : (
+                            <Wand2 className="w-3.5 h-3.5 text-amber-600" />
+                          )}
+                          <span>{isBulkOptimizing ? (isKa ? 'ოპტიმიზაცია...' : 'Optimizing...') : (isKa ? '⚡ ყველა სურათის ოპტიმიზაცია' : '⚡ Auto-Optimize All')}</span>
+                        </button>
+                      </div>
                     </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                      {prodForm.images.map((imgUrl, idx) => (
-                        <div
-                          key={idx}
-                          className={`relative p-2 rounded-2xl border transition-all flex items-center space-x-2.5 bg-white ${
-                            idx === 0
-                              ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <img
-                            src={imgUrl}
-                            alt={`Product img ${idx + 1}`}
-                            referrerPolicy="no-referrer"
-                            onError={handleImageError}
-                            className="w-14 h-14 object-cover rounded-xl border border-slate-100 shrink-0 bg-slate-50"
-                          />
-                          <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                            <div className="flex items-center justify-between">
-                              <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
-                                idx === 0
-                                  ? 'bg-blue-600 text-white'
-                                  : 'bg-slate-100 text-slate-600'
-                              }`}>
-                                {idx === 0 ? (isKa ? '⭐ მთავარი' : '⭐ Cover') : `#${idx + 1}`}
-                              </span>
-                              
-                              <div className="flex items-center space-x-1">
+                      {prodForm.images.map((imgUrl, idx) => {
+                        const hasOrig = Boolean(prodForm.originalImages?.[idx] && prodForm.originalImages[idx] !== imgUrl);
+                        return (
+                          <div
+                            key={idx}
+                            className={`relative p-2 rounded-2xl border transition-all flex items-center space-x-2.5 bg-white ${
+                              idx === 0
+                                ? 'border-blue-500 ring-2 ring-blue-500/20 shadow-xs'
+                                : 'border-slate-200 hover:border-slate-300'
+                            }`}
+                          >
+                            <div className="relative shrink-0">
+                              <img
+                                src={imgUrl}
+                                alt={`Product img ${idx + 1}`}
+                                referrerPolicy="no-referrer"
+                                onError={handleImageError}
+                                className="w-14 h-14 object-cover rounded-xl border border-slate-100 bg-slate-50"
+                              />
+                              {hasOrig && (
+                                <span 
+                                  className="absolute bottom-0.5 right-0.5 bg-amber-500/90 text-white text-[8px] font-black px-1 rounded-xs shadow-xs"
+                                  title={isKa ? 'სტუდიურად ოპტიმიზებული (საწყისი შენახულია)' : 'Optimized (original saved)'}
+                                >
+                                  Opt
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
+                                  idx === 0
+                                    ? 'bg-blue-600 text-white'
+                                    : 'bg-slate-100 text-slate-600'
+                                }`}>
+                                  {idx === 0 ? (isKa ? '⭐ მთავარი' : '⭐ Cover') : `#${idx + 1}`}
+                                </span>
+                                
+                                <div className="flex items-center space-x-1">
+                                  {hasOrig && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleRevertStudioImage(idx)}
+                                      className="p-1 text-amber-600 hover:text-amber-800 hover:bg-amber-50 rounded-lg transition-colors cursor-pointer"
+                                      title={isKa ? 'საწყის ორიგინალზე დაბრუნება (დეფოლტი)' : 'Revert to original default image'}
+                                    >
+                                      <RotateCcw className="w-3.5 h-3.5" />
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleOpenStudioForImage(idx)}
+                                    className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                    title={isKa ? 'სტუდიური ოპტიმიზაცია (ფონი, ხარისხი, ჩრდილი)' : 'Studio optimize (background, clarity, shadow)'}
+                                  >
+                                    <Wand2 className="w-3.5 h-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => removeProdImage(idx)}
+                                    className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                    title={isKa ? 'სურათის წაშლა' : 'Delete image'}
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center space-x-1 mt-1.5">
+                                {idx !== 0 && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setPrimaryProdImage(idx)}
+                                    className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                  >
+                                    {isKa ? 'მთავარად' : 'Set Cover'}
+                                  </button>
+                                )}
                                 <button
                                   type="button"
                                   onClick={() => handleOpenStudioForImage(idx)}
-                                  className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
-                                  title={isKa ? 'სტუდიური ოპტიმიზაცია (ფონი, ხარისხი, ჩრდილი)' : 'Studio optimize (background, clarity, shadow)'}
+                                  className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center space-x-0.5 cursor-pointer ml-1"
                                 >
-                                  <Wand2 className="w-3.5 h-3.5" />
+                                  <span>{isKa ? '✨ სტუდია' : '✨ Studio'}</span>
                                 </button>
-                                <button
-                                  type="button"
-                                  onClick={() => removeProdImage(idx)}
-                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
-                                  title={isKa ? 'სურათის წაშლა' : 'Delete image'}
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center space-x-1 mt-1.5">
-                              {idx !== 0 && (
-                                <button
-                                  type="button"
-                                  onClick={() => setPrimaryProdImage(idx)}
-                                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
-                                >
-                                  {isKa ? 'მთავარად' : 'Set Cover'}
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleOpenStudioForImage(idx)}
-                                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center space-x-0.5 cursor-pointer ml-1"
-                              >
-                                <span>{isKa ? '✨ სტუდია' : '✨ Studio'}</span>
-                              </button>
-                              <div className="ml-auto flex items-center space-x-0.5">
-                                {idx > 0 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => moveProdImage(idx, 'left')}
-                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
-                                    title="Move left"
-                                  >
-                                    <ArrowLeft className="w-3 h-3" />
-                                  </button>
-                                )}
-                                {idx < prodForm.images.length - 1 && (
-                                  <button
-                                    type="button"
-                                    onClick={() => moveProdImage(idx, 'right')}
-                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
-                                    title="Move right"
-                                  >
-                                    <ArrowRight className="w-3 h-3" />
-                                  </button>
-                                )}
+                                <div className="ml-auto flex items-center space-x-0.5">
+                                  {idx > 0 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => moveProdImage(idx, 'left')}
+                                      className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                                      title="Move left"
+                                    >
+                                      <ArrowLeft className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                  {idx < prodForm.images.length - 1 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => moveProdImage(idx, 'right')}
+                                      className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                                      title="Move right"
+                                    >
+                                      <ArrowRight className="w-3 h-3" />
+                                    </button>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
                 )}
@@ -4363,12 +4726,18 @@ export const AdminDashboard: React.FC = () => {
       <ImageStudioModal
         isOpen={studioModal.isOpen}
         imageSrc={studioModal.imageSrc}
+        originalImageSrc={studioModal.originalImageSrc}
+        isOptimized={studioModal.isOptimized}
         imageIndex={studioModal.imageIndex}
-        productTitle={prodForm.title || prodForm.titleKa || 'Product'}
+        productTitle={studioModal.productTitle || prodForm.title || prodForm.titleKa || 'Product'}
         isKa={isKa}
         onClose={() => setStudioModal(prev => ({ ...prev, isOpen: false }))}
         onApply={(optimizedUrl, targetIdx) => {
           handleApplyStudioOptimization(optimizedUrl, targetIdx);
+          setStudioModal(prev => ({ ...prev, isOpen: false }));
+        }}
+        onRevertToOriginal={(targetIdx) => {
+          handleRevertStudioImage(targetIdx);
           setStudioModal(prev => ({ ...prev, isOpen: false }));
         }}
       />

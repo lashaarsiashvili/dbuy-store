@@ -23,9 +23,12 @@ interface ImageStudioModalProps {
   isOpen: boolean;
   onClose: () => void;
   imageSrc: string;
+  originalImageSrc?: string;
+  isOptimized?: boolean;
   imageIndex: number;
   productTitle?: string;
   onApply: (optimizedImage: string, index: number) => void;
+  onRevertToOriginal?: (index: number) => void;
   isKa?: boolean;
 }
 
@@ -33,11 +36,15 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
   isOpen,
   onClose,
   imageSrc,
+  originalImageSrc,
+  isOptimized = false,
   imageIndex,
   productTitle,
   onApply,
+  onRevertToOriginal,
   isKa = false,
 }) => {
+  const effectiveBaseImage = originalImageSrc || imageSrc;
   const [selectedStyle, setSelectedStyle] = useState<StudioBackgroundStyle>('studio-clean');
   const [brightness, setBrightness] = useState<number>(6);
   const [contrast, setContrast] = useState<number>(12);
@@ -55,10 +62,11 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
 
   // Trigger optimization whenever parameters change
   const runOptimization = async (overrideOpts?: Partial<ImageOptimizationOptions>) => {
-    if (!imageSrc) return;
+    const baseSource = effectiveBaseImage || imageSrc;
+    if (!baseSource) return;
     setIsProcessing(true);
     try {
-      const res = await optimizeProductImage(imageSrc, {
+      const res = await optimizeProductImage(baseSource, {
         style: overrideOpts?.style || selectedStyle,
         brightness: overrideOpts?.brightness !== undefined ? overrideOpts.brightness : brightness,
         contrast: overrideOpts?.contrast !== undefined ? overrideOpts.contrast : contrast,
@@ -78,7 +86,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
 
   // Initial load
   useEffect(() => {
-    if (isOpen && imageSrc) {
+    if (isOpen && (effectiveBaseImage || imageSrc)) {
       setSelectedStyle('studio-clean');
       setBrightness(6);
       setContrast(12);
@@ -98,7 +106,7 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
         bgTolerance: 32,
       });
     }
-  }, [isOpen, imageSrc]);
+  }, [isOpen, effectiveBaseImage, imageSrc]);
 
   // Debounced update on slider changes
   const handleSliderChange = (
@@ -127,6 +135,16 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
       onApply(optimizedResult, imageIndex);
       onClose();
     }
+  };
+
+  const handleRevertToDefault = () => {
+    const rawImage = originalImageSrc || imageSrc;
+    if (onRevertToOriginal) {
+      onRevertToOriginal(imageIndex);
+    } else {
+      onApply(rawImage, imageIndex);
+    }
+    onClose();
   };
 
   const handleReset = () => {
@@ -252,10 +270,10 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
                   {/* Before */}
                   <div className="relative flex flex-col items-center justify-center p-3 bg-white dark:bg-slate-900/50">
                     <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-semibold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
-                      {isKa ? 'ატვირთული' : 'Original'}
+                      {isKa ? 'საწყისი (ორიგინალი)' : 'Original (Default)'}
                     </span>
                     <img
-                      src={imageSrc}
+                      src={effectiveBaseImage}
                       alt="Original"
                       className="max-h-[85%] max-w-[85%] object-contain"
                     />
@@ -505,13 +523,28 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
 
         {/* Modal Footer */}
         <div className="flex items-center justify-between px-5 py-3.5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90">
-          <button
-            type="button"
-            onClick={onClose}
-            className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-          >
-            {isKa ? 'გაუქმება' : 'Cancel'}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="px-4 py-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              {isKa ? 'გაუქმება' : 'Cancel'}
+            </button>
+
+            {(originalImageSrc || isOptimized) && (
+              <button
+                type="button"
+                onClick={handleRevertToDefault}
+                id="revert-to-original-btn"
+                className="px-3.5 py-2 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/40 dark:hover:bg-amber-900/50 border border-amber-200 dark:border-amber-800/80 rounded-xl transition-all flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                title={isKa ? 'საწყის ატვირთულ სურათზე დაბრუნება (დეფოლტი)' : 'Revert to original uploaded image'}
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>{isKa ? 'დეფოლტზე დაბრუნება' : 'Revert to Default'}</span>
+              </button>
+            )}
+          </div>
 
           <div className="flex items-center gap-2">
             <button
@@ -519,10 +552,10 @@ export const ImageStudioModal: React.FC<ImageStudioModalProps> = ({
               disabled={isProcessing || !optimizedResult}
               onClick={handleApply}
               id="apply-studio-optimization-btn"
-              className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2"
+              className="px-5 py-2 text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-xl shadow-xs hover:shadow-md transition-all flex items-center gap-2 cursor-pointer"
             >
               <Check className="w-4 h-4" />
-              {isKa ? 'შენახვა ამ სურათზე' : 'Apply to this Image'}
+              <span>{isKa ? 'შენახვა ამ სურათზე' : 'Apply to this Image'}</span>
             </button>
           </div>
         </div>

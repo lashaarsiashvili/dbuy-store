@@ -323,16 +323,16 @@ export const ProductDetailPage: React.FC = () => {
                     <Star
                       key={i}
                       className={`w-4 h-4 ${
-                        i < Math.floor(product.rating)
+                        i < Math.floor(product.rating ?? 5.0)
                           ? 'fill-amber-400 text-amber-400'
                           : 'fill-slate-200 text-slate-200'
                       }`}
                     />
                   ))}
                 </div>
-                <span>{product.rating.toFixed(1)}</span>
+                <span>{(product.rating ?? 5.0).toFixed(1)}</span>
                 <span className="text-slate-400 font-normal">
-                  ({product.reviewsCount} {language === 'ka' ? 'შეფასება' : 'reviews'})
+                  ({product.reviewsCount ?? 1} {language === 'ka' ? 'შეფასება' : 'reviews'})
                 </span>
               </div>
             </div>

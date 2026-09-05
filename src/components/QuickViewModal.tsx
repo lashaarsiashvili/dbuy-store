@@ -229,8 +229,8 @@ export const QuickViewModal: React.FC = () => {
                 </span>
                 <div className="flex items-center space-x-1 text-xs font-bold text-slate-800 bg-amber-50 px-2.5 py-1 rounded-md border border-amber-100">
                   <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-                  <span>{quickViewProduct.rating.toFixed(1)}</span>
-                  <span className="text-slate-400 font-normal">{t('quickView.reviewsCount', { count: quickViewProduct.reviewsCount })}</span>
+                  <span>{(quickViewProduct.rating ?? 5.0).toFixed(1)}</span>
+                  <span className="text-slate-400 font-normal">{t('quickView.reviewsCount', { count: quickViewProduct.reviewsCount ?? 1 })}</span>
                 </div>
               </div>
 

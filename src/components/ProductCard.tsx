@@ -148,8 +148,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </span>
             <div className="flex items-center space-x-1 text-slate-700 font-medium">
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-              <span>{product.rating.toFixed(1)}</span>
-              <span className="text-slate-400 text-[10px]">({product.reviewsCount})</span>
+              <span>{(product.rating ?? 5.0).toFixed(1)}</span>
+              <span className="text-slate-400 text-[10px]">({product.reviewsCount ?? 1})</span>
             </div>
           </div>
 
