@@ -517,11 +517,15 @@ export const AdminDashboard: React.FC = () => {
       }
       if (currentList.includes(url)) return prev;
 
-      const updated = [...currentList, url];
+      // If the list only contains a default Unsplash stock photo, replace it with the new custom image.
+      // Otherwise, prepend the new image so it immediately becomes the primary cover image.
+      const hasOnlyUnsplash = currentList.length === 1 && currentList[0].includes('unsplash.com');
+      const updated = hasOnlyUnsplash ? [url] : [url, ...currentList];
+
       return {
         ...prev,
         images: updated,
-        image: updated[0] || prev.image,
+        image: updated[0] || url,
       };
     });
 

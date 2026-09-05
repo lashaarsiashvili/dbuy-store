@@ -755,6 +755,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (json && json.lastUpdated) {
           lastSyncTimestampRef.current = json.lastUpdated;
         }
+        if (json && Array.isArray(json.products)) {
+          // Update products state and localStorage with the server's clean, persisted image URLs
+          setProducts(json.products);
+          try {
+            localStorage.setItem('dbuy_products', JSON.stringify(json.products));
+          } catch (e) {
+            console.warn('Could not write sanitized products to localStorage:', e);
+          }
+        }
       }
     } catch (err) {
       console.error('Error syncing products to server:', err);
