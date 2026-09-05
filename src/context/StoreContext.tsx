@@ -1383,36 +1383,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               } catch {}
             }
 
-            // Smart restore: if client has custom products (like IDs starting with prod-178)
-            // or if the server currently has only default products, push custom products back to server.
-            const defaultIds = new Set(initialProducts.map(p => p.id));
-            const serverHasCustom = d.products.some(p => !defaultIds.has(p.id));
-            const clientHasCustom = localProducts.some(p => !defaultIds.has(p.id));
-
-            if (clientHasCustom && !serverHasCustom) {
-              console.log('[SYNC-RESTORE] Server database was wiped. Restoring custom client products back to server...');
-              fetch('/api/store/products', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ products: localProducts }),
-              }).catch(err => console.error('Failed to restore custom products to server:', err));
-              return localProducts;
-            }
-
-            const recentLocalEdit = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
+            const recentLocalEdit = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
             if (recentLocalEdit) {
-              // Merge products: prefer local version of any product if we recently edited locally
+              // Merge products: prefer local version of any product if we recently edited locally on this device
               const localMap = new Map((localProducts.length > 0 ? localProducts : prevProducts).map(p => [p.id, p]));
               const merged = d.products.map(sp => {
                 const lp = localMap.get(sp.id);
                 if (lp) {
-                  // Keep local modified version of the product to prevent overwriting images/edits
                   return lp;
                 }
                 return sp;
               });
 
-              // Add any local products that are not on the server yet (e.g. newly added products)
               const serverIds = new Set(d.products.map(p => p.id));
               const missingOnServer = (localProducts.length > 0 ? localProducts : prevProducts).filter(p => !serverIds.has(p.id));
               const finalMerged = [...missingOnServer, ...merged];
@@ -1421,15 +1403,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
                 localStorage.setItem('dbuy_products', JSON.stringify(finalMerged));
               } catch {}
               
-              // Also ensure the server gets this merged version
-              fetch('/api/store/products', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ products: finalMerged }),
-              }).catch(() => {});
-
               return finalMerged;
             }
+
             try {
               localStorage.setItem('dbuy_products', JSON.stringify(d.products));
             } catch {}
@@ -1683,12 +1659,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // Periodic auto-sync only when tab is active
+    // Periodic auto-sync every 3 seconds for fast real-time updates across desktop and mobile devices
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         refreshServerStore();
       }
-    }, 12000);
+    }, 3000);
 
     // Sync on tab focus / phone screen wakeup / network reconnect
     const handleVisibilityChange = () => {

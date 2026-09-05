@@ -216,45 +216,60 @@ function syncCatalogToInitialProducts(products: any[]): void {
   }
 }
 
+const CODE_BACKUP_FILE = path.join(process.cwd(), 'src', 'data', 'storeBackup.json');
+
 function initStoreDatabase(): StoreDatabase {
+  let loadedDb: Partial<StoreDatabase> | null = null;
+
+  try {
+    if (fs.existsSync(DB_FILE)) {
+      const raw = fs.readFileSync(DB_FILE, 'utf-8');
+      loadedDb = JSON.parse(raw);
+    }
+  } catch (err) {
+    console.error('Error reading DB_FILE:', err);
+  }
+
+  // Fallback to codebase backup file if DB_FILE was missing or invalid
+  if (!loadedDb) {
+    try {
+      if (fs.existsSync(CODE_BACKUP_FILE)) {
+        const raw = fs.readFileSync(CODE_BACKUP_FILE, 'utf-8');
+        loadedDb = JSON.parse(raw);
+        console.log('[STORE-INIT] Loaded database state from src/data/storeBackup.json code backup!');
+      }
+    } catch (err) {
+      console.error('Error reading CODE_BACKUP_FILE:', err);
+    }
+  }
+
+  let products = (loadedDb && Array.isArray(loadedDb.products)) ? loadedDb.products : initialProducts;
+
+  // Guarantee that all 10 initial products are present if not explicitly deleted
+  const existingIds = new Set(products.map(p => p.id));
+  const missingInitial = initialProducts.filter(p => !existingIds.has(p.id));
+  if (missingInitial.length > 0) {
+    console.log(`[STORE-INIT] Restoring ${missingInitial.length} missing initial products to catalog`);
+    products = [...products, ...missingInitial];
+  }
+
+  const initialDb: StoreDatabase = {
+    products,
+    registeredUsers: loadedDb?.registeredUsers || {},
+    orders: Array.isArray(loadedDb?.orders) ? loadedDb.orders : [],
+    theme: loadedDb?.theme || DEFAULT_THEME,
+    billboards: Array.isArray(loadedDb?.billboards) && loadedDb.billboards.length > 0 ? loadedDb.billboards : initialBillboards,
+    billboardIntervalSeconds: loadedDb?.billboardIntervalSeconds !== undefined ? loadedDb.billboardIntervalSeconds : 120,
+    adminSecretSlug: loadedDb?.adminSecretSlug || 'lasha-admin-x98',
+    adminPasswordHash: loadedDb?.adminPasswordHash || '',
+    adminPasswordSalt: loadedDb?.adminPasswordSalt || '',
+    lastUpdated: loadedDb?.lastUpdated || new Date().toISOString(),
+  };
+
   try {
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
-    if (fs.existsSync(DB_FILE)) {
-      const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      const parsed = JSON.parse(raw);
-      return {
-        products: Array.isArray(parsed.products) ? parsed.products : initialProducts,
-        registeredUsers: parsed.registeredUsers || {},
-        orders: Array.isArray(parsed.orders) ? parsed.orders : [],
-        theme: parsed.theme || DEFAULT_THEME,
-        billboards: Array.isArray(parsed.billboards) && parsed.billboards.length > 0 ? parsed.billboards : initialBillboards,
-        billboardIntervalSeconds: parsed.billboardIntervalSeconds !== undefined ? parsed.billboardIntervalSeconds : 120,
-        adminSecretSlug: parsed.adminSecretSlug || 'lasha-admin-x98',
-        adminPasswordHash: parsed.adminPasswordHash || '',
-        adminPasswordSalt: parsed.adminPasswordSalt || '',
-        lastUpdated: parsed.lastUpdated || new Date().toISOString(),
-      };
-    }
-  } catch (err) {
-    console.error('Error reading store database, creating default:', err);
-  }
-
-  const initialDb: StoreDatabase = {
-    products: initialProducts,
-    registeredUsers: {},
-    orders: [],
-    theme: DEFAULT_THEME,
-    billboards: initialBillboards,
-    billboardIntervalSeconds: 120,
-    adminSecretSlug: 'lasha-admin-x98',
-    adminPasswordHash: '',
-    adminPasswordSalt: '',
-    lastUpdated: new Date().toISOString(),
-  };
-
-  try {
     fs.writeFileSync(DB_FILE, JSON.stringify(initialDb, null, 2), 'utf-8');
   } catch (writeErr) {
     console.error('Error writing initial store database:', writeErr);
@@ -271,7 +286,17 @@ function saveStoreDatabase(): void {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
     storeDb.lastUpdated = new Date().toISOString();
-    fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
+    const serialized = JSON.stringify(storeDb, null, 2);
+    
+    // Save to runtime ephemeral disk
+    fs.writeFileSync(DB_FILE, serialized, 'utf-8');
+
+    // Save to source repository backup so data survives container cold starts
+    const backupDir = path.dirname(CODE_BACKUP_FILE);
+    if (!fs.existsSync(backupDir)) {
+      fs.mkdirSync(backupDir, { recursive: true });
+    }
+    fs.writeFileSync(CODE_BACKUP_FILE, serialized, 'utf-8');
   } catch (err) {
     console.error('Failed to save store database to file:', err);
   }
