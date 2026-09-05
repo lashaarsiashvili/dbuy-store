@@ -715,21 +715,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     lastLocalProductUpdateRef.current = Date.now();
     setProducts(newProducts);
 
-    // 1. Quota-safe localStorage persistence (never truncate base64 strings as substring(0,100) corrupts data)
+    // 1. Quota-safe localStorage persistence (save products state safely)
     try {
       localStorage.setItem('dbuy_products', JSON.stringify(newProducts));
     } catch (storageErr) {
-      console.warn('localStorage quota warning, attempting lean save without raw base64:', storageErr);
+      console.warn('localStorage quota warning, backing up images to IndexedDB:', storageErr);
+      // Backup base64 images to IndexedDB to preserve data
       try {
-        // Fallback: strip raw base64 data from localStorage until server returns clean short URLs
-        const lean = newProducts.map(p => ({
-          ...p,
-          image: p.image && p.image.startsWith('data:') ? '' : p.image,
-          images: (p.images || []).map(img => img.startsWith('data:') ? '' : img),
-        }));
-        localStorage.setItem('dbuy_products', JSON.stringify(lean));
-      } catch {
-        // Continue safely even if client localStorage is completely exhausted
+        const { saveImageBackupIDB } = await import('../utils/imageStorage');
+        newProducts.forEach((p, idx) => {
+          if (p.image && p.image.startsWith('data:')) {
+            saveImageBackupIDB(`prod-${p.id}-img`, p.image);
+          }
+          if (Array.isArray(p.images)) {
+            p.images.forEach((img, i) => {
+              if (img && img.startsWith('data:')) {
+                saveImageBackupIDB(`prod-${p.id}-img-${i}`, img);
+              }
+            });
+          }
+        });
+      } catch (idbErr) {
+        console.warn('Could not backup to IDB:', idbErr);
       }
     }
 
@@ -1383,33 +1390,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               } catch {}
             }
 
-            const recentLocalEdit = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
-            if (recentLocalEdit) {
-              // Merge products: prefer local version of any product if we recently edited locally on this device
-              const localMap = new Map((localProducts.length > 0 ? localProducts : prevProducts).map(p => [p.id, p]));
-              const merged = d.products.map(sp => {
-                const lp = localMap.get(sp.id);
-                if (lp) {
-                  return lp;
-                }
-                return sp;
-              });
+            const activeLocal = localProducts.length > 0 ? localProducts : prevProducts;
+            const serverIds = new Set(d.products.map(p => p.id));
+            const missingOnServer = activeLocal.filter(p => !serverIds.has(p.id));
 
-              const serverIds = new Set(d.products.map(p => p.id));
-              const missingOnServer = (localProducts.length > 0 ? localProducts : prevProducts).filter(p => !serverIds.has(p.id));
-              const finalMerged = [...missingOnServer, ...merged];
+            let finalMerged = d.products;
 
-              try {
-                localStorage.setItem('dbuy_products', JSON.stringify(finalMerged));
-              } catch {}
-              
-              return finalMerged;
+            if (missingOnServer.length > 0) {
+              console.log(`[CLIENT-STORE-SYNC] Found ${missingOnServer.length} local products missing on server. Merging and auto-pushing to server...`);
+              finalMerged = [...missingOnServer, ...d.products];
+
+              // Push the union catalog to the server so it's persisted permanently
+              fetch('/api/store/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ products: finalMerged }),
+              }).catch(err => console.error('Failed to sync union catalog to server:', err));
             }
 
             try {
-              localStorage.setItem('dbuy_products', JSON.stringify(d.products));
+              localStorage.setItem('dbuy_products', JSON.stringify(finalMerged));
             } catch {}
-            return d.products;
+
+            return finalMerged;
           });
         }
         if (d.registeredUsers && typeof d.registeredUsers === 'object') {

@@ -476,7 +476,7 @@ export const AdminDashboard: React.FC = () => {
         img.onload = async () => {
           let width = img.width;
           let height = img.height;
-          const maxDim = 1200;
+          const maxDim = 1000;
 
           if (width > maxDim || height > maxDim) {
             if (width > height) {
@@ -492,13 +492,29 @@ export const AdminDashboard: React.FC = () => {
           canvas.width = width;
           canvas.height = height;
           const ctx = canvas.getContext('2d');
+          let rawUrl = result;
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const rawUrl = canvas.toDataURL('image/jpeg', 0.90);
-            appendProdImage(rawUrl, file.name);
-          } else {
-            appendProdImage(result, file.name);
+            rawUrl = canvas.toDataURL('image/jpeg', 0.82);
           }
+
+          // Convert to server file immediately so prodForm receives clean short URL
+          try {
+            const res = await fetch('/api/upload-image', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ dataUrl: rawUrl, filename: file.name }),
+            });
+            const json = await res.json();
+            if (json && json.success && json.url) {
+              saveImageBackupIDB(json.url, rawUrl);
+              appendProdImage(json.url, file.name);
+              return;
+            }
+          } catch (err) {
+            console.warn('Upload API call failed, using compressed base64 fallback:', err);
+          }
+          appendProdImage(rawUrl, file.name);
         };
         img.onerror = () => {
           appendProdImage(result, file.name);
@@ -538,7 +554,7 @@ export const AdminDashboard: React.FC = () => {
       );
     }
 
-    // Convert heavy base64 to lightweight server file URL if applicable
+    // Backup background upload if still base64
     if (url.startsWith('data:')) {
       fetch('/api/upload-image', {
         method: 'POST',
@@ -548,9 +564,7 @@ export const AdminDashboard: React.FC = () => {
         .then(r => r.json())
         .then(json => {
           if (json && json.success && json.url) {
-            // Save base64 backup mapping in client IndexedDB to survive Cloud Run container wipes without hitting localStorage limits
             saveImageBackupIDB(json.url, url);
-
             setProdForm(prev => {
               const updated = prev.images.map(img => img === url ? json.url : img);
               return {

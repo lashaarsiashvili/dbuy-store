@@ -45,6 +45,31 @@ export const saveImageBackupIDB = async (url: string, base64: string): Promise<v
 };
 
 /**
+ * Retrieves a base64 image backup from IndexedDB by its server URL.
+ */
+export const getImageBackupIDB = async (url: string): Promise<string | null> => {
+  if (!url || typeof window === 'undefined') return null;
+  try {
+    const db = await getIDB();
+    const tx = db.transaction('images', 'readonly');
+    const store = tx.objectStore('images');
+    const request = store.get(url);
+    return new Promise((resolve) => {
+      request.onsuccess = () => {
+        db.close();
+        resolve((request.result as string) || null);
+      };
+      request.onerror = () => {
+        db.close();
+        resolve(null);
+      };
+    });
+  } catch (e) {
+    return null;
+  }
+};
+
+/**
  * Loads all base64 image backups from IndexedDB as a Record<string, string>.
  */
 export const loadImageBackupsIDB = async (): Promise<Record<string, string>> => {

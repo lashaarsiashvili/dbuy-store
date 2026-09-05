@@ -220,38 +220,46 @@ const CODE_BACKUP_FILE = path.join(process.cwd(), 'src', 'data', 'storeBackup.js
 
 function initStoreDatabase(): StoreDatabase {
   let loadedDb: Partial<StoreDatabase> | null = null;
+  let fileProducts: any[] = [];
+  let backupProducts: any[] = [];
 
+  // 1. Read from runtime database file
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
-      loadedDb = JSON.parse(raw);
+      const parsed = JSON.parse(raw);
+      loadedDb = parsed;
+      if (Array.isArray(parsed.products)) {
+        fileProducts = parsed.products;
+      }
     }
   } catch (err) {
     console.error('Error reading DB_FILE:', err);
   }
 
-  // Fallback to codebase backup file if DB_FILE was missing or invalid
-  if (!loadedDb) {
-    try {
-      if (fs.existsSync(CODE_BACKUP_FILE)) {
-        const raw = fs.readFileSync(CODE_BACKUP_FILE, 'utf-8');
-        loadedDb = JSON.parse(raw);
-        console.log('[STORE-INIT] Loaded database state from src/data/storeBackup.json code backup!');
+  // 2. Read from source code backup file
+  try {
+    if (fs.existsSync(CODE_BACKUP_FILE)) {
+      const raw = fs.readFileSync(CODE_BACKUP_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (!loadedDb) loadedDb = parsed;
+      if (Array.isArray(parsed.products)) {
+        backupProducts = parsed.products;
       }
-    } catch (err) {
-      console.error('Error reading CODE_BACKUP_FILE:', err);
     }
+  } catch (err) {
+    console.error('Error reading CODE_BACKUP_FILE:', err);
   }
 
-  let products = (loadedDb && Array.isArray(loadedDb.products)) ? loadedDb.products : initialProducts;
-
-  // Guarantee that all 10 initial products are present if not explicitly deleted
-  const existingIds = new Set(products.map(p => p.id));
-  const missingInitial = initialProducts.filter(p => !existingIds.has(p.id));
-  if (missingInitial.length > 0) {
-    console.log(`[STORE-INIT] Restoring ${missingInitial.length} missing initial products to catalog`);
-    products = [...products, ...missingInitial];
+  // 3. Union-merge all product sources (initialProducts -> backupProducts -> fileProducts)
+  const productMap = new Map<string, any>();
+  if (Array.isArray(initialProducts)) {
+    initialProducts.forEach(p => { if (p && p.id) productMap.set(p.id, p); });
   }
+  backupProducts.forEach(p => { if (p && p.id) productMap.set(p.id, p); });
+  fileProducts.forEach(p => { if (p && p.id) productMap.set(p.id, p); });
+
+  const products = Array.from(productMap.values());
 
   const initialDb: StoreDatabase = {
     products,
