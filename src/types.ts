@@ -24,6 +24,8 @@ export interface Product {
   reviewsCount: number;
   features?: string[];
   isDeal?: boolean;
+  isPublishedGlobally?: boolean;
+  publishedAt?: string;
 }
 
 export interface CartItem {

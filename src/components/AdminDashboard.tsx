@@ -67,6 +67,7 @@ export const AdminDashboard: React.FC = () => {
     addProduct,
     bulkImportProducts,
     updateProduct,
+    publishProductGlobally,
     deleteProduct,
     orders,
     updateOrderStatus,
@@ -887,8 +888,10 @@ export const AdminDashboard: React.FC = () => {
         description: prodForm.description,
         descriptionKa: prodForm.descriptionKa,
         features: finalFeatures.slice(0, 4),
+        isPublishedGlobally: true,
+        publishedAt: new Date().toISOString(),
       });
-      addToast(isKa ? 'პროდუქტი წარმატებით განახლდა!' : 'Product updated successfully!', 'success');
+      addToast(isKa ? '🌐 პროდუქტი განახლდა და გამოქვეყნდა გლობალურად ყველა მოწყობილობისთვის!' : '🌐 Product updated and published globally across all devices!', 'success');
     } else {
       addProduct({
         title: prodForm.title || prodForm.titleKa || 'Product',
@@ -906,8 +909,10 @@ export const AdminDashboard: React.FC = () => {
         rating: 5.0,
         reviewsCount: 1,
         features: finalFeatures.slice(0, 4),
+        isPublishedGlobally: true,
+        publishedAt: new Date().toISOString(),
       });
-      addToast(isKa ? 'ახალი პროდუქტი წარმატებით დაემატა!' : 'New product created successfully!', 'success');
+      addToast(isKa ? '🌐 ახალი პროდუქტი შეიქმნა და გამოქვეყნდა გლობალურად ყველა მოწყობილობისთვის!' : '🌐 New product created and published globally across all devices!', 'success');
     }
     setIsProductModalOpen(false);
   };
@@ -1595,7 +1600,15 @@ export const AdminDashboard: React.FC = () => {
                             </div>
                           </td>
                           <td className="p-4 max-w-xs">
-                            <div className="font-bold text-slate-900 line-clamp-1">{prod.title}</div>
+                            <div className="flex items-center space-x-1.5">
+                              <span className="font-bold text-slate-900 line-clamp-1">{prod.title}</span>
+                              {prod.isPublishedGlobally && (
+                                <span className="inline-flex items-center space-x-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0" title="Published globally across all devices">
+                                  <Globe className="w-2.5 h-2.5 text-emerald-600 animate-pulse" />
+                                  <span>{isKa ? 'გლობალური' : 'Global'}</span>
+                                </span>
+                              )}
+                            </div>
                             {prod.titleKa && (
                               <div className="text-[11px] text-slate-500 line-clamp-1">{prod.titleKa}</div>
                             )}
@@ -1680,6 +1693,23 @@ export const AdminDashboard: React.FC = () => {
                             )}
                           </td>
                           <td className="p-4 text-right space-x-1">
+                            <button
+                              type="button"
+                              onClick={() => publishProductGlobally(prod.id)}
+                              className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer inline-flex items-center space-x-1 shadow-xs border ${
+                                prod.isPublishedGlobally
+                                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300'
+                                  : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
+                              }`}
+                              title={isKa ? 'პროდუქტის გლობალზე გამოქვეყნება (ყველა მოწყობილობისთვის)' : 'Publish product globally across all devices'}
+                            >
+                              <Globe className={`w-3.5 h-3.5 ${prod.isPublishedGlobally ? 'animate-pulse text-emerald-600' : 'text-white'}`} />
+                              <span>
+                                {prod.isPublishedGlobally 
+                                  ? (isKa ? 'გამოქვეყნებულია' : 'Published') 
+                                  : (isKa ? 'გლობალზე გამოქვეყნება' : 'Publish Globally')}
+                              </span>
+                            </button>
                             <button
                               onClick={() => navigateToProduct(prod.id)}
                               className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"

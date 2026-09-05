@@ -67,6 +67,7 @@ interface StoreContextType {
   addProduct: (product: Omit<Product, 'id'>) => void;
   bulkImportProducts: (newProducts: Product[], replaceExisting?: boolean) => void;
   updateProduct: (product: Product) => void;
+  publishProductGlobally: (id: string) => Promise<boolean>;
   deleteProduct: (id: string) => void;
   clearAllProducts: () => void;
 
@@ -913,6 +914,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         : `Updated product "${updated.title}"`, 
       'success'
     );
+  };
+
+  const publishProductGlobally = async (id: string): Promise<boolean> => {
+    const target = products.find(p => p.id === id);
+    if (!target) return false;
+
+    const publishedProduct: Product = {
+      ...target,
+      isPublishedGlobally: true,
+      publishedAt: new Date().toISOString(),
+    };
+
+    const updatedProducts = products.map(p => p.id === id ? publishedProduct : p);
+    setProducts(updatedProducts);
+
+    // Force save & sync to server + Firebase Firestore + local storage
+    await saveProducts(updatedProducts);
+
+    // Direct Firestore write for instant global sync across all devices
+    try {
+      await setDoc(doc(db, 'store', 'database'), {
+        products: updatedProducts,
+        lastUpdated: new Date().toISOString(),
+      }, { merge: true });
+    } catch (err) {
+      console.warn('[GLOBAL-PUBLISH] Direct Firestore push error:', err);
+    }
+
+    addToast(
+      language === 'ka'
+        ? `🌐 პროდუქტი „${target.title}“ წარმატებით გამოქვეყნდა გლობალურად ყველა მოწყობილობისთვის!`
+        : `🌐 Product "${target.title}" successfully published globally across all devices!`,
+      'success'
+    );
+    return true;
   };
 
   const deleteProduct = (id: string) => {
@@ -2289,6 +2325,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         addProduct,
         bulkImportProducts,
         updateProduct,
+        publishProductGlobally,
         deleteProduct,
         clearAllProducts,
         wishlist,
