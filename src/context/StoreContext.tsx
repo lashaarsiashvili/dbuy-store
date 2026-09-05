@@ -32,6 +32,8 @@ import {
   filterOutAdminLogs
 } from '../utils/analytics';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
+import { db } from '../lib/firebase';
+import { doc, setDoc, onSnapshot } from 'firebase/firestore';
 
 interface StoreContextType {
   // Navigation & View
@@ -586,6 +588,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error('Error syncing theme to server:', err);
     }
 
+    try {
+      setDoc(doc(db, 'store', 'database'), { theme: updated }, { merge: true }).catch(() => {});
+    } catch (e) {}
+
     addToast(
       language === 'ka' 
         ? 'დიზაინის ცვლილებები შენახულია და გავრცელებულია ყველასთვის!' 
@@ -646,6 +652,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ billboards: slides, billboardIntervalSeconds: currentInterval }),
     }).catch(err => console.error('Error syncing billboards to server:', err));
+
+    try {
+      setDoc(doc(db, 'store', 'database'), { billboards: slides, billboardIntervalSeconds: currentInterval }, { merge: true }).catch(() => {});
+    } catch (e) {}
   };
 
   const updateBillboard = (id: string, updated: Partial<BillboardSlide>) => {
@@ -751,7 +761,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // 3. Immediately persist to server and update sync timestamp
+    // 3. Directly persist to Firebase Firestore (Client-Side, works instantly on Vercel)
+    try {
+      setDoc(doc(db, 'store', 'database'), { products: newProducts, lastUpdated: new Date().toISOString() }, { merge: true })
+        .catch(err => console.warn('[CLIENT-FIREBASE] Error saving products:', err));
+    } catch (fbErr) {
+      console.warn('[CLIENT-FIREBASE] Error:', fbErr);
+    }
+
+    // 4. Immediately persist to server and update sync timestamp
     try {
       const res = await fetch('/api/store/products', {
         method: 'POST',
@@ -1621,6 +1639,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     refreshServerStore();
 
+    // Firebase Firestore Realtime Sync (Works directly from client on Vercel)
+    let fbUnsubscribe: (() => void) | null = null;
+    try {
+      const docRef = doc(db, 'store', 'database');
+      fbUnsubscribe = onSnapshot(docRef, (snap) => {
+        if (snap.exists()) {
+          const data = snap.data();
+          if (Array.isArray(data.products) && data.products.length > 0) {
+            if (Date.now() - lastLocalProductUpdateRef.current > 8000) {
+              setProducts(data.products);
+              try {
+                localStorage.setItem('dbuy_products', JSON.stringify(data.products));
+              } catch {}
+            }
+          }
+          if (data.theme && typeof data.theme === 'object') {
+            setTheme(prev => ({ ...prev, ...data.theme }));
+            try {
+              localStorage.setItem('dbuy_theme', JSON.stringify(data.theme));
+            } catch {}
+          }
+          if (Array.isArray(data.billboards) && data.billboards.length > 0) {
+            setBillboards(data.billboards);
+            try {
+              localStorage.setItem('dbuy_billboards', JSON.stringify(data.billboards));
+            } catch {}
+          }
+        }
+      }, (err) => {
+        console.warn('[FIREBASE-REALTIME] Error:', err);
+      });
+    } catch (e) {
+      console.warn('[FIREBASE-INIT] Error:', e);
+    }
+
     // BroadcastChannel cross-tab real-time sync
     let bc: BroadcastChannel | null = null;
     if (typeof BroadcastChannel !== 'undefined') {
@@ -1680,6 +1733,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     return () => {
       clearInterval(interval);
+      if (fbUnsubscribe) fbUnsubscribe();
       if (bc) bc.close();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('storage', handleStorageChange);
