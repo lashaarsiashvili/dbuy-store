@@ -490,6 +490,18 @@ export const Header: React.FC = () => {
           >
             {t('nav.contact')}
           </button>
+
+          <button
+            onClick={() => setCurrentPage('deliveries')}
+            className={`px-3 py-1.5 rounded-full shrink-0 transition-colors flex items-center space-x-1.5 text-xs ${
+              currentPage === 'deliveries'
+                ? 'bg-emerald-600 text-white font-bold'
+                : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200/50'
+            }`}
+          >
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span>{language === 'ka' ? 'ვერიფიცირებული მიწოდება' : 'Verified Deliveries'}</span>
+          </button>
         </div>
       </nav>
     </header>

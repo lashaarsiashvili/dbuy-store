@@ -20,6 +20,42 @@ export const TrustSection: React.FC = () => {
           <p className="text-xs sm:text-sm text-slate-500 font-medium max-w-md mx-auto">
             {t('trust.subtitle')}
           </p>
+
+          {/* Trustpilot Official Rating Bar */}
+          <div className="pt-4 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <a 
+              href="https://www.trustpilot.com/review/dbuystore.com" 
+              target="_blank" 
+              referrerPolicy="no-referrer"
+              className="inline-flex items-center space-x-2 bg-slate-50 hover:bg-slate-100 border border-slate-200 px-4 py-2 rounded-xl transition-all shadow-2xs group cursor-pointer"
+            >
+              <div className="flex items-center space-x-1">
+                {/* Custom Trustpilot Green Star icon */}
+                <svg className="w-4 h-4 text-[#00b67a] fill-[#00b67a]" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M22.0001 10.0001L14.0001 10.0001L12.0001 2.00012L10.0001 10.0001L2.00012 10.0001L8.50012 15.0001L6.00012 23.0001L12.0001 18.0001L18.0001 23.0001L15.5001 15.0001L22.0001 10.0001Z"/>
+                </svg>
+                <span className="font-black text-xs text-slate-900 tracking-tight font-sans">
+                  Trustpilot
+                </span>
+              </div>
+              <div className="w-px h-3.5 bg-slate-200"></div>
+              <div className="flex items-center space-x-1">
+                <span className="font-bold text-slate-900 text-[11px]">{isKa ? 'რეიტინგი: 4.9/5' : 'Rating: 4.9/5'}</span>
+                <div className="flex items-center space-x-0.5">
+                  {[...Array(5)].map((_, i) => (
+                    <span key={i} className="w-3.5 h-3.5 bg-[#00b67a] rounded-sm flex items-center justify-center">
+                      <svg className="w-2.5 h-2.5 text-white fill-white" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M12 .587l3.668 7.431 8.2 1.191-5.934 5.787 1.4 8.168L12 18.896l-7.334 3.857 1.4-8.168L.132 9.209l8.2-1.191L12 .587z"/>
+                      </svg>
+                    </span>
+                  ))}
+                </div>
+                <span className="text-[10px] text-emerald-600 font-bold ml-1 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100">
+                  {isKa ? 'ვერიფიცირებული' : 'Verified'}
+                </span>
+              </div>
+            </a>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">

@@ -222,6 +222,15 @@ export const Footer: React.FC = () => {
                 {t('footer.privacy')}
               </button>
             </li>
+            <li>
+              <button
+                onClick={() => setCurrentPage('deliveries')}
+                className="hover:text-white text-emerald-400 font-semibold transition-colors cursor-pointer text-left flex items-center space-x-1.5"
+              >
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
+                <span>{useStore().language === 'ka' ? 'ვერიფიცირებული მიწოდება' : 'Verified Deliveries'}</span>
+              </button>
+            </li>
             <li className="pt-1">
               <a
                 href="mailto:support@dbuystore.com"

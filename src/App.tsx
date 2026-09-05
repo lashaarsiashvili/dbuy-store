@@ -17,6 +17,7 @@ import { ContactPage } from './components/ContactPage';
 import { GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPages';
 import { MyOrdersPage } from './components/MyOrdersPage';
 import { ProductDetailPage } from './components/ProductDetailPage';
+import { VerifiedDeliveriesPage } from './components/VerifiedDeliveriesPage';
 import { ToastContainer } from './components/ToastContainer';
 import { getPayPalV6Instance } from './utils/paypalV6';
 
@@ -73,6 +74,7 @@ const MainLayout: React.FC = () => {
         {currentPage === 'returns' && <ReturnsPage />}
         {currentPage === 'privacy' && <PrivacyPage />}
         {currentPage === 'my-orders' && <MyOrdersPage />}
+        {currentPage === 'deliveries' && <VerifiedDeliveriesPage />}
         {currentPage === 'admin' && <AdminDashboard />}
       </main>
 

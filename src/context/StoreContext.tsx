@@ -1338,15 +1338,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               } catch {}
             }
 
-            // Check if client has custom products (different length or containing new products not in default list)
-            const hasCustomLocal = localProducts.length > 0 && (
-              localProducts.length !== d.products.length ||
-              localProducts.some(lp => lp.id.startsWith('prod-17') || !d.products.some(sp => sp.id === lp.id))
-            );
+            // Check if client has custom products (different from pristine default initialProducts)
+            const hasCustomLocal = localProducts.length > 0 && JSON.stringify(localProducts) !== JSON.stringify(initialProducts);
 
-            // Check if server is currently returning the pristine default products (meaning server database was wiped)
-            const serverIsDefault = d.products.length === initialProducts.length &&
-              d.products.every(sp => initialProducts.some(ip => ip.id === sp.id));
+            // Check if server is currently returning the pristine default products (meaning server database was wiped/reloaded)
+            const serverIsDefault = JSON.stringify(d.products) === JSON.stringify(initialProducts);
 
             if (hasCustomLocal && serverIsDefault) {
               console.log('[SYNC-RESTORE] Server restarted & wiped. Pushing custom client products catalog back to server...');
@@ -1360,20 +1356,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             const recentLocalEdit = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
             if (recentLocalEdit) {
+              // Merge products: prefer local version of any product if we recently edited locally
+              const localMap = new Map((localProducts.length > 0 ? localProducts : prevProducts).map(p => [p.id, p]));
+              const merged = d.products.map(sp => {
+                const lp = localMap.get(sp.id);
+                if (lp) {
+                  // Keep local modified version of the product to prevent overwriting images/edits
+                  return lp;
+                }
+                return sp;
+              });
+
+              // Add any local products that are not on the server yet (e.g. newly added products)
               const serverIds = new Set(d.products.map(p => p.id));
-              const missingLocal = prevProducts.filter(p => !serverIds.has(p.id));
-              if (missingLocal.length > 0) {
-                const merged = [...missingLocal, ...d.products];
-                try {
-                  localStorage.setItem('dbuy_products', JSON.stringify(merged));
-                } catch {}
-                fetch('/api/store/products', {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ products: merged }),
-                }).catch(() => {});
-                return merged;
-              }
+              const missingOnServer = (localProducts.length > 0 ? localProducts : prevProducts).filter(p => !serverIds.has(p.id));
+              const finalMerged = [...missingOnServer, ...merged];
+
+              try {
+                localStorage.setItem('dbuy_products', JSON.stringify(finalMerged));
+              } catch {}
+              
+              // Also ensure the server gets this merged version
+              fetch('/api/store/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ products: finalMerged }),
+              }).catch(() => {});
+
+              return finalMerged;
             }
             try {
               localStorage.setItem('dbuy_products', JSON.stringify(d.products));
