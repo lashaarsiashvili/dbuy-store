@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { PayPalScriptProvider } from '@paypal/react-paypal-js';
+import { Analytics } from '@vercel/analytics/react';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
@@ -105,6 +106,7 @@ export function App() {
         }}
       >
         <MainLayout />
+        <Analytics />
       </PayPalScriptProvider>
     </StoreProvider>
   );
