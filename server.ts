@@ -5,6 +5,7 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
@@ -286,7 +287,70 @@ function initStoreDatabase(): StoreDatabase {
   return initialDb;
 }
 
+// Vercel KV / Upstash Redis Client Auto-Initialization
+const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
+const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+
+let redisClient: Redis | null = null;
+if (redisUrl && redisToken) {
+  try {
+    redisClient = new Redis({
+      url: redisUrl,
+      token: redisToken,
+    });
+    console.log('[REDIS/KV] Connected to Vercel KV / Upstash Redis successfully!');
+  } catch (e) {
+    console.warn('[REDIS/KV] Could not initialize Redis client:', e);
+  }
+}
+
 let storeDb: StoreDatabase = initStoreDatabase();
+
+// Sync from Vercel KV / Upstash Redis on startup if configured
+async function syncFromRedisOnStartup(): Promise<void> {
+  if (!redisClient) return;
+  try {
+    const data = await redisClient.get<any>('dbuy_store_database');
+    if (data) {
+      const parsed = typeof data === 'string' ? JSON.parse(data) : data;
+      if (parsed && Array.isArray(parsed.products) && parsed.products.length > 0) {
+        console.log(`[REDIS/KV] Loaded ${parsed.products.length} products from Vercel KV / Upstash Redis!`);
+        
+        // Merge products from Redis into active storeDb
+        const pMap = new Map<string, any>();
+        storeDb.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
+        parsed.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
+        storeDb.products = Array.from(pMap.values());
+
+        if (parsed.registeredUsers && Object.keys(parsed.registeredUsers).length > 0) {
+          storeDb.registeredUsers = { ...storeDb.registeredUsers, ...parsed.registeredUsers };
+        }
+        if (Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+          storeDb.orders = parsed.orders;
+        }
+        if (parsed.theme) {
+          storeDb.theme = parsed.theme;
+        }
+        if (Array.isArray(parsed.billboards) && parsed.billboards.length > 0) {
+          storeDb.billboards = parsed.billboards;
+        }
+        storeDb.lastUpdated = new Date().toISOString();
+
+        // Also write merged data to local disk and backup file
+        try {
+          if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+          fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
+          fs.writeFileSync(CODE_BACKUP_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
+        } catch {}
+      }
+    }
+  } catch (err) {
+    console.warn('[REDIS/KV] Error syncing from Redis on startup:', err);
+  }
+}
+
+// Initial sync call
+syncFromRedisOnStartup();
 
 function saveStoreDatabase(): void {
   try {
@@ -305,10 +369,18 @@ function saveStoreDatabase(): void {
       fs.mkdirSync(backupDir, { recursive: true });
     }
     fs.writeFileSync(CODE_BACKUP_FILE, serialized, 'utf-8');
+
+    // Automatically persist to Vercel KV / Upstash Redis if available
+    if (redisClient) {
+      redisClient.set('dbuy_store_database', serialized)
+        .then(() => console.log('[REDIS/KV] Saved database to Vercel KV / Upstash Redis successfully'))
+        .catch(err => console.error('[REDIS/KV] Error saving to Redis:', err));
+    }
   } catch (err) {
     console.error('Failed to save store database to file:', err);
   }
 }
+
 
 // In-memory OTP storage with TTL and attempt limits
 interface OtpRecord {
