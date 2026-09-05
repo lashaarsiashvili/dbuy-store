@@ -420,7 +420,8 @@ async function syncFromRedisOnStartup(): Promise<void> {
       }
     }
   } catch (err: any) {
-    console.warn('[REDIS/KV] Error syncing from Redis on startup (verify your Vercel KV URL/token):', err?.message || err);
+    console.log('[REDIS/KV] Vercel KV / Upstash Redis is offline or not configured. Continuing with local disk & Firebase persistence.');
+    redisClient = null;
   }
 }
 
@@ -456,7 +457,9 @@ function saveStoreDatabase(): void {
     if (redisClient) {
       redisClient.set('dbuy_store_database', serialized)
         .then(() => console.log('[REDIS/KV] Saved database to Vercel KV / Upstash Redis successfully'))
-        .catch(err => console.warn('[REDIS/KV] Could not save database to Redis (check Vercel KV URL/token):', err?.message || err));
+        .catch(() => {
+          redisClient = null;
+        });
     }
   } catch (err) {
     console.error('Failed to save store database to file:', err);
