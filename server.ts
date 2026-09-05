@@ -67,7 +67,10 @@ const DB_FILE = path.join(DB_DIR, 'store_database.json');
 
 // Dedicated persistent uploads directory for product images
 const UPLOADS_DIR = path.join(DB_DIR, 'uploads');
-const UPLOADS_MAP_FILE = path.join(DB_DIR, 'uploads_map.json');
+// Persistent base64 backup map stored inside the source repository (src/data/uploadedImagesBackup.json)
+// This guarantees image data is never lost even if Cloud Run reboots or wipes ephemeral /data storage!
+const UPLOADS_MAP_FILE = path.join(process.cwd(), 'src', 'data', 'uploadedImagesBackup.json');
+const LEGACY_UPLOADS_MAP_FILE = path.join(DB_DIR, 'uploads_map.json');
 
 try {
   if (!fs.existsSync(UPLOADS_DIR)) {
@@ -79,26 +82,62 @@ try {
 
 // Persistent base64 backup map to ensure uploaded files are never lost
 let uploadsMap: Record<string, string> = {};
-try {
-  if (fs.existsSync(UPLOADS_MAP_FILE)) {
-    uploadsMap = JSON.parse(fs.readFileSync(UPLOADS_MAP_FILE, 'utf-8'));
-    // Ensure any file present in map is written to disk if missing
-    for (const [filename, dataUrl] of Object.entries(uploadsMap)) {
-      const filePath = path.join(UPLOADS_DIR, filename);
-      if (!fs.existsSync(filePath) && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+
+function loadUploadsMapBoot(): void {
+  try {
+    if (fs.existsSync(UPLOADS_MAP_FILE)) {
+      const raw = fs.readFileSync(UPLOADS_MAP_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        uploadsMap = { ...uploadsMap, ...parsed };
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read primary UPLOADS_MAP_FILE:', e);
+  }
+
+  try {
+    if (fs.existsSync(LEGACY_UPLOADS_MAP_FILE)) {
+      const raw = fs.readFileSync(LEGACY_UPLOADS_MAP_FILE, 'utf-8');
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        uploadsMap = { ...parsed, ...uploadsMap };
+      }
+    }
+  } catch (e) {
+    console.warn('Could not read LEGACY_UPLOADS_MAP_FILE:', e);
+  }
+
+  // Ensure all images in uploadsMap are physically reconstituted on disk
+  let restoredCount = 0;
+  for (const [filename, dataUrl] of Object.entries(uploadsMap)) {
+    if (!filename || filename === '/' || filename === '.') continue;
+    const filePath = path.join(UPLOADS_DIR, filename);
+    if (!fs.existsSync(filePath) && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+      try {
         const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
         if (matches && matches[2]) {
           fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
+          restoredCount++;
         }
+      } catch (err) {
+        console.error(`Failed to reconstitute image ${filename} on boot:`, err);
       }
     }
   }
-} catch (e) {
-  console.warn('Could not restore uploads map on boot:', e);
+  if (restoredCount > 0) {
+    console.log(`[BOOT-IMAGE-RECONSTITUTE] Recreated ${restoredCount} missing uploaded image files on disk from source backup!`);
+  }
 }
+
+loadUploadsMapBoot();
 
 function saveUploadsMap(): void {
   try {
+    const dir = path.dirname(UPLOADS_MAP_FILE);
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
     fs.writeFileSync(UPLOADS_MAP_FILE, JSON.stringify(uploadsMap, null, 2), 'utf-8');
   } catch (err) {
     console.error('Error saving uploads map:', err);

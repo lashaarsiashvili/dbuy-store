@@ -715,17 +715,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     lastLocalProductUpdateRef.current = Date.now();
     setProducts(newProducts);
 
-    // 1. Quota-safe localStorage persistence
+    // 1. Quota-safe localStorage persistence (never truncate base64 strings as substring(0,100) corrupts data)
     try {
       localStorage.setItem('dbuy_products', JSON.stringify(newProducts));
     } catch (storageErr) {
-      console.warn('localStorage quota warning, attempting lean save:', storageErr);
+      console.warn('localStorage quota warning, attempting lean save without raw base64:', storageErr);
       try {
-        // Fallback: save catalog items without heavy data: URIs in localStorage if browser quota is hit
+        // Fallback: strip raw base64 data from localStorage until server returns clean short URLs
         const lean = newProducts.map(p => ({
           ...p,
-          image: p.image && p.image.startsWith('data:') ? p.image.substring(0, 100) : p.image,
-          images: (p.images || []).map(img => img.startsWith('data:') ? img.substring(0, 100) : img),
+          image: p.image && p.image.startsWith('data:') ? '' : p.image,
+          images: (p.images || []).map(img => img.startsWith('data:') ? '' : img),
         }));
         localStorage.setItem('dbuy_products', JSON.stringify(lean));
       } catch {
@@ -757,10 +757,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           lastSyncTimestampRef.current = json.lastUpdated;
         }
         if (json && Array.isArray(json.products)) {
-          // Update products state and localStorage with the server's clean, persisted image URLs
-          setProducts(json.products);
+          const sanitizedProducts: Product[] = json.products;
+
+          // Save server-generated URL mappings to client IndexedDB for backup
           try {
-            localStorage.setItem('dbuy_products', JSON.stringify(json.products));
+            const { saveImageBackupIDB } = await import('../utils/imageStorage');
+            newProducts.forEach((origProd, idx) => {
+              const sanProd = sanitizedProducts[idx];
+              if (!sanProd) return;
+
+              if (origProd.image && origProd.image.startsWith('data:') && sanProd.image && sanProd.image.startsWith('/uploads/')) {
+                saveImageBackupIDB(sanProd.image, origProd.image);
+              }
+
+              if (Array.isArray(origProd.images) && Array.isArray(sanProd.images)) {
+                origProd.images.forEach((origImg, imgIdx) => {
+                  const sanImg = sanProd.images[imgIdx];
+                  if (origImg && origImg.startsWith('data:') && sanImg && sanImg.startsWith('/uploads/')) {
+                    saveImageBackupIDB(sanImg, origImg);
+                  }
+                });
+              }
+            });
+          } catch (idbErr) {
+            console.warn('[SAVE-PRODUCTS-IDB] Failed to backup image mappings in IndexedDB:', idbErr);
+          }
+
+          // Update products state and localStorage with the server's clean, persisted image URLs
+          setProducts(sanitizedProducts);
+          try {
+            localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
           } catch (e) {
             console.warn('Could not write sanitized products to localStorage:', e);
           }
