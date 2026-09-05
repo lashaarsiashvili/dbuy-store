@@ -7,6 +7,8 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 
@@ -321,7 +323,63 @@ if (rawRedisUrl && rawRedisToken && (rawRedisUrl.startsWith('https://') || rawRe
   );
 }
 
+// Firebase Firestore Integration
+let firebaseDb: any = null;
+try {
+  const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
+  if (fs.existsSync(firebaseConfigPath)) {
+    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
+    const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+    firebaseDb = getFirestore(fbApp, firebaseConfig.firestoreDatabaseId || undefined);
+    console.log('[FIREBASE] Connected to Firebase Firestore successfully!');
+  }
+} catch (fbErr) {
+  console.warn('[FIREBASE] Could not initialize Firebase client:', fbErr instanceof Error ? fbErr.message : fbErr);
+}
+
 let storeDb: StoreDatabase = initStoreDatabase();
+
+// Sync from Firebase Firestore on startup if available
+async function syncFromFirebaseOnStartup(): Promise<void> {
+  if (!firebaseDb) return;
+  try {
+    const docRef = doc(firebaseDb, 'store', 'database');
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+      const parsed = docSnap.data() as any;
+      if (parsed && Array.isArray(parsed.products) && parsed.products.length > 0) {
+        console.log(`[FIREBASE] Loaded ${parsed.products.length} products from Firebase Firestore!`);
+        
+        const pMap = new Map<string, any>();
+        storeDb.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
+        parsed.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
+        storeDb.products = Array.from(pMap.values());
+
+        if (parsed.registeredUsers && Object.keys(parsed.registeredUsers).length > 0) {
+          storeDb.registeredUsers = { ...storeDb.registeredUsers, ...parsed.registeredUsers };
+        }
+        if (Array.isArray(parsed.orders) && parsed.orders.length > 0) {
+          storeDb.orders = parsed.orders;
+        }
+        if (parsed.theme) {
+          storeDb.theme = parsed.theme;
+        }
+        if (Array.isArray(parsed.billboards) && parsed.billboards.length > 0) {
+          storeDb.billboards = parsed.billboards;
+        }
+        storeDb.lastUpdated = new Date().toISOString();
+
+        try {
+          if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+          fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
+          fs.writeFileSync(CODE_BACKUP_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
+        } catch {}
+      }
+    }
+  } catch (err: any) {
+    console.warn('[FIREBASE] Error syncing from Firebase on startup:', err?.message || err);
+  }
+}
 
 // Sync from Vercel KV / Upstash Redis on startup if configured
 async function syncFromRedisOnStartup(): Promise<void> {
@@ -366,8 +424,8 @@ async function syncFromRedisOnStartup(): Promise<void> {
   }
 }
 
-// Initial sync call
-syncFromRedisOnStartup();
+// Initial sync calls
+syncFromFirebaseOnStartup().then(() => syncFromRedisOnStartup());
 
 function saveStoreDatabase(): void {
   try {
@@ -386,6 +444,13 @@ function saveStoreDatabase(): void {
       fs.mkdirSync(backupDir, { recursive: true });
     }
     fs.writeFileSync(CODE_BACKUP_FILE, serialized, 'utf-8');
+
+    // Automatically persist to Firebase Firestore
+    if (firebaseDb) {
+      setDoc(doc(firebaseDb, 'store', 'database'), storeDb, { merge: true })
+        .then(() => console.log('[FIREBASE] Saved database to Firebase Firestore successfully'))
+        .catch(err => console.warn('[FIREBASE] Error saving to Firebase:', err?.message || err));
+    }
 
     // Automatically persist to Vercel KV / Upstash Redis if available
     if (redisClient) {
