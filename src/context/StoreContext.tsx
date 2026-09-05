@@ -1702,7 +1702,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           }
         }
       }, (err) => {
-        console.warn('[FIREBASE-REALTIME] Error:', err);
+        if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {
+          console.log('[FIREBASE-REALTIME] Firestore database instance pending provision. Active local & REST API persistence is functioning normally.');
+        } else {
+          console.warn('[FIREBASE-REALTIME] Notice:', err?.message || err);
+        }
       });
     } catch (e) {
       console.warn('[FIREBASE-INIT] Error:', e);

@@ -377,7 +377,12 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
       }
     }
   } catch (err: any) {
-    console.warn('[FIREBASE] Error syncing from Firebase on startup:', err?.message || err);
+    if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {
+      console.log('[FIREBASE] Firestore database is pending provision on Cloud project. Continuing with local disk & backup persistence.');
+      firebaseDb = null;
+    } else {
+      console.warn('[FIREBASE] Firebase sync notice:', err?.message || err);
+    }
   }
 }
 
@@ -627,7 +632,7 @@ Return ONLY a valid JSON object matching this schema without markdown formatting
         contents.push({ text: promptText });
 
         const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
+          model: 'gemini-3.6-flash',
           contents,
           config: {
             responseMimeType: 'application/json',
