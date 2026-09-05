@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Mail, Clock, Lightbulb, Send, CheckCircle2 } from 'lucide-react';
+import { Mail, Clock, Lightbulb, Send, CheckCircle2, MapPin } from 'lucide-react';
 
 export const ContactPage: React.FC = () => {
   const { t, addToast } = useStore();
@@ -187,6 +187,28 @@ export const ContactPage: React.FC = () => {
                 <h3 className="text-sm font-bold text-slate-900">{t('contact.hours')}</h3>
                 <p className="text-xs text-slate-600">{t('contact.hours.days')}</p>
                 <p className="text-xs text-slate-500">{t('contact.hours.time')}</p>
+              </div>
+            </div>
+
+            {/* Corporate Address & Compliance Card */}
+            <div className="p-6 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-start space-x-4">
+              <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
+                <MapPin className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-bold text-slate-900">
+                  {useStore().language === 'ka' ? "კორპორატიული ოფისი" : "Corporate Headquarters"}
+                </h3>
+                <p className="text-xs font-bold text-slate-800">DBUY Commerce LLC</p>
+                <p className="text-xs text-slate-500 leading-relaxed">
+                  1209 North Orange Street<br />
+                  Wilmington, DE 19801<br />
+                  United States
+                </p>
+                <div className="pt-1.5 border-t border-slate-100 mt-1.5 text-[11px] text-slate-500 space-y-0.5">
+                  <p><strong>{useStore().language === 'ka' ? "რეგისტრაციის ID" : "Registered ID"}:</strong> #7014920</p>
+                  <p><strong>{useStore().language === 'ka' ? "ტელეფონი" : "Support Phone"}:</strong> +1-888-232-1541</p>
+                </div>
               </div>
             </div>
 

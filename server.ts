@@ -17,6 +17,15 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = 3000;
 
+// High-Trust Security Headers to maximize ScamAdviser and SSL Labs trust ratings
+app.use((req, res, next) => {
+  res.header('X-Content-Type-Options', 'nosniff');
+  res.header('X-Frame-Options', 'SAMEORIGIN');
+  res.header('X-XSS-Protection', '1; mode=block');
+  res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
@@ -2165,6 +2174,58 @@ app.post('/api/contact', async (req, res) => {
     console.error('[CONTACT-EMAIL-ERROR]', err);
     res.status(500).json({ success: false, error: 'Failed to send message' });
   }
+});
+
+// SEO robots.txt serving for search engine compliance and automated vetting scanners
+app.get('/robots.txt', (req, res) => {
+  res.type('text/plain');
+  res.send(`User-agent: *
+Allow: /
+Disallow: /api/admin/
+Disallow: /api/auth/
+Sitemap: https://dbuystore.com/sitemap.xml`);
+});
+
+// Dynamic XML Sitemap for absolute transparency and crawl verification
+app.get('/sitemap.xml', (req, res) => {
+  function generateSitemapSlug(title: string): string {
+    return title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+  }
+
+  const urls = [
+    { loc: 'https://dbuystore.com/', changefreq: 'daily', priority: '1.0' },
+    { loc: 'https://dbuystore.com/about', changefreq: 'weekly', priority: '0.8' },
+    { loc: 'https://dbuystore.com/contact', changefreq: 'weekly', priority: '0.8' },
+    { loc: 'https://dbuystore.com/guarantee', changefreq: 'monthly', priority: '0.7' },
+    { loc: 'https://dbuystore.com/returns', changefreq: 'monthly', priority: '0.7' },
+    { loc: 'https://dbuystore.com/privacy', changefreq: 'monthly', priority: '0.7' }
+  ];
+
+  if (storeDb && Array.isArray(storeDb.products)) {
+    storeDb.products.forEach(p => {
+      const slug = p.customSlug || generateSitemapSlug(p.title);
+      urls.push({
+        loc: `https://dbuystore.com/product/${slug}`,
+        changefreq: 'weekly',
+        priority: '0.9'
+      });
+    });
+  }
+
+  const xmlItems = urls.map(item => `  <url>
+    <loc>${item.loc}</loc>
+    <changefreq>${item.changefreq}</changefreq>
+    <priority>${item.priority}</priority>
+  </url>`).join('\n');
+
+  res.header('Content-Type', 'application/xml');
+  res.send(`<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${xmlItems}
+</urlset>`);
 });
 
 // JSON 404 handler for any unknown /api routes (prevents returning HTML SPA fallback for API calls)

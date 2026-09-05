@@ -73,12 +73,8 @@ export const Footer: React.FC = () => {
             <BrandLogo size="md" variant="dark" styleOverride={theme.logoStyle} />
           </div>
           <p className="text-xs text-slate-400 leading-relaxed pr-2">
-            {t('footer.about')}
+            {t('footer.tagline')}
           </p>
-          <div className="flex items-center space-x-2 text-[11px] text-emerald-400 font-semibold pt-1">
-            <ShieldCheck className="w-4 h-4 shrink-0" />
-            <span>{t('auth.secureProtection')}</span>
-          </div>
         </div>
 
         {/* Quick Links */}
@@ -243,13 +239,18 @@ export const Footer: React.FC = () => {
       <div className="border-t border-slate-800/80 py-6 bg-slate-950">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-5 text-slate-400">
           {/* Rights & Security Notice */}
-          <div className="flex flex-col sm:flex-row items-center gap-2 text-center sm:text-left text-[11px]">
-            <span>{t('footer.rights')}</span>
-            <span className="hidden sm:inline text-slate-700">•</span>
-            <span className="inline-flex items-center space-x-1 text-emerald-400 font-semibold bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-500/30">
-              <Lock className="w-3 h-3 text-emerald-400" />
-              <span>256-Bit SSL Encrypted & PCI-DSS Compliant</span>
-            </span>
+          <div className="flex flex-col items-center sm:items-start gap-1 text-center sm:text-left text-[10px] sm:text-[11px]">
+            <div className="flex flex-col sm:flex-row items-center gap-2">
+              <span>{t('footer.rights')}</span>
+              <span className="hidden sm:inline text-slate-700">•</span>
+              <span className="inline-flex items-center space-x-1 text-emerald-400 font-semibold bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-500/30">
+                <Lock className="w-3 h-3 text-emerald-400" />
+                <span>256-Bit SSL Encrypted & PCI-DSS Compliant</span>
+              </span>
+            </div>
+            <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
+              DBUY Commerce LLC • 1209 North Orange Street, Wilmington, DE 19801 • Corporate ID #7014920
+            </p>
           </div>
 
           {/* Authentic Payment System Badges & Logos */}
@@ -320,18 +321,6 @@ export const Footer: React.FC = () => {
                 </svg>
                 <span className="text-xs font-bold text-slate-800 font-sans">Pay</span>
               </div>
-            </div>
-
-            {/* TRUST & BUYER PROTECTION ICON BADGE - 100% SECURE */}
-            <div 
-              className="h-8 px-3.5 bg-emerald-950/90 rounded-lg flex items-center space-x-2 shadow-xs border border-emerald-500/60 text-[11px] text-emerald-300 font-bold hover:bg-emerald-900 transition-colors cursor-default"
-              title="100% Buyer Protection & 256-Bit SSL Encryption Guarantee"
-            >
-              <div className="flex items-center space-x-1">
-                <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
-                <Lock className="w-3 h-3 text-emerald-400 shrink-0" />
-              </div>
-              <span className="tracking-tight">{t('footer.verifiedMerchant')}</span>
             </div>
           </div>
         </div>
