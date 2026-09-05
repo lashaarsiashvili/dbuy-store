@@ -399,10 +399,10 @@ export const AuthModal: React.FC = () => {
           onClick={() => setIsAuthModalOpen(false)}
         />
 
-        <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 my-auto">
+        <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 my-auto">
           <button
             onClick={() => setIsAuthModalOpen(false)}
-            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -415,7 +415,7 @@ export const AuthModal: React.FC = () => {
               variant="light"
               styleOverride={theme.logoStyle}
             />
-            <div className="mt-2 flex items-center space-x-1 text-[11px] font-semibold text-emerald-600 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+            <div className="mt-2 flex items-center space-x-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">
               <ShieldCheck className="w-3.5 h-3.5" />
               <span>{t("auth.secureProtection")}</span>
             </div>

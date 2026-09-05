@@ -46,19 +46,19 @@ export const WishlistDrawer: React.FC = () => {
       />
 
       <div className="fixed inset-y-0 right-0 max-w-full flex pl-10">
-        <aside className="w-[calc(100vw-2.5rem)] sm:w-full max-w-md bg-white shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
+        <aside className="w-[calc(100vw-2.5rem)] sm:w-full max-w-md bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-300">
           
           {/* Header */}
-          <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/70">
+          <div className="p-4 sm:p-6 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between bg-slate-50/70 dark:bg-slate-950/70">
             <div className="flex items-center space-x-2.5">
-              <div className="p-2 rounded-xl bg-red-50 text-red-500">
+              <div className="p-2 rounded-xl bg-red-50 dark:bg-red-950/60 text-red-500">
                 <Heart className="w-5 h-5 fill-red-500" />
               </div>
               <div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
                   {t('wishlist.title')}
                 </h3>
-                <p className="text-xs text-slate-500 font-medium">
+                <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
                   {wishlistProducts.length === 1 
                     ? t('wishlist.productsCountSingle', { count: wishlistProducts.length })
                     : t('wishlist.productsCount', { count: wishlistProducts.length })}
@@ -68,7 +68,7 @@ export const WishlistDrawer: React.FC = () => {
 
             <button
               onClick={() => setIsWishlistOpen(false)}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               aria-label="Close Wishlist"
             >
               <X className="w-5 h-5" />
@@ -79,14 +79,14 @@ export const WishlistDrawer: React.FC = () => {
           <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
             {wishlistProducts.length === 0 ? (
               <div className="text-center py-16 space-y-4">
-                <div className="w-16 h-16 bg-red-50 text-red-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
+                <div className="w-16 h-16 bg-red-50 dark:bg-red-950/60 text-red-400 rounded-2xl flex items-center justify-center mx-auto shadow-inner">
                   <Heart className="w-8 h-8" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-slate-800">
+                  <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
                     {t('wishlist.empty')}
                   </h4>
-                  <p className="text-xs text-slate-500 max-w-xs mx-auto leading-relaxed">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto leading-relaxed">
                     {t('wishlist.emptyDesc')}
                   </p>
                 </div>
@@ -108,14 +108,14 @@ export const WishlistDrawer: React.FC = () => {
                 return (
                   <div
                     key={product.id}
-                    className="p-3.5 rounded-2xl border border-slate-100 hover:border-slate-200 bg-white hover:shadow-xs transition-all flex items-center gap-3.5 group"
+                    className="p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 hover:border-slate-200 dark:hover:border-slate-700 bg-white dark:bg-slate-800/80 hover:shadow-xs transition-all flex items-center gap-3.5 group"
                   >
                     {/* Thumbnail */}
                     <div 
                       onClick={() => {
                         setQuickViewProduct(product);
                       }}
-                      className="w-18 h-18 bg-slate-100 rounded-xl overflow-hidden shrink-0 cursor-pointer relative"
+                      className="w-18 h-18 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden shrink-0 cursor-pointer relative"
                     >
                       <img
                         src={product.image}
@@ -130,7 +130,7 @@ export const WishlistDrawer: React.FC = () => {
                       <div className="flex items-start justify-between gap-1">
                         <h4
                           onClick={() => setQuickViewProduct(product)}
-                          className="text-xs font-bold text-slate-800 hover:text-blue-600 transition-colors line-clamp-1 cursor-pointer"
+                          className="text-xs font-bold text-slate-800 dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors line-clamp-1 cursor-pointer"
                         >
                           {title}
                         </h4>
@@ -144,7 +144,7 @@ export const WishlistDrawer: React.FC = () => {
                       </div>
 
                       <div className="mt-1 flex items-baseline space-x-2">
-                        <span className="text-xs font-black text-slate-900">
+                        <span className="text-xs font-black text-slate-900 dark:text-slate-100">
                           {formatPrice(product.price)}
                         </span>
                         {product.origPrice && product.origPrice > product.price && (

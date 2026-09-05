@@ -31,17 +31,17 @@ export const MyOrdersPage: React.FC = () => {
   };
 
   return (
-    <div className="py-12 bg-slate-50/60 min-h-[70vh]">
+    <div className="py-12 bg-slate-50/60 dark:bg-slate-950 min-h-[70vh]">
       <div className="max-w-4xl mx-auto px-4 space-y-8">
         
         {/* Page Title */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight flex items-center space-x-2">
-              <Package className="w-7 h-7 text-blue-600" />
+            <h1 className="text-2xl sm:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight flex items-center space-x-2">
+              <Package className="w-7 h-7 text-blue-600 dark:text-blue-400" />
               <span>{t('nav.myOrders')}</span>
             </h1>
-            <p className="text-xs sm:text-sm text-slate-500 mt-1">
+            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
               {t('orders.trackSub')}
             </p>
           </div>
@@ -57,12 +57,12 @@ export const MyOrdersPage: React.FC = () => {
 
         {/* Not Logged In State */}
         {!user.isLoggedIn ? (
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-xs space-y-4">
-            <div className="p-4 rounded-full bg-blue-50 text-blue-600 inline-block">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="p-4 rounded-full bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 inline-block">
               <LogIn className="w-10 h-10" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800">{t('orders.empty')}</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">{t('orders.empty')}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
               {t('wishlist.loginRequired')}
             </p>
             <button
@@ -75,12 +75,12 @@ export const MyOrdersPage: React.FC = () => {
           </div>
         ) : displayOrders.length === 0 ? (
           /* Empty Orders List */
-          <div className="bg-white rounded-3xl p-12 text-center border border-slate-200 shadow-xs space-y-4">
-            <div className="p-4 rounded-full bg-slate-100 text-slate-400 inline-block">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl p-12 text-center border border-slate-200 dark:border-slate-800 shadow-xs space-y-4">
+            <div className="p-4 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-400 inline-block">
               <Package className="w-12 h-12" />
             </div>
-            <h3 className="text-lg font-bold text-slate-800">{t('orders.empty')}</h3>
-            <p className="text-xs text-slate-500 max-w-sm mx-auto">
+            <h3 className="text-lg font-bold text-slate-800 dark:text-slate-200">{t('orders.empty')}</h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
               {t('orders.emptyDesc')}
             </p>
             <button
@@ -95,23 +95,23 @@ export const MyOrdersPage: React.FC = () => {
             {displayOrders.map(order => (
               <div
                 key={order.id}
-                className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden transition-all hover:border-slate-300"
+                className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden transition-all hover:border-slate-300 dark:hover:border-slate-700"
               >
                 {/* Header */}
-                <div className="p-5 sm:p-6 bg-slate-50/80 border-b border-slate-100 flex flex-wrap items-center justify-between gap-4">
+                <div className="p-5 sm:p-6 bg-slate-50/80 dark:bg-slate-950/80 border-b border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-4">
                   <div className="space-y-1">
                     <div className="flex items-center space-x-3">
-                      <span className="font-mono font-bold text-blue-700 text-sm">
+                      <span className="font-mono font-bold text-blue-700 dark:text-blue-400 text-sm">
                         {order.id}
                       </span>
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${
                         order.status === 'Delivered'
-                          ? 'bg-emerald-100 text-emerald-800'
+                          ? 'bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300'
                           : order.status === 'Shipped'
-                          ? 'bg-blue-100 text-blue-800'
+                          ? 'bg-blue-100 dark:bg-blue-950/80 text-blue-800 dark:text-blue-300'
                           : order.status === 'Cancelled'
-                          ? 'bg-red-100 text-red-800'
-                          : 'bg-amber-100 text-amber-800'
+                          ? 'bg-red-100 dark:bg-red-950/80 text-red-800 dark:text-red-300'
+                          : 'bg-amber-100 dark:bg-amber-950/80 text-amber-800 dark:text-amber-300'
                       }`}>
                         {order.status === 'Delivered'
                           ? t('orders.status.delivered')
@@ -128,7 +128,7 @@ export const MyOrdersPage: React.FC = () => {
                   <div className="flex items-center space-x-4">
                     <div className="text-right">
                       <div className="text-xs text-slate-400">{t('orders.orderTotal')}</div>
-                      <div className="text-base font-black text-slate-900">
+                      <div className="text-base font-black text-slate-900 dark:text-slate-100">
                         {formatPrice(order.total)}
                       </div>
                     </div>
@@ -138,7 +138,7 @@ export const MyOrdersPage: React.FC = () => {
                       type="button"
                       onClick={() => setOrderToDelete(order.id)}
                       title={t('orders.delete')}
-                      className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 transition-colors cursor-pointer"
+                      className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950/50 border border-transparent hover:border-red-100 dark:hover:border-red-900 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -146,24 +146,24 @@ export const MyOrdersPage: React.FC = () => {
                 </div>
 
                 {/* Items */}
-                <div className="p-5 sm:p-6 divide-y divide-slate-100">
+                <div className="p-5 sm:p-6 divide-y divide-slate-100 dark:divide-slate-800">
                   {order.items.map((item, idx) => (
                     <div key={idx} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-3">
                         <img
                           src={item.image}
                           alt={item.title}
-                          className="w-12 h-12 rounded-xl object-cover bg-slate-100 shrink-0"
+                          className="w-12 h-12 rounded-xl object-cover bg-slate-100 dark:bg-slate-800 shrink-0"
                         />
                         <div>
-                          <h4 className="text-xs font-bold text-slate-900">{item.title}</h4>
+                          <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100">{item.title}</h4>
                           <p className="text-[11px] text-slate-400">
                             {t('orders.qty')}: {item.quantity} × {formatPrice(item.price)}
                           </p>
                         </div>
                       </div>
 
-                      <div className="text-xs font-bold text-slate-900">
+                      <div className="text-xs font-bold text-slate-900 dark:text-slate-100">
                         {formatPrice(item.price * item.quantity)}
                       </div>
                     </div>
@@ -171,24 +171,24 @@ export const MyOrdersPage: React.FC = () => {
                 </div>
 
                 {/* Footer / Tracking Info */}
-                <div className="p-4 sm:p-6 bg-slate-50/70 border-t border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
+                <div className="p-4 sm:p-6 bg-slate-50/70 dark:bg-slate-950/70 border-t border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 text-xs">
                   <div className="space-y-1.5">
-                    <div className="flex flex-wrap items-center gap-2 text-slate-700">
+                    <div className="flex flex-wrap items-center gap-2 text-slate-700 dark:text-slate-300">
                       <div className="flex items-center space-x-1.5 font-semibold">
-                        <Truck className="w-4 h-4 text-blue-600" />
+                        <Truck className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                         <span>{t('orders.tracking')}:</span>
                       </div>
                       
-                      <div className="inline-flex items-center bg-white border border-slate-200 rounded-lg px-2 py-0.5 shadow-2xs">
-                        <strong className="font-mono text-slate-900 mr-1.5">{order.trackingNumber}</strong>
+                      <div className="inline-flex items-center bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-0.5 shadow-2xs">
+                        <strong className="font-mono text-slate-900 dark:text-slate-100 mr-1.5">{order.trackingNumber}</strong>
                         <button
                           type="button"
                           onClick={() => handleCopyTracking(order.trackingNumber)}
-                          className="p-1 text-slate-400 hover:text-blue-600 rounded transition-colors cursor-pointer"
+                          className="p-1 text-slate-400 hover:text-blue-600 dark:hover:text-blue-400 rounded transition-colors cursor-pointer"
                           title="Copy tracking number"
                         >
                           {copiedTracking === order.trackingNumber ? (
-                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                           ) : (
                             <Copy className="w-3.5 h-3.5" />
                           )}
@@ -196,7 +196,7 @@ export const MyOrdersPage: React.FC = () => {
                       </div>
 
                       {order.carrier && (
-                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-bold bg-indigo-50 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
                           {order.carrier}
                         </span>
                       )}

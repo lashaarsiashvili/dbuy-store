@@ -63,7 +63,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   return (
     <div 
-      className="group relative flex flex-col bg-white rounded-2xl border border-slate-200/80 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
+      className="group relative flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
       onClick={handleCardClick}
     >
       {/* Badge */}
@@ -143,10 +143,10 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         <div>
           {/* Category & Rating */}
           <div className="flex items-center justify-between text-xs text-slate-400 mb-1.5">
-            <span className="uppercase font-semibold tracking-wider text-[10px] text-blue-600">
+            <span className="uppercase font-semibold tracking-wider text-[10px] text-blue-600 dark:text-blue-400">
               {product.category}
             </span>
-            <div className="flex items-center space-x-1 text-slate-700 font-medium">
+            <div className="flex items-center space-x-1 text-slate-700 dark:text-slate-300 font-medium">
               <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
               <span>{(product.rating ?? 5.0).toFixed(1)}</span>
               <span className="text-slate-400 text-[10px]">({product.reviewsCount ?? 1})</span>
@@ -154,16 +154,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </div>
 
           {/* Product Title */}
-          <h3 className="text-sm font-bold text-slate-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-snug">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug">
             {displayTitle}
           </h3>
         </div>
 
         {/* Price & Stock */}
-        <div className="pt-2 border-t border-slate-100">
+        <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
           <div className="flex items-baseline justify-between mb-3">
             <div className="flex items-baseline space-x-2">
-              <span className="text-lg font-black text-slate-900">
+              <span className="text-lg font-black text-slate-900 dark:text-slate-100">
                 {formatPrice(product.price)}
               </span>
               {product.origPrice && (
@@ -175,8 +175,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
             <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
               product.stock > 0
-                ? 'bg-emerald-50 text-emerald-700'
-                : 'bg-red-50 text-red-700'
+                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
+                : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300'
             }`}>
               {product.stock > 0
                 ? product.stock < 10

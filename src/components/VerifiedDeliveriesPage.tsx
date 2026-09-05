@@ -139,19 +139,19 @@ export const VerifiedDeliveriesPage: React.FC = () => {
   };
 
   return (
-    <div className="py-12 bg-slate-50/60 min-h-screen">
+    <div className="py-12 bg-slate-50/60 dark:bg-slate-950 min-h-screen">
       <div className="max-w-5xl mx-auto px-4 space-y-12">
         
         {/* Page Title & Trust Stats Banner */}
         <div className="text-center space-y-4">
-          <div className="inline-flex items-center space-x-1.5 bg-emerald-100 text-emerald-800 px-3.5 py-1.5 rounded-full text-xs font-bold border border-emerald-200">
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
+          <div className="inline-flex items-center space-x-1.5 bg-emerald-100 dark:bg-emerald-950/80 text-emerald-800 dark:text-emerald-300 px-3.5 py-1.5 rounded-full text-xs font-bold border border-emerald-200 dark:border-emerald-900">
+            <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
             <span>{language === 'ka' ? '100% ვერიფიცირებული მიწოდების გარანტია' : '100% Verified Delivery & Buyer Protection'}</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 tracking-tight leading-none">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight leading-none">
             {language === 'ka' ? 'მიწოდების რეალური რეესტრი' : 'Verified Deliveries Registry'}
           </h1>
-          <p className="text-slate-500 text-xs sm:text-sm max-w-2xl mx-auto leading-relaxed">
+          <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm max-w-2xl mx-auto leading-relaxed">
             {language === 'ka' 
               ? 'ჩვენი მაღაზია მუშაობს სრულიად გამჭვირვალედ. ყველა შეკვეთა იგზავნება ლიცენზირებული საერთაშორისო გადამზიდავებით და საქართველოს ტერიტორიაზე ბარდება საქართველოს ფოსტის მეშვეობით.' 
               : 'Our boutique shop operates with total transparency. Every order is dispatched from authenticated brand channels and delivered to your doorstep in Georgia via official partners like Georgian Post.'}
@@ -160,28 +160,28 @@ export const VerifiedDeliveriesPage: React.FC = () => {
 
         {/* Live Delivery Performance Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs text-center space-y-1">
-            <p className="text-2xl font-black text-blue-600">1,420+</p>
-            <p className="text-xs font-bold text-slate-800">{language === 'ka' ? 'ჩაბარებული შეკვეთა' : 'Completed Deliveries'}</p>
+          <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs text-center space-y-1">
+            <p className="text-2xl font-black text-blue-600 dark:text-blue-400">1,420+</p>
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{language === 'ka' ? 'ჩაბარებული შეკვეთა' : 'Completed Deliveries'}</p>
             <p className="text-[10px] text-slate-400">{language === 'ka' ? 'საქართველოს მასშტაბით' : 'Across all regions of Georgia'}</p>
           </div>
-          <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs text-center space-y-1">
-            <p className="text-2xl font-black text-emerald-600">100%</p>
-            <p className="text-xs font-bold text-slate-800">{language === 'ka' ? 'წარმატებული ჩაბარება' : 'Delivery Success Rate'}</p>
+          <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs text-center space-y-1">
+            <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">100%</p>
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{language === 'ka' ? 'წარმატებული ჩაბარება' : 'Delivery Success Rate'}</p>
             <p className="text-[10px] text-slate-400">{language === 'ka' ? 'ყველა ამანათი დაზღვეულია' : 'Fully insured shipments'}</p>
           </div>
-          <div className="p-5 bg-white rounded-2xl border border-slate-200/80 shadow-xs text-center space-y-1">
-            <p className="text-2xl font-black text-indigo-600">9-11 {language === 'ka' ? 'დღე' : 'Days'}</p>
-            <p className="text-xs font-bold text-slate-800">{language === 'ka' ? 'საშუალო მიწოდების დრო' : 'Average Delivery Transit'}</p>
+          <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs text-center space-y-1">
+            <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">9-11 {language === 'ka' ? 'დღე' : 'Days'}</p>
+            <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{language === 'ka' ? 'საშუალო მიწოდების დრო' : 'Average Delivery Transit'}</p>
             <p className="text-[10px] text-slate-400">{language === 'ka' ? 'აშშ/ევროპის საწყობიდან' : 'From US/European centers'}</p>
           </div>
         </div>
 
         {/* Live Order Tracking Status Checker */}
-        <div className="p-6 sm:p-8 bg-white rounded-3xl border border-slate-200 shadow-sm space-y-6">
+        <div className="p-6 sm:p-8 bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-6">
           <div className="space-y-1.5">
-            <h2 className="text-base font-bold text-slate-900 flex items-center space-x-2">
-              <Truck className="w-5 h-5 text-blue-600 shrink-0" />
+            <h2 className="text-base font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
+              <Truck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0" />
               <span>{language === 'ka' ? 'შეამოწმეთ თქვენი გზავნილის სტატუსი' : 'Verify & Track Any Parcel'}</span>
             </h2>
             <p className="text-xs text-slate-400">
@@ -198,7 +198,7 @@ export const VerifiedDeliveriesPage: React.FC = () => {
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder={language === 'ka' ? 'მაგ: GP004920412GE ან #DBUY-10512' : 'e.g. GP004920412GE or #DBUY-10512'}
-              className="flex-1 px-4 py-2.5 text-xs sm:text-sm bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+              className="flex-1 px-4 py-2.5 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
             />
             <button
               type="submit"
@@ -210,27 +210,27 @@ export const VerifiedDeliveriesPage: React.FC = () => {
           </form>
 
           {hasSearched && (
-            <div className="border-t border-slate-100 pt-6 animate-in fade-in duration-200">
+            <div className="border-t border-slate-100 dark:border-slate-800 pt-6 animate-in fade-in duration-200">
               {trackedOrder ? (
                 <div className="space-y-6">
                   {/* Grid info header */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-100 text-xs">
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 text-xs">
                     <div>
                       <p className="text-slate-400 font-medium">{language === 'ka' ? 'შეკვეთის ID' : 'Order ID'}</p>
-                      <p className="font-bold text-slate-900">{trackedOrder.orderId}</p>
+                      <p className="font-bold text-slate-900 dark:text-slate-100">{trackedOrder.orderId}</p>
                     </div>
                     <div>
                       <p className="text-slate-400 font-medium">{language === 'ka' ? 'მიმღები' : 'Customer'}</p>
-                      <p className="font-bold text-slate-900">{trackedOrder.customer}</p>
+                      <p className="font-bold text-slate-900 dark:text-slate-100">{trackedOrder.customer}</p>
                     </div>
                     <div>
                       <p className="text-slate-400 font-medium">{language === 'ka' ? 'თრექინგ კოდი' : 'Tracking Number'}</p>
-                      <p className="font-mono text-blue-600 font-bold">{trackedOrder.trackingNumber}</p>
+                      <p className="font-mono text-blue-600 dark:text-blue-400 font-bold">{trackedOrder.trackingNumber}</p>
                     </div>
                     <div>
                       <p className="text-slate-400 font-medium">{language === 'ka' ? 'მიწოდების სტატუსი' : 'Logistics Status'}</p>
-                      <span className="inline-flex items-center space-x-1 text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-bold text-[10px]">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                      <span className="inline-flex items-center space-x-1 text-emerald-700 dark:text-emerald-300 bg-emerald-100 dark:bg-emerald-950/80 px-2 py-0.5 rounded-full font-bold text-[10px]">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                         <span>{language === 'ka' ? trackedOrder.statusKa : trackedOrder.status}</span>
                       </span>
                     </div>
@@ -318,8 +318,8 @@ export const VerifiedDeliveriesPage: React.FC = () => {
         {/* Real Successful Deliveries Table & Customer Reviews */}
         <div className="space-y-6">
           <div className="space-y-1">
-            <h2 className="text-lg font-bold text-slate-900 flex items-center space-x-2">
-              <MessageSquare className="w-5 h-5 text-emerald-600 shrink-0" />
+            <h2 className="text-lg font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-2">
+              <MessageSquare className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
               <span>{language === 'ka' ? 'ბოლო ჩაბარებები და რეალური შეფასებები' : 'Recent Verified Deliveries & Customer Reviews'}</span>
             </h2>
             <p className="text-xs text-slate-400">
@@ -331,18 +331,18 @@ export const VerifiedDeliveriesPage: React.FC = () => {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             {VERIFIED_DELIVERIES.map((record) => (
-              <div key={record.orderId} className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between space-y-4">
+              <div key={record.orderId} className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs flex flex-col justify-between space-y-4">
                 <div className="space-y-3">
                   {/* Top Header Card */}
                   <div className="flex items-start justify-between">
                     <div>
-                      <h4 className="font-bold text-slate-900 text-xs sm:text-sm">{record.customer}</h4>
+                      <h4 className="font-bold text-slate-900 dark:text-slate-100 text-xs sm:text-sm">{record.customer}</h4>
                       <p className="text-[10px] text-slate-400 flex items-center space-x-1">
                         <MapPin className="w-3.5 h-3.5 text-slate-400" />
                         <span>{language === 'ka' ? record.destinationKa : record.destination}</span>
                       </p>
                     </div>
-                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-100">
+                    <span className="text-[10px] font-bold text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/80 px-2.5 py-0.5 rounded-full border border-emerald-100 dark:border-emerald-900">
                       {language === 'ka' ? record.statusKa : record.status}
                     </span>
                   </div>
@@ -355,20 +355,20 @@ export const VerifiedDeliveriesPage: React.FC = () => {
                   </div>
 
                   {/* Item and review text */}
-                  <p className="text-xs text-slate-800 leading-relaxed italic">
+                  <p className="text-xs text-slate-800 dark:text-slate-200 leading-relaxed italic">
                     "{language === 'ka' ? record.reviewKa : record.review}"
                   </p>
                 </div>
 
                 {/* Tracking & Logistics footer */}
-                <div className="pt-3.5 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
                   <div>
-                    <span className="font-semibold text-slate-500">{language === 'ka' ? 'შეძენილი ნივთი' : 'Product'}:</span>{' '}
-                    <span className="font-bold text-slate-700">{language === 'ka' ? record.itemKa : record.item}</span>
+                    <span className="font-semibold text-slate-500 dark:text-slate-400">{language === 'ka' ? 'შეძენილი ნივთი' : 'Product'}:</span>{' '}
+                    <span className="font-bold text-slate-700 dark:text-slate-300">{language === 'ka' ? record.itemKa : record.item}</span>
                   </div>
                   <div>
-                    <span className="font-semibold text-slate-500">{language === 'ka' ? 'თრექინგი' : 'Tracking'}:</span>{' '}
-                    <span className="font-mono font-bold text-blue-600">{record.trackingNumber}</span>
+                    <span className="font-semibold text-slate-500 dark:text-slate-400">{language === 'ka' ? 'თრექინგი' : 'Tracking'}:</span>{' '}
+                    <span className="font-mono font-bold text-blue-600 dark:text-blue-400">{record.trackingNumber}</span>
                   </div>
                 </div>
               </div>
