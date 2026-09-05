@@ -64,12 +64,12 @@ export const ProductGrid: React.FC = () => {
   };
 
   return (
-    <section id="products" className="py-12 bg-slate-50/50">
-      <div className="max-w-7xl mx-auto px-4">
+    <section id="products" className="w-full py-8 sm:py-12 bg-slate-50/50 relative min-h-[300px]">
+      <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header with Title & Sort Bar */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-8 border-b border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-6 sm:pb-8 border-b border-slate-200">
           <div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
+            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">
               {selectedCategory === 'deals'
                 ? t('nav.cat.deals')
                 : selectedCategory === 'tech'
@@ -89,9 +89,9 @@ export const ProductGrid: React.FC = () => {
           </div>
 
           {/* Sort selector */}
-          <div className="flex items-center space-x-2">
-            <ArrowUpDown className="w-4 h-4 text-slate-400" />
-            <label htmlFor="sort-dropdown" className="text-xs font-semibold text-slate-600">
+          <div className="flex items-center space-x-2 self-start sm:self-auto bg-white sm:bg-transparent p-1.5 sm:p-0 rounded-xl border sm:border-0 border-slate-200 shadow-2xs sm:shadow-none">
+            <ArrowUpDown className="w-4 h-4 text-slate-400 shrink-0" />
+            <label htmlFor="sort-dropdown" className="text-xs font-semibold text-slate-600 shrink-0">
               {t('products.sortBy')}
             </label>
             <select
@@ -108,9 +108,9 @@ export const ProductGrid: React.FC = () => {
           </div>
         </div>
 
-        {/* Products Grid */}
+        {/* Products Grid - Enforced Responsive Layout for Mobile (1 col), Tablet (2-3 cols), Desktop (4 cols) */}
         {filteredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 pt-8">
+          <div id="product-grid-container" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 pt-6 sm:pt-8 w-full min-w-full opacity-100">
             {filteredProducts.map(product => (
               <ProductCard key={product.id} product={product} />
             ))}
