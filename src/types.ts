@@ -18,9 +18,6 @@ export interface Product {
   badge?: string;
   image: string;
   images?: string[];
-  originalImage?: string;
-  originalImages?: string[];
-  isOptimized?: boolean;
   description: string;
   descriptionKa?: string;
   rating: number;
@@ -97,8 +94,6 @@ export interface BillboardSlide {
   subtitle: string;
   subtitleKa?: string;
   image: string; // Featured high-res product photo
-  originalImage?: string; // Pristine uploaded image before optimization
-  isOptimized?: boolean; // Whether the image has been studio optimized
   bgImage?: string; // Optional ambient background pattern/photo
   bgGradient: string; // e.g. "from-slate-950 via-slate-900 to-indigo-950"
   accentColor?: string; // e.g. "blue" | "indigo" | "amber" | "emerald" | "rose"
