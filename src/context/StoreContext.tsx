@@ -135,6 +135,9 @@ interface StoreContextType {
   theme: ThemeSettings;
   updateTheme: (newTheme: Partial<ThemeSettings>) => void;
   resetTheme: () => void;
+  isDarkMode: boolean;
+  toggleDarkMode: () => void;
+  setIsDarkMode: (isDark: boolean) => void;
 
   // Rotating Billboards & Banners
   billboards: BillboardSlide[];
@@ -547,6 +550,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCurrencyState(curr);
     localStorage.setItem('dbuy_currency', curr);
   };
+
+  // Dark Mode
+  const [isDarkMode, setIsDarkModeState] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    const saved = localStorage.getItem('dbuy_is_dark_mode');
+    if (saved !== null) return saved === 'true';
+    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  const setIsDarkMode = (isDark: boolean) => {
+    setIsDarkModeState(isDark);
+    localStorage.setItem('dbuy_is_dark_mode', String(isDark));
+  };
+
+  const toggleDarkMode = () => {
+    setIsDarkModeState(prev => {
+      const next = !prev;
+      localStorage.setItem('dbuy_is_dark_mode', String(next));
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+  }, [isDarkMode]);
 
   // Theme & Global Store Settings
   const [theme, setTheme] = useState<ThemeSettings>(() => {
@@ -2290,6 +2322,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         theme,
         updateTheme,
         resetTheme,
+        isDarkMode,
+        toggleDarkMode,
+        setIsDarkMode,
         billboards,
         billboardIntervalSeconds,
         updateBillboard,
