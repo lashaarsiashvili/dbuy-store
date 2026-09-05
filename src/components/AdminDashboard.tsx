@@ -4,6 +4,7 @@ import { Product, Order, BillboardSlide, LogoOptionId } from '../types';
 import { generateProductFeatures } from '../utils/productFeatures';
 import { generateProductAdCopy } from '../utils/adCopyGenerator';
 import { handleImageError } from '../utils/imageFallback';
+import { saveImageBackupIDB } from '../utils/imageStorage';
 import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
@@ -547,15 +548,8 @@ export const AdminDashboard: React.FC = () => {
         .then(r => r.json())
         .then(json => {
           if (json && json.success && json.url) {
-            // Save base64 backup mapping in client localStorage to survive Cloud Run container wipes
-            try {
-              const savedImages = localStorage.getItem('dbuy_images_base64');
-              const map = savedImages ? JSON.parse(savedImages) : {};
-              map[json.url] = url; // Map server URL (e.g., /uploads/xxx) to base64 data URL
-              localStorage.setItem('dbuy_images_base64', JSON.stringify(map));
-            } catch (storageErr) {
-              console.warn('Could not save base64 backup map to localStorage:', storageErr);
-            }
+            // Save base64 backup mapping in client IndexedDB to survive Cloud Run container wipes without hitting localStorage limits
+            saveImageBackupIDB(json.url, url);
 
             setProdForm(prev => {
               const updated = prev.images.map(img => img === url ? json.url : img);

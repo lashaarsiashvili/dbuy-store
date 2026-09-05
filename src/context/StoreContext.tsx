@@ -19,6 +19,7 @@ import {
 import { initialProducts } from '../data/initialProducts';
 import { initialBillboards } from '../data/initialBillboards';
 import { translations } from '../data/translations';
+import { loadImageBackupsIDB } from '../utils/imageStorage';
 import { 
   loadVisitorLogs, 
   saveVisitorLogs, 
@@ -1289,21 +1290,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     isSyncingRef.current = true;
     try {
-      // 1. Auto-restore custom images from local storage backup to the server disk (survives Cloud Run wipes)
+      // 1. Auto-restore custom images from IndexedDB backup (and clean up legacy localStorage to free up quota)
       try {
-        const savedImages = localStorage.getItem('dbuy_images_base64');
-        if (savedImages) {
-          const imagesMap = JSON.parse(savedImages);
-          if (imagesMap && Object.keys(imagesMap).length > 0) {
-            await fetch('/api/store/restore-images', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ imagesMap }),
-            });
-          }
+        const idbImages = await loadImageBackupsIDB();
+        const legacyLocal = localStorage.getItem('dbuy_images_base64');
+        let imagesMap = { ...idbImages };
+
+        if (legacyLocal) {
+          try {
+            const legacyMap = JSON.parse(legacyLocal);
+            if (legacyMap && typeof legacyMap === 'object') {
+              const { saveImageBackupIDB } = await import('../utils/imageStorage');
+              // Save all legacy items into IndexedDB
+              for (const [url, base64] of Object.entries(legacyMap)) {
+                if (url && typeof base64 === 'string' && base64.startsWith('data:')) {
+                  await saveImageBackupIDB(url, base64);
+                  imagesMap[url] = base64;
+                }
+              }
+            }
+          } catch {}
+          // Clear legacy local storage key forever to reclaim up to 5MB browser storage quota!
+          localStorage.removeItem('dbuy_images_base64');
+        }
+
+        if (Object.keys(imagesMap).length > 0) {
+          await fetch('/api/store/restore-images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ imagesMap }),
+          });
         }
       } catch (e) {
-        console.warn('Could not restore client images:', e);
+        console.warn('[SYNC-RESTORE-IMAGES] Could not restore images:', e);
       }
 
       const url = (!force && lastSyncTimestampRef.current)
@@ -1338,14 +1357,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               } catch {}
             }
 
-            // Check if client has custom products (different from pristine default initialProducts)
-            const hasCustomLocal = localProducts.length > 0 && JSON.stringify(localProducts) !== JSON.stringify(initialProducts);
+            // Smart restore: if client has custom products (like IDs starting with prod-178)
+            // or if the server currently has only default products, push custom products back to server.
+            const defaultIds = new Set(initialProducts.map(p => p.id));
+            const serverHasCustom = d.products.some(p => !defaultIds.has(p.id));
+            const clientHasCustom = localProducts.some(p => !defaultIds.has(p.id));
 
-            // Check if server is currently returning the pristine default products (meaning server database was wiped/reloaded)
-            const serverIsDefault = JSON.stringify(d.products) === JSON.stringify(initialProducts);
-
-            if (hasCustomLocal && serverIsDefault) {
-              console.log('[SYNC-RESTORE] Server restarted & wiped. Pushing custom client products catalog back to server...');
+            if (clientHasCustom && !serverHasCustom) {
+              console.log('[SYNC-RESTORE] Server database was wiped. Restoring custom client products back to server...');
               fetch('/api/store/products', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

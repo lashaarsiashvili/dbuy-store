@@ -694,8 +694,9 @@ app.post('/api/store/products', (req, res) => {
 
     storeDb.products = sanitizedProducts;
     saveStoreDatabase();
+    syncCatalogToInitialProducts(sanitizedProducts);
 
-    console.log(`[STORE-PRODUCTS] Successfully saved ${sanitizedProducts.length} products to database.`);
+    console.log(`[STORE-PRODUCTS] Successfully saved & synced ${sanitizedProducts.length} products to database & source code.`);
 
     res.json({
       success: true,
@@ -779,8 +780,19 @@ app.post('/api/store/sync', (req, res) => {
     const { products, registeredUsers, orders, theme, billboards, billboardIntervalSeconds, adminSecretSlug } = req.body;
     
     if (Array.isArray(products)) {
-      storeDb.products = products;
-      syncCatalogToInitialProducts(products);
+      const sanitizedProducts = products.map(p => {
+        const cleanImage = p.image ? persistBase64Image(p.image, `prod-${p.id || Date.now()}`) : p.image;
+        const cleanImages = Array.isArray(p.images)
+          ? p.images.map((img: string, i: number) => persistBase64Image(img, `prod-${p.id || Date.now()}-${i}`))
+          : (cleanImage ? [cleanImage] : []);
+        return {
+          ...p,
+          image: cleanImage,
+          images: cleanImages,
+        };
+      });
+      storeDb.products = sanitizedProducts;
+      syncCatalogToInitialProducts(sanitizedProducts);
     }
     if (registeredUsers && typeof registeredUsers === 'object') {
       storeDb.registeredUsers = { ...storeDb.registeredUsers, ...registeredUsers };
@@ -1108,26 +1120,6 @@ app.post('/api/store/order', (req, res) => {
   } catch (err) {
     console.error('Error saving order:', err);
     res.status(500).json({ success: false, error: 'Failed to save order' });
-  }
-});
-
-// POST: Update products array (Add/Edit/Delete)
-app.post('/api/store/products', (req, res) => {
-  try {
-    const { products } = req.body;
-    if (!Array.isArray(products)) {
-      res.status(400).json({ success: false, error: 'Products array is required' });
-      return;
-    }
-    storeDb.products = products;
-    saveStoreDatabase();
-    syncCatalogToInitialProducts(products);
-    console.log(`[PRODUCTS-PERSISTED] Updated ${products.length} products on server and source file`);
-
-    res.json({ success: true, products: storeDb.products, lastUpdated: storeDb.lastUpdated });
-  } catch (err) {
-    console.error('Error updating products:', err);
-    res.status(500).json({ success: false, error: 'Failed to update products' });
   }
 });
 
