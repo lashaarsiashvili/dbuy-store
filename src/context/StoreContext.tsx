@@ -1323,47 +1323,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     isSyncingRef.current = true;
     try {
-      // 1. Auto-restore custom images from IndexedDB backup (and clean up legacy localStorage to free up quota)
-      try {
-        const idbImages = await loadImageBackupsIDB();
+      // 1. Non-blocking background image restoration (so catalog fetch is instant)
+      loadImageBackupsIDB().then(idbImages => {
         const legacyLocal = localStorage.getItem('dbuy_images_base64');
         let imagesMap = { ...idbImages };
-
         if (legacyLocal) {
           try {
             const legacyMap = JSON.parse(legacyLocal);
             if (legacyMap && typeof legacyMap === 'object') {
-              const { saveImageBackupIDB } = await import('../utils/imageStorage');
-              // Save all legacy items into IndexedDB
-              for (const [url, base64] of Object.entries(legacyMap)) {
-                if (url && typeof base64 === 'string' && base64.startsWith('data:')) {
-                  await saveImageBackupIDB(url, base64);
-                  imagesMap[url] = base64;
-                }
-              }
+              imagesMap = { ...legacyMap, ...imagesMap };
             }
           } catch {}
-          // Clear legacy local storage key forever to reclaim up to 5MB browser storage quota!
           localStorage.removeItem('dbuy_images_base64');
         }
-
         if (Object.keys(imagesMap).length > 0) {
-          await fetch('/api/store/restore-images', {
+          fetch('/api/store/restore-images', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ imagesMap }),
-          });
+          }).catch(() => {});
         }
-      } catch (e) {
-        console.warn('[SYNC-RESTORE-IMAGES] Could not restore images:', e);
-      }
+      }).catch(() => {});
 
       const url = (!force && lastSyncTimestampRef.current)
-        ? `/api/store/sync?since=${encodeURIComponent(lastSyncTimestampRef.current)}`
-        : '/api/store/sync';
+        ? `/api/store/sync?since=${encodeURIComponent(lastSyncTimestampRef.current)}&_t=${Date.now()}`
+        : `/api/store/sync?_t=${Date.now()}`;
 
       const res = await fetch(url, {
-        headers: { 'Cache-Control': 'no-cache' },
+        headers: { 'Cache-Control': 'no-cache, no-store' },
       });
       if (!res.ok) return;
       const json = await res.json();
@@ -1381,6 +1368,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         if (Array.isArray(d.products)) {
           setProducts(prevProducts => {
+            // Check if local update was made very recently (within 15 seconds)
+            const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
+            if (recentlyUpdatedLocally && d.products.length < prevProducts.length) {
+              return prevProducts;
+            }
+
             // Read actual products stored in browser localStorage
             const savedLocal = localStorage.getItem('dbuy_products');
             let localProducts: Product[] = [];
@@ -1392,13 +1385,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             const activeLocal = localProducts.length > 0 ? localProducts : prevProducts;
             const serverIds = new Set(d.products.map(p => p.id));
-            const missingOnServer = activeLocal.filter(p => !serverIds.has(p.id));
+            
+            // Custom admin-added products missing on server
+            const customLocalMissing = activeLocal.filter(p => !serverIds.has(p.id) && (p.id.startsWith('prod-17') || p.id.startsWith('prod-18') || p.id.startsWith('prod-19') || p.id.startsWith('prod-2')));
 
             let finalMerged = d.products;
 
-            if (missingOnServer.length > 0) {
-              console.log(`[CLIENT-STORE-SYNC] Found ${missingOnServer.length} local products missing on server. Merging and auto-pushing to server...`);
-              finalMerged = [...missingOnServer, ...d.products];
+            if (customLocalMissing.length > 0) {
+              console.log(`[CLIENT-STORE-SYNC] Found ${customLocalMissing.length} custom local products missing on server. Merging and auto-pushing to server...`);
+              finalMerged = [...customLocalMissing, ...d.products];
 
               // Push the union catalog to the server so it's persisted permanently
               fetch('/api/store/products', {

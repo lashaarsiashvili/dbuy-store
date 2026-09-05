@@ -679,6 +679,10 @@ app.post('/api/store/restore-images', (req, res) => {
 // GET full synchronized store data (Products, Users, Orders, Theme, Billboards)
 app.get('/api/store/sync', (req, res) => {
   try {
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
+
     const clientSince = req.query.since as string | undefined;
     if (clientSince && clientSince === storeDb.lastUpdated) {
       res.json({
@@ -784,6 +788,9 @@ app.post('/api/store/products', (req, res) => {
 
 // GET: Fetch products catalog explicitly
 app.get('/api/store/products', (req, res) => {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.json({
     success: true,
     count: storeDb.products.length,
@@ -2221,22 +2228,102 @@ app.post('/api/auth/forgot-password', async (req, res) => {
 app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, orderNumber, subject, message } = req.body;
-    const supportEmail = process.env.SMTP_FROM_EMAIL || 'support@dbuystore.com';
-    const targetAdmin = process.env.GMAIL_USER || 'lashaarsiashvili@gmail.com';
+    if (!name || !email || !message) {
+      res.status(400).json({ success: false, error: 'Name, email, and message are required' });
+      return;
+    }
 
-    const transporter = getMailTransporter();
-    await transporter.sendMail({
-      from: `"DBUY Contact Form" <${supportEmail}>`,
-      replyTo: email,
-      to: targetAdmin,
-      subject: `[DBUY Contact] ${subject || 'New Message'} from ${name} (${email})`,
-      text: `Customer Name: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\n\nMessage:\n${message}`,
+    const supportEmail = 'support@dbuystore.com';
+    const adminEmail = process.env.GMAIL_USER || 'lashaarsiashvili@gmail.com';
+    const recipients = [supportEmail, adminEmail].filter(Boolean);
+
+    // Persist message in server database
+    if (!Array.isArray((storeDb as any).contactMessages)) {
+      (storeDb as any).contactMessages = [];
+    }
+    const msgRecord = {
+      id: 'MSG-' + Date.now(),
+      name,
+      email,
+      orderNumber: orderNumber || '',
+      subject: subject || 'General Inquiry',
+      message,
+      createdAt: new Date().toISOString(),
+      status: 'unread',
+    };
+    (storeDb as any).contactMessages.unshift(msgRecord);
+    saveStoreDatabase();
+
+    // Send email dispatch
+    try {
+      const transporter = getMailTransporter();
+      await transporter.sendMail({
+        from: `"DBUY Contact Form" <${supportEmail}>`,
+        replyTo: `${name} <${email}>`,
+        to: recipients.join(', '),
+        subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+            <div style="background-color: #0f172a; padding: 16px 20px; border-radius: 8px 8px 0 0; text-align: center;">
+              <h2 style="color: #ffffff; margin: 0; font-size: 20px;">DBUY Support - New Customer Message</h2>
+            </div>
+            <div style="padding: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
+              <p><strong>Official Mailbox:</strong> <a href="mailto:support@dbuystore.com" style="color: #2563eb;">support@dbuystore.com</a></p>
+              <p><strong>Customer Name:</strong> ${name}</p>
+              <p><strong>Customer Email:</strong> <a href="mailto:${email}" style="color: #2563eb;">${email}</a></p>
+              <p><strong>Order Number:</strong> ${orderNumber || 'N/A'}</p>
+              <p><strong>Subject:</strong> ${subject || 'General Inquiry'}</p>
+              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
+              <p><strong>Message Content:</strong></p>
+              <div style="background-color: #f8fafc; padding: 14px; border-radius: 8px; border-left: 4px solid #2563eb; font-size: 14px; white-space: pre-wrap;">${message}</div>
+            </div>
+            <div style="background-color: #f1f5f9; padding: 12px 20px; border-radius: 0 0 8px 8px; text-align: center; font-size: 12px; color: #64748b;">
+              Delivered directly to support@dbuystore.com • DBUY Commerce LLC
+            </div>
+          </div>
+        `,
+        text: `Official Mailbox: support@dbuystore.com\nCustomer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\n\nMessage:\n${message}`,
+      });
+
+      // Send auto-acknowledgement email back to customer
+      transporter.sendMail({
+        from: `"DBUY Customer Support" <${supportEmail}>`,
+        to: email,
+        subject: `Message Received - DBUY Customer Care [${subject || 'Inquiry'}]`,
+        html: `
+          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
+            <div style="background-color: #2563eb; padding: 16px 20px; border-radius: 8px 8px 0 0; text-align: center;">
+              <h2 style="color: #ffffff; margin: 0; font-size: 20px;">DBUY Customer Care</h2>
+            </div>
+            <div style="padding: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
+              <p>Hello <strong>${name}</strong>,</p>
+              <p>Thank you for contacting DBUY Store! We have received your message and sent it directly to <strong>support@dbuystore.com</strong>.</p>
+              <p>Our customer support team is reviewing your inquiry and will respond to <strong>${email}</strong> within 12–24 business hours.</p>
+              <div style="background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 16px 0;">
+                <p style="margin: 0; font-size: 12px; color: #64748b;"><strong>Message Reference Summary:</strong></p>
+                <p style="margin: 4px 0 0 0; font-size: 13px; color: #1e293b; font-style: italic;">"${message}"</p>
+              </div>
+              <p>Best regards,<br /><strong>DBUY Customer Support Team</strong><br /><a href="mailto:support@dbuystore.com" style="color: #2563eb;">support@dbuystore.com</a></p>
+            </div>
+          </div>
+        `,
+        text: `Hello ${name},\n\nThank you for contacting DBUY Store! We have received your message and sent it directly to support@dbuystore.com.\n\nOur customer support team will respond within 12–24 hours.\n\nBest regards,\nDBUY Support Team\nsupport@dbuystore.com`,
+      }).catch(e => console.warn('[CONTACT-AUTOREPLY-WARN]', e?.message));
+
+    } catch (mailErr) {
+      console.warn('[CONTACT-EMAIL-DISPATCH-WARN] Email notification failed, message saved in DB:', mailErr);
+    }
+
+    console.log(`[CONTACT-MESSAGE-DISPATCH] Saved and dispatched contact message from ${name} (${email}) to support@dbuystore.com`);
+
+    res.json({
+      success: true,
+      message: 'Message dispatched successfully to support@dbuystore.com',
+      id: msgRecord.id,
     });
-
-    res.json({ success: true, message: 'Message sent successfully' });
-  } catch (err) {
+  } catch (err: any) {
     console.error('[CONTACT-EMAIL-ERROR]', err);
-    res.status(500).json({ success: false, error: 'Failed to send message' });
+    res.status(500).json({ success: false, error: err?.message || 'Failed to send message' });
   }
 });
 
