@@ -288,20 +288,37 @@ function initStoreDatabase(): StoreDatabase {
 }
 
 // Vercel KV / Upstash Redis Client Auto-Initialization
-const redisUrl = process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL;
-const redisToken = process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN;
+let rawRedisUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '').trim();
+let rawRedisToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '').trim();
+
+// Auto-fix if user accidentally swapped URL and TOKEN in environment variables
+if (
+  rawRedisUrl &&
+  rawRedisToken &&
+  !rawRedisUrl.startsWith('http://') &&
+  !rawRedisUrl.startsWith('https://') &&
+  (rawRedisToken.startsWith('http://') || rawRedisToken.startsWith('https://'))
+) {
+  const temp = rawRedisUrl;
+  rawRedisUrl = rawRedisToken;
+  rawRedisToken = temp;
+}
 
 let redisClient: Redis | null = null;
-if (redisUrl && redisToken) {
+if (rawRedisUrl && rawRedisToken && (rawRedisUrl.startsWith('https://') || rawRedisUrl.startsWith('http://'))) {
   try {
     redisClient = new Redis({
-      url: redisUrl,
-      token: redisToken,
+      url: rawRedisUrl,
+      token: rawRedisToken,
     });
     console.log('[REDIS/KV] Connected to Vercel KV / Upstash Redis successfully!');
   } catch (e) {
-    console.warn('[REDIS/KV] Could not initialize Redis client:', e);
+    console.warn('[REDIS/KV] Could not initialize Redis client:', e instanceof Error ? e.message : e);
   }
+} else if (rawRedisUrl || rawRedisToken) {
+  console.warn(
+    '[REDIS/KV] Skipping Redis initialization: KV_REST_API_URL must be a valid HTTP/HTTPS URL (e.g. https://...upstash.io)'
+  );
 }
 
 let storeDb: StoreDatabase = initStoreDatabase();
@@ -344,8 +361,8 @@ async function syncFromRedisOnStartup(): Promise<void> {
         } catch {}
       }
     }
-  } catch (err) {
-    console.warn('[REDIS/KV] Error syncing from Redis on startup:', err);
+  } catch (err: any) {
+    console.warn('[REDIS/KV] Error syncing from Redis on startup (verify your Vercel KV URL/token):', err?.message || err);
   }
 }
 
@@ -374,7 +391,7 @@ function saveStoreDatabase(): void {
     if (redisClient) {
       redisClient.set('dbuy_store_database', serialized)
         .then(() => console.log('[REDIS/KV] Saved database to Vercel KV / Upstash Redis successfully'))
-        .catch(err => console.error('[REDIS/KV] Error saving to Redis:', err));
+        .catch(err => console.warn('[REDIS/KV] Could not save database to Redis (check Vercel KV URL/token):', err?.message || err));
     }
   } catch (err) {
     console.error('Failed to save store database to file:', err);
