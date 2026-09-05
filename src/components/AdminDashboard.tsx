@@ -573,6 +573,53 @@ export const AdminDashboard: React.FC = () => {
     setNewImageUrl('');
   };
 
+  // AI Image Enhancement (background removal + studio quality boost via Gemini)
+  const [enhancingImageIndex, setEnhancingImageIndex] = useState<number | null>(null);
+
+  const handleEnhanceImage = async (imageUrl: string, index: number) => {
+    setEnhancingImageIndex(index);
+    try {
+      const res = await fetch('/api/ai/enhance-product-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ image: imageUrl }),
+      });
+      const json = await res.json();
+      if (!json.success || !json.imageData) {
+        addToast(
+          isKa
+            ? `AI გაუმჯობესება ვერ მოხერხდა: ${json.error || 'უცნობი შეცდომა'}`
+            : `AI enhancement failed: ${json.error || 'Unknown error'}`,
+          'error'
+        );
+        return;
+      }
+      const enhancedDataUrl = `data:${json.mimeType};base64,${json.imageData}`;
+      setProdForm(prev => {
+        const updated = [...prev.images];
+        updated[index] = enhancedDataUrl;
+        return {
+          ...prev,
+          images: updated,
+          image: index === 0 ? enhancedDataUrl : prev.image,
+        };
+      });
+      addToast(
+        isKa
+          ? '✨ სურათი AI-ით წარმატებით გაუმჯობესდა — სუფთა ფონი + გაუმჯობესებული ხარისხი!'
+          : '✨ Image enhanced with AI — clean studio background + boosted quality!',
+        'success'
+      );
+    } catch (err: any) {
+      addToast(
+        isKa ? 'AI სერვისთან კავშირი ვერ მოხერხდა' : 'Could not reach AI enhancement service',
+        'error'
+      );
+    } finally {
+      setEnhancingImageIndex(null);
+    }
+  };
+
   // AI Product Ad Copywriter & Marketing Description Generator
   const [isGeneratingCopy, setIsGeneratingCopy] = useState(false);
   const [adTone, setAdTone] = useState<'high-converting' | 'tech' | 'luxury'>('high-converting');
@@ -3299,13 +3346,24 @@ export const AdminDashboard: React.FC = () => {
                               : 'border-slate-200 hover:border-slate-300'
                           }`}
                         >
-                          <img
-                            src={imgUrl}
-                            alt={`Product img ${idx + 1}`}
-                            referrerPolicy="no-referrer"
-                            onError={handleImageError}
-                            className="w-14 h-14 object-cover rounded-xl border border-slate-100 shrink-0"
-                          />
+                          {/* Image thumbnail with loading overlay */}
+                          <div className="relative w-14 h-14 shrink-0">
+                            <img
+                              src={imgUrl}
+                              alt={`Product img ${idx + 1}`}
+                              referrerPolicy="no-referrer"
+                              onError={handleImageError}
+                              className={`w-14 h-14 object-cover rounded-xl border border-slate-100 transition-all ${
+                                enhancingImageIndex === idx ? 'opacity-40 blur-[1px]' : ''
+                              }`}
+                            />
+                            {enhancingImageIndex === idx && (
+                              <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-blue-900/20">
+                                <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
+                              </div>
+                            )}
+                          </div>
+
                           <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                             <div className="flex items-center justify-between">
                               <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
@@ -3318,7 +3376,8 @@ export const AdminDashboard: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => removeProdImage(idx)}
-                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                disabled={enhancingImageIndex !== null}
+                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
                                 title={isKa ? 'სურათის წაშლა' : 'Delete image'}
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
@@ -3330,17 +3389,40 @@ export const AdminDashboard: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => setPrimaryProdImage(idx)}
-                                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                                  disabled={enhancingImageIndex !== null}
+                                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer disabled:opacity-40"
                                 >
                                   {isKa ? 'მთავარად' : 'Set Cover'}
                                 </button>
                               )}
+
+                              {/* AI Enhance Button */}
+                              <button
+                                type="button"
+                                onClick={() => handleEnhanceImage(imgUrl, idx)}
+                                disabled={enhancingImageIndex !== null}
+                                title={isKa ? 'AI-ით სურათის გაუმჯობესება — სუფთა ფონი + ხარისხის ამაღლება' : 'AI Enhance — clean background + quality boost'}
+                                className={`flex items-center space-x-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-all cursor-pointer ${
+                                  enhancingImageIndex === idx
+                                    ? 'bg-blue-100 text-blue-500 cursor-wait'
+                                    : 'bg-gradient-to-r from-violet-100 to-blue-100 text-violet-700 hover:from-violet-200 hover:to-blue-200 disabled:opacity-40'
+                                }`}
+                              >
+                                {enhancingImageIndex === idx ? (
+                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
+                                ) : (
+                                  <Wand2 className="w-2.5 h-2.5" />
+                                )}
+                                <span>{enhancingImageIndex === idx ? (isKa ? '...' : '...') : (isKa ? 'AI ✨' : 'AI ✨')}</span>
+                              </button>
+
                               <div className="ml-auto flex items-center space-x-0.5">
                                 {idx > 0 && (
                                   <button
                                     type="button"
                                     onClick={() => moveProdImage(idx, 'left')}
-                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                                    disabled={enhancingImageIndex !== null}
+                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-40"
                                     title="Move left"
                                   >
                                     <ArrowLeft className="w-3 h-3" />
@@ -3350,7 +3432,8 @@ export const AdminDashboard: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => moveProdImage(idx, 'right')}
-                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                                    disabled={enhancingImageIndex !== null}
+                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-40"
                                     title="Move right"
                                   >
                                     <ArrowRight className="w-3 h-3" />
@@ -3361,6 +3444,7 @@ export const AdminDashboard: React.FC = () => {
                           </div>
                         </div>
                       ))}
+
                     </div>
                   </div>
                 )}

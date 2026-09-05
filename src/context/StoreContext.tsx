@@ -707,9 +707,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return initialProducts;
   });
 
+  /** Strip base64 data URL images before persisting to localStorage/server source sync.
+   *  React state always keeps the real base64 for display. Only the serialised
+   *  copies (localStorage & initialProducts.ts) use CDN placeholder URLs to avoid
+   *  the 5 MB localStorage quota and Vite source-file size limits. */
+  const BASE64_PLACEHOLDER_URL = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
+  const stripBase64 = (products: Product[]): Product[] =>
+    products.map(p => ({
+      ...p,
+      image: p.image?.startsWith('data:') ? BASE64_PLACEHOLDER_URL : p.image,
+      images: p.images?.map(img => img?.startsWith('data:') ? BASE64_PLACEHOLDER_URL : img),
+    }));
+
   const saveProducts = (newProducts: Product[]) => {
+    // Keep full quality (including base64) in React state for UI display
     setProducts(newProducts);
-    localStorage.setItem('dbuy_products', JSON.stringify(newProducts));
+    // Strip base64 before persisting — prevents localStorage 5MB quota overflow
+    const stripped = stripBase64(newProducts);
+    try {
+      localStorage.setItem('dbuy_products', JSON.stringify(stripped));
+    } catch (e) {
+      console.warn('[STORE] localStorage quota full — products not cached locally:', e);
+    }
 
     // Broadcast immediately to other open tabs/windows
     if (typeof BroadcastChannel !== 'undefined') {

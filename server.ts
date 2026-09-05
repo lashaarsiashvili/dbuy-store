@@ -81,13 +81,35 @@ interface StoreDatabase {
 }
 
 // Helper to sync catalog to initialProducts.ts file so it persists forever in the code
+const BASE64_PLACEHOLDER = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
+
+/** Replace base64 data URL images with a placeholder URL so we don't embed
+ *  megabytes of binary data into the TypeScript source file. The real base64
+ *  images are always stored safely in store_database.json (binary file, no limit). */
+function stripBase64FromProducts(products: any[]): any[] {
+  return products.map(p => {
+    const cleanImage = (typeof p.image === 'string' && p.image.startsWith('data:'))
+      ? BASE64_PLACEHOLDER
+      : p.image;
+    const cleanImages = Array.isArray(p.images)
+      ? p.images.map((img: string) =>
+          typeof img === 'string' && img.startsWith('data:') ? BASE64_PLACEHOLDER : img
+        )
+      : p.images;
+    return { ...p, image: cleanImage, images: cleanImages };
+  });
+}
+
 function syncCatalogToInitialProducts(products: any[]): void {
   try {
     const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
     if (Array.isArray(products) && products.length > 0) {
-      const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(products, null, 2)};\n`;
+      // Strip base64 images — they cause the TS file to balloon to 50MB+ which
+      // breaks Vite compilation and prevents the app from starting after a rebuild.
+      const stripped = stripBase64FromProducts(products);
+      const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(stripped, null, 2)};\n`;
       fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
-      console.log(`[SOURCE-SYNC] Auto-persisted ${products.length} products to src/data/initialProducts.ts`);
+      console.log(`[SOURCE-SYNC] Auto-persisted ${products.length} products to src/data/initialProducts.ts (base64 images replaced with CDN placeholders)`);
     }
   } catch (err) {
     console.error('Error auto-syncing initialProducts.ts:', err);
@@ -364,6 +386,120 @@ Return ONLY a valid JSON object matching this schema without any markdown code f
   } catch (err: any) {
     console.error('Error generating product copy:', err);
     res.status(500).json({ success: false, error: err?.message || 'Generation failed' });
+  }
+});
+
+// ==========================================
+// AI PRODUCT IMAGE ENHANCEMENT API
+// ==========================================
+
+/**
+ * POST /api/ai/enhance-product-image
+ * 
+ * Accepts a product image (base64 data URL or https URL) and uses
+ * gemini-3.1-flash-image to:
+ *   1. Remove the original background
+ *   2. Place the product on a professional white studio gradient
+ *   3. Enhance sharpness, colours, and lighting
+ *   4. Keep the product itself 100% unchanged
+ *
+ * Returns { success: true, imageData: "base64...", mimeType: "image/png" }
+ */
+app.post('/api/ai/enhance-product-image', async (req, res) => {
+  try {
+    const { image } = req.body as { image?: string };
+
+    if (!image || typeof image !== 'string') {
+      return res.status(400).json({ success: false, error: 'Image is required (base64 data URL or https URL)' });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.status(503).json({
+        success: false,
+        error: 'Gemini API key is not configured. Set GEMINI_API_KEY in your .env file.',
+      });
+    }
+
+    // Prepare the image part for the API call
+    let imagePart: any;
+    if (image.startsWith('data:image/')) {
+      const match = image.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+      if (!match) {
+        return res.status(400).json({ success: false, error: 'Invalid base64 image format' });
+      }
+      imagePart = { inlineData: { mimeType: match[1], data: match[2] } };
+    } else if (image.startsWith('http://') || image.startsWith('https://')) {
+      // Fetch and convert remote URL to base64
+      const imgRes = await fetch(image, { signal: AbortSignal.timeout(6000) });
+      if (!imgRes.ok) {
+        return res.status(400).json({ success: false, error: 'Failed to fetch image URL' });
+      }
+      const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
+      const arrayBuffer = await imgRes.arrayBuffer();
+      const base64 = Buffer.from(arrayBuffer).toString('base64');
+      imagePart = { inlineData: { mimeType: contentType.split(';')[0], data: base64 } };
+    } else {
+      return res.status(400).json({ success: false, error: 'Image must be a base64 data URL or https URL' });
+    }
+
+    const enhancementPrompt = `You are a professional e-commerce product photo editor.
+
+Task: Edit this product image to make it look like a premium studio product photo.
+
+Instructions (strictly follow all of these):
+1. BACKGROUND: Replace the entire background with a clean, smooth white-to-very-light-grey radial gradient (bright white at center, very light grey #f0f0f0 at edges). The background must look professional, like a high-end studio product photograph.
+2. PRODUCT: Keep the product itself 100% identical — same shape, colour, branding, text, and all details. Do NOT alter, stylise, or cartoon-ify the product in any way.
+3. LIGHTING: Apply soft, even studio lighting with a subtle drop shadow directly beneath the product to give it depth and make it "float" naturally on the background.
+4. SHARPNESS & COLOUR: Slightly increase sharpness and colour vibrancy of the product only (not the background). Make it look crisp and premium.
+5. COMPOSITION: Centre the product in the frame with a small breathing margin on all sides.
+6. OUTPUT: Return only the edited image. No text, no watermarks, no borders.
+
+The goal is a product image that is ready to be placed on a premium e-commerce product listing page.`;
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-3.1-flash-image',
+      contents: [
+        { text: enhancementPrompt },
+        imagePart,
+      ],
+    });
+
+    // Extract the generated image from the response
+    const parts = response.candidates?.[0]?.content?.parts ?? [];
+    let resultImageData: string | null = null;
+    let resultMimeType = 'image/png';
+
+    for (const part of parts) {
+      if (part.inlineData?.data) {
+        resultImageData = part.inlineData.data;
+        resultMimeType = part.inlineData.mimeType || 'image/png';
+        break;
+      }
+    }
+
+    if (!resultImageData) {
+      // Log the full response for debugging
+      console.warn('[AI-ENHANCE] No image part in Gemini response:', JSON.stringify(response).slice(0, 500));
+      return res.status(500).json({
+        success: false,
+        error: 'Gemini returned no image. The model may not support image editing for this input.',
+      });
+    }
+
+    console.log(`[AI-ENHANCE] Successfully enhanced product image (${resultMimeType})`);
+    return res.json({
+      success: true,
+      imageData: resultImageData,
+      mimeType: resultMimeType,
+    });
+
+  } catch (err: any) {
+    console.error('[AI-ENHANCE] Error enhancing product image:', err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || 'Image enhancement failed',
+    });
   }
 });
 
