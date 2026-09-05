@@ -547,6 +547,16 @@ export const AdminDashboard: React.FC = () => {
         .then(r => r.json())
         .then(json => {
           if (json && json.success && json.url) {
+            // Save base64 backup mapping in client localStorage to survive Cloud Run container wipes
+            try {
+              const savedImages = localStorage.getItem('dbuy_images_base64');
+              const map = savedImages ? JSON.parse(savedImages) : {};
+              map[json.url] = url; // Map server URL (e.g., /uploads/xxx) to base64 data URL
+              localStorage.setItem('dbuy_images_base64', JSON.stringify(map));
+            } catch (storageErr) {
+              console.warn('Could not save base64 backup map to localStorage:', storageErr);
+            }
+
             setProdForm(prev => {
               const updated = prev.images.map(img => img === url ? json.url : img);
               return {

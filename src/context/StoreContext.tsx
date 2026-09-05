@@ -1289,6 +1289,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     isSyncingRef.current = true;
     try {
+      // 1. Auto-restore custom images from local storage backup to the server disk (survives Cloud Run wipes)
+      try {
+        const savedImages = localStorage.getItem('dbuy_images_base64');
+        if (savedImages) {
+          const imagesMap = JSON.parse(savedImages);
+          if (imagesMap && Object.keys(imagesMap).length > 0) {
+            await fetch('/api/store/restore-images', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ imagesMap }),
+            });
+          }
+        }
+      } catch (e) {
+        console.warn('Could not restore client images:', e);
+      }
+
       const url = (!force && lastSyncTimestampRef.current)
         ? `/api/store/sync?since=${encodeURIComponent(lastSyncTimestampRef.current)}`
         : '/api/store/sync';
@@ -1312,6 +1329,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         if (Array.isArray(d.products)) {
           setProducts(prevProducts => {
+            // Read actual products stored in browser localStorage
+            const savedLocal = localStorage.getItem('dbuy_products');
+            let localProducts: Product[] = [];
+            if (savedLocal) {
+              try {
+                localProducts = JSON.parse(savedLocal);
+              } catch {}
+            }
+
+            // Check if client has custom products (different length or containing new products not in default list)
+            const hasCustomLocal = localProducts.length > 0 && (
+              localProducts.length !== d.products.length ||
+              localProducts.some(lp => lp.id.startsWith('prod-17') || !d.products.some(sp => sp.id === lp.id))
+            );
+
+            // Check if server is currently returning the pristine default products (meaning server database was wiped)
+            const serverIsDefault = d.products.length === initialProducts.length &&
+              d.products.every(sp => initialProducts.some(ip => ip.id === sp.id));
+
+            if (hasCustomLocal && serverIsDefault) {
+              console.log('[SYNC-RESTORE] Server restarted & wiped. Pushing custom client products catalog back to server...');
+              fetch('/api/store/products', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ products: localProducts }),
+              }).catch(err => console.error('Failed to restore custom products to server:', err));
+              return localProducts;
+            }
+
             const recentLocalEdit = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
             if (recentLocalEdit) {
               const serverIds = new Set(d.products.map(p => p.id));

@@ -540,6 +540,57 @@ app.post('/api/upload-image', (req, res) => {
   }
 });
 
+// POST: Restore uploaded images from client-side backup map (helps survive Cloud Run redeploy/wipe)
+app.post('/api/store/restore-images', (req, res) => {
+  try {
+    const { imagesMap } = req.body;
+    if (!imagesMap || typeof imagesMap !== 'object') {
+      res.status(400).json({ success: false, error: 'imagesMap is required' });
+      return;
+    }
+
+    let restoredCount = 0;
+    for (const [imgUrl, dataUrl] of Object.entries(imagesMap)) {
+      if (typeof imgUrl !== 'string' || typeof dataUrl !== 'string' || !dataUrl.startsWith('data:')) {
+        continue;
+      }
+
+      // Extract filename from URL (e.g. "/uploads/prod-123.jpg" -> "prod-123.jpg")
+      const filename = path.basename(imgUrl);
+      if (!filename || filename === '/' || filename === '.') continue;
+
+      const filePath = path.join(UPLOADS_DIR, filename);
+      if (!fs.existsSync(filePath)) {
+        try {
+          const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+          if (matches && matches[2]) {
+            fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
+            uploadsMap[filename] = dataUrl;
+            restoredCount++;
+          }
+        } catch (writeErr) {
+          console.error(`Failed to restore file ${filename}:`, writeErr);
+        }
+      } else {
+        // Even if file exists, make sure it is in uploadsMap
+        if (!uploadsMap[filename]) {
+          uploadsMap[filename] = dataUrl;
+        }
+      }
+    }
+
+    if (restoredCount > 0) {
+      saveUploadsMap();
+      console.log(`[RESTORE-IMAGES] Restored ${restoredCount} images to disk from client-side backup`);
+    }
+
+    res.json({ success: true, restoredCount });
+  } catch (err: any) {
+    console.error('Error in restore-images:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Restore failed' });
+  }
+});
+
 // ==========================================
 // STORE PERSISTENCE & REAL-TIME SYNC API
 // ==========================================
