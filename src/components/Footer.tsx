@@ -231,6 +231,15 @@ export const Footer: React.FC = () => {
                 <span>{useStore().language === 'ka' ? 'ვერიფიცირებული მიწოდება' : 'Verified Deliveries'}</span>
               </button>
             </li>
+            <li>
+              <button
+                onClick={() => setCurrentPage('admin')}
+                className="hover:text-amber-400 text-slate-400 font-medium transition-colors cursor-pointer text-left flex items-center space-x-1.5 text-[11px]"
+              >
+                <ShieldCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+                <span>{useStore().language === 'ka' ? 'ადმინ პორტალი' : 'Admin Portal'}</span>
+              </button>
+            </li>
             <li className="pt-1">
               <a
                 href="mailto:support@dbuystore.com"
