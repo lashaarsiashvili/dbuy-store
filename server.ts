@@ -58,6 +58,8 @@ const DB_FILE = path.join(DB_DIR, 'store_database.json');
 
 // Dedicated persistent uploads directory for product images
 const UPLOADS_DIR = path.join(DB_DIR, 'uploads');
+const UPLOADS_MAP_FILE = path.join(DB_DIR, 'uploads_map.json');
+
 try {
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
@@ -66,8 +68,67 @@ try {
   console.error('Error creating uploads directory:', err);
 }
 
+// Persistent base64 backup map to ensure uploaded files are never lost
+let uploadsMap: Record<string, string> = {};
+try {
+  if (fs.existsSync(UPLOADS_MAP_FILE)) {
+    uploadsMap = JSON.parse(fs.readFileSync(UPLOADS_MAP_FILE, 'utf-8'));
+    // Ensure any file present in map is written to disk if missing
+    for (const [filename, dataUrl] of Object.entries(uploadsMap)) {
+      const filePath = path.join(UPLOADS_DIR, filename);
+      if (!fs.existsSync(filePath) && typeof dataUrl === 'string' && dataUrl.startsWith('data:')) {
+        const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+        if (matches && matches[2]) {
+          fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
+        }
+      }
+    }
+  }
+} catch (e) {
+  console.warn('Could not restore uploads map on boot:', e);
+}
+
+function saveUploadsMap(): void {
+  try {
+    fs.writeFileSync(UPLOADS_MAP_FILE, JSON.stringify(uploadsMap, null, 2), 'utf-8');
+  } catch (err) {
+    console.error('Error saving uploads map:', err);
+  }
+}
+
 // Serve uploaded product photos directly
 app.use('/uploads', express.static(UPLOADS_DIR));
+
+// Fallback for /uploads/:filename to restore from memory/map or serve clean SVG
+app.get('/uploads/:filename', (req, res) => {
+  const { filename } = req.params;
+  const filePath = path.join(UPLOADS_DIR, filename);
+
+  if (fs.existsSync(filePath)) {
+    return res.sendFile(filePath);
+  }
+
+  // Check if we have base64 in backup map
+  if (uploadsMap[filename]) {
+    try {
+      const dataUrl = uploadsMap[filename];
+      const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+      if (matches && matches[2]) {
+        const buffer = Buffer.from(matches[2], 'base64');
+        fs.writeFileSync(filePath, buffer);
+        res.setHeader('Content-Type', matches[1]);
+        return res.send(buffer);
+      }
+    } catch (err) {
+      console.error('Failed to recover image from map:', err);
+    }
+  }
+
+  // Neutral SVG fallback instead of 404 or random image
+  res.setHeader('Content-Type', 'image/svg+xml');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.send('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="#f8fafc"/><rect x="20" y="20" width="360" height="360" rx="16" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="8 8"/><path d="M120 250l50-50 60 60 40-40 60 60H70l50-30z" fill="#cbd5e1"/><circle cx="140" cy="140" r="24" fill="#94a3b8"/></svg>');
+});
 
 const DEFAULT_THEME = {
   announcementText: '🚚 Free Shipping on orders over $50 | 🛡️ 14-Day Money Back Guarantee',
@@ -467,7 +528,9 @@ app.post('/api/upload-image', (req, res) => {
     const filePath = path.join(UPLOADS_DIR, safeName);
 
     fs.writeFileSync(filePath, buffer);
-    console.log(`[IMAGE-UPLOAD] Saved product image to ${filePath} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    uploadsMap[safeName] = dataUrl;
+    saveUploadsMap();
+    console.log(`[IMAGE-UPLOAD] Saved product image to ${filePath} and backup map (${(buffer.length / 1024).toFixed(1)} KB)`);
 
     const publicUrl = `/uploads/${safeName}`;
     res.json({ success: true, url: publicUrl });
@@ -537,7 +600,9 @@ function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
     const filePath = path.join(UPLOADS_DIR, safeName);
 
     fs.writeFileSync(filePath, buffer);
-    console.log(`[AUTO-DISK-IMAGE] Saved product image to disk: ${safeName} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    uploadsMap[safeName] = dataUrl;
+    saveUploadsMap();
+    console.log(`[AUTO-DISK-IMAGE] Saved product image to disk & map: ${safeName} (${(buffer.length / 1024).toFixed(1)} KB)`);
     return `/uploads/${safeName}`;
   } catch (e) {
     console.error('Error saving base64 image to disk:', e);
@@ -568,10 +633,9 @@ app.post('/api/store/products', (req, res) => {
     });
 
     storeDb.products = sanitizedProducts;
-    syncCatalogToInitialProducts(sanitizedProducts);
     saveStoreDatabase();
 
-    console.log(`[STORE-PRODUCTS] Successfully saved ${sanitizedProducts.length} products to database & source.`);
+    console.log(`[STORE-PRODUCTS] Successfully saved ${sanitizedProducts.length} products to database.`);
 
     res.json({
       success: true,
