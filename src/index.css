@@ -28,6 +28,33 @@
     max-width: 100%;
     height: auto;
   }
+
+  /* Universal instant placeholder disappearance on click / focus */
+  input::placeholder,
+  textarea::placeholder,
+  input::-webkit-input-placeholder,
+  textarea::-webkit-input-placeholder,
+  input::-moz-placeholder,
+  textarea::-moz-placeholder {
+    transition: opacity 0.1s ease, color 0.1s ease;
+  }
+
+  input:focus::placeholder,
+  input:focus-visible::placeholder,
+  input:active::placeholder,
+  textarea:focus::placeholder,
+  textarea:focus-visible::placeholder,
+  textarea:active::placeholder,
+  input:focus::-webkit-input-placeholder,
+  input:active::-webkit-input-placeholder,
+  textarea:focus::-webkit-input-placeholder,
+  textarea:active::-webkit-input-placeholder,
+  input:focus::-moz-placeholder,
+  textarea:focus::-moz-placeholder {
+    opacity: 0 !important;
+    color: transparent !important;
+    -webkit-text-fill-color: transparent !important;
+  }
 }
 
 /* Official Apple Pay Web Component & Native Button styling */

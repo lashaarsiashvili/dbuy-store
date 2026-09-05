@@ -9,6 +9,8 @@ import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
 import { StoreSyncModal } from './StoreSyncModal';
+import { ImageStudioModal } from './ImageStudioModal';
+import { optimizeProductImage } from '../utils/productImageOptimizer';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -52,7 +54,12 @@ import {
   ArrowLeft,
   ArrowRight,
   Wand2,
-  Loader2
+  Loader2,
+  Search,
+  Filter,
+  ArrowUpDown,
+  TrendingUp,
+  AlertTriangle
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -187,6 +194,21 @@ export const AdminDashboard: React.FC = () => {
   const [newImageUrl, setNewImageUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Dedicated Image Studio Modal State (strictly isolated to selected image)
+  const [studioModal, setStudioModal] = useState<{
+    isOpen: boolean;
+    imageSrc: string;
+    imageIndex: number;
+  }>({
+    isOpen: false,
+    imageSrc: '',
+    imageIndex: 0,
+  });
+
+  // Auto-optimize on upload & bulk optimization state
+  const [autoStudioOptimizeOnUpload, setAutoStudioOptimizeOnUpload] = useState<boolean>(true);
+  const [isBulkOptimizing, setIsBulkOptimizing] = useState<boolean>(false);
+
   const [prodForm, setProdForm] = useState({
     title: '',
     titleKa: '',
@@ -206,6 +228,12 @@ export const AdminDashboard: React.FC = () => {
   // Product catalog table search & filter
   const [productSearch, setProductSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock'>('all');
+  const [productSort, setProductSort] = useState<'default' | 'price_asc' | 'price_desc' | 'stock_desc' | 'stock_asc' | 'title_asc'>('default');
+
+  // Orders table search & status filter
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
 
   // Theme Form State
   const [themeForm, setThemeForm] = useState<{
@@ -445,9 +473,9 @@ export const AdminDashboard: React.FC = () => {
     if (fileArray.length === 0) return;
 
     const currentCount = prodForm.images.length;
-    const availableSlots = 5 - currentCount;
+    const availableSlots = 10 - currentCount;
     if (availableSlots <= 0) {
-      addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed per product', 'warning');
+      addToast(isKa ? 'მაქსიმუმ 10 სურათია დაშვებული' : 'Maximum 10 images allowed per product', 'warning');
       return;
     }
 
@@ -461,7 +489,7 @@ export const AdminDashboard: React.FC = () => {
         if (!result) return;
 
         const img = new Image();
-        img.onload = () => {
+        img.onload = async () => {
           let width = img.width;
           let height = img.height;
           const maxDim = 1200;
@@ -482,8 +510,27 @@ export const AdminDashboard: React.FC = () => {
           const ctx = canvas.getContext('2d');
           if (ctx) {
             ctx.drawImage(img, 0, 0, width, height);
-            const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.88);
-            appendProdImage(compressedDataUrl, file.name);
+            let finalUrl = canvas.toDataURL('image/jpeg', 0.88);
+
+            // If auto-optimize is turned on, run the studio optimizer on upload
+            if (autoStudioOptimizeOnUpload) {
+              try {
+                finalUrl = await optimizeProductImage(finalUrl, {
+                  style: 'studio-clean',
+                  brightness: 6,
+                  contrast: 12,
+                  sharpness: 35,
+                  shadowIntensity: 45,
+                  zoom: 1.0,
+                  removeBackground: true,
+                  bgTolerance: 32,
+                });
+              } catch (optErr) {
+                console.warn('Auto studio optimization fallback to original:', optErr);
+              }
+            }
+
+            appendProdImage(finalUrl, file.name);
           } else {
             appendProdImage(result, file.name);
           }
@@ -500,8 +547,8 @@ export const AdminDashboard: React.FC = () => {
   const appendProdImage = (url: string, name?: string) => {
     setProdForm(prev => {
       const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
-      if (currentList.length >= 5) {
-        addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed', 'warning');
+      if (currentList.length >= 10) {
+        addToast(isKa ? 'მაქსიმუმ 10 სურათია დაშვებული' : 'Maximum 10 images allowed', 'warning');
         return prev;
       }
       if (currentList.includes(url)) return prev;
@@ -512,9 +559,164 @@ export const AdminDashboard: React.FC = () => {
         image: updated[0] || prev.image,
       };
     });
+
     if (name) {
       setUploadedFileInfo({ name, size: 'Ready' });
-      addToast(isKa ? `სურათი „${name}“ წარმატებით დაემატა!` : `Image "${name}" added!`, 'success');
+      addToast(
+        isKa
+          ? `სურათი „${name}“ დაემატა${autoStudioOptimizeOnUpload ? ' (სტუდიურად ოპტიმიზებული)' : ''}!`
+          : `Image "${name}" added${autoStudioOptimizeOnUpload ? ' (studio-optimized)' : ''}!`,
+        'success'
+      );
+    }
+
+    // Convert heavy base64 to lightweight server file URL if applicable
+    if (url.startsWith('data:')) {
+      fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl: url, filename: name }),
+      })
+        .then(r => r.json())
+        .then(json => {
+          if (json && json.success && json.url) {
+            setProdForm(prev => {
+              const updated = prev.images.map(img => img === url ? json.url : img);
+              return {
+                ...prev,
+                images: updated,
+                image: prev.image === url ? json.url : prev.image,
+              };
+            });
+          }
+        })
+        .catch(err => console.warn('Could not store image to server disk, keeping in memory:', err));
+    }
+  };
+
+  // Open Studio Optimizer for a specific image index
+  const handleOpenStudioForImage = (idx: number) => {
+    const targetUrl = prodForm.images[idx] || (idx === 0 ? prodForm.image : '');
+    if (!targetUrl) return;
+
+    setStudioModal({
+      isOpen: true,
+      imageSrc: targetUrl,
+      imageIndex: idx,
+    });
+  };
+
+  // Apply optimized image strictly to its corresponding index
+  const handleApplyStudioOptimization = (optimizedDataUrl: string, targetIdx: number) => {
+    setProdForm(prev => {
+      const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
+      const updatedList = [...currentList];
+      if (targetIdx >= 0 && targetIdx < updatedList.length) {
+        updatedList[targetIdx] = optimizedDataUrl;
+      } else {
+        updatedList.push(optimizedDataUrl);
+      }
+      return {
+        ...prev,
+        images: updatedList,
+        image: targetIdx === 0 ? optimizedDataUrl : (updatedList[0] || prev.image),
+      };
+    });
+
+    addToast(
+      isKa
+        ? `სურათი #${targetIdx + 1} წარმატებით ოპტიმიზდა (ფონი, ცენტრირება, ხარისხი)!`
+        : `Image #${targetIdx + 1} studio optimized!`,
+      'success'
+    );
+
+    // Save to disk to keep database JSON compact
+    if (optimizedDataUrl.startsWith('data:')) {
+      fetch('/api/upload-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dataUrl: optimizedDataUrl }),
+      })
+        .then(r => r.json())
+        .then(json => {
+          if (json && json.success && json.url) {
+            setProdForm(prev => {
+              const updated = prev.images.map((img, i) => i === targetIdx ? json.url : img);
+              return {
+                ...prev,
+                images: updated,
+                image: targetIdx === 0 ? json.url : (updated[0] || prev.image),
+              };
+            });
+          }
+        })
+        .catch(err => console.warn('Could not save optimized image to disk:', err));
+    }
+  };
+
+  // Bulk optimize all images currently in prodForm
+  const handleAutoOptimizeAllImages = async () => {
+    if (prodForm.images.length === 0) {
+      addToast(isKa ? 'გთხოვთ ჯერ ატვირთოთ სურათები' : 'Please upload images first', 'warning');
+      return;
+    }
+
+    setIsBulkOptimizing(true);
+    addToast(
+      isKa
+        ? `მიმდინარეობს ${prodForm.images.length} სურათის სტუდიური ოპტიმიზაცია...`
+        : `Optimizing ${prodForm.images.length} images in studio...`,
+      'info'
+    );
+
+    try {
+      const optimizedImages: string[] = [];
+      for (let i = 0; i < prodForm.images.length; i++) {
+        const raw = prodForm.images[i];
+        const res = await optimizeProductImage(raw, {
+          style: 'studio-clean',
+          brightness: 6,
+          contrast: 12,
+          sharpness: 35,
+          shadowIntensity: 45,
+          zoom: 1.0,
+        });
+
+        // Persist to server disk
+        try {
+          const upRes = await fetch('/api/upload-image', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ dataUrl: res }),
+          });
+          const upJson = await upRes.json();
+          if (upJson && upJson.success && upJson.url) {
+            optimizedImages.push(upJson.url);
+          } else {
+            optimizedImages.push(res);
+          }
+        } catch {
+          optimizedImages.push(res);
+        }
+      }
+
+      setProdForm(prev => ({
+        ...prev,
+        images: optimizedImages,
+        image: optimizedImages[0] || prev.image,
+      }));
+
+      addToast(
+        isKa
+          ? `ყველა სურათი (${optimizedImages.length}) წარმატებით ოპტიმიზდა!`
+          : `All ${optimizedImages.length} images studio-optimized successfully!`,
+        'success'
+      );
+    } catch (err) {
+      console.error('Error auto-optimizing all images:', err);
+      addToast(isKa ? 'ოპტიმიზაციისას დაფიქსირდა შეცდომა' : 'Optimization failed', 'error');
+    } finally {
+      setIsBulkOptimizing(false);
     }
   };
 
@@ -571,53 +773,6 @@ export const AdminDashboard: React.FC = () => {
     }
     appendProdImage(newImageUrl.trim());
     setNewImageUrl('');
-  };
-
-  // AI Image Enhancement (background removal + studio quality boost via Gemini)
-  const [enhancingImageIndex, setEnhancingImageIndex] = useState<number | null>(null);
-
-  const handleEnhanceImage = async (imageUrl: string, index: number) => {
-    setEnhancingImageIndex(index);
-    try {
-      const res = await fetch('/api/ai/enhance-product-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ image: imageUrl }),
-      });
-      const json = await res.json();
-      if (!json.success || !json.imageData) {
-        addToast(
-          isKa
-            ? `AI გაუმჯობესება ვერ მოხერხდა: ${json.error || 'უცნობი შეცდომა'}`
-            : `AI enhancement failed: ${json.error || 'Unknown error'}`,
-          'error'
-        );
-        return;
-      }
-      const enhancedDataUrl = `data:${json.mimeType};base64,${json.imageData}`;
-      setProdForm(prev => {
-        const updated = [...prev.images];
-        updated[index] = enhancedDataUrl;
-        return {
-          ...prev,
-          images: updated,
-          image: index === 0 ? enhancedDataUrl : prev.image,
-        };
-      });
-      addToast(
-        isKa
-          ? '✨ სურათი AI-ით წარმატებით გაუმჯობესდა — სუფთა ფონი + გაუმჯობესებული ხარისხი!'
-          : '✨ Image enhanced with AI — clean studio background + boosted quality!',
-        'success'
-      );
-    } catch (err: any) {
-      addToast(
-        isKa ? 'AI სერვისთან კავშირი ვერ მოხერხდა' : 'Could not reach AI enhancement service',
-        'error'
-      );
-    } finally {
-      setEnhancingImageIndex(null);
-    }
   };
 
   // AI Product Ad Copywriter & Marketing Description Generator
@@ -817,11 +972,11 @@ export const AdminDashboard: React.FC = () => {
 
     const finalSlug = prodForm.customSlug?.trim() || generateProductSlug(effectiveTitle);
 
-    // Prepare valid images array (up to 5 images)
+    // Prepare valid images array (up to 10 images)
     const validImages = (prodForm.images || [])
       .map(img => (img || '').trim())
       .filter(img => img.length > 0)
-      .slice(0, 5);
+      .slice(0, 10);
 
     const finalImages = validImages.length > 0
       ? validImages
@@ -906,10 +1061,41 @@ export const AdminDashboard: React.FC = () => {
     );
   };
 
-  // Filtered products in admin table
+  // Filtered & sorted products in admin table
   const filteredProducts = products.filter(p => {
     if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
-    if (productSearch.trim() && !p.title.toLowerCase().includes(productSearch.toLowerCase())) return false;
+    if (productSearch.trim()) {
+      const q = productSearch.toLowerCase();
+      const matchTitle = p.title.toLowerCase().includes(q);
+      const matchTitleKa = p.titleKa?.toLowerCase().includes(q);
+      const matchId = String(p.id).toLowerCase().includes(q);
+      const matchBadge = p.badge?.toLowerCase().includes(q);
+      if (!matchTitle && !matchTitleKa && !matchId && !matchBadge) return false;
+    }
+    if (stockFilter === 'in_stock' && p.stock <= 0) return false;
+    if (stockFilter === 'low_stock' && (p.stock <= 0 || p.stock > 5)) return false;
+    if (stockFilter === 'out_of_stock' && p.stock > 0) return false;
+    return true;
+  }).sort((a, b) => {
+    if (productSort === 'price_asc') return a.price - b.price;
+    if (productSort === 'price_desc') return b.price - a.price;
+    if (productSort === 'stock_desc') return b.stock - a.stock;
+    if (productSort === 'stock_asc') return a.stock - b.stock;
+    if (productSort === 'title_asc') return a.title.localeCompare(b.title);
+    return 0;
+  });
+
+  // Filtered orders in admin table
+  const filteredOrders = orders.filter(o => {
+    if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false;
+    if (orderSearch.trim()) {
+      const q = orderSearch.toLowerCase();
+      const matchId = o.id.toLowerCase().includes(q);
+      const matchCust = o.customerName.toLowerCase().includes(q);
+      const matchEmail = o.email.toLowerCase().includes(q);
+      const matchTrack = (o.trackingNumber || '').toLowerCase().includes(q);
+      if (!matchId && !matchCust && !matchEmail && !matchTrack) return false;
+    }
     return true;
   });
 
@@ -968,14 +1154,26 @@ export const AdminDashboard: React.FC = () => {
                   required
                   autoComplete="current-password"
                   value={pinInput ?? ''}
-                  onFocus={e => e.target.select()}
-                  onClick={e => (e.target as HTMLInputElement).select()}
+                  onMouseDown={e => {
+                    (e.target as HTMLInputElement).placeholder = "";
+                  }}
+                  onFocus={e => {
+                    (e.target as HTMLInputElement).placeholder = "";
+                    e.target.select();
+                  }}
+                  onClick={e => {
+                    (e.target as HTMLInputElement).placeholder = "";
+                    (e.target as HTMLInputElement).select();
+                  }}
+                  onBlur={e => {
+                    (e.target as HTMLInputElement).placeholder = isKa ? 'შეიყვანეთ პაროლი...' : 'Enter password...';
+                  }}
                   onChange={e => {
                     setPinInput(e.target.value);
                     setAuthError(false);
                   }}
                   placeholder={isKa ? 'შეიყვანეთ პაროლი...' : 'Enter password...'}
-                  className="w-full pl-4 pr-16 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  className="w-full pl-4 pr-16 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                 />
                 <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
                   {pinInput.length > 0 && (
@@ -1031,218 +1229,301 @@ export const AdminDashboard: React.FC = () => {
   return (
     <div className="min-h-screen bg-slate-100/70 pb-16">
       {/* Top Admin Header */}
-      <div className="bg-slate-900 text-white border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex flex-wrap items-center justify-between gap-4">
-          <div className="flex items-center space-x-3">
+      <div className="bg-slate-900 text-white border-b border-slate-800 shadow-md sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-4">
+          <div className="flex items-center space-x-3.5">
             <BrandLogo size="sm" variant="dark" showText={false} />
             <div>
-              <h1 className="text-base font-bold text-white flex items-center space-x-2">
-                <span>DBUY Master Control Panel</span>
-                <span className="px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 rounded-full">
-                  🟢 Session Active
+              <div className="flex items-center space-x-2">
+                <span className="text-xs font-medium text-slate-400">DBUY</span>
+                <span className="text-slate-600">/</span>
+                <h1 className="text-sm font-bold text-white tracking-tight">
+                  {isKa ? 'ადმინის მართვის ცენტრი' : 'Command Center'}
+                </h1>
+              </div>
+              <div className="flex items-center space-x-2 mt-0.5">
+                <span className="inline-flex items-center space-x-1 px-2 py-0.5 text-[10px] font-semibold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 rounded-full">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span>{isKa ? 'ცოცხალი სისტემა' : 'Production Live'}</span>
                 </span>
-              </h1>
+                <span className="hidden sm:inline-flex items-center text-[10px] text-slate-400 space-x-1">
+                  <Truck className="w-3 h-3 text-blue-400" />
+                  <span>Georgian Post</span>
+                </span>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center space-x-3">
-            <a
-              href="/api/download-zip"
-              download="dbuy-store-project.zip"
-              className="px-3 py-1.5 rounded-xl bg-emerald-600/30 hover:bg-emerald-600/50 text-emerald-200 text-xs font-semibold flex items-center space-x-1.5 border border-emerald-500/40 transition-colors cursor-pointer"
-              title={isKa ? 'მთელი საიტის ZIP ფაილად ჩამოტვირთვა' : 'Download full site project as ZIP archive'}
+          <div className="flex items-center space-x-2 sm:space-x-3">
+            <button
+              onClick={handleOpenAddProduct}
+              className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center space-x-1.5 shadow-sm transition-all cursor-pointer"
             >
-              <Download className="w-3.5 h-3.5 text-emerald-400" />
-              <span>{isKa ? 'ZIP გადმოწერა' : 'Download ZIP'}</span>
-            </a>
+              <Plus className="w-3.5 h-3.5" />
+              <span>{isKa ? 'პროდუქტის დამატება' : 'Add Product'}</span>
+            </button>
+
             <button
               onClick={() => setIsSyncModalOpen(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-200 text-xs font-semibold flex items-center space-x-1.5 border border-blue-500/40 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 border border-slate-700 transition-colors cursor-pointer"
               title={isKa ? 'ცოცხალი საიტის სინქრონიზაცია & ბაზა' : 'Live site sync & database'}
             >
               <Database className="w-3.5 h-3.5 text-blue-400" />
-              <span>{isKa ? 'საიტის სინქრონიზაცია' : 'Live Sync'}</span>
+              <span className="hidden md:inline">{isKa ? 'საიტის სინქრონიზაცია' : 'Live Sync'}</span>
             </button>
+
+            <a
+              href="/api/download-zip"
+              download="dbuy-store-project.zip"
+              className="px-3 py-1.5 rounded-xl bg-emerald-950/60 hover:bg-emerald-900/60 text-emerald-300 text-xs font-semibold flex items-center space-x-1.5 border border-emerald-700/50 transition-colors cursor-pointer"
+              title={isKa ? 'მთელი საიტის ZIP ფაილად ჩამოტვირთვა' : 'Download full site project as ZIP archive'}
+            >
+              <Download className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="hidden lg:inline">{isKa ? 'ZIP გადმოწერა' : 'Export ZIP'}</span>
+            </a>
+
             <button
               onClick={() => setCurrentPage('home')}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 border border-slate-700 transition-colors cursor-pointer"
+              title="Open customer storefront"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>View Storefront</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+              <span className="hidden sm:inline">Storefront</span>
             </button>
-            <button
-              onClick={() => {
-                logoutUser();
-                setCurrentPage('home');
-              }}
-              className="px-3.5 py-1.5 rounded-xl bg-red-600/20 hover:bg-red-600/30 text-red-300 text-xs font-semibold border border-red-500/30 transition-colors cursor-pointer"
-            >
-              Lock / Logout
-            </button>
+
+            {/* Admin Profile & Logout */}
+            <div className="flex items-center pl-2 border-l border-slate-800 space-x-2">
+              <div className="hidden xl:flex flex-col text-right">
+                <span className="text-[11px] font-bold text-slate-200 leading-none">Lasha Arsiashvili</span>
+                <span className="text-[9px] text-slate-400 leading-tight">Master Admin</span>
+              </div>
+              <button
+                onClick={() => {
+                  logoutUser();
+                  setCurrentPage('home');
+                }}
+                className="px-2.5 py-1.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-300 text-xs font-semibold border border-red-500/20 transition-colors cursor-pointer flex items-center space-x-1"
+                title="Lock / Logout from Admin Panel"
+              >
+                <Lock className="w-3 h-3 text-red-400" />
+                <span className="hidden sm:inline">Logout</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 pt-8 space-y-8">
+      <div className="max-w-7xl mx-auto px-4 pt-6 space-y-6">
         
         {/* Metrics Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
           {/* Revenue */}
-          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-            <div className="p-3 rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex items-center space-x-3.5">
+            <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
               <DollarSign className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Total Revenue</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Revenue</p>
               <h3 className="text-lg font-black text-slate-900">{formatPrice(totalRevenueUSD)}</h3>
+              <p className="text-[10px] text-emerald-600 font-semibold flex items-center space-x-1 mt-0.5">
+                <TrendingUp className="w-3 h-3" />
+                <span>Verified Orders</span>
+              </p>
             </div>
           </div>
 
           {/* Orders */}
-          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-            <div className="p-3 rounded-xl bg-blue-50 text-blue-600 shrink-0">
+          <div 
+            onClick={() => setActiveTab('orders')}
+            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs hover:border-blue-400 hover:shadow-md transition-all flex items-center space-x-3.5 cursor-pointer group"
+          >
+            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 shrink-0 group-hover:scale-105 transition-transform">
               <ShoppingBag className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">Orders Placed</p>
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Orders Placed</p>
               <h3 className="text-lg font-black text-slate-900">{totalOrdersCount}</h3>
+              <p className="text-[10px] text-blue-600 font-semibold mt-0.5 group-hover:underline">
+                {orders.filter(o => o.status === 'Processing').length} pending fulfillment
+              </p>
             </div>
           </div>
 
           {/* Today's Visitors (LIVE) */}
           <div 
             onClick={() => setActiveTab('analytics')}
-            className="p-5 bg-white rounded-2xl border border-blue-200/80 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
+            className="p-4 bg-white rounded-2xl border border-blue-200 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
           >
-            <div className="p-3 rounded-xl bg-blue-50 text-blue-600 shrink-0 group-hover:scale-105 transition-transform">
-              <Activity className="w-5 h-5 animate-pulse" />
+            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 shrink-0 group-hover:scale-105 transition-transform">
+              <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
             </div>
             <div>
               <div className="flex items-center space-x-1.5">
-                <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">
+                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">
                   {isKa ? 'დღის ვიზიტები' : "Today's Visits"}
                 </p>
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
               </div>
-              <div className="flex items-baseline space-x-2">
-                <h3 className="text-lg font-black text-slate-900">
-                  {analyticsData.totalVisitorsToday} <span className="text-xs font-normal text-slate-400">{isKa ? 'ვიზიტორი' : 'visitors'}</span>
-                </h3>
-              </div>
-              <span className="text-[10px] text-emerald-600 font-semibold flex items-center space-x-1">
-                <span>🛡️ {isKa ? 'თქვენი ვიზიტები არ ითვლება' : 'Admin excluded'}</span>
-              </span>
+              <h3 className="text-lg font-black text-slate-900">
+                {analyticsData.totalVisitorsToday} <span className="text-xs font-normal text-slate-400">{isKa ? 'ვიზიტორი' : 'visitors'}</span>
+              </h3>
+              <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                🛡️ {isKa ? 'ადმინი გამორიცხულია' : 'Admin excluded'}
+              </p>
             </div>
           </div>
 
           {/* Top Country */}
           <div 
             onClick={() => setActiveTab('analytics')}
-            className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-indigo-400 transition-all"
+            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all"
           >
-            <div className="p-3 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
+            <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
               <Globe className="w-5 h-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                 {isKa ? 'ტოპ ქვეყანა' : 'Top Country'}
               </p>
               <h3 className="text-base font-black text-slate-900 truncate flex items-center space-x-1">
                 <span>{analyticsData.countryStatsToday[0]?.flag || '🇬🇪'}</span>
                 <span className="truncate">{analyticsData.countryStatsToday[0]?.country || 'Georgia'}</span>
               </h3>
+              <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">
+                {analyticsData.countryStatsToday[0]?.visitors || 1} hits today
+              </p>
             </div>
           </div>
 
-          {/* Products */}
-          <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5">
-            <div className="p-3 rounded-xl bg-amber-50 text-amber-600 shrink-0">
+          {/* Products & Inventory Health */}
+          <div 
+            onClick={() => setActiveTab('products')}
+            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-amber-400 hover:shadow-md transition-all group"
+          >
+            <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 shrink-0 group-hover:scale-105 transition-transform">
               <Package className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                 {isKa ? 'პროდუქტების კატალოგი' : 'Catalog Products'}
               </p>
               <h3 className="text-lg font-black text-slate-900">{totalProductsCount}</h3>
+              <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+                {products.filter(p => p.stock > 0).length} In Stock
+              </p>
             </div>
           </div>
         </div>
 
-        {/* Tab Navigation */}
-        <div className="flex border-b border-slate-200 space-x-2 overflow-x-auto pb-0.5">
+        {/* Tab Navigation - Modern Segmented Control */}
+        <div className="bg-slate-200/75 p-1.5 rounded-2xl flex items-center space-x-1.5 overflow-x-auto border border-slate-300/60 shadow-xs scrollbar-none">
           <button
             onClick={() => setActiveTab('analytics')}
-            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'analytics'
-                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
             }`}
           >
             <Activity className="w-4 h-4 text-blue-600" />
-            <span>{isKa ? `📊 ტრაფიკი & ქვეყნები (${analyticsData.totalVisitorsToday} დღეს)` : `📊 Traffic & Countries (${analyticsData.totalVisitorsToday} today)`}</span>
+            <span>{isKa ? 'ტრაფიკი & ანალიტიკა' : 'Traffic & Analytics'}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeTab === 'analytics' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {analyticsData.totalVisitorsToday}
+            </span>
           </button>
+
           <button
             onClick={() => setActiveTab('products')}
-            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer shrink-0 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'products'
-                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
             }`}
           >
-            📦 {isKa ? 'პროდუქტების კატალოგი' : 'Products Catalog'} ({products.length})
+            <Package className="w-4 h-4 text-blue-600" />
+            <span>{isKa ? 'პროდუქტების კატალოგი' : 'Products Catalog'}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeTab === 'products' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {products.length}
+            </span>
           </button>
+
           <button
             onClick={() => setActiveTab('billboards')}
-            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'billboards'
-                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
             }`}
           >
             <Layers className="w-4 h-4 text-blue-600" />
-            <span>{isKa ? `🖼️ ბილბორდები / ბანერები (${billboards.length})` : `🖼️ Billboards & Banners (${billboards.length})`}</span>
+            <span>{isKa ? 'ბილბორდები & ბანერები' : 'Billboards & Banners'}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeTab === 'billboards' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {billboards.length}
+            </span>
           </button>
+
           <button
             onClick={() => setActiveTab('theme')}
-            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer shrink-0 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'theme'
-                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
             }`}
           >
-            🎨 {isKa ? 'ვიზუალური თემა და სტილი' : 'Visual & Theme Customizer'}
+            <Sparkles className="w-4 h-4 text-blue-600" />
+            <span>{isKa ? 'ვიზუალური თემა' : 'Theme & Styles'}</span>
           </button>
+
           <button
             onClick={() => setActiveTab('orders')}
-            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer shrink-0 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'orders'
-                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
             }`}
           >
-            📋 {isKa ? 'შეკვეთების მართვა' : 'Orders Management'} ({orders.length})
+            <ShoppingBag className="w-4 h-4 text-blue-600" />
+            <span>{isKa ? 'შეკვეთები' : 'Orders'}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeTab === 'orders' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {orders.length}
+            </span>
           </button>
+
           <button
             onClick={() => setActiveTab('users')}
-            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'users'
-                ? 'border-blue-600 text-blue-600 bg-blue-50/40 rounded-t-xl'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
             }`}
           >
             <Users className="w-4 h-4 text-blue-600" />
-            <span>{isKa ? `👥 დარეგისტრირებული იუზერები (${registeredUsers.length})` : `👥 Registered Users (${registeredUsers.length})`}</span>
+            <span>{isKa ? 'იუზერები' : 'Users'}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeTab === 'users' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {registeredUsers.length}
+            </span>
           </button>
+
           <button
             onClick={() => setActiveTab('security')}
-            className={`px-5 py-3 text-xs font-bold border-b-2 transition-all cursor-pointer flex items-center space-x-1.5 shrink-0 ${
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'security'
-                ? 'border-amber-600 text-amber-600 bg-amber-50/50 rounded-t-xl'
-                : 'border-transparent text-slate-600 hover:text-slate-900'
+                ? 'bg-white text-amber-700 shadow-sm border border-amber-200/80'
+                : 'text-slate-600 hover:text-amber-800 hover:bg-white/50'
             }`}
           >
             <Lock className="w-4 h-4 text-amber-600" />
-            <span>{isKa ? '🔐 ადმინის უსაფრთხოება & პაროლი' : '🔐 Admin Security & Password'}</span>
+            <span>{isKa ? 'უსაფრთხოება' : 'Security'}</span>
           </button>
         </div>
 
@@ -1251,165 +1532,349 @@ export const AdminDashboard: React.FC = () => {
 
         {/* TAB 1: PRODUCTS CATALOG */}
         {activeTab === 'products' && (
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            {/* Action Bar */}
-            <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
-              <div className="flex items-center space-x-3 w-full sm:w-auto">
-                <input
-                  type="text"
-                  value={productSearch ?? ''}
-                  onChange={e => setProductSearch(e.target.value)}
-                  placeholder="Filter products by title..."
-                  className="px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden w-full sm:w-64"
-                />
-                <select
-                  value={categoryFilter ?? 'all'}
-                  onChange={e => setCategoryFilter(e.target.value)}
-                  className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
-                >
-                  <option value="all">All Categories</option>
-                  <option value="tech">Smart Tech</option>
-                  <option value="fitness">Fitness & Hydration</option>
-                  <option value="everyday">Everyday Carry</option>
-                  <option value="accessories">Accessories</option>
-                </select>
+          <div className="space-y-4">
+            {/* Inventory Overview Ribbon (Shopify Style) */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'სულ პროდუქტი' : 'Total Listed'}
+                  </span>
+                  <p className="text-lg font-black text-slate-900 leading-tight">{products.length}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Package className="w-4 h-4" />
+                </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
-                <button
-                  onClick={() => setIsSyncModalOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
-                  title={isKa ? 'გაშვებული საიტიდან მონაცემების გადმოტანა, ბექაფი და კოდში დაფიქსირება' : 'Sync with running live site, backup or commit to code'}
-                >
-                  <Database className="w-4 h-4 text-emerald-400" />
-                  <span>{isKa ? 'საიტის სინქრონიზაცია' : 'Live Sync'}</span>
-                </button>
-                <button
-                  onClick={() => setIsImportModalOpen(true)}
-                  className="px-3.5 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-700 hover:to-blue-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
-                  title="Import products from Payhip or CSV file"
-                >
-                  <UploadCloud className="w-4 h-4" />
-                  <span>{isKa ? 'Payhip & CSV იმპორტი' : 'Payhip & CSV Import'}</span>
-                </button>
-                <button
-                  onClick={handleOpenAddProduct}
-                  className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>{isKa ? 'პროდუქტის დამატება' : 'Add New Product'}</span>
-                </button>
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'მარაგშია' : 'In Stock'}
+                  </span>
+                  <p className="text-lg font-black text-emerald-600 leading-tight">
+                    {products.filter(p => p.stock > 0).length}
+                  </p>
+                </div>
+                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                  <CheckCircle2 className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'მწირი მარაგი (≤5)' : 'Low Stock (≤5)'}
+                  </span>
+                  <p className="text-lg font-black text-amber-600 leading-tight">
+                    {products.filter(p => p.stock > 0 && p.stock <= 5).length}
+                  </p>
+                </div>
+                <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'მარაგის ჯამი' : 'Inventory Value'}
+                  </span>
+                  <p className="text-lg font-black text-slate-900 leading-tight">
+                    {formatPrice(products.reduce((sum, p) => sum + (p.price * (p.stock || 0)), 0))}
+                  </p>
+                </div>
+                <div className="p-2 rounded-xl bg-indigo-50 text-indigo-600">
+                  <DollarSign className="w-4 h-4" />
+                </div>
               </div>
             </div>
 
-            {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="p-4">Image</th>
-                    <th className="p-4">Title & Details</th>
-                    <th className="p-4">Unique URL</th>
-                    <th className="p-4">Category</th>
-                    <th className="p-4">Price</th>
-                    <th className="p-4">Stock</th>
-                    <th className="p-4">Badge</th>
-                    <th className="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredProducts.map(prod => (
-                    <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-4">
-                        <img
-                          src={prod.image}
-                          alt={prod.title}
-                          referrerPolicy="no-referrer"
-                          onError={handleImageError}
-                          className="w-12 h-12 object-cover rounded-xl bg-slate-100"
-                        />
-                      </td>
-                      <td className="p-4">
-                        <div className="font-bold text-slate-900">{prod.title}</div>
-                        {prod.titleKa && (
-                          <div className="text-[11px] text-slate-500">{prod.titleKa}</div>
-                        )}
-                        <div className="text-[10px] text-slate-400 font-mono mt-0.5">
-                          ID: {prod.id}
-                        </div>
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-1.5">
-                          <code 
-                            className="text-[11px] bg-slate-100 px-2 py-1 rounded-md font-mono text-slate-700 select-all max-w-[200px] truncate block cursor-pointer hover:bg-slate-200 transition-colors"
-                            onClick={() => copyProductUrl(prod.id)}
-                            title={getProductUrl(prod.id)}
-                          >
-                            /product/{prod.id}/{prod.customSlug || generateProductSlug(prod.title)}
-                          </code>
-                          <button
-                            onClick={() => copyProductUrl(prod.id)}
-                            className="p-1 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer shrink-0"
-                            title="Copy full unique product URL"
-                          >
-                            <LinkIcon className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                      <td className="p-4 uppercase font-semibold text-[10px] text-blue-600">
-                        {prod.category}
-                      </td>
-                      <td className="p-4 font-black text-slate-900">
-                        {formatPrice(prod.price)}
-                        {prod.origPrice && (
-                          <span className="text-[10px] text-slate-400 line-through ml-1.5">
-                            {formatPrice(prod.origPrice)}
-                          </span>
-                        )}
-                      </td>
-                      <td className="p-4">
-                        <span className={`px-2 py-0.5 rounded-full font-bold text-[10px] ${
-                          prod.stock > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'
-                        }`}>
-                          {prod.stock} units
-                        </span>
-                      </td>
-                      <td className="p-4">
-                        {prod.badge ? (
-                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px]">
-                            {prod.badge}
-                          </span>
-                        ) : (
-                          <span className="text-slate-400 text-[10px]">None</span>
-                        )}
-                      </td>
-                      <td className="p-4 text-right space-x-1">
-                        <button
-                          onClick={() => navigateToProduct(prod.id)}
-                          className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
-                          title="View Live Product Page"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleOpenEditProduct(prod)}
-                          className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
-                          title="Edit Product"
-                        >
-                          <Edit3 className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => deleteProduct(prod.id)}
-                          className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
-                          title="Delete Product"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </td>
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+              {/* Action & Filter Bar */}
+              <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3.5">
+                <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                  {/* Search Input with Clear Button */}
+                  <div className="relative flex-1 min-w-[220px]">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={productSearch}
+                      onChange={e => setProductSearch(e.target.value)}
+                      placeholder={isKa ? 'ძიება: სახელი, ID, ბეიჯი...' : 'Search title, ID, badge...'}
+                      className="w-full pl-8.5 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                    />
+                    {productSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setProductSearch('')}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Category Filter */}
+                  <select
+                    value={categoryFilter}
+                    onChange={e => setCategoryFilter(e.target.value)}
+                    className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="all">{isKa ? 'ყველა კატეგორია' : 'All Categories'}</option>
+                    <option value="tech">Smart Tech</option>
+                    <option value="fitness">Fitness & Hydration</option>
+                    <option value="everyday">Everyday Carry</option>
+                    <option value="accessories">Accessories</option>
+                  </select>
+
+                  {/* Stock Status Filter */}
+                  <select
+                    value={stockFilter}
+                    onChange={e => setStockFilter(e.target.value as typeof stockFilter)}
+                    className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="all">{isKa ? 'სრული მარაგი' : 'All Stock Status'}</option>
+                    <option value="in_stock">{isKa ? 'მარაგშია (>0)' : 'In Stock (>0)'}</option>
+                    <option value="low_stock">{isKa ? 'მწირი მარაგი (≤5)' : 'Low Stock (≤5)'}</option>
+                    <option value="out_of_stock">{isKa ? 'გამოლეულია (0)' : 'Out of Stock (0)'}</option>
+                  </select>
+
+                  {/* Sort Order */}
+                  <select
+                    value={productSort}
+                    onChange={e => setProductSort(e.target.value as typeof productSort)}
+                    className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="default">{isKa ? 'დალაგება: სტანდარტული' : 'Sort: Default'}</option>
+                    <option value="price_asc">{isKa ? 'ფასი: ზრდადი' : 'Price: Low to High'}</option>
+                    <option value="price_desc">{isKa ? 'ფასი: კლებადი' : 'Price: High to Low'}</option>
+                    <option value="stock_desc">{isKa ? 'მარაგი: მაღალი' : 'Stock: High to Low'}</option>
+                    <option value="stock_asc">{isKa ? 'მარაგი: დაბალი' : 'Stock: Low to High'}</option>
+                    <option value="title_asc">{isKa ? 'სახელი: A-Z' : 'Title: A to Z'}</option>
+                  </select>
+                </div>
+
+                {/* Right Action Buttons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => setIsImportModalOpen(true)}
+                    className="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    title="Import products from Payhip or CSV file"
+                  >
+                    <UploadCloud className="w-3.5 h-3.5" />
+                    <span>{isKa ? 'Payhip / CSV' : 'Payhip / CSV'}</span>
+                  </button>
+
+                  <button
+                    onClick={handleOpenAddProduct}
+                    className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{isKa ? 'ახალი პროდუქტი' : 'Add Product'}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Products Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                    <tr>
+                      <th className="p-4">{isKa ? 'სურათი' : 'Image'}</th>
+                      <th className="p-4">{isKa ? 'დასახელება & ID' : 'Title & Identifier'}</th>
+                      <th className="p-4">{isKa ? 'უნიკალური ბმული' : 'Direct Link'}</th>
+                      <th className="p-4">{isKa ? 'კატეგორია' : 'Category'}</th>
+                      <th className="p-4">{isKa ? 'ფასი' : 'Price'}</th>
+                      <th className="p-4">{isKa ? 'მარაგი' : 'Stock'}</th>
+                      <th className="p-4">{isKa ? 'ბეიჯი' : 'Badge'}</th>
+                      <th className="p-4 text-right">{isKa ? 'მოქმედებები' : 'Actions'}</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredProducts.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-12 text-center text-slate-400">
+                          <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          <p className="font-semibold text-slate-700">
+                            {isKa ? 'პროდუქტი ვერ მოიძებნა' : 'No products match your criteria'}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {isKa ? 'სცადეთ შეცვალოთ ფილტრი ან საძიებო სიტყვა' : 'Try clearing search or adjusting your filters'}
+                          </p>
+                          {(productSearch || categoryFilter !== 'all' || stockFilter !== 'all') && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setProductSearch('');
+                                setCategoryFilter('all');
+                                setStockFilter('all');
+                                setProductSort('default');
+                              }}
+                              className="mt-3 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 cursor-pointer"
+                            >
+                              {isKa ? 'ფილტრების გასუფთავება' : 'Reset All Filters'}
+                            </button>
+                          )}
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredProducts.map(prod => (
+                        <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-4">
+                            <div className="relative group/thumb w-12 h-12 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                              <img
+                                src={prod.image}
+                                alt={prod.title}
+                                referrerPolicy="no-referrer"
+                                onError={handleImageError}
+                                className="w-full h-full object-cover transition-transform group-hover/thumb:scale-110"
+                              />
+                            </div>
+                          </td>
+                          <td className="p-4 max-w-xs">
+                            <div className="font-bold text-slate-900 line-clamp-1">{prod.title}</div>
+                            {prod.titleKa && (
+                              <div className="text-[11px] text-slate-500 line-clamp-1">{prod.titleKa}</div>
+                            )}
+                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                              ID: {prod.id}
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center space-x-1.5">
+                              <code 
+                                className="text-[11px] bg-slate-100 px-2 py-1 rounded-md font-mono text-slate-700 select-all max-w-[180px] truncate block cursor-pointer hover:bg-slate-200 transition-colors"
+                                onClick={() => copyProductUrl(prod.id)}
+                                title={getProductUrl(prod.id)}
+                              >
+                                /product/{prod.id}/{prod.customSlug || generateProductSlug(prod.title)}
+                              </code>
+                              <button
+                                onClick={() => copyProductUrl(prod.id)}
+                                className="p-1 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer shrink-0"
+                                title="Copy full unique product URL"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-4 uppercase font-semibold text-[10px] text-blue-600">
+                            <span className="px-2 py-1 rounded-md bg-blue-50 border border-blue-100">
+                              {prod.category}
+                            </span>
+                          </td>
+                          <td className="p-4 font-black text-slate-900">
+                            {formatPrice(prod.price)}
+                            {prod.origPrice && (
+                              <span className="text-[10px] text-slate-400 line-through ml-1.5 font-normal">
+                                {formatPrice(prod.origPrice)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <div className="flex items-center space-x-1.5">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newStock = Math.max(0, prod.stock - 1);
+                                  updateProduct({ ...prod, stock: newStock });
+                                }}
+                                className="w-5 h-5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
+                                title={isKa ? 'მარაგის შემცირება (-1)' : 'Decrease stock (-1)'}
+                              >
+                                -
+                              </button>
+                              <span className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full font-bold text-[10px] border ${
+                                prod.stock > 5
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : prod.stock > 0
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-red-50 text-red-700 border-red-200'
+                              }`}>
+                                {prod.stock <= 5 && prod.stock > 0 && <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />}
+                                <span>{prod.stock} {isKa ? 'ცალი' : 'units'}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const newStock = prod.stock + 1;
+                                  updateProduct({ ...prod, stock: newStock });
+                                }}
+                                className="w-5 h-5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
+                                title={isKa ? 'მარაგის გაზრდა (+1)' : 'Increase stock (+1)'}
+                              >
+                                +
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-4">
+                            {prod.badge ? (
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200">
+                                {prod.badge}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 text-[10px]">—</span>
+                            )}
+                          </td>
+                          <td className="p-4 text-right space-x-1">
+                            <button
+                              onClick={() => navigateToProduct(prod.id)}
+                              className="p-1.5 rounded-lg text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer"
+                              title={isKa ? 'მაღაზიის გვერდის ნახვა' : 'View Live Product Page'}
+                            >
+                              <ExternalLink className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                setStudioModal({
+                                  isOpen: true,
+                                  imageSrc: prod.image,
+                                  imageIndex: 0,
+                                });
+                              }}
+                              className="p-1.5 rounded-lg text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                              title={isKa ? 'სურათის სტუდიური ოპტიმიზაცია' : 'Studio Image Optimizer'}
+                            >
+                              <Sparkles className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => {
+                                const duplicated: Omit<Product, 'id'> = {
+                                  ...prod,
+                                  title: `${prod.title} (Copy)`,
+                                  titleKa: prod.titleKa ? `${prod.titleKa} (ასლი)` : undefined,
+                                  customSlug: `${prod.customSlug || generateProductSlug(prod.title)}-copy-${Math.floor(100 + Math.random() * 900)}`,
+                                };
+                                addProduct(duplicated);
+                              }}
+                              className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                              title={isKa ? 'პროდუქტის დუბლირება (ასლი)' : 'Duplicate Product'}
+                            >
+                              <Copy className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleOpenEditProduct(prod)}
+                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+                              title={isKa ? 'რედაქტირება' : 'Edit Product Details & Images'}
+                            >
+                              <Edit3 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => deleteProduct(prod.id)}
+                              className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
+                              title={isKa ? 'წაშლა' : 'Delete Product'}
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -1614,11 +2079,24 @@ export const AdminDashboard: React.FC = () => {
 
                       <div className="flex items-center space-x-2">
                         <button
+                          onClick={() => {
+                            setStudioModal({
+                              isOpen: true,
+                              imageSrc: slide.image,
+                              imageIndex: 0,
+                            });
+                          }}
+                          className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 transition-colors cursor-pointer"
+                          title={isKa ? 'ბილბორდის სურათის სტუდიური ოპტიმიზაცია' : 'Studio Image Optimizer'}
+                        >
+                          <Sparkles className="w-4 h-4" />
+                        </button>
+                        <button
                           onClick={() => handleOpenEditBillboard(slide)}
                           className="px-3.5 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                         >
                           <Edit3 className="w-3.5 h-3.5" />
-                          <span>რედაქტირება / სურათის შეცვლა</span>
+                          <span>{isKa ? 'რედაქტირება' : 'Edit Slide'}</span>
                         </button>
 
                         <button
@@ -1888,140 +2366,246 @@ export const AdminDashboard: React.FC = () => {
 
         {/* TAB 3: ORDERS MANAGEMENT */}
         {activeTab === 'orders' && (
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <div className="p-4 sm:p-6 border-b border-slate-100 flex items-center justify-between">
-              <div>
-                <h3 className="text-base font-bold text-slate-900">
-                  Customer Orders Ledger
-                </h3>
-                <p className="text-xs text-slate-500">
-                  Real-time orders placed across all storefront sessions.
-                </p>
+          <div className="space-y-4">
+            {/* Orders KPI Ribbon */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'სულ შეკვეთა' : 'Total Orders'}
+                  </span>
+                  <p className="text-lg font-black text-slate-900 leading-tight">{orders.length}</p>
+                </div>
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <ShoppingBag className="w-4 h-4" />
+                </div>
               </div>
-              {orders.length > 0 && (
-                <button
-                  onClick={clearOrderHistory}
-                  className="px-3.5 py-1.5 rounded-xl text-red-600 hover:bg-red-50 font-semibold text-xs transition-colors"
-                >
-                  Clear Order History
-                </button>
-              )}
+
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'მუშავდება' : 'Processing'}
+                  </span>
+                  <p className="text-lg font-black text-amber-600 leading-tight">
+                    {orders.filter(o => o.status === 'Processing').length}
+                  </p>
+                </div>
+                <div className="p-2 rounded-xl bg-amber-50 text-amber-600">
+                  <Clock className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'გაგზავნილი / გზაში' : 'Shipped'}
+                  </span>
+                  <p className="text-lg font-black text-blue-600 leading-tight">
+                    {orders.filter(o => o.status === 'Shipped').length}
+                  </p>
+                </div>
+                <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
+                  <Truck className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                    {isKa ? 'შემოსავალი' : 'Gross Sales'}
+                  </span>
+                  <p className="text-lg font-black text-emerald-600 leading-tight">
+                    {formatPrice(orders.filter(o => o.status !== 'Cancelled').reduce((sum, o) => sum + (o.total || 0), 0))}
+                  </p>
+                </div>
+                <div className="p-2 rounded-xl bg-emerald-50 text-emerald-600">
+                  <DollarSign className="w-4 h-4" />
+                </div>
+              </div>
             </div>
 
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs">
-                <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-                  <tr>
-                    <th className="p-4">Order ID</th>
-                    <th className="p-4">Customer</th>
-                    <th className="p-4">Date</th>
-                    <th className="p-4">Items</th>
-                    <th className="p-4">Total</th>
-                    <th className="p-4">Status</th>
-                    <th className="p-4">{isKa ? 'თრექინგი / გადამზიდი' : 'Tracking & Courier'}</th>
-                    <th className="p-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {orders.length === 0 ? (
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+              {/* Header & Filter Controls */}
+              <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3.5">
+                <div className="flex flex-wrap items-center gap-2.5 flex-1">
+                  {/* Search orders */}
+                  <div className="relative flex-1 min-w-[220px]">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={orderSearch}
+                      onChange={e => setOrderSearch(e.target.value)}
+                      placeholder={isKa ? 'ძიება: ID, მომხმარებელი, იმეილი, ქალაქი...' : 'Search ID, customer, email, city...'}
+                      className="w-full pl-8.5 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                    />
+                    {orderSearch && (
+                      <button
+                        type="button"
+                        onClick={() => setOrderSearch('')}
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        title="Clear search"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Status filter */}
+                  <select
+                    value={orderStatusFilter}
+                    onChange={e => setOrderStatusFilter(e.target.value as typeof orderStatusFilter)}
+                    className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
+                  >
+                    <option value="all">{isKa ? 'ყველა სტატუსი' : 'All Statuses'}</option>
+                    <option value="Processing">Processing</option>
+                    <option value="Shipped">Shipped</option>
+                    <option value="Delivered">Delivered</option>
+                    <option value="Cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                {orders.length > 0 && (
+                  <button
+                    onClick={clearOrderHistory}
+                    className="px-3 py-2 rounded-xl text-red-600 hover:bg-red-50 border border-transparent hover:border-red-100 font-semibold text-xs transition-colors shrink-0 cursor-pointer"
+                  >
+                    {isKa ? 'ისტორიის გასუფთავება' : 'Clear Order History'}
+                  </button>
+                )}
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
                     <tr>
-                      <td colSpan={8} className="p-8 text-center text-slate-400">
-                        {isKa ? 'შეკვეთები ჯერ არ არის დაფიქსირებული' : 'No orders recorded yet. Place an order in the checkout to see it appear here!'}
-                      </td>
+                      <th className="p-4">{isKa ? 'შეკვეთის ID' : 'Order ID'}</th>
+                      <th className="p-4">{isKa ? 'მომხმარებელი' : 'Customer'}</th>
+                      <th className="p-4">{isKa ? 'თარიღი' : 'Date'}</th>
+                      <th className="p-4">{isKa ? 'პროდუქტები' : 'Items'}</th>
+                      <th className="p-4">{isKa ? 'ჯამი' : 'Total'}</th>
+                      <th className="p-4">{isKa ? 'სტატუსი' : 'Status'}</th>
+                      <th className="p-4">{isKa ? 'თრექინგი / გადამზიდი' : 'Tracking & Courier'}</th>
+                      <th className="p-4 text-right">{isKa ? 'მოქმედებები' : 'Actions'}</th>
                     </tr>
-                  ) : (
-                    orders.map(order => (
-                      <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                        <td className="p-4 font-mono font-bold text-blue-700">
-                          <div>{order.id}</div>
-                          {order.paypalTransactionId && (
-                            <div className="text-[10px] text-emerald-600 font-normal mt-0.5">
-                              PP: {order.paypalTransactionId}
-                            </div>
-                          )}
-                        </td>
-                        <td className="p-4">
-                          <div className="font-bold text-slate-900">{order.customerName}</div>
-                          <div className="text-[11px] text-slate-400">{order.email}</div>
-                          <div className="text-[10px] text-slate-500">{order.city}, {order.country}</div>
-                        </td>
-                        <td className="p-4 text-slate-500">
-                          {order.date}
-                        </td>
-                        <td className="p-4">
-                          <div className="space-y-1 max-w-xs">
-                            {order.items.map((it, idx) => (
-                              <div key={idx} className="text-[11px] text-slate-700 truncate">
-                                • {it.quantity}x {it.title}
-                              </div>
-                            ))}
-                          </div>
-                        </td>
-                        <td className="p-4 font-black text-slate-900">
-                          {formatPrice(order.total)}
-                        </td>
-                        <td className="p-4">
-                          <select
-                            value={order.status}
-                            onChange={e => updateOrderStatus(order.id, e.target.value as Order['status'])}
-                            className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer border ${
-                              order.status === 'Delivered'
-                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                : order.status === 'Shipped'
-                                ? 'bg-blue-50 text-blue-700 border-blue-200'
-                                : order.status === 'Cancelled'
-                                ? 'bg-red-50 text-red-700 border-red-200'
-                                : 'bg-amber-50 text-amber-700 border-amber-200'
-                            }`}
-                          >
-                            <option value="Processing">Processing</option>
-                            <option value="Shipped">Shipped</option>
-                            <option value="Delivered">Delivered</option>
-                            <option value="Cancelled">Cancelled</option>
-                          </select>
-                        </td>
-                        <td className="p-4">
-                          <div className="flex flex-col space-y-1">
-                            <div className="flex items-center space-x-1.5">
-                              <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                                {order.trackingNumber || 'Pending'}
-                              </span>
-                            </div>
-                            {order.carrier && (
-                              <span className="text-[10px] font-semibold text-indigo-700 flex items-center space-x-1">
-                                <Truck className="w-3 h-3" />
-                                <span>{order.carrier}</span>
-                              </span>
-                            )}
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredOrders.length === 0 ? (
+                      <tr>
+                        <td colSpan={8} className="p-12 text-center text-slate-400">
+                          <ShoppingBag className="w-8 h-8 mx-auto mb-2 text-slate-300" />
+                          <p className="font-semibold text-slate-700">
+                            {orders.length === 0 
+                              ? (isKa ? 'შეკვეთები ჯერ არ არის დაფიქსირებული' : 'No orders recorded yet')
+                              : (isKa ? 'შეკვეთები ვერ მოიძებნა მითითებული ფილტრით' : 'No orders match your search criteria')}
+                          </p>
+                          {(orderSearch || orderStatusFilter !== 'all') && (
                             <button
                               type="button"
-                              onClick={() => openTrackingModal(order)}
-                              className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 pt-0.5 cursor-pointer"
+                              onClick={() => {
+                                setOrderSearch('');
+                                setOrderStatusFilter('all');
+                              }}
+                              className="mt-3 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 cursor-pointer"
                             >
-                              <Edit3 className="w-3 h-3" />
-                              <span>{isKa ? 'თრექინგის ჩასმა/შეცვლა' : 'Edit / Set Tracking'}</span>
+                              {isKa ? 'ფილტრის გასუფთავება' : 'Reset Filters'}
                             </button>
-                          </div>
-                        </td>
-                        <td className="p-4 text-right">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              if (window.confirm(`Delete order ${order.id}?`)) {
-                                deleteOrder(order.id);
-                              }
-                            }}
-                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                            title="Delete order"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                          )}
                         </td>
                       </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
+                    ) : (
+                      filteredOrders.map(order => (
+                        <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
+                          <td className="p-4 font-mono font-bold text-blue-700">
+                            <div>{order.id}</div>
+                            {order.paypalTransactionId && (
+                              <div className="text-[10px] text-emerald-600 font-normal mt-0.5">
+                                PP: {order.paypalTransactionId}
+                              </div>
+                            )}
+                          </td>
+                          <td className="p-4">
+                            <div className="font-bold text-slate-900">{order.customerName}</div>
+                            <div className="text-[11px] text-slate-500">{order.email}</div>
+                            <div className="text-[10px] text-slate-400">{order.city}, {order.country}</div>
+                          </td>
+                          <td className="p-4 text-slate-500 whitespace-nowrap">
+                            {order.date}
+                          </td>
+                          <td className="p-4">
+                            <div className="space-y-1 max-w-xs">
+                              {order.items.map((it, idx) => (
+                                <div key={idx} className="text-[11px] text-slate-700 truncate">
+                                  • <span className="font-semibold">{it.quantity}x</span> {it.title}
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="p-4 font-black text-slate-900 whitespace-nowrap">
+                            {formatPrice(order.total)}
+                          </td>
+                          <td className="p-4">
+                            <select
+                              value={order.status}
+                              onChange={e => updateOrderStatus(order.id, e.target.value as Order['status'])}
+                              className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer border ${
+                                order.status === 'Delivered'
+                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  : order.status === 'Shipped'
+                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  : order.status === 'Cancelled'
+                                  ? 'bg-red-50 text-red-700 border-red-200'
+                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                              }`}
+                            >
+                              <option value="Processing">Processing</option>
+                              <option value="Shipped">Shipped</option>
+                              <option value="Delivered">Delivered</option>
+                              <option value="Cancelled">Cancelled</option>
+                            </select>
+                          </td>
+                          <td className="p-4">
+                            <div className="flex flex-col space-y-1">
+                              <div className="flex items-center space-x-1.5">
+                                <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                  {order.trackingNumber || 'Pending'}
+                                </span>
+                              </div>
+                              {order.carrier && (
+                                <span className="text-[10px] font-semibold text-indigo-700 flex items-center space-x-1">
+                                  <Truck className="w-3 h-3" />
+                                  <span>{order.carrier}</span>
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openTrackingModal(order)}
+                                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 pt-0.5 cursor-pointer"
+                              >
+                                <Edit3 className="w-3 h-3" />
+                                <span>{isKa ? 'თრექინგის შეცვლა' : 'Edit Tracking'}</span>
+                              </button>
+                            </div>
+                          </td>
+                          <td className="p-4 text-right">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (window.confirm(`Delete order ${order.id}?`)) {
+                                  deleteOrder(order.id);
+                                }
+                              }}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Delete order"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         )}
@@ -2123,10 +2707,42 @@ export const AdminDashboard: React.FC = () => {
                   )}
                 </div>
 
-                <div className="flex items-center space-x-2 w-full sm:w-auto justify-end">
+                <div className="flex items-center space-x-3 w-full sm:w-auto justify-end">
                   <span className="text-xs text-slate-500 font-medium">
                     {isKa ? `ნაჩვენებია: ${registeredUsers.length} მომხმარებელი` : `Showing: ${registeredUsers.length} users`}
                   </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const headers = ['Name', 'Email', 'Role', 'City', 'Country', 'Address', 'Phone', 'Created At'];
+                      const rows = registeredUsers.map(u => [
+                        `"${(u.name || '').replace(/"/g, '""')}"`,
+                        `"${(u.email || '').replace(/"/g, '""')}"`,
+                        `"${(u.role || 'customer').replace(/"/g, '""')}"`,
+                        `"${(u.city || '').replace(/"/g, '""')}"`,
+                        `"${(u.country || '').replace(/"/g, '""')}"`,
+                        `"${(u.address || '').replace(/"/g, '""')}"`,
+                        `"${(u.phone || '').replace(/"/g, '""')}"`,
+                        `"${u.createdAt || ''}"`,
+                      ]);
+                      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+                      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+                      const url = URL.createObjectURL(blob);
+                      const a = document.createElement('a');
+                      a.href = url;
+                      a.download = `dbuy_users_${new Date().toISOString().slice(0, 10)}.csv`;
+                      document.body.appendChild(a);
+                      a.click();
+                      document.body.removeChild(a);
+                      URL.revokeObjectURL(url);
+                      addToast(isKa ? 'მომხმარებელთა სია ექსპორტირებულია CSV ფაილში!' : 'Customer list exported to CSV!', 'success');
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    title={isKa ? 'მომხმარებელთა სიის გადმოწერა (CSV)' : 'Export Users List to CSV'}
+                  >
+                    <Download className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{isKa ? 'CSV ექსპორტი' : 'Export CSV'}</span>
+                  </button>
                 </div>
               </div>
 
@@ -2498,7 +3114,7 @@ export const AdminDashboard: React.FC = () => {
                     onClick={e => (e.target as HTMLInputElement).select()}
                     onChange={e => setOldPasswordInput(e.target.value)}
                     placeholder={isKa ? 'შეიყვანეთ მიმდინარე პაროლი...' : 'Enter current password...'}
-                    className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                    className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                   />
                 </div>
 
@@ -2515,7 +3131,7 @@ export const AdminDashboard: React.FC = () => {
                       onClick={e => (e.target as HTMLInputElement).select()}
                       onChange={e => setNewPasswordInput(e.target.value)}
                       placeholder={isKa ? 'ახალი პაროლი...' : 'New password...'}
-                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                     />
                   </div>
                   <div>
@@ -2530,7 +3146,7 @@ export const AdminDashboard: React.FC = () => {
                       onClick={e => (e.target as HTMLInputElement).select()}
                       onChange={e => setConfirmPasswordInput(e.target.value)}
                       placeholder={isKa ? 'გაიმეორეთ ახალი პაროლი...' : 'Confirm new password...'}
-                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden"
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                     />
                   </div>
                 </div>
@@ -3240,14 +3856,34 @@ export const AdminDashboard: React.FC = () => {
                       className="hidden"
                     />
 
+                    {/* Auto Studio Optimize on Upload Checkbox */}
+                    <div className="flex items-center justify-between pb-1">
+                      <label className="flex items-center space-x-2 text-[11px] font-semibold text-slate-700 select-none cursor-pointer bg-slate-50 border border-slate-200 hover:border-slate-300 px-3 py-1.5 rounded-xl transition-all">
+                        <input
+                          type="checkbox"
+                          checked={autoStudioOptimizeOnUpload}
+                          onChange={e => setAutoStudioOptimizeOnUpload(e.target.checked)}
+                          className="rounded text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                        />
+                        <span className="flex items-center space-x-1.5">
+                          <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+                          <span>
+                            {isKa
+                              ? 'ატვირთვისას ავტომატური სტუდიური ოპტიმიზაცია (ფონი, ცენტრირება, მკაფიოობა)'
+                              : 'Auto studio-optimize on upload (background, centering, clarity)'}
+                          </span>
+                        </span>
+                      </label>
+                    </div>
+
                     {/* Drag and drop dropzone */}
                     <div
                       onDragOver={handleDragOver}
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
                       onClick={() => {
-                        if (prodForm.images.length >= 5) {
-                          addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed', 'warning');
+                        if (prodForm.images.length >= 10) {
+                          addToast(isKa ? 'მაქსიმუმ 10 სურათია დაშვებული' : 'Maximum 10 images allowed', 'warning');
                         } else {
                           fileInputRef.current?.click();
                         }
@@ -3255,7 +3891,7 @@ export const AdminDashboard: React.FC = () => {
                       className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
                         isDragging
                           ? 'border-blue-500 bg-blue-50/80 scale-[1.01]'
-                          : prodForm.images.length >= 5
+                          : prodForm.images.length >= 10
                           ? 'border-slate-200 bg-slate-100 opacity-80 cursor-not-allowed'
                           : 'border-slate-300 bg-white hover:border-blue-500 hover:bg-blue-50/30'
                       }`}
@@ -3265,12 +3901,12 @@ export const AdminDashboard: React.FC = () => {
                           <UploadCloud className="w-4 h-4" />
                         </div>
                         <p className="text-xs font-bold text-slate-800">
-                          {prodForm.images.length >= 5
-                            ? (isKa ? 'მიღწეულია 5 სურათის ლიმიტი' : '5 images limit reached')
-                            : (isKa ? 'დააჭირეთ ან გადმოათრიეთ სურათები (1-5 ფაილი)' : 'Click to select or drag & drop images (1-5 files)')}
+                          {prodForm.images.length >= 10
+                            ? (isKa ? 'მიღწეულია 10 სურათის ლიმიტი' : '10 images limit reached')
+                            : (isKa ? 'დააჭირეთ ან გადმოათრიეთ სურათები (1-10 ფაილი)' : 'Click to select or drag & drop images (1-10 files)')}
                         </p>
                         <p className="text-[10px] text-slate-400">
-                          PNG, JPG, WEBP, GIF (ავტომატური ოპტიმიზაციით)
+                          PNG, JPG, WEBP, GIF (ავტომატური სტუდიური გაუმჯობესებითა და ფონის დამუშავებით)
                         </p>
                       </div>
                     </div>
@@ -3289,13 +3925,13 @@ export const AdminDashboard: React.FC = () => {
                           }
                         }}
                         placeholder=""
-                        disabled={prodForm.images.length >= 5}
+                        disabled={prodForm.images.length >= 10}
                         className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-hidden disabled:bg-slate-100"
                       />
                       <button
                         type="button"
                         onClick={handleAddImageUrl}
-                        disabled={prodForm.images.length >= 5 || !newImageUrl.trim()}
+                        disabled={prodForm.images.length >= 10 || !newImageUrl.trim()}
                         className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs flex items-center space-x-1 transition-all cursor-pointer shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -3314,7 +3950,7 @@ export const AdminDashboard: React.FC = () => {
                             key={idx}
                             type="button"
                             onClick={() => appendProdImage(preset.url, preset.label)}
-                            disabled={prodForm.images.length >= 5}
+                            disabled={prodForm.images.length >= 10}
                             className="shrink-0 p-1 rounded-xl border border-slate-200 bg-white hover:border-blue-500 transition-all disabled:opacity-40 cursor-pointer"
                             title={preset.label}
                           >
@@ -3330,12 +3966,29 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 )}
 
-                {/* 5-Images Gallery Grid Preview */}
+                {/* 10-Images Gallery Grid Preview with Studio Optimization Controls */}
                 {prodForm.images.length > 0 && (
                   <div className="pt-2 border-t border-slate-200/60 space-y-2">
-                    <span className="text-[11px] font-bold text-slate-700 block">
-                      {isKa ? 'დამატებული სურათები (გადაადგილება / მთავარად არჩევა):' : 'Added Gallery Images (Reorder / Set Cover):'}
-                    </span>
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-slate-700 block">
+                        {isKa ? `დამატებული სურათები (${prodForm.images.length}/10):` : `Added Gallery Images (${prodForm.images.length}/10):`}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={handleAutoOptimizeAllImages}
+                        disabled={isBulkOptimizing || prodForm.images.length === 0}
+                        className="text-[11px] font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 px-2.5 py-1 rounded-xl flex items-center space-x-1.5 transition-all disabled:opacity-50 cursor-pointer shadow-2xs"
+                        title={isKa ? 'ყველა სურათის სტუდიური ოპტიმიზაცია' : 'Studio optimize all images'}
+                      >
+                        {isBulkOptimizing ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-600" />
+                        ) : (
+                          <Wand2 className="w-3.5 h-3.5 text-amber-600" />
+                        )}
+                        <span>{isBulkOptimizing ? (isKa ? 'ოპტიმიზაცია...' : 'Optimizing...') : (isKa ? '⚡ ყველა სურათის ოპტიმიზაცია' : '⚡ Auto-Optimize All')}</span>
+                      </button>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
                       {prodForm.images.map((imgUrl, idx) => (
                         <div
@@ -3346,24 +3999,13 @@ export const AdminDashboard: React.FC = () => {
                               : 'border-slate-200 hover:border-slate-300'
                           }`}
                         >
-                          {/* Image thumbnail with loading overlay */}
-                          <div className="relative w-14 h-14 shrink-0">
-                            <img
-                              src={imgUrl}
-                              alt={`Product img ${idx + 1}`}
-                              referrerPolicy="no-referrer"
-                              onError={handleImageError}
-                              className={`w-14 h-14 object-cover rounded-xl border border-slate-100 transition-all ${
-                                enhancingImageIndex === idx ? 'opacity-40 blur-[1px]' : ''
-                              }`}
-                            />
-                            {enhancingImageIndex === idx && (
-                              <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-blue-900/20">
-                                <Loader2 className="w-5 h-5 text-blue-600 animate-spin" />
-                              </div>
-                            )}
-                          </div>
-
+                          <img
+                            src={imgUrl}
+                            alt={`Product img ${idx + 1}`}
+                            referrerPolicy="no-referrer"
+                            onError={handleImageError}
+                            className="w-14 h-14 object-cover rounded-xl border border-slate-100 shrink-0 bg-slate-50"
+                          />
                           <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
                             <div className="flex items-center justify-between">
                               <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
@@ -3373,15 +4015,25 @@ export const AdminDashboard: React.FC = () => {
                               }`}>
                                 {idx === 0 ? (isKa ? '⭐ მთავარი' : '⭐ Cover') : `#${idx + 1}`}
                               </span>
-                              <button
-                                type="button"
-                                onClick={() => removeProdImage(idx)}
-                                disabled={enhancingImageIndex !== null}
-                                className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer disabled:opacity-40"
-                                title={isKa ? 'სურათის წაშლა' : 'Delete image'}
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
+                              
+                              <div className="flex items-center space-x-1">
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenStudioForImage(idx)}
+                                  className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                  title={isKa ? 'სტუდიური ოპტიმიზაცია (ფონი, ხარისხი, ჩრდილი)' : 'Studio optimize (background, clarity, shadow)'}
+                                >
+                                  <Wand2 className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => removeProdImage(idx)}
+                                  className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                                  title={isKa ? 'სურათის წაშლა' : 'Delete image'}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             </div>
 
                             <div className="flex items-center space-x-1 mt-1.5">
@@ -3389,40 +4041,24 @@ export const AdminDashboard: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => setPrimaryProdImage(idx)}
-                                  disabled={enhancingImageIndex !== null}
-                                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer disabled:opacity-40"
+                                  className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
                                 >
                                   {isKa ? 'მთავარად' : 'Set Cover'}
                                 </button>
                               )}
-
-                              {/* AI Enhance Button */}
                               <button
                                 type="button"
-                                onClick={() => handleEnhanceImage(imgUrl, idx)}
-                                disabled={enhancingImageIndex !== null}
-                                title={isKa ? 'AI-ით სურათის გაუმჯობესება — სუფთა ფონი + ხარისხის ამაღლება' : 'AI Enhance — clean background + quality boost'}
-                                className={`flex items-center space-x-0.5 text-[10px] font-bold px-1.5 py-0.5 rounded-md transition-all cursor-pointer ${
-                                  enhancingImageIndex === idx
-                                    ? 'bg-blue-100 text-blue-500 cursor-wait'
-                                    : 'bg-gradient-to-r from-violet-100 to-blue-100 text-violet-700 hover:from-violet-200 hover:to-blue-200 disabled:opacity-40'
-                                }`}
+                                onClick={() => handleOpenStudioForImage(idx)}
+                                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center space-x-0.5 cursor-pointer ml-1"
                               >
-                                {enhancingImageIndex === idx ? (
-                                  <Loader2 className="w-2.5 h-2.5 animate-spin" />
-                                ) : (
-                                  <Wand2 className="w-2.5 h-2.5" />
-                                )}
-                                <span>{enhancingImageIndex === idx ? (isKa ? '...' : '...') : (isKa ? 'AI ✨' : 'AI ✨')}</span>
+                                <span>{isKa ? '✨ სტუდია' : '✨ Studio'}</span>
                               </button>
-
                               <div className="ml-auto flex items-center space-x-0.5">
                                 {idx > 0 && (
                                   <button
                                     type="button"
                                     onClick={() => moveProdImage(idx, 'left')}
-                                    disabled={enhancingImageIndex !== null}
-                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-40"
+                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
                                     title="Move left"
                                   >
                                     <ArrowLeft className="w-3 h-3" />
@@ -3432,8 +4068,7 @@ export const AdminDashboard: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => moveProdImage(idx, 'right')}
-                                    disabled={enhancingImageIndex !== null}
-                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100 disabled:opacity-40"
+                                    className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
                                     title="Move right"
                                   >
                                     <ArrowRight className="w-3 h-3" />
@@ -3444,7 +4079,6 @@ export const AdminDashboard: React.FC = () => {
                           </div>
                         </div>
                       ))}
-
                     </div>
                   </div>
                 )}
@@ -3723,6 +4357,20 @@ export const AdminDashboard: React.FC = () => {
         isOpen={isSyncModalOpen}
         onClose={() => setIsSyncModalOpen(false)}
         isKa={isKa}
+      />
+
+      {/* AI Studio Image Enhancement & Isolated Background Studio Modal */}
+      <ImageStudioModal
+        isOpen={studioModal.isOpen}
+        imageSrc={studioModal.imageSrc}
+        imageIndex={studioModal.imageIndex}
+        productTitle={prodForm.title || prodForm.titleKa || 'Product'}
+        isKa={isKa}
+        onClose={() => setStudioModal(prev => ({ ...prev, isOpen: false }))}
+        onApply={(optimizedUrl, targetIdx) => {
+          handleApplyStudioOptimization(optimizedUrl, targetIdx);
+          setStudioModal(prev => ({ ...prev, isOpen: false }));
+        }}
       />
 
       {/* Order Tracking Management Modal */}

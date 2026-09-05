@@ -707,30 +707,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return initialProducts;
   });
 
-  /** Strip base64 data URL images before persisting to localStorage/server source sync.
-   *  React state always keeps the real base64 for display. Only the serialised
-   *  copies (localStorage & initialProducts.ts) use CDN placeholder URLs to avoid
-   *  the 5 MB localStorage quota and Vite source-file size limits. */
-  const BASE64_PLACEHOLDER_URL = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
-  const stripBase64 = (products: Product[]): Product[] =>
-    products.map(p => ({
-      ...p,
-      image: p.image?.startsWith('data:') ? BASE64_PLACEHOLDER_URL : p.image,
-      images: p.images?.map(img => img?.startsWith('data:') ? BASE64_PLACEHOLDER_URL : img),
-    }));
+  // Ref to prevent background sync from overwriting newly added/edited products
+  const lastLocalProductUpdateRef = useRef<number>(0);
 
-  const saveProducts = (newProducts: Product[]) => {
-    // Keep full quality (including base64) in React state for UI display
+  const saveProducts = async (newProducts: Product[]) => {
+    lastLocalProductUpdateRef.current = Date.now();
     setProducts(newProducts);
-    // Strip base64 before persisting — prevents localStorage 5MB quota overflow
-    const stripped = stripBase64(newProducts);
+
+    // 1. Quota-safe localStorage persistence
     try {
-      localStorage.setItem('dbuy_products', JSON.stringify(stripped));
-    } catch (e) {
-      console.warn('[STORE] localStorage quota full — products not cached locally:', e);
+      localStorage.setItem('dbuy_products', JSON.stringify(newProducts));
+    } catch (storageErr) {
+      console.warn('localStorage quota warning, attempting lean save:', storageErr);
+      try {
+        // Fallback: save catalog items without heavy data: URIs in localStorage if browser quota is hit
+        const lean = newProducts.map(p => ({
+          ...p,
+          image: p.image && p.image.startsWith('data:') ? p.image.substring(0, 100) : p.image,
+          images: (p.images || []).map(img => img.startsWith('data:') ? img.substring(0, 100) : img),
+        }));
+        localStorage.setItem('dbuy_products', JSON.stringify(lean));
+      } catch {
+        // Continue safely even if client localStorage is completely exhausted
+      }
     }
 
-    // Broadcast immediately to other open tabs/windows
+    // 2. Broadcast immediately to other open tabs/windows
     if (typeof BroadcastChannel !== 'undefined') {
       try {
         const bc = new BroadcastChannel('dbuy_store_sync');
@@ -741,12 +743,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // Asynchronously push to persistent server and broadcast to all devices
-    fetch('/api/store/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ products: newProducts }),
-    }).catch(err => console.error('Error syncing products to server:', err));
+    // 3. Immediately persist to server and update sync timestamp
+    try {
+      const res = await fetch('/api/store/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ products: newProducts }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.lastUpdated) {
+          lastSyncTimestampRef.current = json.lastUpdated;
+        }
+      }
+    } catch (err) {
+      console.error('Error syncing products to server:', err);
+    }
   };
 
   const addProduct = (prodData: Omit<Product, 'id'>) => {
@@ -756,15 +768,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       rating: prodData.rating || 5.0,
       reviewsCount: prodData.reviewsCount || 1,
     };
-    const updated = [newProd, ...products];
-    saveProducts(updated);
-    addToast(`Added "${newProd.title}" to catalog!`, 'success');
+    setProducts(prev => {
+      const updated = [newProd, ...prev.filter(p => p.id !== newProd.id)];
+      saveProducts(updated);
+      return updated;
+    });
+    addToast(
+      language === 'ka' 
+        ? `პროდუქტი „${newProd.title}“ წარმატებით დაემატა!` 
+        : `Added "${newProd.title}" to catalog!`, 
+      'success'
+    );
+    return newProd;
   };
 
   const bulkImportProducts = (newProducts: Product[], replaceExisting: boolean = false) => {
     if (!newProducts || newProducts.length === 0) return;
-    const finalCatalog = replaceExisting ? newProducts : [...newProducts, ...products];
-    saveProducts(finalCatalog);
+    setProducts(prev => {
+      const finalCatalog = replaceExisting ? newProducts : [...newProducts, ...prev];
+      saveProducts(finalCatalog);
+      return finalCatalog;
+    });
     addToast(
       language === 'ka'
         ? `წარმატებით შემოტანილია ${newProducts.length} პროდუქტი!`
@@ -774,6 +798,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const clearAllProducts = () => {
+    setProducts([]);
     saveProducts([]);
     addToast(
       language === 'ka' ? 'კატალოგი გასუფთავებულია' : 'Catalog cleared',
@@ -782,16 +807,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateProduct = (updated: Product) => {
-    const newProducts = products.map(p => (p.id === updated.id ? updated : p));
-    saveProducts(newProducts);
-    addToast(`Updated product "${updated.title}"`, 'success');
+    setProducts(prev => {
+      const newProducts = prev.map(p => (p.id === updated.id ? updated : p));
+      saveProducts(newProducts);
+      return newProducts;
+    });
+    addToast(
+      language === 'ka' 
+        ? `პროდუქტი „${updated.title}“ განახლდა!` 
+        : `Updated product "${updated.title}"`, 
+      'success'
+    );
   };
 
   const deleteProduct = (id: string) => {
     const deleted = products.find(p => p.id === id);
-    const newProducts = products.filter(p => p.id !== id);
-    saveProducts(newProducts);
-    addToast(`Deleted "${deleted?.title || 'Product'}"`, 'info');
+    setProducts(prev => {
+      const newProducts = prev.filter(p => p.id !== id);
+      saveProducts(newProducts);
+      return newProducts;
+    });
+    addToast(
+      language === 'ka' 
+        ? `პროდუქტი „${deleted?.title || 'Product'}“ წაიშალა` 
+        : `Deleted "${deleted?.title || 'Product'}"`, 
+      'info'
+    );
   };
 
   // Filters & Sorting
@@ -1261,8 +1302,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           lastSyncTimestampRef.current = d.lastUpdated;
         }
         if (Array.isArray(d.products)) {
-          setProducts(d.products);
-          localStorage.setItem('dbuy_products', JSON.stringify(d.products));
+          setProducts(prevProducts => {
+            const recentLocalEdit = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
+            if (recentLocalEdit) {
+              const serverIds = new Set(d.products.map(p => p.id));
+              const missingLocal = prevProducts.filter(p => !serverIds.has(p.id));
+              if (missingLocal.length > 0) {
+                const merged = [...missingLocal, ...d.products];
+                try {
+                  localStorage.setItem('dbuy_products', JSON.stringify(merged));
+                } catch {}
+                fetch('/api/store/products', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ products: merged }),
+                }).catch(() => {});
+                return merged;
+              }
+            }
+            try {
+              localStorage.setItem('dbuy_products', JSON.stringify(d.products));
+            } catch {}
+            return d.products;
+          });
         }
         if (d.registeredUsers && typeof d.registeredUsers === 'object') {
           localStorage.setItem('dbuy_registered_users', JSON.stringify(d.registeredUsers));

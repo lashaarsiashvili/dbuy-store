@@ -1288,6 +1288,15 @@ export const CheckoutModal: React.FC = () => {
                             required
                             maxLength={4}
                             value={cardData.cvc}
+                            onMouseDown={(e) => {
+                              (e.target as HTMLInputElement).placeholder = "";
+                            }}
+                            onFocus={(e) => {
+                              (e.target as HTMLInputElement).placeholder = "";
+                            }}
+                            onBlur={(e) => {
+                              (e.target as HTMLInputElement).placeholder = "•••";
+                            }}
                             onChange={(e) =>
                               setCardData((prev) => ({
                                 ...prev,
@@ -1295,7 +1304,7 @@ export const CheckoutModal: React.FC = () => {
                               }))
                             }
                             placeholder="•••"
-                            className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                            className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-center placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                           />
                         </div>
                       </div>

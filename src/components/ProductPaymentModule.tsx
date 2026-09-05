@@ -1528,10 +1528,19 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                       type="password"
                       required
                       value={cardCvc}
+                      onMouseDown={(e) => {
+                        (e.target as HTMLInputElement).placeholder = "";
+                      }}
+                      onFocus={(e) => {
+                        (e.target as HTMLInputElement).placeholder = "";
+                      }}
+                      onBlur={(e) => {
+                        (e.target as HTMLInputElement).placeholder = "•••";
+                      }}
                       onChange={(e) => setCardCvc(e.target.value.slice(0, 4))}
                       placeholder="•••"
                       maxLength={4}
-                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
+                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                     />
                   </div>
                 </div>

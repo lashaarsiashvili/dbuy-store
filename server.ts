@@ -56,6 +56,19 @@ async function safeJsonFromFetch(response: Response): Promise<{ ok: boolean; sta
 const DB_DIR = path.join(process.cwd(), 'data');
 const DB_FILE = path.join(DB_DIR, 'store_database.json');
 
+// Dedicated persistent uploads directory for product images
+const UPLOADS_DIR = path.join(DB_DIR, 'uploads');
+try {
+  if (!fs.existsSync(UPLOADS_DIR)) {
+    fs.mkdirSync(UPLOADS_DIR, { recursive: true });
+  }
+} catch (err) {
+  console.error('Error creating uploads directory:', err);
+}
+
+// Serve uploaded product photos directly
+app.use('/uploads', express.static(UPLOADS_DIR));
+
 const DEFAULT_THEME = {
   announcementText: '🚚 Free Shipping on orders over $50 | 🛡️ 14-Day Money Back Guarantee',
   announcementVisible: true,
@@ -81,35 +94,13 @@ interface StoreDatabase {
 }
 
 // Helper to sync catalog to initialProducts.ts file so it persists forever in the code
-const BASE64_PLACEHOLDER = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
-
-/** Replace base64 data URL images with a placeholder URL so we don't embed
- *  megabytes of binary data into the TypeScript source file. The real base64
- *  images are always stored safely in store_database.json (binary file, no limit). */
-function stripBase64FromProducts(products: any[]): any[] {
-  return products.map(p => {
-    const cleanImage = (typeof p.image === 'string' && p.image.startsWith('data:'))
-      ? BASE64_PLACEHOLDER
-      : p.image;
-    const cleanImages = Array.isArray(p.images)
-      ? p.images.map((img: string) =>
-          typeof img === 'string' && img.startsWith('data:') ? BASE64_PLACEHOLDER : img
-        )
-      : p.images;
-    return { ...p, image: cleanImage, images: cleanImages };
-  });
-}
-
 function syncCatalogToInitialProducts(products: any[]): void {
   try {
     const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
     if (Array.isArray(products) && products.length > 0) {
-      // Strip base64 images — they cause the TS file to balloon to 50MB+ which
-      // breaks Vite compilation and prevents the app from starting after a rebuild.
-      const stripped = stripBase64FromProducts(products);
-      const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(stripped, null, 2)};\n`;
+      const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(products, null, 2)};\n`;
       fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
-      console.log(`[SOURCE-SYNC] Auto-persisted ${products.length} products to src/data/initialProducts.ts (base64 images replaced with CDN placeholders)`);
+      console.log(`[SOURCE-SYNC] Auto-persisted ${products.length} products to src/data/initialProducts.ts`);
     }
   } catch (err) {
     console.error('Error auto-syncing initialProducts.ts:', err);
@@ -130,7 +121,7 @@ function initStoreDatabase(): StoreDatabase {
         orders: Array.isArray(parsed.orders) ? parsed.orders : [],
         theme: parsed.theme || DEFAULT_THEME,
         billboards: Array.isArray(parsed.billboards) && parsed.billboards.length > 0 ? parsed.billboards : initialBillboards,
-        billboardIntervalSeconds: parsed.billboardIntervalSeconds || 6,
+        billboardIntervalSeconds: parsed.billboardIntervalSeconds !== undefined ? parsed.billboardIntervalSeconds : 120,
         adminSecretSlug: parsed.adminSecretSlug || 'lasha-admin-x98',
         adminPasswordHash: parsed.adminPasswordHash || '',
         adminPasswordSalt: parsed.adminPasswordSalt || '',
@@ -147,7 +138,7 @@ function initStoreDatabase(): StoreDatabase {
     orders: [],
     theme: DEFAULT_THEME,
     billboards: initialBillboards,
-    billboardIntervalSeconds: 6,
+    billboardIntervalSeconds: 120,
     adminSecretSlug: 'lasha-admin-x98',
     adminPasswordHash: '',
     adminPasswordSalt: '',
@@ -293,8 +284,8 @@ app.post('/api/generate-product-copy', async (req, res) => {
           }
         }
 
-        const promptText = `You are a world-class e-commerce conversion copywriter and product marketing director for DBUY Store (Smart Commerce).
-Your task is to craft an accurate, persuasive, high-converting product description, key features, and titles directly based on the uploaded product photos, image titles/filenames, and the product title.
+        const promptText = `You are an elite, award-winning e-commerce product copywriter and creative brand strategist for DBUY Store (Smart Commerce).
+Your task is to craft an irresistibly magnetic, persuasive, high-converting product description, key features, and titles directly based on the uploaded product photos, image titles/filenames, and the product title.
 
 Input Details:
 - Image Titles / File Names: "${Array.isArray(imageTitles) && imageTitles.length > 0 ? imageTitles.join(', ') : 'None'}"
@@ -304,21 +295,25 @@ Input Details:
 - Price: "$${price || ''}"
 - Tone: "${tone || 'high-converting-ad'}"
 
-Core Instructions:
-1. Image Titles & Visual Synthesis:
-   - Carefully inspect the image titles/filenames (e.g. "Apple AirPods Max", "Insulated Water Bottle", "Wireless Charging Stand") and the attached photo(s).
-   - Use the image titles and visual details as primary foundation to describe the exact product, its purpose, materials, and benefits.
-   - If the main title is empty, deduce the English and Georgian titles directly from the image title/filename.
-2. "descriptionEn": A captivating, benefit-rich 2-4 sentence advertising description in English. Highlight the real problem it solves, build quality, and everyday convenience to drive strong buying desire.
-3. "descriptionKa": An authentic, grammatically correct and compelling Georgian advertising description (ქართულად გამართული, მიმზიდველი სარეკლამო აღწერა, რომელიც ზუსტად ემთხვევა სურათზე ნაჩვენებ პროდუქტსა და სათაურს).
-4. "featuresEn": Exactly 4 punchy, benefit-first selling points in English (e.g. "⚡ 15W Fast Wireless Charging — Powers up in half the time") matching the physical product.
-5. "featuresKa": Exactly 4 punchy, benefit-first selling points in Georgian matching the physical product.
-6. "titleEn": A polished, clean English title.
-7. "titleKa": A natural Georgian translation of the product title.
-8. "customSlug": A clean, SEO-optimized URL slug (lowercase letters, numbers, and hyphens only).
-9. "badge": A catchy badge (e.g. "Best Seller", "Hot Deal", "Trending", or "New").
+Creative Directives:
+1. Visual Synthesis & Product Authenticity:
+   - Identify the exact product from the photos or filenames (e.g. smart watch, wireless earbuds, magnetic car mount, insulated flask, mechanical keyboard, dash cam).
+   - Celebrate its unique physical features, ergonomic form, and aesthetic appeal.
+2. "descriptionEn": A magnetic, storytelling 2-4 sentence product description in English.
+   - Start with an attention-commanding hook.
+   - Highlight how it simplifies, elevates, or brings joy to the customer's daily life.
+   - Focus on tangible everyday benefits, premium craftsmanship, and emotional satisfaction.
+3. "descriptionKa": A beautifully written, grammatically flawless, highly attractive Georgian product description (ცოცხალი, ემოციური და მიმზიდველი ქართული სარეკლამო აღწერა).
+   - გამოიყენე შთამბეჭდავი, ბუნებრივი და დამარწმუნებელი ქართული ენა.
+   - ხაზი გაუსვი კომფორტს, ხარისხს, თანამედროვე სტილსა და პრაქტიკულ სარგებელს ყოველდღიურობაში.
+4. "featuresEn": Exactly 4 punchy, benefit-first selling points in English with appropriate emojis (e.g. "⚡ Ultra-Fast Wireless Sync — Powers up in minutes without tangled cables").
+5. "featuresKa": Exactly 4 punchy, benefit-first selling points in Georgian with emojis, perfectly matching the physical product.
+6. "titleEn": A sleek, premium English title.
+7. "titleKa": An accurate, natural Georgian product title.
+8. "customSlug": A clean, SEO-optimized URL slug (e.g. "ultra-fast-wireless-charger").
+9. "badge": A catchy badge (e.g. "Best Seller", "Hot Deal", "Premium Choice", or "Trending").
 
-Return ONLY a valid JSON object matching this schema without any markdown code fence:
+Return ONLY a valid JSON object matching this schema without markdown formatting:
 {
   "titleEn": string,
   "titleKa": string,
@@ -333,7 +328,7 @@ Return ONLY a valid JSON object matching this schema without any markdown code f
         contents.push({ text: promptText });
 
         const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           contents,
           config: {
             responseMimeType: 'application/json',
@@ -353,7 +348,7 @@ Return ONLY a valid JSON object matching this schema without any markdown code f
       }
     }
 
-    // Server-side smart fallback if Gemini API is offline or not configured
+    // Server-side smart fallback if Gemini API is offline or quota exceeded
     const cleanSlug = rawTitle
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
@@ -361,23 +356,64 @@ Return ONLY a valid JSON object matching this schema without any markdown code f
       .replace(/-+/g, '-')
       .replace(/^-|-$/g, '');
 
+    const lower = (rawTitle + ' ' + (Array.isArray(imageTitles) ? imageTitles.join(' ') : '')).toLowerCase();
+    
+    // Domain-tailored creative copywriting fallback
+    let descEn = `Engineered to perfection, the ${rawTitle} seamlessly blends cutting-edge functionality with an ultra-sleek, modern design. Designed for those who refuse to compromise on quality, it elevates your everyday routine with effortless convenience and unmatched durability. Experience the difference from day one.`;
+    let descKa = `სრულყოფილებამდე დახვეწილი ${titleKa || rawTitle} აერთიანებს მოწინავე ტექნოლოგიას, ულტრა-თანამედროვე დიზაინსა და საიმედოობას. შექმნილია მათთვის, ვინც აფასებს მაქსიმალურ კომფორტსა და პრემიუმ ხარისხს. ეს მოდელი თქვენს ყოველდღიურობას სრულიად ახალ დონეზე აიყვანს.`;
+    
+    let fEn = [
+      '⭐ Premium Build Quality — Precision-crafted from top-tier materials for lasting durability',
+      '✨ Sleek Ergonomic Profile — Thoughtfully engineered for maximum everyday comfort',
+      '🚀 Instant Seamless Performance — Responsive, intuitive, and effortlessly dependable',
+      '🛡️ DBUY Official Guarantee — Fast dispatch, secure checkout, and full customer support',
+    ];
+    let fKa = [
+      '⭐ პრემიუმ ხარისხის მასალები — საიმედო კონსტრუქცია და გამძლეობა ხანგრძლივი გამოყენებისთვის',
+      '✨ დახვეწილი ერგონომიული დიზაინი — მაქსიმალური კომფორტი და ესთეტიკური იერი',
+      '🚀 უმაღლესი წარმადობა — ინტუიციური, სწრაფი და სტაბილური მუშაობა ყოველდღიურად',
+      '🛡️ DBUY-ის ოფიციალური გარანტია — სწრაფი მიწოდება და საიმედო მომხმარებელთა მხარდაჭერა',
+    ];
+
+    if (lower.includes('cam') || lower.includes('dash') || lower.includes('video') || lower.includes('recorder')) {
+      descEn = `Capture every moment on the road in crystal-clear high definition with the ${rawTitle}. Featuring ultra-wide viewing angles, night vision capability, and instant loop recording, it provides the ultimate peace of mind and protection on every journey.`;
+      descKa = `დააფიქსირეთ გზის თითოეული დეტალი კრისტალურად სუფთა მაღალი გარჩევადობით ${titleKa || rawTitle}-ით. ფართო ხედვის კუთხე, ღამის ხედვის რეჟიმი და უწყვეტი ჩაწერა თქვენს მგზავრობას ხდის მაქსიმალურად მშვიდსა და უსაფრთხოს.`;
+      fEn = [
+        '📷 Crystal-Clear HD Resolution — Sharp visual fidelity capturing license plates and road signs',
+        '🌙 Enhanced Night Vision — Clear detail recording even in low-light environments',
+        '🔄 Seamless Loop Recording — Automatically overwrites old footage without missing a second',
+        '🚗 Smart G-Sensor Protection — Locks emergency collision clips from being erased',
+      ];
+      fKa = [
+        '📷 კრისტალურად სუფთა HD გარჩევადობა — მკაფიო დეტალიზაცია და ნომრების იოლად გარჩევა',
+        '🌙 ღამის ხედვის რეჟიმი — სრულფასოვანი ჩაწერა დაბალი განათების პირობებშიც კი',
+        '🔄 უწყვეტი ციკლური ჩაწერა — ავტომატური განახლება მეხსიერების შეფერხების გარეშე',
+        '🚗 ჭკვიანი G-სენსორი — საგანგებო მომენტების ავტომატური დაცვა და შენახვა',
+      ];
+    } else if (lower.includes('headphone') || lower.includes('earbuds') || lower.includes('audio') || lower.includes('sound')) {
+      descEn = `Immerse yourself in rich, studio-grade acoustics with the ${rawTitle}. Engineered with custom-tuned acoustic drivers, deep resonant bass, and active isolation, it brings your favorite playlists and podcasts to life with sensational clarity and all-day battery endurance.`;
+      descKa = `ჩაიძირეთ ცოცხალ, სტუდიური ჟღერადობის სამყაროში ${titleKa || rawTitle}-ით. სპეციალურად დახვეწილი დრაივერები, ღრმა ბასები და ერგონომიული კომფორტი თქვენს საყვარელ მუსიკას განსაკუთრებულ ემოციას სძენს მთელი დღის განმავლობაში.`;
+      fEn = [
+        '🎵 Studio-Grade Acoustic Drivers — Rich, dynamic audio with deep bass and sparkling highs',
+        '🔋 Extended All-Day Battery — Long-lasting listening with rapid USB-C fast recharging',
+        '🎧 Cloud-Soft Ergonomic Ear Cushions — Featherlight comfort for endless listening sessions',
+        '🎙️ HD Voice Call Isolation — Crystal-clear microphone clarity for seamless phone calls',
+      ];
+      fKa = [
+        '🎵 სტუდიური აკუსტიკა — ღრმა ბასები, სუფთა მაღალი სიხშირეები და დინამიური ჟღერადობა',
+        '🔋 მთელი დღის ავტონომია — ხანგრძლივი მუშაობა და სწრაფი USB-C დატენვა',
+        '🎧 ულტრა-რბილი ერგონომიული ბალიშები — შეუდარებელი კომფორტი ხანგრძლივი ტარებისას',
+        '🎙️ ხმაურისგან იზოლირებული მიკროფონი — იდეალურად სუფთა ხმა სატელეფონო საუბრისას',
+      ];
+    }
+
     const fallbackData = {
       titleEn: rawTitle,
       titleKa: titleKa || rawTitle,
-      descriptionEn: `Experience the ideal combination of premium durability and effortless everyday performance. Engineered for discerning users who demand reliability, the ${rawTitle} delivers exceptional convenience, modern styling, and long-lasting quality that elevates your routine.`,
-      descriptionKa: `აღმოაჩინეთ უმაღლესი ხარისხისა და პრაქტიკულობის იდეალური შერწყმა. პრემიუმ მასალებით შექმნილი ${titleKa || rawTitle} თქვენს ყოველდღიურობას ხდის უფრო მარტივს, თანამედროვესა და კომფორტულს. საუკეთესო არჩევანი მათთვის, ვინც აფასებს გამძლეობასა და სანდოობას.`,
-      featuresEn: [
-        '⭐ High-Grade Materials — Built for durability and long-lasting daily use',
-        '✨ Ergonomic & Modern Design — Sleek profile that complements any setup',
-        '🎯 Reliable Performance — Extensively tested for seamless functionality',
-        '🛡️ DBUY Quality Guarantee — Backed by fast dispatch and full store support',
-      ],
-      featuresKa: [
-        '⭐ პრემიუმ ხარისხის მასალები — გამძლე კონსტრუქცია ხანგრძლივი გამოყენებისთვის',
-        '✨ თანამედროვე ერგონომიული დიზაინი — დახვეწილი სტილი ნებისმიერ გარემოში',
-        '🎯 მაღალი საიმედოობა — შემოწმებული და სტაბილური მუშაობა',
-        '🛡️ DBUY-ის ხარისხის გარანტია — სწრაფი მიწოდება და საიმედო მხარდაჭერა',
-      ],
+      descriptionEn: descEn,
+      descriptionKa: descKa,
+      featuresEn: fEn,
+      featuresKa: fKa,
       customSlug: cleanSlug || 'smart-living-product',
       badge: 'Hot Deal',
     };
@@ -390,116 +426,54 @@ Return ONLY a valid JSON object matching this schema without any markdown code f
 });
 
 // ==========================================
-// AI PRODUCT IMAGE ENHANCEMENT API
+// UPLOAD PRODUCT IMAGE API
+// Saves uploaded/optimized base64 images as disk files
+// Drastically shrinks product JSON and enables UNLIMITED products!
 // ==========================================
-
-/**
- * POST /api/ai/enhance-product-image
- * 
- * Accepts a product image (base64 data URL or https URL) and uses
- * gemini-3.1-flash-image to:
- *   1. Remove the original background
- *   2. Place the product on a professional white studio gradient
- *   3. Enhance sharpness, colours, and lighting
- *   4. Keep the product itself 100% unchanged
- *
- * Returns { success: true, imageData: "base64...", mimeType: "image/png" }
- */
-app.post('/api/ai/enhance-product-image', async (req, res) => {
+app.post('/api/upload-image', (req, res) => {
   try {
-    const { image } = req.body as { image?: string };
-
-    if (!image || typeof image !== 'string') {
-      return res.status(400).json({ success: false, error: 'Image is required (base64 data URL or https URL)' });
+    const { dataUrl, filename } = req.body;
+    if (!dataUrl || typeof dataUrl !== 'string') {
+      res.status(400).json({ success: false, error: 'dataUrl is required' });
+      return;
     }
 
-    const ai = getGeminiClient();
-    if (!ai) {
-      return res.status(503).json({
-        success: false,
-        error: 'Gemini API key is not configured. Set GEMINI_API_KEY in your .env file.',
-      });
+    // If it's already a URL (e.g. http, /uploads, etc.), return as is
+    if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://') || dataUrl.startsWith('/uploads/')) {
+      res.json({ success: true, url: dataUrl });
+      return;
     }
 
-    // Prepare the image part for the API call
-    let imagePart: any;
-    if (image.startsWith('data:image/')) {
-      const match = image.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
-      if (!match) {
-        return res.status(400).json({ success: false, error: 'Invalid base64 image format' });
-      }
-      imagePart = { inlineData: { mimeType: match[1], data: match[2] } };
-    } else if (image.startsWith('http://') || image.startsWith('https://')) {
-      // Fetch and convert remote URL to base64
-      const imgRes = await fetch(image, { signal: AbortSignal.timeout(6000) });
-      if (!imgRes.ok) {
-        return res.status(400).json({ success: false, error: 'Failed to fetch image URL' });
-      }
-      const contentType = imgRes.headers.get('content-type') || 'image/jpeg';
-      const arrayBuffer = await imgRes.arrayBuffer();
-      const base64 = Buffer.from(arrayBuffer).toString('base64');
-      imagePart = { inlineData: { mimeType: contentType.split(';')[0], data: base64 } };
-    } else {
-      return res.status(400).json({ success: false, error: 'Image must be a base64 data URL or https URL' });
+    // Match base64 data URI pattern
+    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) {
+      res.status(400).json({ success: false, error: 'Invalid base64 data format' });
+      return;
     }
 
-    const enhancementPrompt = `You are a professional e-commerce product photo editor.
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
 
-Task: Edit this product image to make it look like a premium studio product photo.
+    let ext = 'jpg';
+    if (mimeType.includes('png')) ext = 'png';
+    else if (mimeType.includes('webp')) ext = 'webp';
+    else if (mimeType.includes('gif')) ext = 'gif';
 
-Instructions (strictly follow all of these):
-1. BACKGROUND: Replace the entire background with a clean, smooth white-to-very-light-grey radial gradient (bright white at center, very light grey #f0f0f0 at edges). The background must look professional, like a high-end studio product photograph.
-2. PRODUCT: Keep the product itself 100% identical — same shape, colour, branding, text, and all details. Do NOT alter, stylise, or cartoon-ify the product in any way.
-3. LIGHTING: Apply soft, even studio lighting with a subtle drop shadow directly beneath the product to give it depth and make it "float" naturally on the background.
-4. SHARPNESS & COLOUR: Slightly increase sharpness and colour vibrancy of the product only (not the background). Make it look crisp and premium.
-5. COMPOSITION: Centre the product in the frame with a small breathing margin on all sides.
-6. OUTPUT: Return only the edited image. No text, no watermarks, no borders.
+    // Unique clean safe name
+    const timestamp = Date.now();
+    const rand = Math.random().toString(36).substring(2, 8);
+    const safeName = `prod-${timestamp}-${rand}.${ext}`;
+    const filePath = path.join(UPLOADS_DIR, safeName);
 
-The goal is a product image that is ready to be placed on a premium e-commerce product listing page.`;
+    fs.writeFileSync(filePath, buffer);
+    console.log(`[IMAGE-UPLOAD] Saved product image to ${filePath} (${(buffer.length / 1024).toFixed(1)} KB)`);
 
-    const response = await ai.models.generateContent({
-      model: 'gemini-3.1-flash-image',
-      contents: [
-        { text: enhancementPrompt },
-        imagePart,
-      ],
-    });
-
-    // Extract the generated image from the response
-    const parts = response.candidates?.[0]?.content?.parts ?? [];
-    let resultImageData: string | null = null;
-    let resultMimeType = 'image/png';
-
-    for (const part of parts) {
-      if (part.inlineData?.data) {
-        resultImageData = part.inlineData.data;
-        resultMimeType = part.inlineData.mimeType || 'image/png';
-        break;
-      }
-    }
-
-    if (!resultImageData) {
-      // Log the full response for debugging
-      console.warn('[AI-ENHANCE] No image part in Gemini response:', JSON.stringify(response).slice(0, 500));
-      return res.status(500).json({
-        success: false,
-        error: 'Gemini returned no image. The model may not support image editing for this input.',
-      });
-    }
-
-    console.log(`[AI-ENHANCE] Successfully enhanced product image (${resultMimeType})`);
-    return res.json({
-      success: true,
-      imageData: resultImageData,
-      mimeType: resultMimeType,
-    });
-
+    const publicUrl = `/uploads/${safeName}`;
+    res.json({ success: true, url: publicUrl });
   } catch (err: any) {
-    console.error('[AI-ENHANCE] Error enhancing product image:', err);
-    return res.status(500).json({
-      success: false,
-      error: err?.message || 'Image enhancement failed',
-    });
+    console.error('Error processing image upload:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Image upload failed' });
   }
 });
 
@@ -536,6 +510,142 @@ app.get('/api/store/sync', (req, res) => {
   } catch (err) {
     console.error('Error fetching store data:', err);
     res.status(500).json({ success: false, error: 'Failed to fetch store data' });
+  }
+});
+
+// Helper to persist base64 data URIs to physical files on disk
+function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
+  if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
+  if (!dataUrl.startsWith('data:image/')) return dataUrl;
+
+  try {
+    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) return dataUrl;
+
+    const mimeType = matches[1];
+    const base64Data = matches[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+
+    let ext = 'jpg';
+    if (mimeType.includes('png')) ext = 'png';
+    else if (mimeType.includes('webp')) ext = 'webp';
+    else if (mimeType.includes('gif')) ext = 'gif';
+
+    const timestamp = Date.now();
+    const rand = Math.random().toString(36).substring(2, 7);
+    const safeName = `${prefix}-${timestamp}-${rand}.${ext}`;
+    const filePath = path.join(UPLOADS_DIR, safeName);
+
+    fs.writeFileSync(filePath, buffer);
+    console.log(`[AUTO-DISK-IMAGE] Saved product image to disk: ${safeName} (${(buffer.length / 1024).toFixed(1)} KB)`);
+    return `/uploads/${safeName}`;
+  } catch (e) {
+    console.error('Error saving base64 image to disk:', e);
+    return dataUrl;
+  }
+}
+
+// POST: Save products catalog explicitly (called from saveProducts in StoreContext)
+app.post('/api/store/products', (req, res) => {
+  try {
+    const { products } = req.body;
+    if (!Array.isArray(products)) {
+      res.status(400).json({ success: false, error: 'Products array is required' });
+      return;
+    }
+
+    // Clean up any inline base64 images into physical disk uploads
+    const sanitizedProducts = products.map(p => {
+      const cleanImage = p.image ? persistBase64Image(p.image, `prod-${p.id || Date.now()}`) : p.image;
+      const cleanImages = Array.isArray(p.images)
+        ? p.images.map((img: string, i: number) => persistBase64Image(img, `prod-${p.id || Date.now()}-${i}`))
+        : (cleanImage ? [cleanImage] : []);
+      return {
+        ...p,
+        image: cleanImage,
+        images: cleanImages,
+      };
+    });
+
+    storeDb.products = sanitizedProducts;
+    syncCatalogToInitialProducts(sanitizedProducts);
+    saveStoreDatabase();
+
+    console.log(`[STORE-PRODUCTS] Successfully saved ${sanitizedProducts.length} products to database & source.`);
+
+    res.json({
+      success: true,
+      count: sanitizedProducts.length,
+      lastUpdated: storeDb.lastUpdated,
+      products: sanitizedProducts,
+    });
+  } catch (err: any) {
+    console.error('Error saving products:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Failed to save products' });
+  }
+});
+
+// GET: Fetch products catalog explicitly
+app.get('/api/store/products', (req, res) => {
+  res.json({
+    success: true,
+    count: storeDb.products.length,
+    lastUpdated: storeDb.lastUpdated,
+    products: storeDb.products,
+  });
+});
+
+// POST: Save theme settings explicitly
+app.post('/api/store/theme', (req, res) => {
+  try {
+    const { theme } = req.body;
+    if (theme && typeof theme === 'object') {
+      storeDb.theme = { ...storeDb.theme, ...theme };
+      saveStoreDatabase();
+    }
+    res.json({ success: true, theme: storeDb.theme, lastUpdated: storeDb.lastUpdated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update theme' });
+  }
+});
+
+// POST: Save billboard slides & interval explicitly
+app.post('/api/store/billboards', (req, res) => {
+  try {
+    const { billboards, billboardIntervalSeconds } = req.body;
+    if (Array.isArray(billboards)) {
+      storeDb.billboards = billboards.map(b => ({
+        ...b,
+        image: b.image ? persistBase64Image(b.image, 'billboard') : b.image,
+        bgImage: b.bgImage ? persistBase64Image(b.bgImage, 'billboard-bg') : b.bgImage,
+      }));
+    }
+    if (typeof billboardIntervalSeconds === 'number') {
+      storeDb.billboardIntervalSeconds = billboardIntervalSeconds;
+    }
+    saveStoreDatabase();
+    res.json({
+      success: true,
+      billboards: storeDb.billboards,
+      billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
+      lastUpdated: storeDb.lastUpdated,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update billboards' });
+  }
+});
+
+// POST: Save orders explicitly
+app.post('/api/store/orders', (req, res) => {
+  try {
+    const { orders } = req.body;
+    if (Array.isArray(orders)) {
+      storeDb.orders = orders;
+      saveStoreDatabase();
+    }
+    res.json({ success: true, count: storeDb.orders.length, lastUpdated: storeDb.lastUpdated });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update orders' });
   }
 });
 
@@ -890,7 +1000,7 @@ app.post('/api/store/products', (req, res) => {
     syncCatalogToInitialProducts(products);
     console.log(`[PRODUCTS-PERSISTED] Updated ${products.length} products on server and source file`);
 
-    res.json({ success: true, products: storeDb.products });
+    res.json({ success: true, products: storeDb.products, lastUpdated: storeDb.lastUpdated });
   } catch (err) {
     console.error('Error updating products:', err);
     res.status(500).json({ success: false, error: 'Failed to update products' });

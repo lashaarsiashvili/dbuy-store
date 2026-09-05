@@ -135,6 +135,13 @@ export const AuthModal: React.FC = () => {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [isLoginEmailFocused, setIsLoginEmailFocused] = useState(false);
+  const [isLoginPasswordFocused, setIsLoginPasswordFocused] = useState(false);
+  const [isRegNameFocused, setIsRegNameFocused] = useState(false);
+  const [isRegEmailFocused, setIsRegEmailFocused] = useState(false);
+  const [isRegPasswordFocused, setIsRegPasswordFocused] = useState(false);
+  const [isRegConfirmFocused, setIsRegConfirmFocused] = useState(false);
+  const [isForgotEmailFocused, setIsForgotEmailFocused] = useState(false);
   const [authProvider, setAuthProvider] = useState<"email" | "google">("email");
 
   // Forgot Password / Recovery State
@@ -182,6 +189,9 @@ export const AuthModal: React.FC = () => {
       setPassword("");
       setConfirmPassword("");
       setShowPassword(false);
+      setIsLoginPasswordFocused(false);
+      setIsRegPasswordFocused(false);
+      setIsRegConfirmFocused(false);
       setCountry("Georgia");
       setCity("Tbilisi");
       setZip("");
@@ -199,6 +209,9 @@ export const AuthModal: React.FC = () => {
     setRegStep(1);
     setPassword("");
     setConfirmPassword("");
+    setIsLoginPasswordFocused(false);
+    setIsRegPasswordFocused(false);
+    setIsRegConfirmFocused(false);
     setTempPassSentTo(null);
   };
 
@@ -464,9 +477,21 @@ export const AuthModal: React.FC = () => {
                         type="email"
                         required
                         value={forgotEmail}
+                        onMouseDown={() => setIsForgotEmailFocused(true)}
+                        onClick={(e) => {
+                          setIsForgotEmailFocused(true);
+                          (e.target as HTMLInputElement).placeholder = "";
+                          if (forgotEmail) (e.target as HTMLInputElement).select();
+                        }}
+                        onFocus={(e) => {
+                          setIsForgotEmailFocused(true);
+                          (e.target as HTMLInputElement).placeholder = "";
+                          if (forgotEmail) e.target.select();
+                        }}
+                        onBlur={() => setIsForgotEmailFocused(false)}
                         onChange={(e) => setForgotEmail(e.target.value)}
-                        placeholder="you@example.com"
-                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                        placeholder={isForgotEmailFocused ? "" : "you@example.com"}
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                       />
                     </div>
                   </div>
@@ -579,9 +604,21 @@ export const AuthModal: React.FC = () => {
                         type="email"
                         required
                         value={email}
+                        onMouseDown={() => setIsLoginEmailFocused(true)}
+                        onClick={(e) => {
+                          setIsLoginEmailFocused(true);
+                          (e.target as HTMLInputElement).placeholder = "";
+                          if (email) (e.target as HTMLInputElement).select();
+                        }}
+                        onFocus={(e) => {
+                          setIsLoginEmailFocused(true);
+                          (e.target as HTMLInputElement).placeholder = "";
+                          if (email) e.target.select();
+                        }}
+                        onBlur={() => setIsLoginEmailFocused(false)}
                         onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@example.com"
-                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                        placeholder={isLoginEmailFocused ? "" : "you@example.com"}
+                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                       />
                     </div>
                   </div>
@@ -609,11 +646,32 @@ export const AuthModal: React.FC = () => {
                         required
                         autoComplete="current-password"
                         value={password}
-                        onFocus={(e) => e.target.select()}
-                        onClick={(e) => (e.target as HTMLInputElement).select()}
+                        onMouseDown={() => {
+                          setIsLoginPasswordFocused(true);
+                          if (password === "••••••••" || password.includes("•")) {
+                            setPassword("");
+                          }
+                        }}
+                        onFocus={(e) => {
+                          setIsLoginPasswordFocused(true);
+                          if (password === "••••••••" || password.includes("•")) {
+                            setPassword("");
+                          } else if (password) {
+                            e.target.select();
+                          }
+                        }}
+                        onClick={(e) => {
+                          setIsLoginPasswordFocused(true);
+                          if (password === "••••••••" || password.includes("•")) {
+                            setPassword("");
+                          } else if (password) {
+                            (e.target as HTMLInputElement).select();
+                          }
+                        }}
+                        onBlur={() => setIsLoginPasswordFocused(false)}
                         onChange={(e) => setPassword(e.target.value)}
-                        placeholder={t("auth.passwordPlaceholder")}
-                        className="w-full pl-9 pr-16 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                        placeholder={isLoginPasswordFocused ? "" : t("auth.passwordPlaceholder")}
+                        className="w-full pl-9 pr-16 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                       />
                       <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
                         {password.length > 0 && (
@@ -723,9 +781,21 @@ export const AuthModal: React.FC = () => {
                             type="text"
                             required
                             value={name}
+                            onMouseDown={() => setIsRegNameFocused(true)}
+                            onClick={(e) => {
+                              setIsRegNameFocused(true);
+                              (e.target as HTMLInputElement).placeholder = "";
+                              if (name) (e.target as HTMLInputElement).select();
+                            }}
+                            onFocus={(e) => {
+                              setIsRegNameFocused(true);
+                              (e.target as HTMLInputElement).placeholder = "";
+                              if (name) e.target.select();
+                            }}
+                            onBlur={() => setIsRegNameFocused(false)}
                             onChange={(e) => setName(e.target.value)}
-                            placeholder={t("auth.fullNamePlaceholder")}
-                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                            placeholder={isRegNameFocused ? "" : t("auth.fullNamePlaceholder")}
+                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                           />
                         </div>
                       </div>
@@ -740,9 +810,21 @@ export const AuthModal: React.FC = () => {
                             type="email"
                             required
                             value={email}
+                            onMouseDown={() => setIsRegEmailFocused(true)}
+                            onClick={(e) => {
+                              setIsRegEmailFocused(true);
+                              (e.target as HTMLInputElement).placeholder = "";
+                              if (email) (e.target as HTMLInputElement).select();
+                            }}
+                            onFocus={(e) => {
+                              setIsRegEmailFocused(true);
+                              (e.target as HTMLInputElement).placeholder = "";
+                              if (email) e.target.select();
+                            }}
+                            onBlur={() => setIsRegEmailFocused(false)}
                             onChange={(e) => setEmail(e.target.value)}
-                            placeholder="you@example.com"
-                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                            placeholder={isRegEmailFocused ? "" : "you@example.com"}
+                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                           />
                         </div>
                       </div>
@@ -759,13 +841,32 @@ export const AuthModal: React.FC = () => {
                               required
                               autoComplete="new-password"
                               value={password}
-                              onFocus={(e) => e.target.select()}
-                              onClick={(e) =>
-                                (e.target as HTMLInputElement).select()
-                              }
+                              onMouseDown={() => {
+                                setIsRegPasswordFocused(true);
+                                if (password === "••••••••" || password.includes("•")) {
+                                  setPassword("");
+                                }
+                              }}
+                              onFocus={(e) => {
+                                setIsRegPasswordFocused(true);
+                                if (password === "••••••••" || password.includes("•")) {
+                                  setPassword("");
+                                } else if (password) {
+                                  e.target.select();
+                                }
+                              }}
+                              onClick={(e) => {
+                                setIsRegPasswordFocused(true);
+                                if (password === "••••••••" || password.includes("•")) {
+                                  setPassword("");
+                                } else if (password) {
+                                  (e.target as HTMLInputElement).select();
+                                }
+                              }}
+                              onBlur={() => setIsRegPasswordFocused(false)}
                               onChange={(e) => setPassword(e.target.value)}
-                              placeholder={t("auth.pwdMin")}
-                              className="w-full pl-9 pr-8 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                              placeholder={isRegPasswordFocused ? "" : t("auth.pwdMin")}
+                              className="w-full pl-9 pr-8 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                             />
                             <button
                               type="button"
@@ -792,15 +893,34 @@ export const AuthModal: React.FC = () => {
                               required
                               autoComplete="new-password"
                               value={confirmPassword}
-                              onFocus={(e) => e.target.select()}
-                              onClick={(e) =>
-                                (e.target as HTMLInputElement).select()
-                              }
+                              onMouseDown={() => {
+                                setIsRegConfirmFocused(true);
+                                if (confirmPassword === "••••••••" || confirmPassword.includes("•")) {
+                                  setConfirmPassword("");
+                                }
+                              }}
+                              onFocus={(e) => {
+                                setIsRegConfirmFocused(true);
+                                if (confirmPassword === "••••••••" || confirmPassword.includes("•")) {
+                                  setConfirmPassword("");
+                                } else if (confirmPassword) {
+                                  e.target.select();
+                                }
+                              }}
+                              onClick={(e) => {
+                                setIsRegConfirmFocused(true);
+                                if (confirmPassword === "••••••••" || confirmPassword.includes("•")) {
+                                  setConfirmPassword("");
+                                } else if (confirmPassword) {
+                                  (e.target as HTMLInputElement).select();
+                                }
+                              }}
+                              onBlur={() => setIsRegConfirmFocused(false)}
                               onChange={(e) =>
                                 setConfirmPassword(e.target.value)
                               }
-                              placeholder={t("auth.confirmPassword")}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                              placeholder={isRegConfirmFocused ? "" : t("auth.confirmPassword")}
+                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                             />
                           </div>
                         </div>
@@ -917,9 +1037,19 @@ export const AuthModal: React.FC = () => {
                               type="text"
                               required
                               value={city}
+                              onMouseDown={(e) => {
+                                (e.target as HTMLInputElement).placeholder = "";
+                              }}
+                              onFocus={(e) => {
+                                (e.target as HTMLInputElement).placeholder = "";
+                                if (city) e.target.select();
+                              }}
+                              onBlur={(e) => {
+                                (e.target as HTMLInputElement).placeholder = t("auth.cityPlaceholder");
+                              }}
                               onChange={(e) => setCity(e.target.value)}
                               placeholder={t("auth.cityPlaceholder")}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                             />
                           </div>
                         </div>
@@ -936,9 +1066,19 @@ export const AuthModal: React.FC = () => {
                               type="text"
                               required
                               value={zip}
+                              onMouseDown={(e) => {
+                                (e.target as HTMLInputElement).placeholder = "";
+                              }}
+                              onFocus={(e) => {
+                                (e.target as HTMLInputElement).placeholder = "";
+                                if (zip) e.target.select();
+                              }}
+                              onBlur={(e) => {
+                                (e.target as HTMLInputElement).placeholder = t("auth.zipPlaceholder");
+                              }}
                               onChange={(e) => setZip(e.target.value)}
                               placeholder={t("auth.zipPlaceholder")}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono"
+                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                             />
                           </div>
                         </div>
@@ -952,9 +1092,19 @@ export const AuthModal: React.FC = () => {
                             <input
                               type="tel"
                               value={phone}
+                              onMouseDown={(e) => {
+                                (e.target as HTMLInputElement).placeholder = "";
+                              }}
+                              onFocus={(e) => {
+                                (e.target as HTMLInputElement).placeholder = "";
+                                if (phone) e.target.select();
+                              }}
+                              onBlur={(e) => {
+                                (e.target as HTMLInputElement).placeholder = t("auth.phonePlaceholder");
+                              }}
                               onChange={(e) => setPhone(e.target.value)}
                               placeholder={t("auth.phonePlaceholder")}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                             />
                           </div>
                         </div>
@@ -970,9 +1120,19 @@ export const AuthModal: React.FC = () => {
                             type="text"
                             required
                             value={address}
+                            onMouseDown={(e) => {
+                              (e.target as HTMLInputElement).placeholder = "";
+                            }}
+                            onFocus={(e) => {
+                              (e.target as HTMLInputElement).placeholder = "";
+                              if (address) e.target.select();
+                            }}
+                            onBlur={(e) => {
+                              (e.target as HTMLInputElement).placeholder = t("auth.addressPlaceholder");
+                            }}
                             onChange={(e) => setAddress(e.target.value)}
                             placeholder={t("auth.addressPlaceholder")}
-                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                           />
                         </div>
                       </div>
