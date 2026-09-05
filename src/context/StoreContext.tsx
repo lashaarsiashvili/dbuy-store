@@ -850,6 +850,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           } catch (e) {
             console.warn('Could not write sanitized products to localStorage:', e);
           }
+
+          // Directly sync clean sanitized products back to Firestore so all secondary devices receive clean URLs
+          try {
+            setDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: json.lastUpdated || new Date().toISOString() }, { merge: true })
+              .catch(err => console.warn('[CLIENT-FIREBASE] Error saving sanitized products:', err));
+          } catch (e) {}
         }
       }
     } catch (err) {
@@ -1456,13 +1462,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         if (Array.isArray(d.products)) {
           setProducts(prevProducts => {
-            // Check if local update was made very recently (within 15 seconds)
+            // Check if local update was made very recently (within 15 seconds) by an admin on THIS specific device
             const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
-            if (recentlyUpdatedLocally && d.products.length < prevProducts.length) {
-              return prevProducts;
+
+            // If this device was NOT actively creating or editing products locally, ALWAYS accept server's d.products
+            if (!recentlyUpdatedLocally) {
+              try {
+                localStorage.setItem('dbuy_products', JSON.stringify(d.products));
+              } catch {}
+              return d.products;
             }
 
-            // Read actual products stored in browser localStorage
+            // Only if this device IS actively editing/adding products locally in this session:
             const savedLocal = localStorage.getItem('dbuy_products');
             let localProducts: Product[] = [];
             if (savedLocal) {
@@ -1480,7 +1491,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             let finalMerged = d.products;
 
             if (customLocalMissing.length > 0) {
-              console.log(`[CLIENT-STORE-SYNC] Found ${customLocalMissing.length} custom local products missing on server. Merging and auto-pushing to server...`);
+              console.log(`[CLIENT-STORE-SYNC] Active admin session: found ${customLocalMissing.length} custom local products missing on server. Merging and auto-pushing to server...`);
               finalMerged = [...customLocalMissing, ...d.products];
 
               // Push the union catalog to the server so it's persisted permanently

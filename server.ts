@@ -202,6 +202,7 @@ interface StoreDatabase {
   adminSecretSlug: string;
   adminPasswordHash?: string;
   adminPasswordSalt?: string;
+  uploadsMap?: Record<string, string>;
   lastUpdated: string;
 }
 
@@ -264,6 +265,10 @@ function initStoreDatabase(): StoreDatabase {
 
   const products = Array.from(productMap.values());
 
+  if (loadedDb?.uploadsMap && typeof loadedDb.uploadsMap === 'object') {
+    uploadsMap = { ...uploadsMap, ...loadedDb.uploadsMap };
+  }
+
   const initialDb: StoreDatabase = {
     products,
     registeredUsers: loadedDb?.registeredUsers || {},
@@ -274,6 +279,7 @@ function initStoreDatabase(): StoreDatabase {
     adminSecretSlug: loadedDb?.adminSecretSlug || 'lasha-admin-x98',
     adminPasswordHash: loadedDb?.adminPasswordHash || '',
     adminPasswordSalt: loadedDb?.adminPasswordSalt || '',
+    uploadsMap,
     lastUpdated: loadedDb?.lastUpdated || new Date().toISOString(),
   };
 
@@ -355,6 +361,11 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
         parsed.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
         storeDb.products = Array.from(pMap.values());
 
+        if (parsed.uploadsMap && typeof parsed.uploadsMap === 'object') {
+          uploadsMap = { ...uploadsMap, ...parsed.uploadsMap };
+          saveUploadsMap();
+          storeDb.uploadsMap = uploadsMap;
+        }
         if (parsed.registeredUsers && Object.keys(parsed.registeredUsers).length > 0) {
           storeDb.registeredUsers = { ...storeDb.registeredUsers, ...parsed.registeredUsers };
         }
@@ -439,6 +450,7 @@ function saveStoreDatabase(): void {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
     storeDb.lastUpdated = new Date().toISOString();
+    storeDb.uploadsMap = uploadsMap;
     const serialized = JSON.stringify(storeDb, null, 2);
     
     // Save to runtime ephemeral disk
