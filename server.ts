@@ -265,6 +265,37 @@ function initStoreDatabase(): StoreDatabase {
 
   const products = Array.from(productMap.values());
 
+  const defaultFallbackImages: Record<string, string> = {
+    tech: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1000&q=80',
+    fitness: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=1000&q=80',
+    accessories: 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?auto=format&fit=crop&w=1000&q=80',
+    home: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=1000&q=80',
+  };
+
+  products.forEach((p: any) => {
+    const defaultImg = defaultFallbackImages[p.category] || defaultFallbackImages.tech;
+    if (!p.image || p.image.includes('placeholder.jpg') || p.image.trim() === '') {
+      p.image = defaultImg;
+    }
+    if (Array.isArray(p.images)) {
+      p.images = p.images.map((imgUrl: string) => {
+        if (!imgUrl || imgUrl.includes('placeholder.jpg') || imgUrl.trim() === '') {
+          return defaultImg;
+        }
+        return imgUrl;
+      });
+      if (p.images.length === 0) {
+        p.images = [p.image];
+      }
+    } else {
+      p.images = [p.image];
+    }
+  });
+
+  if (uploadsMap && uploadsMap['placeholder.jpg']) {
+    delete uploadsMap['placeholder.jpg'];
+  }
+
   if (loadedDb?.uploadsMap && typeof loadedDb.uploadsMap === 'object') {
     uploadsMap = { ...uploadsMap, ...loadedDb.uploadsMap };
   }
@@ -650,6 +681,86 @@ function getMailTransporter() {
   return transporter;
 }
 
+// Resilient email dispatch helper with multi-port automatic retries
+async function sendMailWithRetry(options: {
+  from?: string;
+  to: string;
+  subject: string;
+  text?: string;
+  html?: string;
+  replyTo?: string;
+}): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  const customSmtp = (storeDb as any)?.smtpConfig || {};
+  const smtpUser = customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com';
+  const smtpPass = (
+    customSmtp.pass ||
+    process.env.SMTP_PASS ||
+    process.env.ZOHO_PASSWORD ||
+    process.env.GMAIL_APP_PASSWORD ||
+    'cjmwVviQbiaq'
+  ).replace(/\s+/g, '');
+
+  const defaultFrom = `"DBUY Store" <${smtpUser}>`;
+  let finalFrom = options.from ? options.from : defaultFrom;
+
+  // Enforce correct envelope/from email matches Zoho authenticated user address
+  if (!finalFrom.includes(smtpUser)) {
+    finalFrom = `"DBUY Store" <${smtpUser}>`;
+  }
+
+  const mailPayload = {
+    ...options,
+    from: finalFrom,
+    headers: {
+      'X-Mailer': 'DBUY-Store-Mailer',
+      'X-Priority': '1 (Highest)',
+    },
+  };
+
+  // Configurations to try in sequence: 465 SSL -> 587 STARTTLS -> 465 SSL Retry
+  const configs = [
+    { host: 'smtp.zoho.eu', port: 465, secure: true },
+    { host: 'smtp.zoho.eu', port: 587, secure: false },
+    { host: 'smtp.zoho.eu', port: 465, secure: true },
+  ];
+
+  let lastError: any = null;
+
+  for (let i = 0; i < configs.length; i++) {
+    const cfg = configs[i];
+    try {
+      console.log(`[EMAIL-DISPATCH] Attempt ${i + 1}/${configs.length} via ${cfg.host}:${cfg.port} to ${mailPayload.to}`);
+      const transporter = nodemailer.createTransport({
+        host: cfg.host,
+        port: cfg.port,
+        secure: cfg.secure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+      });
+
+      const info = await transporter.sendMail(mailPayload);
+      console.log(`[EMAIL-DISPATCH-SUCCESS] Sent email to ${mailPayload.to} (MessageId: ${info.messageId})`);
+      return { success: true, messageId: info.messageId };
+    } catch (err: any) {
+      lastError = err;
+      console.warn(`[EMAIL-DISPATCH-ATTEMPT-FAILED] Attempt ${i + 1} (${cfg.host}:${cfg.port}) error:`, err?.message || err);
+      // Brief pause before retry
+      await new Promise((resolve) => setTimeout(resolve, 600));
+    }
+  }
+
+  console.error('[EMAIL-DISPATCH-FATAL] All email send attempts failed:', lastError?.message || lastError);
+  return { success: false, error: lastError?.message || 'Failed to deliver email after retries' };
+}
+
 // API Health Check
 app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
@@ -767,7 +878,7 @@ Return ONLY a valid JSON object matching this schema without markdown formatting
         contents.push({ text: promptText });
 
         const response = await ai.models.generateContent({
-          model: 'gemini-3.6-flash',
+          model: 'gemini-2.5-flash',
           contents,
           config: {
             responseMimeType: 'application/json',
@@ -1501,21 +1612,21 @@ app.post('/api/store/order', (req, res) => {
         : 'Order Items';
 
       // 1. Admin / Store Alert Email to support@dbuystore.com
-      transporter.sendMail({
+      sendMailWithRetry({
         from: '"DBUY Store Orders" <support@dbuystore.com>',
         to: 'support@dbuystore.com, lashaarsiashvili@gmail.com',
         subject: `[DBUY New Order] #${newOrder.id} - $${Number(totalAmount).toFixed(2)}`,
         text: `New order placed on DBUY Store!\n\nOrder ID: #${newOrder.id}\nCustomer: ${customerName} (${customerEmail || 'No Email'})\nTotal: $${Number(totalAmount).toFixed(2)} ${currency}\nPayment Method: ${newOrder.paymentMethod || 'Online Payment'}\nAddress: ${newOrder.customerInfo?.address || newOrder.address || 'N/A'}\n\nItems:\n${itemsList}\n\nDBUY Store Management`,
-      }).catch(err => console.warn('[ORDER-EMAIL] Admin order alert error:', err?.message));
+      });
 
       // 2. Confirmation Email to Customer
       if (customerEmail && customerEmail.includes('@')) {
-        transporter.sendMail({
+        sendMailWithRetry({
           from: '"DBUY Store" <support@dbuystore.com>',
           to: customerEmail,
           subject: `Order Confirmation - DBUY Store #${newOrder.id}`,
           text: `Hello ${customerName},\n\nThank you for shopping at DBUY Store! We have received your order #${newOrder.id}.\n\nTotal: $${Number(totalAmount).toFixed(2)} ${currency}\nPayment Method: ${newOrder.paymentMethod || 'Online Payment'}\n\nItems:\n${itemsList}\n\nIf you have any questions, feel free to contact us at support@dbuystore.com.\n\nBest regards,\nDBUY Store Team`,
-        }).catch(err => console.warn('[ORDER-EMAIL] Customer confirmation error:', err?.message));
+        });
       }
     } catch (mailErr) {
       console.warn('[ORDER-EMAIL] Error dispatching order emails:', mailErr);
@@ -2048,13 +2159,12 @@ app.post('/api/googlepay/process-payment', async (req, res) => {
     }
 
     try {
-      const transporter = getMailTransporter();
-      transporter.sendMail({
+      sendMailWithRetry({
         from: '"DBUY Payments" <support@dbuystore.com>',
-        to: 'lashaarsiashvili@gmail.com',
+        to: 'lashaarsiashvili@gmail.com, support@dbuystore.com',
         subject: `[DBUY Order] Google Pay Payment: $${Number(amount || 0).toFixed(2)} (${txnId})`,
         text: `A new order has been paid via Google Pay!\n\nTransaction ID: ${txnId}\nAmount: $${Number(amount || 0).toFixed(2)} ${currency}\nCustomer: ${payer.name} (${payer.email})\nAddress: ${payer.address}, ${payer.city}, ${payer.country}\nPayee: lashafrommadrid@gmail.com\n\nDBUY Store`,
-      }).catch(err => console.warn('[EMAIL-NOTICE] Google Pay email notice:', err?.message));
+      });
     } catch (e) {
       // ignore
     }
@@ -2155,13 +2265,12 @@ app.post('/api/applepay/authorize', async (req, res) => {
     }
 
     try {
-      const transporter = getMailTransporter();
-      transporter.sendMail({
+      sendMailWithRetry({
         from: '"DBUY Payments" <support@dbuystore.com>',
-        to: 'lashaarsiashvili@gmail.com',
+        to: 'lashaarsiashvili@gmail.com, support@dbuystore.com',
         subject: `[DBUY Order] Apple Pay Payment: $${Number(amount || 0).toFixed(2)} (${txnId})`,
         text: `A new order has been authorized via Apple Pay!\n\nTransaction ID: ${txnId}\nAmount: $${Number(amount || 0).toFixed(2)} ${currency}\nCustomer: ${payer.name} (${payer.email})\nAddress: ${payer.address}, ${payer.city}, ${payer.country}\nPayee: lashafrommadrid@gmail.com\n\nDBUY Store`,
-      }).catch(err => console.warn('[EMAIL-NOTICE] Apple Pay email notice:', err?.message));
+      });
     } catch (e) {
       // ignore
     }
@@ -2311,21 +2420,26 @@ app.post('/api/auth/send-otp', async (req, res) => {
       ? `მოგესალმებით ${recipientName}!\n\nთქვენი DBUY Store-ის 5-ციფრიანი დამადასტურებელი კოდია: ${code}\n\nკოდი აქტიურია 10 წუთის განმავლობაში.\n\nთუ თქვენ არ მოგითხოვიათ ეს კოდი, უგულებელყავით ეს წერილი.\n\nგამომგზავნი: support@dbuystore.com\nDBUY Store Security`
       : `Hello ${recipientName}!\n\nYour DBUY Store 5-digit verification code is: ${code}\n\nThis code is valid for 10 minutes.\n\nIf you did not request this code, please ignore this email.\n\nSender: support@dbuystore.com\nDBUY Store Security`;
 
-    const transporter = getMailTransporter();
-
-    const mailOptions = {
+    const dispatchRes = await sendMailWithRetry({
       from: `"${senderName}" <${senderEmail}>`,
       replyTo: senderEmail,
       to: normalizedEmail,
       subject,
       text: textContent,
       html: htmlContent,
-    };
-
-    const sendResult = await transporter.sendMail(mailOptions);
-    console.log(`[AUTH-EMAIL-DISPATCH] Sent 5-digit OTP to: ${normalizedEmail} from: ${senderEmail}`, {
-      messageId: (sendResult as { messageId?: string })?.messageId || 'dispatched',
     });
+
+    if (!dispatchRes.success) {
+      res.status(500).json({
+        success: false,
+        error: isKa
+          ? 'დამადასტურებელი კოდის გაგზავნა ვერ მოხერხდა. სცადეთ ხელახლა.'
+          : dispatchRes.error || 'Failed to dispatch verification email. Please try again.',
+      });
+      return;
+    }
+
+    console.log(`[AUTH-EMAIL-DISPATCH] Sent 5-digit OTP to: ${normalizedEmail} (MessageId: ${dispatchRes.messageId})`);
 
     // We respond with success and NEVER return the actual OTP code to the browser!
     res.json({
@@ -2576,30 +2690,36 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       ? `მოგესალმებით!\n\nთქვენი DBUY Store-ის ახალი დროებითი პაროლია: ${tempPassword}\n\nგამოიყენეთ ეს პაროლი საიტზე შესასვლელად.\n\nგამომგზავნი: support@dbuystore.com\nDBUY Store Security`
       : `Hello!\n\nYour new DBUY Store temporary password is: ${tempPassword}\n\nUse this password to log in to your account.\n\nSender: support@dbuystore.com\nDBUY Store Security`;
 
-    let emailSent = false;
-    try {
-      const transporter = getMailTransporter();
-      await transporter.sendMail({
-        from: `"${senderName}" <${senderEmail}>`,
-        replyTo: senderEmail,
-        to: normalizedEmail,
-        subject,
-        text: textContent,
-        html: htmlContent,
+    const dispatchRes = await sendMailWithRetry({
+      from: `"${senderName}" <${senderEmail}>`,
+      replyTo: senderEmail,
+      to: normalizedEmail,
+      subject,
+      text: textContent,
+      html: htmlContent,
+    });
+
+    if (!dispatchRes.success) {
+      console.warn(`[AUTH-TEMP-PASSWORD] Email delivery failed for ${normalizedEmail}:`, dispatchRes.error);
+      res.status(500).json({
+        success: false,
+        error: isKa
+          ? 'დროებითი პაროლის გაგზავნა ვერ მოხერხდა ელ-ფოსტაზე. გთხოვთ სცადოთ ხელახლა.'
+          : 'Failed to deliver temporary password to your email inbox. Please try again.',
+        emailSent: false,
       });
-      emailSent = true;
-      console.log(`[AUTH-TEMP-PASSWORD] Dispatched temporary password email to: ${normalizedEmail}`);
-    } catch (mailErr) {
-      console.warn(`[AUTH-TEMP-PASSWORD] Email send encountered issue (password still updated):`, mailErr);
+      return;
     }
+
+    console.log(`[AUTH-TEMP-PASSWORD] Dispatched temporary password email to: ${normalizedEmail}`);
 
     res.json({
       success: true,
       tempPassword,
       email: normalizedEmail,
-      emailSent,
+      emailSent: true,
       sender: senderEmail,
-      message: isKa ? 'დროებითი პაროლი წარმატებით გენერირებულია და გაიგზავნა' : 'Temporary password successfully generated and dispatched',
+      message: isKa ? 'დროებითი პაროლი წარმატებით გაიგზავნა თქვენს ელ-ფოსტაზე' : 'Temporary password successfully dispatched to your email inbox',
     });
   } catch (error) {
     console.error('[AUTH-TEMP-PASS-ERROR]', error);
@@ -2697,14 +2817,13 @@ app.post('/api/contact', async (req, res) => {
 
     // Send email dispatch
     try {
-      const transporter = getMailTransporter();
       const formattedDate = new Date().toLocaleString('en-US', {
         dateStyle: 'medium',
         timeStyle: 'short',
         timeZone: 'UTC',
       }) + ' UTC';
 
-      await transporter.sendMail({
+      await sendMailWithRetry({
         from: `"DBUY Contact Form" <${supportEmail}>`,
         replyTo: `${name} <${email}>`,
         to: recipients.join(', '),
@@ -2803,7 +2922,7 @@ app.post('/api/contact', async (req, res) => {
       });
 
       // Send auto-acknowledgement email back to customer
-      transporter.sendMail({
+      sendMailWithRetry({
         from: `"DBUY Customer Care" <${supportEmail}>`,
         to: email,
         subject: `Message Received - DBUY Customer Care [${subject || 'Inquiry'}]`,
@@ -3023,11 +3142,8 @@ app.post('/api/admin/smtp/test', async (req, res) => {
       socketTimeout: 15000,
     });
 
-    // Verify SMTP connection
-    await testTransporter.verify();
-
-    // Send test email
-    const testResult = await testTransporter.sendMail({
+    // Send test email with retry
+    const testResult = await sendMailWithRetry({
       from: `"DBUY System Test" <${smtpUser}>`,
       to: `${smtpUser}, lashaarsiashvili@gmail.com`,
       subject: `[DBUY Test] Zoho Mail SMTP Connected Successfully (${new Date().toLocaleTimeString()})`,
@@ -3053,9 +3169,18 @@ app.post('/api/admin/smtp/test', async (req, res) => {
       text: `Zoho Mail SMTP Connected Successfully for ${smtpUser}!`,
     });
 
+    if (!testResult.success) {
+      res.status(500).json({
+        success: false,
+        error: testResult.error || 'Failed to dispatch test email',
+        meta,
+      });
+      return;
+    }
+
     res.json({
       success: true,
-      message: `Successfully verified connection and dispatched test email to ${smtpUser}`,
+      message: `Successfully verified connection and dispatched test email to ${smtpUser} and lashaarsiashvili@gmail.com`,
       messageId: testResult.messageId,
       meta,
     });

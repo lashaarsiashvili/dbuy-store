@@ -200,13 +200,13 @@ export const Header: React.FC = () => {
         {/* eBay-Style Search Container */}
         <div 
           style={{ borderColor: theme.primaryColor || '#2563eb' }}
-          className="hidden sm:flex flex-1 max-w-2xl items-center border-2 rounded-lg overflow-hidden bg-white dark:bg-slate-800 shadow-xs focus-within:ring-2 focus-within:ring-blue-300"
+          className="hidden sm:flex flex-1 w-full max-w-2xl items-center border-2 rounded-lg bg-white dark:bg-slate-800 shadow-sm mx-4"
         >
           <select
             value={selectedCategory}
             onChange={e => handleCategorySelect(e.target.value as Category)}
             aria-label="Search Category"
-            className="px-3 py-2 text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-r border-slate-200 dark:border-slate-600 focus:outline-hidden cursor-pointer"
+            className="h-full px-3 py-2.5 text-xs font-semibold bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-200 border-r border-slate-200 dark:border-slate-600 focus:outline-none cursor-pointer rounded-l-md"
           >
             <option value="all">{t('nav.all')}</option>
             <option value="tech">{t('nav.cat.tech')}</option>
@@ -216,18 +216,18 @@ export const Header: React.FC = () => {
             <option value="deals">{t('nav.cat.deals')}</option>
           </select>
 
-          <div className="relative flex-1 flex items-center">
+          <div className="relative flex-1 flex items-center h-full">
             <input
               type="text"
               value={searchQuery ?? ''}
               onChange={e => setSearchQuery(e.target.value)}
               placeholder={t('nav.searchPlaceholder')}
-              className="w-full px-3 py-2 text-sm text-slate-800 dark:text-slate-100 bg-transparent placeholder-slate-400 focus:outline-hidden"
+              className="w-full h-full px-4 py-2 text-sm text-slate-800 dark:text-slate-100 bg-transparent placeholder-slate-400 focus:outline-none"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 pr-2"
+                className="absolute right-2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                 aria-label="Clear search"
               >
                 <X className="w-4 h-4" />
@@ -240,9 +240,9 @@ export const Header: React.FC = () => {
               if (currentPage !== 'home') setCurrentPage('home');
             }}
             style={{ backgroundColor: theme.primaryColor || '#2563eb' }}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white font-semibold text-sm hover:opacity-90 transition-opacity"
+            className="flex items-center justify-center px-6 py-2.5 text-white font-bold text-sm hover:opacity-90 transition-opacity rounded-r-sm h-full"
           >
-            <Search className="w-4 h-4 mr-1.5" />
+            <Search className="w-4 h-4 mr-2" />
             <span>{t('nav.search')}</span>
           </button>
         </div>
