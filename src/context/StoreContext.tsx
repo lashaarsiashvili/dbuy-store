@@ -348,12 +348,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return text;
   };
 
+  // Track Firestore Quota state so we never stall execution or listen to frozen stale states
+  const firestoreWriteBlockedRef = useRef<boolean>(false);
+
   const safeFirestoreSetDoc = async (documentRef: any, data: any, options: any = { merge: true }) => {
+    if (firestoreWriteBlockedRef.current) {
+      return;
+    }
     try {
-      await setDoc(documentRef, data, options);
+      // 3-second timeout protection: If Firestore write stream stalls due to quota exhaustion, abort cleanly
+      await Promise.race([
+        setDoc(documentRef, data, options),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('FIRESTORE_WRITE_TIMEOUT')), 3000))
+      ]);
     } catch (err: any) {
-      if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
-        console.warn('[FIREBASE] Quota notice: Server disk & memory persistence handling store operations.');
+      if (
+        err?.code === 'resource-exhausted' ||
+        err?.message?.includes('RESOURCE_EXHAUSTED') ||
+        err?.message?.includes('Quota limit exceeded') ||
+        err?.message === 'FIRESTORE_WRITE_TIMEOUT'
+      ) {
+        firestoreWriteBlockedRef.current = true;
+        console.warn('[FIREBASE] Quota limit active: Server backend is authoritative persistence.');
       } else {
         console.warn('[FIREBASE] Notice saving doc:', err?.message || err);
       }
@@ -822,14 +838,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // 3. Directly persist to Firebase Firestore store/database (single atomic write to save quota)
-    try {
-      await safeFirestoreSetDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: nowIso });
-    } catch (fbErr: any) {
-      // safeFirestoreSetDoc gracefully handles quota limits
-    }
-
-    // 4. Immediately persist to server backend and keep server storage in sync
+    // 3. Authoritative server backend persistence (immediate disk, memory & source backup)
     try {
       const res = await fetch('/api/store/products', {
         method: 'POST',
@@ -845,6 +854,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (err) {
       console.error('Error syncing products to server:', err);
     }
+
+    // 4. Background persist to Firebase Firestore store/database (non-blocking)
+    safeFirestoreSetDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: nowIso })
+      .catch(() => {});
   };
 
   const addProduct = (prodData: Omit<Product, 'id'>) => {
@@ -1453,8 +1466,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         if (Array.isArray(d.products)) {
           setProducts(prevProducts => {
-            // Check if local update was made very recently (within 15 seconds) by an admin on THIS specific device
-            const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
+            // Check if local update was made very recently (within 30 seconds) by an admin on THIS specific device
+            const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
 
             // If this device recently modified products, preserve local user edits
             if (recentlyUpdatedLocally) {
@@ -1691,13 +1704,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         const data = snap.data();
 
-        // 1. PRODUCTS - Ensure Firestore is authoritative and images are persistent absolute URLs
-        // Guard against overwriting changes recently performed on this device
-        const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
+        // 1. PRODUCTS - Guard against stale Firestore snapshots reverting local/server state!
+        // If Firestore write quota is exhausted, Firestore will never receive new writes, so its snapshot is frozen and stale.
+        const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
         const isStaleSnapshot = Boolean(
-          data.lastUpdated &&
-          lastSyncTimestampRef.current &&
-          new Date(data.lastUpdated).getTime() < new Date(lastSyncTimestampRef.current).getTime()
+          firestoreWriteBlockedRef.current ||
+          (data.lastUpdated && lastSyncTimestampRef.current && new Date(data.lastUpdated).getTime() < new Date(lastSyncTimestampRef.current).getTime())
         );
 
         if (!recentlyUpdatedLocally && !isStaleSnapshot) {

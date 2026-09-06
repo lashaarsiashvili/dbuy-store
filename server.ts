@@ -255,9 +255,9 @@ function initStoreDatabase(): StoreDatabase {
   // 3. Strict single source of truth - NEVER union-merge with default catalog!
   // Preserves deletions, edits, and additions permanently.
   let products: any[] = [];
-  if (Array.isArray(fileProducts) && fileProducts.length > 0) {
+  if (Array.isArray(fileProducts)) {
     products = fileProducts;
-  } else if (Array.isArray(backupProducts) && backupProducts.length > 0) {
+  } else if (Array.isArray(backupProducts)) {
     products = backupProducts;
   } else if (Array.isArray(initialProducts)) {
     products = initialProducts;
@@ -396,12 +396,12 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
     if (docSnap.exists()) {
       const parsed = docSnap.data() as any;
       if (parsed) {
-        // Compare timestamps: Never overwrite a newer local store state with an older Firebase snapshot
+        // Compare timestamps: Never overwrite a newer or equal local store state with an older Firebase snapshot
         if (parsed.lastUpdated && storeDb.lastUpdated) {
           const parsedTime = new Date(parsed.lastUpdated).getTime();
           const localTime = new Date(storeDb.lastUpdated).getTime();
-          if (!isNaN(parsedTime) && !isNaN(localTime) && parsedTime < localTime) {
-            console.log(`[FIREBASE] Firestore snapshot (${parsed.lastUpdated}) is older than local disk database (${storeDb.lastUpdated}). Keeping local version!`);
+          if (!isNaN(parsedTime) && !isNaN(localTime) && parsedTime <= localTime) {
+            console.log(`[FIREBASE] Firestore snapshot (${parsed.lastUpdated}) is older than or equal to local disk database (${storeDb.lastUpdated}). Keeping local version!`);
             return;
           }
         }
