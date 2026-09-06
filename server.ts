@@ -520,6 +520,19 @@ function saveStoreDatabase(): void {
       const sanitizedStoreDb: Record<string, any> = { ...storeDb };
       delete sanitizedStoreDb.uploadsMap; // Remove base64 image map from main document
 
+      // Ensure verified Zoho SMTP configuration is preserved in storeDb & Firestore
+      if (!sanitizedStoreDb.smtpConfig || !sanitizedStoreDb.smtpConfig.pass) {
+        sanitizedStoreDb.smtpConfig = {
+          host: 'smtp.zoho.eu',
+          port: 465,
+          user: 'support@dbuystore.com',
+          pass: 'cjmwVviQbiaq',
+          verified: true,
+          lastVerifiedAt: new Date().toISOString(),
+        };
+        (storeDb as any).smtpConfig = sanitizedStoreDb.smtpConfig;
+      }
+
       // In products array, if image or images contain raw inline base64 data URLs, persist them to disk
       if (Array.isArray(sanitizedStoreDb.products)) {
         sanitizedStoreDb.products = sanitizedStoreDb.products.map((p: any) => {
@@ -1471,6 +1484,39 @@ app.post('/api/store/order', (req, res) => {
 
     saveStoreDatabase();
     console.log(`[ORDER-PERSISTED] Order ${newOrder.id} saved to server database`);
+
+    // Dispatch order notification email to support@dbuystore.com & admin & customer
+    try {
+      const transporter = getMailTransporter();
+      const customerEmail = newOrder.customerInfo?.email || newOrder.email || '';
+      const customerName = newOrder.customerInfo?.fullName || newOrder.customerInfo?.name || newOrder.name || 'Valued Customer';
+      const totalAmount = newOrder.total || newOrder.totalPrice || 0;
+      const currency = newOrder.currency || 'USD';
+      
+      const itemsList = Array.isArray(newOrder.items)
+        ? newOrder.items.map((i: any) => `- ${i.title || i.name || 'Product'} (x${i.quantity || 1}) - $${Number(i.price || 0).toFixed(2)}`).join('\n')
+        : 'Order Items';
+
+      // 1. Admin / Store Alert Email to support@dbuystore.com
+      transporter.sendMail({
+        from: '"DBUY Store Orders" <support@dbuystore.com>',
+        to: 'support@dbuystore.com, lashaarsiashvili@gmail.com',
+        subject: `[DBUY New Order] #${newOrder.id} - $${Number(totalAmount).toFixed(2)}`,
+        text: `New order placed on DBUY Store!\n\nOrder ID: #${newOrder.id}\nCustomer: ${customerName} (${customerEmail || 'No Email'})\nTotal: $${Number(totalAmount).toFixed(2)} ${currency}\nPayment Method: ${newOrder.paymentMethod || 'Online Payment'}\nAddress: ${newOrder.customerInfo?.address || newOrder.address || 'N/A'}\n\nItems:\n${itemsList}\n\nDBUY Store Management`,
+      }).catch(err => console.warn('[ORDER-EMAIL] Admin order alert error:', err?.message));
+
+      // 2. Confirmation Email to Customer
+      if (customerEmail && customerEmail.includes('@')) {
+        transporter.sendMail({
+          from: '"DBUY Store" <support@dbuystore.com>',
+          to: customerEmail,
+          subject: `Order Confirmation - DBUY Store #${newOrder.id}`,
+          text: `Hello ${customerName},\n\nThank you for shopping at DBUY Store! We have received your order #${newOrder.id}.\n\nTotal: $${Number(totalAmount).toFixed(2)} ${currency}\nPayment Method: ${newOrder.paymentMethod || 'Online Payment'}\n\nItems:\n${itemsList}\n\nIf you have any questions, feel free to contact us at support@dbuystore.com.\n\nBest regards,\nDBUY Store Team`,
+        }).catch(err => console.warn('[ORDER-EMAIL] Customer confirmation error:', err?.message));
+      }
+    } catch (mailErr) {
+      console.warn('[ORDER-EMAIL] Error dispatching order emails:', mailErr);
+    }
 
     res.json({
       success: true,

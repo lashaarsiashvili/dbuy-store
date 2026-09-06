@@ -1,0 +1,21 @@
+{
+  "short_name": "DBUY Store",
+  "name": "DBUY Store - Premium Electronics & Digital Goods",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512 192x192 64x64 32x32 24x24 16x16"
+    },
+    {
+      "src": "/falcon-icon.svg",
+      "type": "image/svg+xml",
+      "sizes": "512x512",
+      "purpose": "any maskable"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#0F172A",
+  "theme_color": "#3B82F6",
+  "display": "standalone"
+}

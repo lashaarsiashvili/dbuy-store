@@ -31,6 +31,7 @@ import {
   sanitizeInput,
   evaluatePasswordStrength,
 } from "../utils/security";
+import { smartApiFetch } from "../lib/api";
 import { ALL_COUNTRIES } from "../data/countries";
 
 import firebaseConfig from '../../firebase-applet-config.json';
@@ -280,7 +281,7 @@ export const AuthModal: React.FC = () => {
 
     setIsSendingTempPass(true);
     try {
-      const response = await fetch("/api/auth/forgot-password", {
+      const response = await smartApiFetch("/api/auth/forgot-password", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
