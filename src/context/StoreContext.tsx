@@ -33,7 +33,7 @@ import {
 } from '../utils/analytics';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
 import { db } from '../lib/firebase';
-import { doc, setDoc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, getDoc, onSnapshot, collection } from 'firebase/firestore';
 import { ensurePersistentAbsoluteUrl } from '../utils/firebaseStorage';
 
 interface StoreContextType {
@@ -863,6 +863,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // 4. Background persist to Firebase Firestore store/database (non-blocking)
     safeFirestoreSetDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: nowIso })
       .catch(() => {});
+
+    // 5. Automatic persistent sync to Firestore 'products' collection
+    try {
+      sanitizedProducts.forEach(prod => {
+        safeFirestoreSetDoc(doc(db, 'products', prod.id), prod)
+          .catch((err) => console.error(`Error saving product ${prod.id} to Firestore collection:`, err));
+      });
+
+      // Handle deletions
+      const nextIds = new Set(sanitizedProducts.map(p => p.id));
+      products.forEach(oldProd => {
+        if (!nextIds.has(oldProd.id)) {
+          safeFirestoreDeleteDoc(doc(db, 'products', oldProd.id))
+            .catch((err) => console.error(`Error deleting product ${oldProd.id} from Firestore:`, err));
+        }
+      });
+    } catch (e) {
+      console.error('Error synchronizing to products collection:', e);
+    }
   };
 
   const addProduct = (prodData: Omit<Product, 'id'>) => {
@@ -1699,6 +1718,50 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Firebase Firestore Realtime Sync (Robust real-time synchronization across all sessions)
     let fbUnsubscribe: (() => void) | null = null;
+    let fbProductsUnsubscribe: (() => void) | null = null;
+    
+    try {
+      fbProductsUnsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
+        const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
+        if (recentlyUpdatedLocally || firestoreWriteBlockedRef.current) {
+          return; // Skip if we recently modified products on this device
+        }
+
+        const fbProducts: Product[] = [];
+        snapshot.forEach((docSnap) => {
+          const p = docSnap.data() as any;
+          if (p && p.id) {
+            const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
+            const extraImgs = Array.isArray(p.images)
+              ? p.images.map((img: string) => ensurePersistentAbsoluteUrl(img, img))
+              : (mainImg ? [mainImg] : []);
+            fbProducts.push({
+              ...p,
+              image: mainImg,
+              images: extraImgs,
+            });
+          }
+        });
+
+        if (fbProducts.length > 0) {
+          fbProducts.sort((a, b) => {
+            const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+            const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+            return timeB - timeA;
+          });
+
+          setProducts(fbProducts);
+          try {
+            localStorage.setItem('dbuy_products', JSON.stringify(fbProducts));
+          } catch {}
+        }
+      }, (err) => {
+        console.error('[FIREBASE-REALTIME] Error in products collection listener:', err);
+      });
+    } catch (err) {
+      console.error('[FIREBASE-REALTIME] Failed to subscribe to products collection:', err);
+    }
+
     try {
       const docRef = doc(db, 'store', 'database');
       fbUnsubscribe = onSnapshot(docRef, (snap) => {
@@ -1873,6 +1936,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return () => {
       clearInterval(interval);
       if (fbUnsubscribe) fbUnsubscribe();
+      if (fbProductsUnsubscribe) fbProductsUnsubscribe();
       if (bc) bc.close();
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('storage', handleStorageChange);
