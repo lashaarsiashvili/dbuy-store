@@ -14,9 +14,6 @@ import { initialBillboards } from './src/data/initialBillboards';
 
 dotenv.config();
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app = express();
 const PORT = 3000;
 
@@ -398,12 +395,9 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
     if (docSnap.exists()) {
       const parsed = docSnap.data() as any;
       if (parsed) {
-        if (Array.isArray(parsed.products) && parsed.products.length > 0) {
+        if (Array.isArray(parsed.products)) {
           console.log(`[FIREBASE] Loaded ${parsed.products.length} products from Firebase Firestore!`);
-          const pMap = new Map<string, any>();
-          storeDb.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
-          parsed.products.forEach((p: any) => { if (p && p.id) pMap.set(p.id, p); });
-          storeDb.products = Array.from(pMap.values());
+          storeDb.products = parsed.products;
         }
 
         if (parsed.registeredUsers && Object.keys(parsed.registeredUsers).length > 0) {
@@ -486,14 +480,9 @@ async function syncFromRedisOnStartup(): Promise<void> {
     const data = await redisClient.get<any>('dbuy_store_database');
     if (data) {
       const parsed = typeof data === 'string' ? JSON.parse(data) : data;
-      if (parsed && Array.isArray(parsed.products) && parsed.products.length > 0) {
+      if (parsed && Array.isArray(parsed.products)) {
         console.log(`[REDIS/KV] Loaded ${parsed.products.length} products from Vercel KV / Upstash Redis!`);
-        
-        // Merge products from Redis into active storeDb
-        const pMap = new Map<string, any>();
-        storeDb.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
-        parsed.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
-        storeDb.products = Array.from(pMap.values());
+        storeDb.products = parsed.products;
 
         if (parsed.registeredUsers && Object.keys(parsed.registeredUsers).length > 0) {
           storeDb.registeredUsers = { ...storeDb.registeredUsers, ...parsed.registeredUsers };

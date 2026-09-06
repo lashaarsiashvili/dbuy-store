@@ -21,8 +21,11 @@ export const uploadImageToFirebase = async (dataUrl: string, prefix = 'uploads')
     const downloadURL = await getDownloadURL(storageRef);
     
     return downloadURL;
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error uploading image to Firebase Storage:', error);
+    if (error.code === 'storage/unauthorized') {
+       alert("CRITICAL ERROR: Firebase Storage permission denied. You MUST go to Firebase Console -> Storage -> Rules and change 'allow write: if request.auth != null;' to 'allow write: if true;'. Otherwise images will NOT save!");
+    }
     return null;
   }
 };
