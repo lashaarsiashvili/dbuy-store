@@ -33,7 +33,8 @@ import {
 } from '../utils/analytics';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
 import { db } from '../lib/firebase';
-import { doc, setDoc, onSnapshot } from 'firebase/firestore';
+import { doc, setDoc, deleteDoc, getDoc, onSnapshot } from 'firebase/firestore';
+import { ensurePersistentAbsoluteUrl } from '../utils/firebaseStorage';
 
 interface StoreContextType {
   // Navigation & View
@@ -761,109 +762,85 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, [products]);
 
-  // Ref to prevent background sync from overwriting newly added/edited products
+  // Ref to track locally initiated update timestamp
   const lastLocalProductUpdateRef = useRef<number>(0);
 
   const saveProducts = async (newProducts: Product[]) => {
+    // Sanitize image URLs in all products: ensure persistent absolute paths and no data: strings
+    const sanitizedProducts: Product[] = newProducts.map(p => {
+      const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
+      const extraImgs = Array.isArray(p.images)
+        ? p.images.map(img => ensurePersistentAbsoluteUrl(img, img))
+        : (mainImg ? [mainImg] : []);
+      return {
+        ...p,
+        image: mainImg,
+        images: extraImgs,
+      };
+    });
+
+    const nowIso = new Date().toISOString();
     lastLocalProductUpdateRef.current = Date.now();
-    setProducts(newProducts);
+    lastSyncTimestampRef.current = nowIso;
+    setProducts(sanitizedProducts);
 
     // 1. Quota-safe localStorage persistence (save products state safely)
     try {
-      localStorage.setItem('dbuy_products', JSON.stringify(newProducts));
+      localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
     } catch (storageErr) {
-      console.warn('localStorage quota warning, backing up images to IndexedDB:', storageErr);
-      // Backup base64 images to IndexedDB to preserve data
-      try {
-        const { saveImageBackupIDB } = await import('../utils/imageStorage');
-        newProducts.forEach((p, idx) => {
-          if (p.image && p.image.startsWith('data:')) {
-            saveImageBackupIDB(`prod-${p.id}-img`, p.image);
-          }
-          if (Array.isArray(p.images)) {
-            p.images.forEach((img, i) => {
-              if (img && img.startsWith('data:')) {
-                saveImageBackupIDB(`prod-${p.id}-img-${i}`, img);
-              }
-            });
-          }
-        });
-      } catch (idbErr) {
-        console.warn('Could not backup to IDB:', idbErr);
-      }
+      console.warn('localStorage quota warning:', storageErr);
     }
 
     // 2. Broadcast immediately to other open tabs/windows
     if (typeof BroadcastChannel !== 'undefined') {
       try {
         const bc = new BroadcastChannel('dbuy_store_sync');
-        bc.postMessage({ type: 'PRODUCTS_UPDATED', products: newProducts, timestamp: Date.now() });
+        bc.postMessage({ type: 'PRODUCTS_UPDATED', products: sanitizedProducts, timestamp: Date.now() });
         bc.close();
       } catch (e) {
         // ignore
       }
     }
 
-    // 3. Directly persist to Firebase Firestore (Client-Side, works instantly on Vercel)
+    // 3. Directly persist to Firebase Firestore store/database
     try {
-      setDoc(doc(db, 'store', 'database'), { products: newProducts, lastUpdated: new Date().toISOString() }, { merge: true })
-        .catch(err => console.warn('[CLIENT-FIREBASE] Error saving products:', err));
-    } catch (fbErr) {
-      console.warn('[CLIENT-FIREBASE] Error:', fbErr);
+      await setDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: nowIso }, { merge: true });
+    } catch (fbErr: any) {
+      if (fbErr?.code === 'resource-exhausted' || fbErr?.message?.includes('RESOURCE_EXHAUSTED')) {
+        console.warn('[CLIENT-FIREBASE] Daily write quota reached. Local & Server persistence active.');
+      } else {
+        console.warn('[CLIENT-FIREBASE] Notice saving products to Firestore:', fbErr?.message || fbErr);
+      }
     }
 
-    // 4. Immediately persist to server and update sync timestamp
+    // Also persist individual product documents in Firestore products collection
+    try {
+      sanitizedProducts.forEach(prod => {
+        setDoc(doc(db, 'products', prod.id), {
+          id: prod.id,
+          name: prod.title,
+          price: prod.price,
+          originalPrice: prod.origPrice || null,
+          category: prod.category,
+          image: prod.image,
+          description: prod.description || '',
+          inStock: (prod.stock ?? 1) > 0,
+          badge: prod.badge || null,
+        }, { merge: true }).catch(() => {});
+      });
+    } catch (e) {}
+
+    // 4. Immediately persist to server backend and keep server storage in sync
     try {
       const res = await fetch('/api/store/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ products: newProducts }),
+        body: JSON.stringify({ products: sanitizedProducts }),
       });
       if (res.ok) {
         const json = await res.json();
         if (json && json.lastUpdated) {
           lastSyncTimestampRef.current = json.lastUpdated;
-        }
-        if (json && Array.isArray(json.products)) {
-          const sanitizedProducts: Product[] = json.products;
-
-          // Save server-generated URL mappings to client IndexedDB for backup
-          try {
-            const { saveImageBackupIDB } = await import('../utils/imageStorage');
-            newProducts.forEach((origProd, idx) => {
-              const sanProd = sanitizedProducts[idx];
-              if (!sanProd) return;
-
-              if (origProd.image && origProd.image.startsWith('data:') && sanProd.image && sanProd.image.startsWith('/uploads/')) {
-                saveImageBackupIDB(sanProd.image, origProd.image);
-              }
-
-              if (Array.isArray(origProd.images) && Array.isArray(sanProd.images)) {
-                origProd.images.forEach((origImg, imgIdx) => {
-                  const sanImg = sanProd.images[imgIdx];
-                  if (origImg && origImg.startsWith('data:') && sanImg && sanImg.startsWith('/uploads/')) {
-                    saveImageBackupIDB(sanImg, origImg);
-                  }
-                });
-              }
-            });
-          } catch (idbErr) {
-            console.warn('[SAVE-PRODUCTS-IDB] Failed to backup image mappings in IndexedDB:', idbErr);
-          }
-
-          // Update products state and localStorage with the server's clean, persisted image URLs
-          setProducts(sanitizedProducts);
-          try {
-            localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
-          } catch (e) {
-            console.warn('Could not write sanitized products to localStorage:', e);
-          }
-
-          // Directly sync clean sanitized products back to Firestore so all secondary devices receive clean URLs
-          try {
-            setDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: json.lastUpdated || new Date().toISOString() }, { merge: true })
-              .catch(err => console.warn('[CLIENT-FIREBASE] Error saving sanitized products:', err));
-          } catch (e) {}
         }
       }
     } catch (err) {
@@ -1222,6 +1199,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
     setLastPlacedOrder(newOrder);
 
+    const nowIso = new Date().toISOString();
+    // Direct sync to Firestore store/database & orders collection
+    try {
+      setDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso }, { merge: true }).catch(() => {});
+      setDoc(doc(db, 'orders', newOrder.id), {
+        id: newOrder.id,
+        date: newOrder.date,
+        total: newOrder.total,
+        status: newOrder.status,
+      }, { merge: true }).catch(() => {});
+    } catch (e) {}
+
     // Save order to server backend
     fetch('/api/store/order', {
       method: 'POST',
@@ -1244,6 +1233,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updated = orders.map(o => (o.id === orderId ? { ...o, status } : o));
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
+    const nowIso = new Date().toISOString();
+    try {
+      setDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso }, { merge: true }).catch(() => {});
+      setDoc(doc(db, 'orders', orderId), { status }, { merge: true }).catch(() => {});
+    } catch (e) {}
+
     fetch('/api/store/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1276,6 +1271,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
+    const nowIso = new Date().toISOString();
+    try {
+      setDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso }, { merge: true }).catch(() => {});
+    } catch (e) {}
+
     fetch('/api/store/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1293,6 +1293,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const updated = orders.filter(o => o.id !== orderId);
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
+    const nowIso = new Date().toISOString();
+    try {
+      setDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso }, { merge: true }).catch(() => {});
+      deleteDoc(doc(db, 'orders', orderId)).catch(() => {});
+    } catch (e) {}
+
     fetch('/api/store/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1307,6 +1313,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const clearOrderHistory = () => {
     setOrders([]);
     localStorage.removeItem('dbuy_orders');
+    const nowIso = new Date().toISOString();
+    try {
+      setDoc(doc(db, 'store', 'database'), { orders: [], lastUpdated: nowIso }, { merge: true }).catch(() => {});
+    } catch (e) {}
+
     fetch('/api/store/sync', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1473,48 +1484,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             // Check if local update was made very recently (within 15 seconds) by an admin on THIS specific device
             const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
 
-            // If this device was NOT actively creating or editing products locally, ALWAYS accept server's d.products
-            if (!recentlyUpdatedLocally) {
-              try {
-                localStorage.setItem('dbuy_products', JSON.stringify(d.products));
-              } catch {}
-              return d.products;
+            // If this device recently modified products, preserve local user edits
+            if (recentlyUpdatedLocally) {
+              return prevProducts;
             }
 
-            // Only if this device IS actively editing/adding products locally in this session:
-            const savedLocal = localStorage.getItem('dbuy_products');
-            let localProducts: Product[] = [];
-            if (savedLocal) {
-              try {
-                localProducts = JSON.parse(savedLocal);
-              } catch {}
-            }
-
-            const activeLocal = localProducts.length > 0 ? localProducts : prevProducts;
-            const serverIds = new Set(d.products.map(p => p.id));
-            
-            // Custom admin-added products missing on server
-            const customLocalMissing = activeLocal.filter(p => !serverIds.has(p.id) && (p.id.startsWith('prod-17') || p.id.startsWith('prod-18') || p.id.startsWith('prod-19') || p.id.startsWith('prod-2')));
-
-            let finalMerged = d.products;
-
-            if (customLocalMissing.length > 0) {
-              console.log(`[CLIENT-STORE-SYNC] Active admin session: found ${customLocalMissing.length} custom local products missing on server. Merging and auto-pushing to server...`);
-              finalMerged = [...customLocalMissing, ...d.products];
-
-              // Push the union catalog to the server so it's persisted permanently
-              fetch('/api/store/products', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ products: finalMerged }),
-              }).catch(err => console.error('Failed to sync union catalog to server:', err));
-            }
-
+            // Otherwise, adopt the authoritative server products catalog
             try {
-              localStorage.setItem('dbuy_products', JSON.stringify(finalMerged));
+              localStorage.setItem('dbuy_products', JSON.stringify(d.products));
             } catch {}
-
-            return finalMerged;
+            return d.products;
           });
         }
         if (d.registeredUsers && typeof d.registeredUsers === 'object') {
@@ -1728,33 +1707,97 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     refreshServerStore();
 
-    // Firebase Firestore Realtime Sync (Works directly from client on Vercel)
+    // Firebase Firestore Realtime Sync (Robust real-time synchronization across all sessions)
     let fbUnsubscribe: (() => void) | null = null;
     try {
       const docRef = doc(db, 'store', 'database');
       fbUnsubscribe = onSnapshot(docRef, (snap) => {
-        if (snap.exists()) {
-          const data = snap.data();
-          if (Array.isArray(data.products) && data.products.length > 0) {
-            if (Date.now() - lastLocalProductUpdateRef.current > 8000) {
-              setProducts(data.products);
-              try {
-                localStorage.setItem('dbuy_products', JSON.stringify(data.products));
-              } catch {}
+        if (!snap.exists()) {
+          console.log('[FIREBASE-REALTIME] store/database document does not exist yet. Initializing.');
+          return;
+        }
+
+        const data = snap.data();
+        if (data.lastUpdated) {
+          lastSyncTimestampRef.current = data.lastUpdated;
+        }
+
+        // 1. PRODUCTS - Ensure Firestore is authoritative and images are persistent absolute URLs
+        if (Array.isArray(data.products)) {
+          const sanitizedProducts: Product[] = data.products.map(p => {
+            const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
+            const extraImgs = Array.isArray(p.images)
+              ? p.images.map(img => ensurePersistentAbsoluteUrl(img, img))
+              : (mainImg ? [mainImg] : []);
+            return {
+              ...p,
+              image: mainImg,
+              images: extraImgs,
+            };
+          });
+
+          setProducts(sanitizedProducts);
+          try {
+            localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
+          } catch {}
+        }
+
+        // 2. THEME - Update global theme and CSS custom property
+        if (data.theme && typeof data.theme === 'object') {
+          setTheme(prev => {
+            const nextTheme = { ...prev, ...data.theme };
+            if (nextTheme.primaryColor) {
+              document.documentElement.style.setProperty('--theme-primary', nextTheme.primaryColor);
             }
-          }
-          if (data.theme && typeof data.theme === 'object') {
-            setTheme(prev => ({ ...prev, ...data.theme }));
-            try {
-              localStorage.setItem('dbuy_theme', JSON.stringify(data.theme));
-            } catch {}
-          }
-          if (Array.isArray(data.billboards) && data.billboards.length > 0) {
-            setBillboards(data.billboards);
-            try {
-              localStorage.setItem('dbuy_billboards', JSON.stringify(data.billboards));
-            } catch {}
-          }
+            return nextTheme;
+          });
+          try {
+            localStorage.setItem('dbuy_theme', JSON.stringify(data.theme));
+          } catch {}
+        }
+
+        // 3. BILLBOARDS - Ensure billboard images are persistent absolute URLs
+        if (Array.isArray(data.billboards) && data.billboards.length > 0) {
+          const sanitizedBillboards: BillboardSlide[] = data.billboards.map(b => ({
+            ...b,
+            image: ensurePersistentAbsoluteUrl(b.image, b.image || ''),
+          }));
+          setBillboards(sanitizedBillboards);
+          try {
+            localStorage.setItem('dbuy_billboards', JSON.stringify(sanitizedBillboards));
+          } catch {}
+        }
+
+        // 4. BILLBOARD INTERVAL
+        if (typeof data.billboardIntervalSeconds === 'number') {
+          setBillboardIntervalSecondsState(data.billboardIntervalSeconds);
+          try {
+            localStorage.setItem('dbuy_billboard_interval', String(data.billboardIntervalSeconds));
+          } catch {}
+        }
+
+        // 5. ORDERS
+        if (Array.isArray(data.orders)) {
+          setOrders(data.orders);
+          try {
+            localStorage.setItem('dbuy_orders', JSON.stringify(data.orders));
+          } catch {}
+        }
+
+        // 6. REGISTERED USERS
+        if (data.registeredUsers && typeof data.registeredUsers === 'object') {
+          try {
+            localStorage.setItem('dbuy_registered_users', JSON.stringify(data.registeredUsers));
+            setRegisteredUsers(mapRegisteredUsersList(data.registeredUsers));
+          } catch {}
+        }
+
+        // 7. ADMIN SECRET SLUG
+        if (data.adminSecretSlug) {
+          setAdminSecretSlug(data.adminSecretSlug);
+          try {
+            localStorage.setItem('dbuy_admin_secret_slug', data.adminSecretSlug);
+          } catch {}
         }
       }, (err) => {
         if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {

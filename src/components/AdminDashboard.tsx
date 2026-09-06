@@ -12,7 +12,7 @@ import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
 import { StoreSyncModal } from './StoreSyncModal';
-import { uploadImageToFirebase } from '../utils/firebaseStorage';
+import { uploadImageToFirebase, ensurePersistentAbsoluteUrl } from '../utils/firebaseStorage';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -607,12 +607,14 @@ export const AdminDashboard: React.FC = () => {
           ctx.drawImage(img, 0, 0, width, height);
           const raw = canvas.toDataURL('image/jpeg', 0.90);
           
-          addToast(isKa ? 'ბილბორდის სურათი იტვირთება...' : 'Uploading billboard image...', 'info');
+          addToast(isKa ? 'ბილბორდის სურათი იტვირთება...' : 'Uploading billboard image to storage...', 'info');
           const uploadedUrl = await uploadImageToFirebase(raw, 'billboards');
-          const finalUrl = uploadedUrl || raw;
-          
-          setBillboardForm(prev => ({ ...prev, image: finalUrl }));
-          addToast(isKa ? 'ბილბორდის სურათი წარმატებით აიტვირთა!' : 'Billboard image uploaded successfully!', 'success');
+          if (uploadedUrl && (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://'))) {
+            setBillboardForm(prev => ({ ...prev, image: uploadedUrl }));
+            addToast(isKa ? 'ბილბორდის სურათი წარმატებით აიტვირთა!' : 'Billboard image uploaded successfully!', 'success');
+          } else {
+            addToast(isKa ? 'ბილბორდის სურათის ატვირთვა ვერ მოხერხდა' : 'Failed to upload billboard image', 'error');
+          }
         }
       };
       img.src = result;
@@ -698,19 +700,19 @@ export const AdminDashboard: React.FC = () => {
             rawUrl = canvas.toDataURL('image/jpeg', 0.82);
           }
 
-          // Upload to Firebase Storage
-          addToast(isKa ? 'სურათი იტვირთება...' : 'Uploading image...', 'info');
+          // Upload to Firebase Storage and get permanent downloadURL
+          addToast(isKa ? 'სურათი იტვირთება...' : 'Uploading image to storage...', 'info');
           const uploadedUrl = await uploadImageToFirebase(rawUrl, 'products');
           
-          if (uploadedUrl) {
+          if (uploadedUrl && (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://'))) {
             saveImageBackupIDB(uploadedUrl, rawUrl);
             appendProdImage(uploadedUrl, file.name);
           } else {
-            appendProdImage(rawUrl, file.name);
+            addToast(isKa ? 'სურათის ატვირთვა ვერ მოხერხდა' : 'Failed to upload image', 'error');
           }
         };
         img.onerror = () => {
-          appendProdImage(result, file.name);
+          addToast(isKa ? 'სურათის დამუშავება ვერ მოხერხდა' : 'Failed to process image file', 'error');
         };
         img.src = result;
       };
@@ -816,8 +818,8 @@ export const AdminDashboard: React.FC = () => {
 
   const handleAddImageUrl = () => {
     if (!newImageUrl.trim()) return;
-    if (!newImageUrl.startsWith('http') && !newImageUrl.startsWith('data:')) {
-      addToast(isKa ? 'გთხოვთ შეიყვანოთ სწორი ბმული (http...)' : 'Please enter a valid URL (http...)', 'warning');
+    if (!newImageUrl.startsWith('http://') && !newImageUrl.startsWith('https://')) {
+      addToast(isKa ? 'გთხოვთ შეიყვანოთ სწორი ბმული (https://...)' : 'Please enter a valid URL (https://...)', 'warning');
       return;
     }
     appendProdImage(newImageUrl.trim());
@@ -1021,17 +1023,19 @@ export const AdminDashboard: React.FC = () => {
 
     const finalSlug = prodForm.customSlug?.trim() || generateProductSlug(effectiveTitle);
 
-    // Prepare valid images array (up to 10 images)
+    const defaultStockCover = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
+
+    // Prepare valid images array (up to 10 images) ensuring persistent absolute URLs
     const validImages = (prodForm.images || [])
-      .map(img => (img || '').trim())
-      .filter(img => img.length > 0)
+      .map(img => ensurePersistentAbsoluteUrl(img, ''))
+      .filter(img => img.length > 0 && !img.startsWith('data:'))
       .slice(0, 10);
 
     const finalImages = validImages.length > 0
       ? validImages
-      : (prodForm.image ? [prodForm.image] : ['https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80']);
+      : [ensurePersistentAbsoluteUrl(prodForm.image, defaultStockCover)];
     
-    const finalPrimaryImage = finalImages[0];
+    const finalPrimaryImage = finalImages[0] || defaultStockCover;
 
     // Prepare 4 Key Features (auto-generate only if blank and description exists)
     let finalFeatures = (prodForm.features || [])

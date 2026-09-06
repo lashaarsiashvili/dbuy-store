@@ -207,7 +207,7 @@ interface StoreDatabase {
 function syncCatalogToInitialProducts(products: any[]): void {
   try {
     const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
-    if (Array.isArray(products) && products.length > 0) {
+    if (Array.isArray(products)) {
       const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(products, null, 2)};\n`;
       fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
       console.log(`[SOURCE-SYNC] Auto-persisted ${products.length} products to src/data/initialProducts.ts`);
@@ -252,15 +252,16 @@ function initStoreDatabase(): StoreDatabase {
     console.error('Error reading CODE_BACKUP_FILE:', err);
   }
 
-  // 3. Union-merge all product sources (initialProducts -> backupProducts -> fileProducts)
-  const productMap = new Map<string, any>();
-  if (Array.isArray(initialProducts)) {
-    initialProducts.forEach(p => { if (p && p.id) productMap.set(p.id, p); });
+  // 3. Strict single source of truth - NEVER union-merge with default catalog!
+  // Preserves deletions, edits, and additions permanently.
+  let products: any[] = [];
+  if (Array.isArray(fileProducts) && fileProducts.length > 0) {
+    products = fileProducts;
+  } else if (Array.isArray(backupProducts) && backupProducts.length > 0) {
+    products = backupProducts;
+  } else if (Array.isArray(initialProducts)) {
+    products = initialProducts;
   }
-  backupProducts.forEach(p => { if (p && p.id) productMap.set(p.id, p); });
-  fileProducts.forEach(p => { if (p && p.id) productMap.set(p.id, p); });
-
-  const products = Array.from(productMap.values());
 
   const defaultFallbackImages: Record<string, string> = {
     tech: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1000&q=80',
@@ -395,6 +396,16 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
     if (docSnap.exists()) {
       const parsed = docSnap.data() as any;
       if (parsed) {
+        // Compare timestamps: Never overwrite a newer local store state with an older Firebase snapshot
+        if (parsed.lastUpdated && storeDb.lastUpdated) {
+          const parsedTime = new Date(parsed.lastUpdated).getTime();
+          const localTime = new Date(storeDb.lastUpdated).getTime();
+          if (!isNaN(parsedTime) && !isNaN(localTime) && parsedTime < localTime) {
+            console.log(`[FIREBASE] Firestore snapshot (${parsed.lastUpdated}) is older than local disk database (${storeDb.lastUpdated}). Keeping local version!`);
+            return;
+          }
+        }
+
         if (Array.isArray(parsed.products)) {
           console.log(`[FIREBASE] Loaded ${parsed.products.length} products from Firebase Firestore!`);
           storeDb.products = parsed.products;
@@ -418,7 +429,7 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
         if (Array.isArray(parsed.contactMessages) && parsed.contactMessages.length > 0) {
           (storeDb as any).contactMessages = parsed.contactMessages;
         }
-        storeDb.lastUpdated = new Date().toISOString();
+        storeDb.lastUpdated = parsed.lastUpdated || new Date().toISOString();
 
         try {
           if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
@@ -575,20 +586,13 @@ function saveStoreDatabase(): void {
 
       setDoc(doc(firebaseDb, 'store', 'database'), sanitizedStoreDb, { merge: true })
         .then(() => console.log('[FIREBASE] Saved sanitized database to Firebase Firestore successfully'))
-        .catch(err => console.warn('[FIREBASE] Error saving to Firebase:', err?.message || err));
-
-      // Persist uploaded image files to store_uploads collection (1 document per image, unlimited)
-      if (uploadsMap && typeof uploadsMap === 'object') {
-        const uploadKeys = Object.keys(uploadsMap);
-        uploadKeys.forEach(filename => {
-          const dataUrl = uploadsMap[filename];
-          if (dataUrl && dataUrl.length < 900000) {
-            const safeDocId = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
-            setDoc(doc(firebaseDb, 'store_uploads', safeDocId), { filename, dataUrl, updatedAt: new Date().toISOString() }, { merge: true })
-              .catch(() => {});
+        .catch(err => {
+          if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED')) {
+            console.warn('[FIREBASE] Quota limit reached for today. Server disk persistence active.');
+          } else {
+            console.warn('[FIREBASE] Notice saving to Firebase:', err?.message || err);
           }
         });
-      }
     }
 
     // Automatically persist to Vercel KV / Upstash Redis if available
@@ -3266,6 +3270,10 @@ app.all('/api/*', (req, res) => {
 
 // Serve frontend with Vite in development or static dist in production
 async function setupFrontend() {
+  if (process.env.VERCEL === '1') {
+    return;
+  }
+
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
@@ -3287,3 +3295,5 @@ async function setupFrontend() {
 }
 
 setupFrontend();
+
+export default app;
