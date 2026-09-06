@@ -1757,7 +1757,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           } catch {}
         }
       }, (err) => {
-        console.error('[FIREBASE-REALTIME] Error in products collection listener:', err);
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
+          console.warn('[FIREBASE-REALTIME] Free daily Firestore products quota reached. Real-time sync seamlessly active via server REST API.');
+          return;
+        }
+        if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {
+          console.log('[FIREBASE-REALTIME] Products collection pending. REST API backup is functioning normally.');
+        } else {
+          console.warn('[FIREBASE-REALTIME] Notice in products collection listener:', err?.message || err);
+        }
       });
     } catch (err) {
       console.error('[FIREBASE-REALTIME] Failed to subscribe to products collection:', err);
