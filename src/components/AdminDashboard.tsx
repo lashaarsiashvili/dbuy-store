@@ -3354,18 +3354,38 @@ export const AdminDashboard: React.FC = () => {
                   {/* SMTP Host */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1">
-                      {isKa ? 'SMTP სერვერის ჰოსტი (Zoho Server)' : 'SMTP Host'}
+                      {isKa ? 'SMTP სერვერის ჰოსტი (SMTP Host)' : 'SMTP Host'}
                     </label>
                     <select
-                      value={smtpForm.host}
-                      onChange={e => setSmtpForm({ ...smtpForm, host: e.target.value })}
+                      value={['smtppro.zoho.com', 'smtppro.zoho.eu', 'smtp.zoho.com', 'smtp.zoho.eu', 'smtp.gmail.com', 'smtp-relay.brevo.com', 'smtp.resend.com'].includes(smtpForm.host) ? smtpForm.host : 'custom'}
+                      onChange={e => {
+                        if (e.target.value === 'custom') {
+                          setSmtpForm({ ...smtpForm, host: '' });
+                        } else {
+                          setSmtpForm({ ...smtpForm, host: e.target.value });
+                        }
+                      }}
                       className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono"
                     >
-                      <option value="smtppro.zoho.com">smtppro.zoho.com (Zoho Workplace / Custom Domain - Global)</option>
-                      <option value="smtppro.zoho.eu">smtppro.zoho.eu (Zoho Workplace / Custom Domain - Europe)</option>
+                      <option value="smtppro.zoho.com">smtppro.zoho.com (Zoho Workplace / Domain - Global)</option>
+                      <option value="smtppro.zoho.eu">smtppro.zoho.eu (Zoho Workplace / Domain - Europe)</option>
                       <option value="smtp.zoho.com">smtp.zoho.com (Zoho Personal)</option>
                       <option value="smtp.zoho.eu">smtp.zoho.eu (Zoho Personal - Europe)</option>
+                      <option value="smtp-relay.brevo.com">smtp-relay.brevo.com (Brevo / Sendinblue - 300 Free/Day)</option>
+                      <option value="smtp.gmail.com">smtp.gmail.com (Google / Gmail App Password)</option>
+                      <option value="smtp.resend.com">smtp.resend.com (Resend)</option>
+                      <option value="custom">✏️ {isKa ? 'სხვა სერვერის ჩაწერა...' : 'Custom SMTP Host...'}</option>
                     </select>
+
+                    {!['smtppro.zoho.com', 'smtppro.zoho.eu', 'smtp.zoho.com', 'smtp.zoho.eu', 'smtp.gmail.com', 'smtp-relay.brevo.com', 'smtp.resend.com'].includes(smtpForm.host) && (
+                      <input
+                        type="text"
+                        value={smtpForm.host}
+                        onChange={e => setSmtpForm({ ...smtpForm, host: e.target.value })}
+                        placeholder="e.g. smtp.example.com"
+                        className="w-full mt-2 px-4 py-2 text-xs bg-white border border-blue-300 rounded-lg font-mono focus:ring-2 focus:ring-blue-500"
+                      />
+                    )}
                   </div>
 
                   {/* SMTP Port */}
@@ -3437,21 +3457,40 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </form>
 
-              {/* Zoho Instructions Banner */}
+              {/* Zoho Instructions & Solutions Banner */}
               <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs text-slate-600">
                 <p className="font-bold text-slate-800 flex items-center space-x-1.5">
                   <span>ℹ️</span>
-                  <span>{isKa ? 'როგორ დავაგენერიროთ Zoho App Password და ჩავრთოთ SMTP?' : 'How to configure Zoho App Password & Enable SMTP?'}</span>
+                  <span>{isKa ? 'რატომ წერს Zoho "554 5.7.8 Access Restricted" და რა არის გამოსავალი?' : 'Why does Zoho return "554 5.7.8 Access Restricted" & Solution Options'}</span>
                 </p>
-                <ol className="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed text-slate-600">
-                  <li>{isKa ? 'შეხედით Zoho Accounts პორტალზე (accounts.zoho.com ან accounts.zoho.eu)' : 'Log in to Zoho Accounts (accounts.zoho.com or accounts.zoho.eu)'}</li>
-                  <li>{isKa ? 'გადადით Security → App Passwords სექციაში → დააჭირეთ Generate New Password ("DBUY Store") და დააკოპირეთ მიღებული 16-ნიშნა კოდი პაროლის ველში.' : 'Navigate to Security → Application-Specific Passwords → Click Generate New Password ("DBUY Store") and paste the 16-character code into the password field above.'}</li>
-                  <li className="font-semibold text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200/70">
+                
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-2 text-[11px] text-amber-900 leading-relaxed">
+                  <p className="font-bold text-amber-950">
                     {isKa 
-                      ? '⚠️ თუ გწერთ "554 5.7.8 Access Restricted": შედიხართ mail.zoho.com-ზე (ან mail.zoho.eu) → Settings ⚙️ → Mail Accounts → დააჭირეთ support@dbuystore.com-ს → აუცილებლად ჩართეთ "Enable SMTP Access" (მონიშნეთ ჩანართი).'
-                      : '⚠️ If getting "554 5.7.8 Access Restricted": Go to mail.zoho.com (or mail.zoho.eu) → Settings ⚙️ → Mail Accounts → Click support@dbuystore.com → Check "Enable SMTP Access".'}
-                  </li>
-                </ol>
+                      ? '📌 Zoho-ს ოფიციალური შეზღუდვა:' 
+                      : '📌 Zoho Mail Official Limitation:'}
+                  </p>
+                  <p>
+                    {isKa 
+                      ? 'Zoho Mail-ის უფასო (Forever Free) ტარიფზე 2021 წლის შემდეგ შექმნილ დომენურ ფოსტებზე (მაგ. support@dbuystore.com) Zoho-მ სრულად დაბლოკა გარეგანი SMTP/POP/IMAP წვდომა და ითხოვს $1-იან Paid Plan-ს.' 
+                      : 'Zoho Mail has disabled external SMTP/IMAP/POP access on Free plans created after Dec 2021 for custom domains.'}
+                  </p>
+                </div>
+
+                <div className="space-y-1.5 text-[11px] text-slate-700">
+                  <p className="font-bold text-slate-900">{isKa ? '💡 3 მარტივი გზა პრობლემის გადასაჭრელად:' : '💡 3 Simple Solutions:'}</p>
+                  <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-600">
+                    <li>
+                      <strong>1. Brevo (Sendinblue) - {isKa ? '100% უფასო (300 იმეილი/დღეში)' : '100% Free (300 emails/day)'}:</strong> {isKa ? 'დარეგისტრირდით brevo.com-ზე (1 წუთში), აიღეთ უფასო SMTP key, აირჩიეთ ზემოთ smtp-relay.brevo.com და გააგზავნეთ support@dbuystore.com-ის სახელით.' : 'Sign up at brevo.com, copy your free SMTP key, select smtp-relay.brevo.com above and send from support@dbuystore.com.'}
+                    </li>
+                    <li>
+                      <strong>2. Zoho Paid Plan ($1 / {isKa ? 'თვეში' : 'month'}):</strong> {isKa ? 'Zoho-ს $1-იან Mail Lite ტარიფზე გადასვლისას Zoho ავტომატურად ხსნის SMTP წვდომას.' : 'Upgrading Zoho to the $1/mo plan unlocks full SMTP access.'}
+                    </li>
+                    <li>
+                      <strong>3. Google / Gmail App Password ({isKa ? 'უფასო' : 'Free'}):</strong> {isKa ? 'აირჩიეთ smtp.gmail.com (465) და გამოიყენეთ ნებისმიერი Gmail-ის 16-ნიშნა App Password.' : 'Select smtp.gmail.com and use a 16-character Gmail App Password.'}
+                    </li>
+                  </ul>
+                </div>
               </div>
             </div>
 

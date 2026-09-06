@@ -568,7 +568,7 @@ setInterval(() => {
 function getMailTransporter() {
   const customSmtp = (storeDb as any)?.smtpConfig || {};
 
-  const smtpHost = customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.com';
+  const smtpHost = customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.eu';
   const smtpPort = parseInt(String(customSmtp.port || process.env.SMTP_PORT || '465'), 10);
   const smtpUser = customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com';
   const smtpPass = (
@@ -2794,7 +2794,7 @@ app.post('/api/admin/smtp/test', async (req, res) => {
     const { host, port, user, pass } = req.body || {};
     const customSmtp = (storeDb as any)?.smtpConfig || {};
 
-    const smtpHost = String(host || customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.com').trim();
+    const smtpHost = String(host || customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.eu').trim();
     const smtpPort = parseInt(String(port || customSmtp.port || process.env.SMTP_PORT || '465'), 10);
     const smtpUser = String(user || customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com').trim();
 
@@ -2873,9 +2873,11 @@ app.post('/api/admin/smtp/test', async (req, res) => {
     let userMessage = err?.message || 'SMTP connection failed';
 
     if (errStr.includes('554') || errStr.includes('Access Restricted')) {
-      userMessage = 'Zoho Mail Access Restricted (554 5.7.8): SMTP Access is disabled in your Zoho Mail account settings. ' +
-        'Fix: 1) Go to mail.zoho.com (or mail.zoho.eu) → Settings ⚙️ → Mail Accounts → Click "support@dbuystore.com" → Check "Enable SMTP Access". ' +
-        '2) Make sure Host is smtppro.zoho.com (or smtppro.zoho.eu for EU region). 3) Generate an App Password at accounts.zoho.com.';
+      userMessage = 'Zoho Mail Access Restricted (554 5.7.8): Zoho rejected the login request for support@dbuystore.com.\n\n' +
+        'Please verify these 3 steps in Zoho:\n' +
+        '1) Domain Verification: Go to mailadmin.zoho.eu ➔ Domains and click "Verify" for the TXT/MX records you added.\n' +
+        '2) App Password: Go to accounts.zoho.eu ➔ Security ➔ App Passwords ➔ Generate a 16-character App Password (do not use your regular account password if 2FA is active).\n' +
+        '3) Plan / SMTP Access: Ensure your account is upgraded to Zoho Mail Lite ($1/mo) or SMTP Access is enabled under mail.zoho.eu ➔ Settings ➔ Mail Accounts ➔ support@dbuystore.com.';
     } else if (errStr.includes('535') || errStr.includes('Authentication Failed') || errStr.includes('Invalid login')) {
       userMessage = 'Zoho Mail Authentication Failed (535): The password or App Password entered was rejected by Zoho. ' +
         'Please verify: 1) Your password is correct. 2) If 2FA is enabled in Zoho Accounts, generate a 16-character App Password at https://accounts.zoho.com (Security → App Passwords).';
