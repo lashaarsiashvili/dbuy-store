@@ -644,11 +644,17 @@ function getMailTransporter() {
     smtpHost = 'smtp.zoho.eu';
   }
   const smtpPort = parseInt(String(customSmtp.port || process.env.SMTP_PORT || '465'), 10);
-  const smtpUser = customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com';
+  const smtpUser = (
+    customSmtp.user ||
+    process.env.ZOHO_USER ||
+    process.env.SMTP_USER ||
+    'support@dbuystore.com'
+  ).trim();
   const smtpPass = (
     customSmtp.pass ||
-    process.env.SMTP_PASS ||
+    process.env.ZOHO_APP_PASSWORD ||
     process.env.ZOHO_PASSWORD ||
+    process.env.SMTP_PASS ||
     process.env.GMAIL_APP_PASSWORD ||
     'cjmwVviQbiaq'
   ).replace(/\s+/g, '');
@@ -689,11 +695,17 @@ async function sendMailWithRetry(options: {
   replyTo?: string;
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
   const customSmtp = (storeDb as any)?.smtpConfig || {};
-  const smtpUser = customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com';
+  const smtpUser = (
+    customSmtp.user ||
+    process.env.ZOHO_USER ||
+    process.env.SMTP_USER ||
+    'support@dbuystore.com'
+  ).trim();
   const smtpPass = (
     customSmtp.pass ||
-    process.env.SMTP_PASS ||
+    process.env.ZOHO_APP_PASSWORD ||
     process.env.ZOHO_PASSWORD ||
+    process.env.SMTP_PASS ||
     process.env.GMAIL_APP_PASSWORD ||
     'cjmwVviQbiaq'
   ).replace(/\s+/g, '');
@@ -3074,8 +3086,18 @@ app.get('/api/admin/smtp', (req, res) => {
     success: true,
     host: customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu',
     port: customSmtp.port || process.env.SMTP_PORT || 465,
-    user: customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com',
-    hasPass: Boolean(customSmtp.pass || process.env.SMTP_PASS || process.env.ZOHO_PASSWORD || 'cjmwVviQbiaq'),
+    user:
+      customSmtp.user ||
+      process.env.ZOHO_USER ||
+      process.env.SMTP_USER ||
+      'support@dbuystore.com',
+    hasPass: Boolean(
+      customSmtp.pass ||
+      process.env.ZOHO_APP_PASSWORD ||
+      process.env.ZOHO_PASSWORD ||
+      process.env.SMTP_PASS ||
+      'cjmwVviQbiaq'
+    ),
   });
 });
 
@@ -3117,11 +3139,22 @@ app.post('/api/admin/smtp/test', async (req, res) => {
 
     const smtpHost = String(host || customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu').trim();
     const smtpPort = parseInt(String(port || customSmtp.port || process.env.SMTP_PORT || '465'), 10);
-    const smtpUser = String(user || customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com').trim();
+    const smtpUser = String(
+      user ||
+      customSmtp.user ||
+      process.env.ZOHO_USER ||
+      process.env.SMTP_USER ||
+      'support@dbuystore.com'
+    ).trim();
 
     let rawPass = pass;
     if (!rawPass || rawPass === '****') {
-      rawPass = customSmtp.pass || process.env.SMTP_PASS || process.env.ZOHO_PASSWORD || 'cjmwVviQbiaq';
+      rawPass =
+        customSmtp.pass ||
+        process.env.ZOHO_APP_PASSWORD ||
+        process.env.ZOHO_PASSWORD ||
+        process.env.SMTP_PASS ||
+        'cjmwVviQbiaq';
     }
     const smtpPass = String(rawPass).trim().replace(/\s+/g, '');
 
