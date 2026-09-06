@@ -491,6 +491,11 @@ export const AuthModal: React.FC = () => {
                           <span>{language === "ka" ? "კოპირება" : "Copy"}</span>
                         </button>
                       </div>
+                      <p className="text-[10.5px] text-slate-500 italic mt-1 text-center">
+                        📧 {language === "ka" 
+                          ? "წერილები იგზავნება support@dbuystore.com-დან. შეამოწმეთ Inbox და Spam/Junk საქაღალდე."
+                          : "Dispatched from support@dbuystore.com. Please check your Inbox & Spam/Junk folder."}
+                      </p>
                     </div>
                   )}
 

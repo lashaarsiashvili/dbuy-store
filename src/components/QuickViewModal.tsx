@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { getProductFeatures } from '../utils/productFeatures';
 import { handleImageError } from '../utils/imageFallback';
+import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { 
   X, 
@@ -111,11 +112,10 @@ export const QuickViewModal: React.FC = () => {
             <div>
               {/* Main Featured Active Image with Zoom Frame */}
               <div className="relative w-full aspect-square sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-center group">
-                <img
+                <CachedImage
                   src={currentImage}
                   alt={`${displayTitle} - photo ${activeImageIndex + 1}`}
                   referrerPolicy="no-referrer"
-                  onError={handleImageError}
                   className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
                 />
 
@@ -190,11 +190,10 @@ export const QuickViewModal: React.FC = () => {
                           : 'border-slate-200 dark:border-slate-800 opacity-70 hover:opacity-100 hover:border-slate-400'
                       }`}
                     >
-                      <img
+                      <CachedImage
                         src={imgUrl}
                         alt={`Thumbnail ${idx + 1}`}
                         referrerPolicy="no-referrer"
-                        onError={handleImageError}
                         className="w-full h-full object-cover"
                       />
                       {activeImageIndex === idx && (

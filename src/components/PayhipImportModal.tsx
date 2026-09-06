@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import { Product } from '../types';
+import { CachedImage } from './CachedImage';
 import { 
   parseCSVText, 
   convertPayhipRowsToProducts, 
@@ -390,13 +391,10 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
                     {parsedPreview.map((p, idx) => (
                       <tr key={idx} className="hover:bg-slate-50/80">
                         <td className="p-2">
-                          <img
+                          <CachedImage
                             src={p.image}
                             alt={p.title}
                             className="w-9 h-9 object-cover rounded-lg border border-slate-200"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=400&q=80';
-                            }}
                           />
                         </td>
                         <td className="p-2 font-bold text-slate-800 max-w-[180px] truncate" title={p.title}>

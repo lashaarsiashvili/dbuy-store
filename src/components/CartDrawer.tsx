@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { CachedImage } from './CachedImage';
 import { 
   X, 
   Trash2, 
@@ -147,7 +148,7 @@ export const CartDrawer: React.FC = () => {
                   <div key={item.product.id} className="py-4 flex space-x-3 items-center">
                     {/* Thumbnail */}
                     <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
-                      <img
+                      <CachedImage
                         src={item.product.image}
                         alt={title}
                         className="w-full h-full object-cover"

@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Product, BillboardSlide } from '../types';
 import { handleImageError } from '../utils/imageFallback';
+import { CachedImage } from './CachedImage';
 
 export const Hero: React.FC = () => {
   const { 
@@ -240,12 +241,11 @@ export const Hero: React.FC = () => {
                   onClick={handleAction}
                   className="w-full h-64 sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-slate-950 relative cursor-pointer border border-slate-800 shadow-inner group/img"
                 >
-                  <img
+                  <CachedImage
                     key={currentSlide.id + currentSlide.image}
                     src={currentSlide.image}
                     alt={slideTitle}
                     referrerPolicy="no-referrer"
-                    onError={handleImageError}
                     className="w-full h-full object-cover group-hover/img:scale-106 transition-transform duration-700 ease-out animate-fadeIn"
                   />
                   
@@ -322,7 +322,7 @@ export const Hero: React.FC = () => {
               >
                 {/* Thumbnail Image */}
                 <div className="w-12 h-12 rounded-xl overflow-hidden bg-slate-950 shrink-0 relative border border-slate-800">
-                  <img
+                  <CachedImage
                     src={slide.image}
                     alt={thumbTitle}
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-300"

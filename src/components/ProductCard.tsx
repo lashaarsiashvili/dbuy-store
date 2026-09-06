@@ -3,6 +3,7 @@ import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Star, ShoppingCart, Eye, Check, Heart, Share2, Link as LinkIcon } from 'lucide-react';
 import { handleImageError } from '../utils/imageFallback';
+import { CachedImage } from './CachedImage';
 
 interface ProductCardProps {
   product: Product;
@@ -114,13 +115,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
       {/* Product Image Container */}
       <div className="relative w-full pt-[85%] bg-slate-100 overflow-hidden">
-        <img
+        <CachedImage
           src={product.image}
           alt={displayTitle}
           className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
           loading="lazy"
           referrerPolicy="no-referrer"
-          onError={handleImageError}
         />
 
         {/* Quick View Hover Overlay Button */}

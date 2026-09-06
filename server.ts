@@ -610,7 +610,10 @@ setInterval(() => {
 function getMailTransporter() {
   const customSmtp = (storeDb as any)?.smtpConfig || {};
 
-  const smtpHost = customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu';
+  let smtpHost = customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu';
+  if (smtpHost.includes('smtppro') || !smtpHost) {
+    smtpHost = 'smtp.zoho.eu';
+  }
   const smtpPort = parseInt(String(customSmtp.port || process.env.SMTP_PORT || '465'), 10);
   const smtpUser = customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com';
   const smtpPass = (

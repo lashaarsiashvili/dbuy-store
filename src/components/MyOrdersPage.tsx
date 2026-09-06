@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
+import { CachedImage } from './CachedImage';
 import { Package, Truck, ArrowRight, LogIn, Trash2, AlertTriangle, X, Copy, Check, ExternalLink } from 'lucide-react';
 
 export const MyOrdersPage: React.FC = () => {
@@ -150,7 +151,7 @@ export const MyOrdersPage: React.FC = () => {
                   {order.items.map((item, idx) => (
                     <div key={idx} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between gap-4">
                       <div className="flex items-center space-x-3">
-                        <img
+                        <CachedImage
                           src={item.image}
                           alt={item.title}
                           className="w-12 h-12 rounded-xl object-cover bg-slate-100 dark:bg-slate-800 shrink-0"

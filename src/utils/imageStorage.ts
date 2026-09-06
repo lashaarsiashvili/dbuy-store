@@ -1,5 +1,11 @@
-// Simple, high-performance IndexedDB wrapper for safe, unlimited base64 image backup storage.
-// This completely bypasses the 5MB browser localStorage quota limits, resolving image loss issues forever!
+import { useState, useEffect } from 'react';
+
+// ============================================================================
+// INDEXEDDB DATABASE SETUP
+// ============================================================================
+const DB_NAME = 'dbuy_image_backups';
+const DB_VERSION = 1;
+const STORE_NAME = 'images';
 
 const getIDB = (): Promise<IDBDatabase> => {
   return new Promise((resolve, reject) => {
@@ -7,11 +13,11 @@ const getIDB = (): Promise<IDBDatabase> => {
       reject(new Error('IndexedDB is not supported in this environment'));
       return;
     }
-    const request = indexedDB.open('dbuy_image_backups', 1);
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
     request.onupgradeneeded = () => {
       const db = request.result;
-      if (!db.objectStoreNames.contains('images')) {
-        db.createObjectStore('images');
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
       }
     };
     request.onsuccess = () => resolve(request.result);
@@ -19,7 +25,15 @@ const getIDB = (): Promise<IDBDatabase> => {
   });
 };
 
-const normalizeUrlKey = (url: string): string => {
+// ============================================================================
+// MEMORY CACHE & IN-FLIGHT DEDUPLICATION
+// ============================================================================
+// Synchronous in-memory RAM cache for 0ms lookup during React re-renders
+const memoryImageCache = new Map<string, string>();
+// Map of in-flight image resolution Promises to avoid duplicate fetch operations
+const pendingImageFetches = new Map<string, Promise<string>>();
+
+export const normalizeUrlKey = (url: string): string => {
   if (!url) return '';
   if (url.startsWith('data:')) return '';
   if (url.includes('/uploads/')) {
@@ -29,17 +43,62 @@ const normalizeUrlKey = (url: string): string => {
 };
 
 /**
- * Saves a base64 image backup to IndexedDB mapped to its server URL.
+ * Returns synchronously cached image from RAM if available (0ms delay).
  */
-export const saveImageBackupIDB = async (rawUrl: string, base64: string): Promise<void> => {
-  if (!rawUrl || !base64 || typeof window === 'undefined') return;
-  const url = normalizeUrlKey(rawUrl);
-  if (!url) return;
+export const getCachedImageUrlSync = (rawUrl: string): string | null => {
+  if (!rawUrl) return null;
+  if (rawUrl.startsWith('data:')) return rawUrl;
+  if (memoryImageCache.has(rawUrl)) {
+    return memoryImageCache.get(rawUrl)!;
+  }
+  const key = normalizeUrlKey(rawUrl);
+  if (key && memoryImageCache.has(key)) {
+    return memoryImageCache.get(key)!;
+  }
+  return null;
+};
+
+/**
+ * Saves an image (Base64 data URL or Blob) to IndexedDB mapped to key(s) and updates RAM cache.
+ */
+export const saveImageBackupIDB = async (rawUrl: string, base64OrBlob: string | Blob): Promise<void> => {
+  if (!rawUrl || !base64OrBlob || typeof window === 'undefined') return;
+
+  const keys = new Set<string>();
+  keys.add(rawUrl);
+  const normKey = normalizeUrlKey(rawUrl);
+  if (normKey) keys.add(normKey);
+
+  let dataUrl = typeof base64OrBlob === 'string' ? base64OrBlob : '';
+
+  if (base64OrBlob instanceof Blob) {
+    try {
+      dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(base64OrBlob);
+      });
+    } catch (e) {
+      console.warn('[IMAGE-STORAGE] Blob conversion failed:', e);
+      return;
+    }
+  }
+
+  if (!dataUrl) return;
+
+  // Update RAM cache immediately for instant re-render access
+  keys.forEach((k) => memoryImageCache.set(k, dataUrl));
+
   try {
     const db = await getIDB();
-    const tx = db.transaction('images', 'readwrite');
-    const store = tx.objectStore('images');
-    store.put(base64, url);
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    const store = tx.objectStore(STORE_NAME);
+
+    keys.forEach((k) => {
+      store.put(dataUrl, k);
+    });
+
     return new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => {
         db.close();
@@ -51,46 +110,57 @@ export const saveImageBackupIDB = async (rawUrl: string, base64: string): Promis
       };
     });
   } catch (e) {
-    console.error('[IMAGE-STORAGE-IDB] Save failed:', e);
+    console.warn('[IMAGE-STORAGE-IDB] Save failed:', e);
   }
 };
 
 /**
- * Retrieves a base64 image backup from IndexedDB by its server URL.
+ * Retrieves an image from IndexedDB mapped to a URL key.
  */
 export const getImageBackupIDB = async (rawUrl: string): Promise<string | null> => {
   if (!rawUrl || typeof window === 'undefined') return null;
-  const url = normalizeUrlKey(rawUrl);
-  if (!url) return null;
+
+  // Direct memory cache hit check
+  const syncHit = getCachedImageUrlSync(rawUrl);
+  if (syncHit) return syncHit;
+
+  const keysToTry = [rawUrl, normalizeUrlKey(rawUrl)].filter(Boolean);
+
   try {
     const db = await getIDB();
-    const tx = db.transaction('images', 'readonly');
-    const store = tx.objectStore('images');
-    const request = store.get(url);
-    return new Promise((resolve) => {
-      request.onsuccess = () => {
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
+
+    for (const key of keysToTry) {
+      const result = await new Promise<string | null>((resolve) => {
+        const req = store.get(key);
+        req.onsuccess = () => resolve((req.result as string) || null);
+        req.onerror = () => resolve(null);
+      });
+
+      if (result) {
         db.close();
-        resolve((request.result as string) || null);
-      };
-      request.onerror = () => {
-        db.close();
-        resolve(null);
-      };
-    });
+        // Populate RAM cache
+        keysToTry.forEach((k) => memoryImageCache.set(k, result));
+        return result;
+      }
+    }
+    db.close();
+    return null;
   } catch (e) {
     return null;
   }
 };
 
 /**
- * Loads all base64 image backups from IndexedDB as a Record<string, string>.
+ * Loads all base64 image backups from IndexedDB and populates the memory cache.
  */
 export const loadImageBackupsIDB = async (): Promise<Record<string, string>> => {
   if (typeof window === 'undefined') return {};
   try {
     const db = await getIDB();
-    const tx = db.transaction('images', 'readonly');
-    const store = tx.objectStore('images');
+    const tx = db.transaction(STORE_NAME, 'readonly');
+    const store = tx.objectStore(STORE_NAME);
     const request = store.openCursor();
     const result: Record<string, string> = {};
 
@@ -98,7 +168,10 @@ export const loadImageBackupsIDB = async (): Promise<Record<string, string>> => 
       request.onsuccess = (event: any) => {
         const cursor = event.target.result;
         if (cursor) {
-          result[cursor.key] = cursor.value;
+          const key = String(cursor.key);
+          const val = String(cursor.value);
+          result[key] = val;
+          memoryImageCache.set(key, val);
           cursor.continue();
         } else {
           db.close();
@@ -111,7 +184,144 @@ export const loadImageBackupsIDB = async (): Promise<Record<string, string>> => 
       };
     });
   } catch (e) {
-    console.error('[IMAGE-STORAGE-IDB] Load failed:', e);
+    console.warn('[IMAGE-STORAGE-IDB] Bulk load failed:', e);
     return {};
   }
 };
+
+/**
+ * Asynchronously resolves an image URL:
+ * 1. Checks memory cache (0ms)
+ * 2. Checks IndexedDB
+ * 3. Background fetches remote image, caches in IDB & RAM, and returns cached URL.
+ */
+export const resolveAndCacheImage = async (rawUrl: string): Promise<string> => {
+  if (!rawUrl) return '';
+  if (rawUrl.startsWith('data:')) return rawUrl;
+
+  const hit = getCachedImageUrlSync(rawUrl);
+  if (hit) return hit;
+
+  if (pendingImageFetches.has(rawUrl)) {
+    return pendingImageFetches.get(rawUrl)!;
+  }
+
+  const fetchPromise = (async (): Promise<string> => {
+    // Check IndexedDB
+    const idbHit = await getImageBackupIDB(rawUrl);
+    if (idbHit) return idbHit;
+
+    // Fetch from network if remote / relative path
+    if (typeof window !== 'undefined' && (rawUrl.startsWith('/uploads/') || rawUrl.startsWith('http://') || rawUrl.startsWith('https://'))) {
+      try {
+        const response = await fetch(rawUrl, { cache: 'force-cache' });
+        if (response.ok) {
+          const blob = await response.blob();
+          if (blob && blob.size > 0) {
+            await saveImageBackupIDB(rawUrl, blob);
+            const cached = getCachedImageUrlSync(rawUrl);
+            if (cached) return cached;
+          }
+        }
+      } catch (e) {
+        // Fallback to original URL on fetch failure
+      }
+    }
+
+    return rawUrl;
+  })();
+
+  pendingImageFetches.set(rawUrl, fetchPromise);
+
+  try {
+    const result = await fetchPromise;
+    return result;
+  } finally {
+    pendingImageFetches.delete(rawUrl);
+  }
+};
+
+/**
+ * Preloads and caches product images into IndexedDB and RAM cache.
+ */
+export const preloadProductImages = async (
+  products: Array<{ id?: string | number; image?: string; images?: string[] }>
+): Promise<void> => {
+  if (!Array.isArray(products) || typeof window === 'undefined') return;
+
+  for (const product of products) {
+    if (!product) continue;
+
+    if (product.image) {
+      if (product.image.startsWith('data:')) {
+        const idKey = `prod-${product.id}-img`;
+        memoryImageCache.set(idKey, product.image);
+        saveImageBackupIDB(idKey, product.image).catch(() => {});
+      } else {
+        resolveAndCacheImage(product.image).catch(() => {});
+      }
+    }
+
+    if (Array.isArray(product.images)) {
+      product.images.forEach((img, idx) => {
+        if (!img) return;
+        if (img.startsWith('data:')) {
+          const idKey = `prod-${product.id}-img-${idx}`;
+          memoryImageCache.set(idKey, img);
+          saveImageBackupIDB(idKey, img).catch(() => {});
+        } else {
+          resolveAndCacheImage(img).catch(() => {});
+        }
+      });
+    }
+  }
+};
+
+/**
+ * React Hook for persistent cached product images with 0ms memory fallback.
+ */
+export function useCachedImage(src: string, fallbackSrc?: string): string {
+  const [cachedSrc, setCachedSrc] = useState<string>(() => {
+    if (!src) return fallbackSrc || '';
+    if (src.startsWith('data:')) return src;
+    return getCachedImageUrlSync(src) || src;
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+
+    if (!src) {
+      setCachedSrc(fallbackSrc || '');
+      return;
+    }
+
+    if (src.startsWith('data:')) {
+      setCachedSrc(src);
+      return;
+    }
+
+    const syncHit = getCachedImageUrlSync(src);
+    if (syncHit) {
+      setCachedSrc(syncHit);
+      return;
+    }
+
+    resolveAndCacheImage(src)
+      .then((resolved) => {
+        if (isMounted && resolved) {
+          setCachedSrc(resolved);
+        }
+      })
+      .catch(() => {
+        if (isMounted) {
+          setCachedSrc(src || fallbackSrc || '');
+        }
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [src, fallbackSrc]);
+
+  return cachedSrc;
+}

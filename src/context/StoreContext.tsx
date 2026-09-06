@@ -19,7 +19,7 @@ import {
 import { initialProducts } from '../data/initialProducts';
 import { initialBillboards } from '../data/initialBillboards';
 import { translations } from '../data/translations';
-import { loadImageBackupsIDB } from '../utils/imageStorage';
+import { loadImageBackupsIDB, preloadProductImages } from '../utils/imageStorage';
 import { 
   loadVisitorLogs, 
   saveVisitorLogs, 
@@ -753,6 +753,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // Only used on very first clean install when localStorage is completely empty
     return initialProducts;
   });
+
+  // Pre-cache product images to IndexedDB and RAM cache to prevent image loss during re-renders or state updates
+  useEffect(() => {
+    if (Array.isArray(products) && products.length > 0) {
+      preloadProductImages(products);
+    }
+  }, [products]);
 
   // Ref to prevent background sync from overwriting newly added/edited products
   const lastLocalProductUpdateRef = useRef<number>(0);

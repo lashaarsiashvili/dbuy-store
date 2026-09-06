@@ -6,6 +6,7 @@ import { generateProductFeatures } from '../utils/productFeatures';
 import { generateProductAdCopy } from '../utils/adCopyGenerator';
 import { handleImageError } from '../utils/imageFallback';
 import { saveImageBackupIDB } from '../utils/imageStorage';
+import { CachedImage } from './CachedImage';
 import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
@@ -1799,11 +1800,10 @@ export const AdminDashboard: React.FC = () => {
                         <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
                           <td className="p-4">
                             <div className="relative group/thumb w-12 h-12 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
-                              <img
+                              <CachedImage
                                 src={prod.image}
                                 alt={prod.title}
                                 referrerPolicy="no-referrer"
-                                onError={handleImageError}
                                 className="w-full h-full object-cover transition-transform group-hover/thumb:scale-110"
                               />
                             </div>
@@ -2112,7 +2112,7 @@ export const AdminDashboard: React.FC = () => {
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-4 items-center">
                           {/* Image Box */}
                           <div className="sm:col-span-5 h-44 rounded-2xl overflow-hidden bg-slate-950 relative border border-slate-200 shadow-inner group">
-                            <img
+                            <CachedImage
                               src={slide.image}
                               alt={slide.title}
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
@@ -3811,7 +3811,7 @@ export const AdminDashboard: React.FC = () => {
                           : 'border-slate-200 hover:border-blue-400'
                       }`}
                     >
-                      <img
+                      <CachedImage
                         src={prod.image}
                         alt={prod.title}
                         className="w-8 h-8 rounded-lg object-cover bg-slate-950 shrink-0"
@@ -3886,7 +3886,7 @@ export const AdminDashboard: React.FC = () => {
                 {/* Live Image Preview Card */}
                 {billboardForm.image && (
                   <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 flex items-center space-x-4">
-                    <img
+                    <CachedImage
                       src={billboardForm.image}
                       alt="Preview"
                       className="w-20 h-20 rounded-xl object-cover bg-slate-950 border border-slate-700 shrink-0"
@@ -4448,7 +4448,7 @@ export const AdminDashboard: React.FC = () => {
                             className="shrink-0 p-1 rounded-xl border border-slate-200 bg-white hover:border-blue-500 transition-all disabled:opacity-40 cursor-pointer"
                             title={preset.label}
                           >
-                            <img
+                            <CachedImage
                               src={preset.url}
                               alt={preset.label}
                               className="w-9 h-9 object-cover rounded-lg"
@@ -4481,11 +4481,10 @@ export const AdminDashboard: React.FC = () => {
                             }`}
                           >
                             <div className="relative shrink-0">
-                              <img
+                              <CachedImage
                                 src={imgUrl}
                                 alt={`Product img ${idx + 1}`}
                                 referrerPolicy="no-referrer"
-                                onError={handleImageError}
                                 className="w-14 h-14 object-cover rounded-xl border border-slate-100 bg-slate-50"
                               />
                             </div>

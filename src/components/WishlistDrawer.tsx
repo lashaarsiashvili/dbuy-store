@@ -1,5 +1,6 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
+import { CachedImage } from './CachedImage';
 import { 
   X, 
   Trash2, 
@@ -117,7 +118,7 @@ export const WishlistDrawer: React.FC = () => {
                       }}
                       className="w-18 h-18 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden shrink-0 cursor-pointer relative"
                     >
-                      <img
+                      <CachedImage
                         src={product.image}
                         alt={title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

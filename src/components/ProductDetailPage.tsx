@@ -3,6 +3,7 @@ import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product } from '../types';
 import { getProductFeatures } from '../utils/productFeatures';
 import { handleImageError } from '../utils/imageFallback';
+import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { 
   Star, 
@@ -210,11 +211,10 @@ export const ProductDetailPage: React.FC = () => {
         <div className="lg:col-span-6 xl:col-span-6 space-y-4">
           <div className="relative w-full pt-[85%] sm:pt-[80%] rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-sm">
             {/* Main Image */}
-            <img
+            <CachedImage
               src={currentImage}
               alt={displayTitle}
               referrerPolicy="no-referrer"
-              onError={handleImageError}
               className="absolute inset-0 w-full h-full object-contain p-4 sm:p-6 transition-all duration-300"
             />
 
@@ -278,11 +278,10 @@ export const ProductDetailPage: React.FC = () => {
                       : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 opacity-70 hover:opacity-100'
                   }`}
                 >
-                  <img
+                  <CachedImage
                     src={imgUrl}
                     alt={`${displayTitle} - photo ${idx + 1}`}
                     referrerPolicy="no-referrer"
-                    onError={handleImageError}
                     className="w-full h-full object-cover p-1"
                   />
                 </button>
@@ -614,11 +613,10 @@ export const ProductDetailPage: React.FC = () => {
                   className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-3 flex flex-col justify-between hover:shadow-xl transition-all cursor-pointer"
                 >
                   <div className="relative pt-[85%] rounded-xl bg-slate-50 dark:bg-slate-950 overflow-hidden mb-3">
-                    <img
+                    <CachedImage
                       src={rel.image}
                       alt={relTitle}
                       referrerPolicy="no-referrer"
-                      onError={handleImageError}
                       className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
