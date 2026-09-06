@@ -500,9 +500,34 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
         // In serverless / Vercel cloud environments, the local disk is ephemeral and resets on cold starts.
         // Therefore, on startup we must always trust and pull the latest live database state from Firebase.
 
-        if (Array.isArray(parsed.products)) {
+        if (Array.isArray(parsed.products) && parsed.products.length > 0) {
           console.log(`[FIREBASE] Loaded ${parsed.products.length} products from Firebase Firestore!`);
           storeDb.products = parsed.products;
+        }
+
+        // Load from dedicated 'products' collection to bypass 1MB document size limits and support unlimited products
+        try {
+          const productsSnap = await getDocs(collection(firebaseDb, 'products'));
+          if (!productsSnap.empty) {
+            const fbProducts: any[] = [];
+            productsSnap.forEach((doc) => {
+              const p = doc.data();
+              if (p && p.id) {
+                fbProducts.push(p);
+              }
+            });
+            if (fbProducts.length > 0) {
+              console.log(`[FIREBASE] Loaded ${fbProducts.length} products from dedicated products collection!`);
+              fbProducts.sort((a, b) => {
+                const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
+                const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
+                return timeB - timeA;
+              });
+              storeDb.products = fbProducts;
+            }
+          }
+        } catch (prodErr) {
+          console.warn('[FIREBASE] Failed to load from products collection during startup sync:', prodErr);
         }
 
         if (parsed.registeredUsers && Object.keys(parsed.registeredUsers).length > 0) {

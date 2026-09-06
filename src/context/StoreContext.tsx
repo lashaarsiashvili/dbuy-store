@@ -835,8 +835,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error('Error syncing products to server:', err);
     }
 
-    // 4. Background persist to Firebase Firestore store/database (non-blocking)
-    safeFirestoreSetDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: nowIso })
+    // 4. Background persist to Firebase Firestore store/database (non-blocking) - omit products field to bypass the 1MB limit and support unlimited products
+    safeFirestoreSetDoc(doc(db, 'store', 'database'), { lastUpdated: nowIso })
       .catch(() => {});
 
     // 5. Automatic persistent sync to Firestore 'products' collection
@@ -1747,33 +1747,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         const data = snap.data();
 
-        // 1. PRODUCTS - Guard against stale Firestore snapshots reverting local/server state!
-        // If Firestore write quota is exhausted, Firestore will never receive new writes, so its snapshot is frozen and stale.
-        const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
-        const isStaleSnapshot = Boolean(
-          (data.lastUpdated && lastSyncTimestampRef.current && new Date(data.lastUpdated).getTime() < new Date(lastSyncTimestampRef.current).getTime())
-        );
-
-        if (!recentlyUpdatedLocally && !isStaleSnapshot) {
-          if (Array.isArray(data.products)) {
-            const sanitizedProducts: Product[] = data.products.map(p => {
-              const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
-              const extraImgs = Array.isArray(p.images)
-                ? p.images.map(img => ensurePersistentAbsoluteUrl(img, img))
-                : (mainImg ? [mainImg] : []);
-              return {
-                ...p,
-                image: mainImg,
-                images: extraImgs,
-              };
-            });
-
-            setProducts(sanitizedProducts);
-            try {
-              localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
-            } catch {}
-          }
-          if (data.lastUpdated) {
+        // 1. PRODUCTS - We bypass storing products in the monolithic store/database document to avoid the 1MB limit.
+        // Products are safely synced via the dedicated, separate 'products' collection onSnapshot listener.
+        if (data.lastUpdated) {
+          const isStaleSnapshot = Boolean(
+            lastSyncTimestampRef.current && new Date(data.lastUpdated).getTime() < new Date(lastSyncTimestampRef.current).getTime()
+          );
+          if (!isStaleSnapshot) {
             lastSyncTimestampRef.current = data.lastUpdated;
           }
         }
