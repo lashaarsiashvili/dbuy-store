@@ -227,13 +227,13 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         return (
           <div className="flex flex-col">
             <div className={`flex items-baseline font-black tracking-tight leading-none ${config.textSize}`}>
-              <span className={isDark ? 'text-white' : 'text-slate-950'}>D</span>
+              <span className={isDark ? 'text-white' : 'text-slate-950 dark:text-white'}>D</span>
               <span className="bg-gradient-to-r from-blue-500 to-indigo-500 bg-clip-text text-transparent">
                 Buy
               </span>
               <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 ml-1 mb-0.5 animate-pulse" />
             </div>
-            <span className={`font-bold tracking-[0.24em] uppercase ${config.subText} ${textMuted} mt-0.5`}>
+            <span className={`font-bold tracking-[0.24em] uppercase ${config.subText} ${isDark ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'} mt-0.5`}>
               Cyber • Store
             </span>
           </div>
@@ -243,13 +243,13 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         return (
           <div className="flex flex-col">
             <div className={`flex items-baseline font-black tracking-tight leading-none ${config.textSize}`}>
-              <span className={isDark ? 'text-white' : 'text-slate-950'}>D</span>
+              <span className={isDark ? 'text-white' : 'text-slate-950 dark:text-white'}>D</span>
               <span className="bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500 bg-clip-text text-transparent">
                 B
               </span>
-              <span className={isDark ? 'text-slate-100' : 'text-slate-900'}>uy</span>
+              <span className={isDark ? 'text-slate-100' : 'text-slate-900 dark:text-slate-100'}>uy</span>
             </div>
-            <span className={`font-black tracking-[0.26em] uppercase ${config.subText} ${textMuted} mt-0.5`}>
+            <span className={`font-black tracking-[0.26em] uppercase ${config.subText} ${isDark ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'} mt-0.5`}>
               Smart Living Store
             </span>
           </div>
@@ -260,13 +260,13 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         return (
           <div className="flex flex-col">
             <div className={`flex items-baseline font-black tracking-tight leading-none ${config.textSize}`}>
-              <span className={isDark ? 'text-white' : 'text-slate-950'}>D</span>
+              <span className={isDark ? 'text-white' : 'text-slate-950 dark:text-white'}>D</span>
               <span className="text-sky-500">Buy</span>
-              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-400 ml-1.5 uppercase border border-sky-500/20">
+              <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-md bg-sky-500/10 text-sky-400 dark:text-sky-300 ml-1.5 uppercase border border-sky-500/20">
                 Shop
               </span>
             </div>
-            <span className={`font-bold tracking-[0.2em] uppercase ${config.subText} ${textMuted} mt-0.5`}>
+            <span className={`font-bold tracking-[0.2em] uppercase ${config.subText} ${isDark ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'} mt-0.5`}>
               Smart Commerce
             </span>
           </div>
@@ -280,7 +280,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
                 DBUY
               </span>
             </div>
-            <span className={`font-black tracking-[0.28em] uppercase ${config.subText} ${textMuted} mt-0.5`}>
+            <span className={`font-black tracking-[0.28em] uppercase ${config.subText} ${isDark ? 'text-slate-400' : 'text-slate-500 dark:text-slate-400'} mt-0.5`}>
               Tech Innovation
             </span>
           </div>
@@ -290,7 +290,7 @@ export const BrandLogo: React.FC<BrandLogoProps> = ({
         return (
           <div className="flex flex-col">
             <div className={`flex items-baseline font-black tracking-wider leading-none ${config.textSize}`}>
-              <span className={isDark ? 'text-white' : 'text-slate-950'}>D</span>
+              <span className={isDark ? 'text-white' : 'text-slate-950 dark:text-white'}>D</span>
               <span className="bg-gradient-to-r from-purple-400 to-pink-500 bg-clip-text text-transparent">
                 BUY
               </span>

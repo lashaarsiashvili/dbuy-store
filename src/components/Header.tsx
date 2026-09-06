@@ -194,7 +194,7 @@ export const Header: React.FC = () => {
           onClick={handleLogoClick}
           className="flex items-center shrink-0 cursor-pointer"
         >
-          <BrandLogo size="md" variant="light" styleOverride={theme.logoStyle} />
+          <BrandLogo size="md" variant={isDarkMode ? 'dark' : 'light'} styleOverride={theme.logoStyle} />
         </a>
 
         {/* eBay-Style Search Container */}
@@ -388,13 +388,13 @@ export const Header: React.FC = () => {
 
       {/* Mobile Search Bar */}
       <div className="sm:hidden px-4 pb-2.5">
-        <div className="flex items-center border border-slate-300 rounded-lg overflow-hidden bg-white shadow-2xs">
+        <div className="flex items-center border border-slate-300 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-800 shadow-2xs">
           <input
             type="text"
             value={searchQuery ?? ''}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder={t('nav.searchPlaceholder')}
-            className="w-full px-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-hidden"
+            className="w-full px-3 py-1.5 text-xs text-slate-800 dark:text-slate-100 bg-transparent placeholder-slate-400 focus:outline-hidden"
           />
           {searchQuery && (
             <button

@@ -121,6 +121,7 @@ export const AuthModal: React.FC = () => {
     registerUser,
     resetUserPassword,
     theme,
+    isDarkMode,
     addToast,
   } = useStore();
 
@@ -420,7 +421,7 @@ export const AuthModal: React.FC = () => {
           <div className="flex flex-col items-center justify-center mb-5 pt-1">
             <BrandLogo
               size="md"
-              variant="light"
+              variant={isDarkMode ? 'dark' : 'light'}
               styleOverride={theme.logoStyle}
             />
             <div className="mt-2 flex items-center space-x-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/60 px-2.5 py-0.5 rounded-full border border-emerald-200 dark:border-emerald-800">

@@ -177,8 +177,8 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
         aria-expanded={isOpen}
         className={`inline-flex items-center space-x-1.5 px-2 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer select-none shadow-2xs ${
           variant === 'dark'
-            ? 'bg-slate-900 border-slate-800 text-slate-100 hover:bg-slate-850 hover:border-slate-700'
-            : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-slate-300 hover:text-slate-900'
+            ? 'bg-slate-900 border-slate-800 text-slate-100 hover:bg-slate-800 hover:border-slate-700'
+            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100'
         }`}
       >
         <CircularFlag code={currentLang.code} size={16} />
@@ -190,9 +190,9 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
       {isOpen && (
         <div
           role="listbox"
-          className="absolute right-0 mt-1.5 w-44 bg-white rounded-xl shadow-xl border border-slate-200 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100"
+          className="absolute right-0 mt-1.5 w-44 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-200 dark:border-slate-800 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 dark:divide-slate-800"
         >
-          <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400">
+          <div className="px-3 py-1 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             {t('top.selectLanguage')}
           </div>
           <div className="py-1">
@@ -208,22 +208,22 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors cursor-pointer text-left ${
                     isSelected
-                      ? 'bg-blue-50/80 text-blue-700 font-bold'
-                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900 font-medium'
+                      ? 'bg-blue-50/80 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
                   }`}
                 >
                   <div className="flex items-center space-x-2.5">
                     <CircularFlag code={item.code} size={18} />
                     <div className="flex items-baseline space-x-1.5">
-                      <span className="font-extrabold tracking-wider text-[11px] text-slate-900">
+                      <span className="font-extrabold tracking-wider text-[11px] text-slate-900 dark:text-slate-100">
                         {item.shortLabel}
                       </span>
-                      <span className="text-slate-500 text-[11px]">
+                      <span className="text-slate-500 dark:text-slate-400 text-[11px]">
                         • {item.fullLabel}
                       </span>
                     </div>
                   </div>
-                  {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-2" />}
+                  {isSelected && <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 ml-2" />}
                 </button>
               );
             })}

@@ -2620,55 +2620,169 @@ app.post('/api/contact', async (req, res) => {
     // Send email dispatch
     try {
       const transporter = getMailTransporter();
+      const formattedDate = new Date().toLocaleString('en-US', {
+        dateStyle: 'medium',
+        timeStyle: 'short',
+        timeZone: 'UTC',
+      }) + ' UTC';
+
       await transporter.sendMail({
         from: `"DBUY Contact Form" <${supportEmail}>`,
         replyTo: `${name} <${email}>`,
         to: recipients.join(', '),
         subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-            <div style="background-color: #0f172a; padding: 16px 20px; border-radius: 8px 8px 0 0; text-align: center;">
-              <h2 style="color: #ffffff; margin: 0; font-size: 20px;">DBUY Support - New Customer Message</h2>
-            </div>
-            <div style="padding: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
-              <p><strong>Official Mailbox:</strong> <a href="mailto:support@dbuystore.com" style="color: #2563eb;">support@dbuystore.com</a></p>
-              <p><strong>Customer Name:</strong> ${name}</p>
-              <p><strong>Customer Email:</strong> <a href="mailto:${email}" style="color: #2563eb;">${email}</a></p>
-              <p><strong>Order Number:</strong> ${orderNumber || 'N/A'}</p>
-              <p><strong>Subject:</strong> ${subject || 'General Inquiry'}</p>
-              <hr style="border: none; border-top: 1px solid #e2e8f0; margin: 16px 0;" />
-              <p><strong>Message Content:</strong></p>
-              <div style="background-color: #f8fafc; padding: 14px; border-radius: 8px; border-left: 4px solid #2563eb; font-size: 14px; white-space: pre-wrap;">${message}</div>
-            </div>
-            <div style="background-color: #f1f5f9; padding: 12px 20px; border-radius: 0 0 8px 8px; text-align: center; font-size: 12px; color: #64748b;">
-              Delivered directly to support@dbuystore.com • DBUY Commerce LLC
-            </div>
-          </div>
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>New Support Ticket - DBUY Store</title>
+            </head>
+            <body style="margin: 0; padding: 24px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 620px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);">
+                <!-- Header -->
+                <tr>
+                  <td style="background-color: #0f172a; padding: 28px 32px; text-align: left;">
+                    <table width="100%" cellspacing="0" cellpadding="0">
+                      <tr>
+                        <td>
+                          <span style="font-size: 22px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff;">DBUY<span style="color: #3b82f6;">.</span> STORE</span>
+                        </td>
+                        <td style="text-align: right;">
+                          <span style="display: inline-block; background-color: rgba(37, 99, 235, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
+                            New Support Ticket
+                          </span>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Content Body -->
+                <tr>
+                  <td style="padding: 32px;">
+                    <h1 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 800; color: #0f172a;">Customer Inquiry Received</h1>
+                    <p style="margin: 0 0 24px 0; font-size: 13px; color: #64748b; line-height: 1.5;">
+                      A new message has been submitted via the DBUY Store contact form and assigned to <strong>support@dbuystore.com</strong>.
+                    </p>
+
+                    <!-- Ticket Metadata Table -->
+                    <table width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 24px; font-size: 13px;">
+                      <tr>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600; width: 35%;">Customer Name:</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 700;">${name}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600;">Email Address:</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #2563eb; font-weight: 700;">
+                          <a href="mailto:${email}" style="color: #2563eb; text-decoration: none;">${email}</a>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600;">Order Number:</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600;">
+                          ${orderNumber ? `<span style="background-color: #eff6ff; color: #1d4ed8; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-weight: 700;">#${orderNumber}</span>` : '<span style="color: #94a3b8;">None Provided</span>'}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600;">Subject Topic:</td>
+                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600;">${subject || 'General Inquiry'}</td>
+                      </tr>
+                      <tr>
+                        <td style="padding: 12px 16px; color: #64748b; font-weight: 600;">Received Time:</td>
+                        <td style="padding: 12px 16px; color: #475569; font-size: 12px;">${formattedDate}</td>
+                      </tr>
+                    </table>
+
+                    <!-- Message Body Box -->
+                    <div style="margin-bottom: 28px;">
+                      <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin-bottom: 8px;">Customer Message:</div>
+                      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid #2563eb; border-radius: 8px; padding: 18px; font-size: 14px; color: #1e293b; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">${message}</div>
+                    </div>
+
+                    <!-- CTA Reply Button -->
+                    <div style="text-align: center; margin-bottom: 8px;">
+                      <a href="mailto:${email}?subject=Re:%20[DBUY%20Support]%20${encodeURIComponent(subject || 'Your Inquiry')}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; padding: 12px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
+                        ✉️ Reply to ${name} (${email})
+                      </a>
+                    </div>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 32px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+                    Dispatched directly to <strong style="color: #64748b;">support@dbuystore.com</strong><br />
+                    © ${new Date().getFullYear()} DBUY Store LLC. All customer rights reserved.
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>
         `,
-        text: `Official Mailbox: support@dbuystore.com\nCustomer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\n\nMessage:\n${message}`,
+        text: `Official Mailbox: support@dbuystore.com\nCustomer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\nReceived: ${formattedDate}\n\nMessage:\n${message}`,
       });
 
       // Send auto-acknowledgement email back to customer
       transporter.sendMail({
-        from: `"DBUY Customer Support" <${supportEmail}>`,
+        from: `"DBUY Customer Care" <${supportEmail}>`,
         to: email,
         subject: `Message Received - DBUY Customer Care [${subject || 'Inquiry'}]`,
         html: `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #e2e8f0; border-radius: 12px; background-color: #ffffff;">
-            <div style="background-color: #2563eb; padding: 16px 20px; border-radius: 8px 8px 0 0; text-align: center;">
-              <h2 style="color: #ffffff; margin: 0; font-size: 20px;">DBUY Customer Care</h2>
-            </div>
-            <div style="padding: 20px; color: #334155; font-size: 14px; line-height: 1.6;">
-              <p>Hello <strong>${name}</strong>,</p>
-              <p>Thank you for contacting DBUY Store! We have received your message and sent it directly to <strong>support@dbuystore.com</strong>.</p>
-              <p>Our customer support team is reviewing your inquiry and will respond to <strong>${email}</strong> within 12–24 business hours.</p>
-              <div style="background-color: #f8fafc; padding: 12px; border-radius: 8px; border: 1px solid #e2e8f0; margin: 16px 0;">
-                <p style="margin: 0; font-size: 12px; color: #64748b;"><strong>Message Reference Summary:</strong></p>
-                <p style="margin: 4px 0 0 0; font-size: 13px; color: #1e293b; font-style: italic;">"${message}"</p>
-              </div>
-              <p>Best regards,<br /><strong>DBUY Customer Support Team</strong><br /><a href="mailto:support@dbuystore.com" style="color: #2563eb;">support@dbuystore.com</a></p>
-            </div>
-          </div>
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>We Received Your Message - DBUY Store</title>
+            </head>
+            <body style="margin: 0; padding: 24px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
+              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);">
+                <!-- Header -->
+                <tr>
+                  <td style="background-color: #2563eb; padding: 28px 32px; text-align: center; color: #ffffff;">
+                    <div style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 4px;">DBUY<span style="color: #93c5fd;">.</span> STORE</div>
+                    <div style="font-size: 13px; font-weight: 500; color: #bfdbfe;">Customer Care & Support</div>
+                  </td>
+                </tr>
+
+                <!-- Content Body -->
+                <tr>
+                  <td style="padding: 32px;">
+                    <h1 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 800; color: #0f172a;">Thank You for Reaching Out, ${name}!</h1>
+                    <p style="margin: 0 0 16px 0; font-size: 14px; color: #334155; line-height: 1.6;">
+                      We have successfully received your inquiry and forwarded it directly to our customer support team at <strong>support@dbuystore.com</strong>.
+                    </p>
+                    <p style="margin: 0 0 24px 0; font-size: 14px; color: #334155; line-height: 1.6;">
+                      Our team is currently reviewing your message and will respond directly to <strong>${email}</strong> within <strong>12 to 24 business hours</strong>.
+                    </p>
+
+                    <!-- Message Copy Reference Box -->
+                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
+                      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 6px;">Your Inquiry Reference Summary:</div>
+                      <div style="font-size: 13px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">Subject: ${subject || 'General Inquiry'}</div>
+                      <div style="font-size: 13px; color: #475569; font-style: italic; line-height: 1.5; white-space: pre-wrap;">"${message}"</div>
+                    </div>
+
+                    <p style="margin: 0; font-size: 14px; color: #334155; line-height: 1.6;">
+                      Best regards,<br />
+                      <strong style="color: #0f172a;">DBUY Customer Care Team</strong><br />
+                      <a href="mailto:support@dbuystore.com" style="color: #2563eb; text-decoration: none; font-weight: 600;">support@dbuystore.com</a>
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Footer -->
+                <tr>
+                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 32px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
+                    Need urgent assistance? Reply directly to this email or visit <a href="https://dbuystore.com" style="color: #2563eb; text-decoration: none;">dbuystore.com</a><br />
+                    © ${new Date().getFullYear()} DBUY Store LLC. All rights reserved.
+                  </td>
+                </tr>
+              </table>
+            </body>
+          </html>
         `,
         text: `Hello ${name},\n\nThank you for contacting DBUY Store! We have received your message and sent it directly to support@dbuystore.com.\n\nOur customer support team will respond within 12–24 hours.\n\nBest regards,\nDBUY Support Team\nsupport@dbuystore.com`,
       }).catch(e => console.warn('[CONTACT-AUTOREPLY-WARN]', e?.message));
