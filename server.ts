@@ -42,6 +42,7 @@ app.use('/api', (req, res, next) => {
 });
 
 export const pendingPromises = new Set<Promise<any>>();
+export let dbInitPromise: Promise<void> | null = null;
 
 // Serverless Interceptor Middleware:
 // Since Vercel is a serverless platform, any asynchronous calls (e.g. saving to Firestore,
@@ -49,7 +50,17 @@ export const pendingPromises = new Set<Promise<any>>();
 // aborted if the HTTP response is sent before they finish.
 // This middleware intercepts res.json, res.send, and res.end to wait for all active
 // database writes and email dispatches to fully resolve before returning.
+// It also blocks requests until the database startup sync finishes, preventing cold-starts
+// from serving outdated default values from disk.
 app.use(async (req, res, next) => {
+  if (dbInitPromise) {
+    try {
+      await dbInitPromise;
+    } catch (err) {
+      console.error('[SERVERLESS-INTERCEPTOR] Error waiting for database initialization promise:', err);
+    }
+  }
+
   const originalJson = res.json;
   const originalSend = res.send;
   const originalEnd = res.end;
@@ -448,15 +459,8 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
     if (docSnap.exists()) {
       const parsed = docSnap.data() as any;
       if (parsed) {
-        // Compare timestamps: Never overwrite a newer or equal local store state with an older Firebase snapshot
-        if (parsed.lastUpdated && storeDb.lastUpdated) {
-          const parsedTime = new Date(parsed.lastUpdated).getTime();
-          const localTime = new Date(storeDb.lastUpdated).getTime();
-          if (!isNaN(parsedTime) && !isNaN(localTime) && parsedTime <= localTime) {
-            console.log(`[FIREBASE] Firestore snapshot (${parsed.lastUpdated}) is older than or equal to local disk database (${storeDb.lastUpdated}). Keeping local version!`);
-            return;
-          }
-        }
+        // In serverless / Vercel cloud environments, the local disk is ephemeral and resets on cold starts.
+        // Therefore, on startup we must always trust and pull the latest live database state from Firebase.
 
         if (Array.isArray(parsed.products)) {
           console.log(`[FIREBASE] Loaded ${parsed.products.length} products from Firebase Firestore!`);
@@ -575,8 +579,21 @@ async function syncFromRedisOnStartup(): Promise<void> {
   }
 }
 
-// Initial sync calls
-syncFromFirebaseOnStartup().then(() => syncFromRedisOnStartup());
+// Initial sync calls tracked inside dbInitPromise to block cold-start requests until fully synchronized
+dbInitPromise = (async () => {
+  console.log('[STARTUP-SYNC] Starting database synchronization...');
+  try {
+    await syncFromFirebaseOnStartup();
+  } catch (err) {
+    console.error('[STARTUP-SYNC] Error syncing from Firebase on startup:', err);
+  }
+  try {
+    await syncFromRedisOnStartup();
+  } catch (err) {
+    console.error('[STARTUP-SYNC] Error syncing from Redis on startup:', err);
+  }
+  console.log('[STARTUP-SYNC] Database synchronization complete.');
+})();
 
 let firestoreQuotaExceededUntil = 0;
 
