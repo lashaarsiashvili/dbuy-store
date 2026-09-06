@@ -183,6 +183,7 @@ interface StoreContextType {
     picture?: string;
   }) => boolean;
   changeAdminPassword: (oldPass: string, newPass: string) => boolean;
+  changeUserPassword: (oldPass: string, newPass: string) => Promise<boolean>;
   resetUserPassword: (email: string, newTempPass: string) => boolean;
   isAdmin: boolean;
   registeredUsers: RegisteredUser[];
@@ -2065,26 +2066,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (trimmedEmail === 'lashaarsiashvili@gmail.com') {
       setAdminPassword(hashedTempPass);
       localStorage.setItem('dbuy_admin_password', hashedTempPass);
-      return true;
     }
 
     const registeredMap = getRegisteredUsersMap();
     if (registeredMap[trimmedEmail]) {
       registeredMap[trimmedEmail].password = hashedTempPass;
-      localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
-      refreshRegisteredUsers();
     } else {
       registeredMap[trimmedEmail] = {
-        name: 'Customer',
+        name: trimmedEmail === 'lashaarsiashvili@gmail.com' ? 'Lasha (Admin)' : 'Customer',
         email: trimmedEmail,
         password: hashedTempPass,
         isLoggedIn: false,
-        role: 'customer',
+        role: trimmedEmail === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer',
         createdAt: new Date().toISOString(),
       };
-      localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
-      refreshRegisteredUsers();
     }
+    localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+    refreshRegisteredUsers();
+
     fetch('/api/store/register-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2109,8 +2108,71 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const hashedNew = hashPasswordSync(newPass);
     setAdminPassword(hashedNew);
     localStorage.setItem('dbuy_admin_password', hashedNew);
+
+    const registeredMap = getRegisteredUsersMap();
+    if (registeredMap['lashaarsiashvili@gmail.com']) {
+      registeredMap['lashaarsiashvili@gmail.com'].password = hashedNew;
+      localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+      refreshRegisteredUsers();
+    }
+
+    fetch('/api/auth/change-password', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email: 'lashaarsiashvili@gmail.com',
+        oldPassword: oldPass,
+        newPassword: newPass,
+      }),
+    }).catch(err => console.error('Error saving admin password to server:', err));
+
     addToast(t('toasts.adminPassChanged'), 'success');
     return true;
+  };
+
+  const changeUserPassword = async (oldPass: string, newPass: string): Promise<boolean> => {
+    if (!user.isLoggedIn || !user.email) {
+      addToast(language === 'ka' ? 'გთხოვთ გაიაროთ ავტორიზაცია' : 'Please log in first', 'error');
+      return false;
+    }
+
+    const cleanEmail = user.email.toLowerCase().trim();
+
+    if (cleanEmail === 'lashaarsiashvili@gmail.com') {
+      return changeAdminPassword(oldPass, newPass);
+    }
+
+    try {
+      const res = await fetch('/api/auth/change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          oldPassword: oldPass,
+          newPassword: newPass,
+        }),
+      });
+
+      const json = await res.json();
+      if (!res.ok || !json.success) {
+        addToast(json.error || (language === 'ka' ? 'ძველი პაროლი არასწორია' : 'Current password is incorrect'), 'error');
+        return false;
+      }
+
+      const hashedNew = hashPasswordSync(newPass);
+      const registeredMap = getRegisteredUsersMap();
+      if (registeredMap[cleanEmail]) {
+        registeredMap[cleanEmail].password = hashedNew;
+        localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+        refreshRegisteredUsers();
+      }
+
+      addToast(language === 'ka' ? '🔑 პაროლი წარმატებით განახლდა!' : '🔑 Password updated successfully!', 'success');
+      return true;
+    } catch (err: any) {
+      addToast(err.message || 'Error changing password', 'error');
+      return false;
+    }
   };
 
   const logoutUser = () => {
@@ -2399,6 +2461,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         logoutUser,
         registerUser,
         changeAdminPassword,
+        changeUserPassword,
         resetUserPassword,
         isAdmin,
         registeredUsers,

@@ -3,6 +3,7 @@ import { useStore } from '../context/StoreContext';
 import { Category, Currency, Language } from '../types';
 import { BrandLogo } from './BrandLogo';
 import { LanguageSelector } from './LanguageSelector';
+import { ChangePasswordModal } from './ChangePasswordModal';
 import { 
   Search, 
   ShoppingCart, 
@@ -17,7 +18,8 @@ import {
   Tag,
   Heart,
   Sun,
-  Moon
+  Moon,
+  KeyRound
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -48,6 +50,7 @@ export const Header: React.FC = () => {
 
   const [announcementClosed, setAnnouncementClosed] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -301,6 +304,16 @@ export const Header: React.FC = () => {
                     <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                     <span>{t('nav.myOrders')}</span>
                   </button>
+                  <button
+                    onClick={() => {
+                      setIsChangePasswordOpen(true);
+                      setUserDropdownOpen(false);
+                    }}
+                    className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2 font-medium"
+                  >
+                    <KeyRound className="w-4 h-4 text-amber-500" />
+                    <span>{language === 'ka' ? 'პაროლის შეცვლა' : 'Change Password'}</span>
+                  </button>
                   {isAdmin && (
                     <button
                       onClick={() => {
@@ -528,6 +541,11 @@ export const Header: React.FC = () => {
           </button>
         </div>
       </nav>
+
+      <ChangePasswordModal
+        isOpen={isChangePasswordOpen}
+        onClose={() => setIsChangePasswordOpen(false)}
+      />
     </header>
   );
 };

@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 
@@ -353,19 +353,15 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
       const parsed = docSnap.data() as any;
-      if (parsed && Array.isArray(parsed.products) && parsed.products.length > 0) {
-        console.log(`[FIREBASE] Loaded ${parsed.products.length} products from Firebase Firestore!`);
-        
-        const pMap = new Map<string, any>();
-        storeDb.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
-        parsed.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
-        storeDb.products = Array.from(pMap.values());
-
-        if (parsed.uploadsMap && typeof parsed.uploadsMap === 'object') {
-          uploadsMap = { ...uploadsMap, ...parsed.uploadsMap };
-          saveUploadsMap();
-          storeDb.uploadsMap = uploadsMap;
+      if (parsed) {
+        if (Array.isArray(parsed.products) && parsed.products.length > 0) {
+          console.log(`[FIREBASE] Loaded ${parsed.products.length} products from Firebase Firestore!`);
+          const pMap = new Map<string, any>();
+          storeDb.products.forEach(p => { if (p && p.id) pMap.set(p.id, p); });
+          parsed.products.forEach((p: any) => { if (p && p.id) pMap.set(p.id, p); });
+          storeDb.products = Array.from(pMap.values());
         }
+
         if (parsed.registeredUsers && Object.keys(parsed.registeredUsers).length > 0) {
           storeDb.registeredUsers = { ...storeDb.registeredUsers, ...parsed.registeredUsers };
         }
@@ -378,6 +374,12 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
         if (Array.isArray(parsed.billboards) && parsed.billboards.length > 0) {
           storeDb.billboards = parsed.billboards;
         }
+        if (parsed.smtpConfig) {
+          (storeDb as any).smtpConfig = parsed.smtpConfig;
+        }
+        if (Array.isArray(parsed.contactMessages) && parsed.contactMessages.length > 0) {
+          (storeDb as any).contactMessages = parsed.contactMessages;
+        }
         storeDb.lastUpdated = new Date().toISOString();
 
         try {
@@ -386,6 +388,28 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
           fs.writeFileSync(CODE_BACKUP_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
         } catch {}
       }
+    }
+
+    // Restore uploaded image files from store_uploads collection if available
+    try {
+      const uploadsSnap = await getDocs(collection(firebaseDb, 'store_uploads'));
+      if (!uploadsSnap.empty) {
+        let restoredCount = 0;
+        uploadsSnap.forEach(uDoc => {
+          const uData = uDoc.data();
+          if (uData?.filename && uData?.dataUrl) {
+            uploadsMap[uData.filename] = uData.dataUrl;
+            restoredCount++;
+          }
+        });
+        if (restoredCount > 0) {
+          console.log(`[FIREBASE] Restored ${restoredCount} uploaded images from Firebase store_uploads!`);
+          saveUploadsMap();
+          storeDb.uploadsMap = uploadsMap;
+        }
+      }
+    } catch (uErr) {
+      // Ignore if collection does not exist yet
     }
   } catch (err: any) {
     if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {
@@ -465,9 +489,44 @@ function saveStoreDatabase(): void {
 
     // Automatically persist to Firebase Firestore
     if (firebaseDb) {
-      setDoc(doc(firebaseDb, 'store', 'database'), storeDb, { merge: true })
-        .then(() => console.log('[FIREBASE] Saved database to Firebase Firestore successfully'))
+      // Create a clean payload WITHOUT giant base64 image maps to keep document size < 1MB
+      const sanitizedStoreDb: Record<string, any> = { ...storeDb };
+      delete sanitizedStoreDb.uploadsMap; // Remove base64 image map from main document
+
+      // In products array, if image or images contain raw inline base64 data URLs > 10KB, strip them
+      if (Array.isArray(sanitizedStoreDb.products)) {
+        sanitizedStoreDb.products = sanitizedStoreDb.products.map((p: any) => {
+          if (!p) return p;
+          const cleanP = { ...p };
+          if (typeof cleanP.image === 'string' && cleanP.image.startsWith('data:') && cleanP.image.length > 500) {
+            cleanP.image = '/uploads/placeholder.jpg';
+          }
+          if (Array.isArray(cleanP.images)) {
+            cleanP.images = cleanP.images.map((img: any) =>
+              typeof img === 'string' && img.startsWith('data:') && img.length > 500 ? '/uploads/placeholder.jpg' : img
+            );
+          }
+          return cleanP;
+        });
+      }
+
+      setDoc(doc(firebaseDb, 'store', 'database'), sanitizedStoreDb, { merge: true })
+        .then(() => console.log('[FIREBASE] Saved sanitized database to Firebase Firestore successfully'))
         .catch(err => console.warn('[FIREBASE] Error saving to Firebase:', err?.message || err));
+
+      // Persist uploaded image files to store_uploads collection (1 document per image)
+      if (uploadsMap && typeof uploadsMap === 'object') {
+        const uploadKeys = Object.keys(uploadsMap);
+        // Save uploaded images as separate documents (staying safely under 1MB per document)
+        uploadKeys.slice(-30).forEach(filename => {
+          const dataUrl = uploadsMap[filename];
+          if (dataUrl && dataUrl.length < 900000) {
+            const safeDocId = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
+            setDoc(doc(firebaseDb, 'store_uploads', safeDocId), { filename, dataUrl, updatedAt: new Date().toISOString() }, { merge: true })
+              .catch(() => {});
+          }
+        });
+      }
     }
 
     // Automatically persist to Vercel KV / Upstash Redis if available
@@ -507,24 +566,40 @@ setInterval(() => {
 
 // Helper to configure nodemailer transporter
 function getMailTransporter() {
-  const gmailUser = process.env.GMAIL_USER || 'lashaarsiashvili@gmail.com';
-  const gmailAppPass = (process.env.GMAIL_APP_PASSWORD || 'kcafmhjfwffmkmtu').replace(/\s+/g, '');
-  const smtpHost = process.env.SMTP_HOST || 'smtp.gmail.com';
-  const smtpPort = parseInt(process.env.SMTP_PORT || '465', 10);
-  const smtpUser = process.env.SMTP_USER || gmailUser;
+  const customSmtp = (storeDb as any)?.smtpConfig || {};
 
-  return nodemailer.createTransport({
+  const smtpHost = customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.com';
+  const smtpPort = parseInt(String(customSmtp.port || process.env.SMTP_PORT || '465'), 10);
+  const smtpUser = customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com';
+  const smtpPass = (
+    customSmtp.pass ||
+    process.env.SMTP_PASS ||
+    process.env.ZOHO_PASSWORD ||
+    process.env.GMAIL_APP_PASSWORD ||
+    ''
+  ).replace(/\s+/g, '');
+
+  const transporter = nodemailer.createTransport({
     host: smtpHost,
     port: smtpPort,
     secure: smtpPort === 465,
     auth: {
       user: smtpUser,
-      pass: gmailAppPass,
+      pass: smtpPass,
     },
     tls: {
       rejectUnauthorized: false,
     },
   });
+
+  (transporter as any).meta = {
+    smtpHost,
+    smtpPort,
+    smtpUser,
+    hasPass: Boolean(smtpPass),
+  };
+
+  return transporter;
 }
 
 // API Health Check
@@ -2054,8 +2129,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
       attempts: 0,
     });
 
-    const gmailUser = process.env.GMAIL_USER || 'lashaarsiashvili@gmail.com';
-    const senderEmail = process.env.SMTP_FROM_EMAIL || 'support@dbuystore.com';
+    const senderEmail = process.env.SMTP_FROM_EMAIL || (storeDb as any)?.smtpConfig?.user || 'support@dbuystore.com';
     const senderName = process.env.SMTP_FROM_NAME || 'DBUY Store';
 
     const subject = isKa 
@@ -2159,7 +2233,7 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const transporter = getMailTransporter();
 
     const mailOptions = {
-      from: `"${senderName}" <${gmailUser}>`,
+      from: `"${senderName}" <${senderEmail}>`,
       replyTo: senderEmail,
       to: normalizedEmail,
       subject,
@@ -2250,6 +2324,34 @@ app.post('/api/auth/verify-otp', (req, res) => {
   }
 });
 
+// Helper password hashing for server-side consistency
+function hashPasswordSyncServer(password: string): string {
+  if (!password) return '';
+  const SALT = 'dbuy_security_hash_salt_2026_x89';
+  const str = password + SALT;
+  let hash1 = 0xdeadbeef;
+  let hash2 = 0x41c64e6d;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str.charCodeAt(i);
+    hash1 = Math.imul(hash1 ^ ch, 2654435761);
+    hash2 = Math.imul(hash2 ^ ch, 1597334677);
+  }
+  hash1 = Math.imul(hash1 ^ (hash1 >>> 16), 2246822507);
+  hash1 ^= Math.imul(hash2 ^ (hash2 >>> 13), 3266489909);
+  hash2 = Math.imul(hash2 ^ (hash2 >>> 16), 2246822507);
+  hash2 ^= Math.imul(hash1 ^ (hash1 >>> 13), 3266489909);
+  const hex = (4294967296 * (2097151 & hash2) + (hash1 >>> 0)).toString(16);
+  return `h_${hex.padStart(16, '0')}`;
+}
+
+function verifyPasswordServer(enteredPassword: string, storedHashOrPass: string): boolean {
+  if (!enteredPassword || !storedHashOrPass) return false;
+  const syncHash = hashPasswordSyncServer(enteredPassword);
+  if (storedHashOrPass === syncHash) return true;
+  if (storedHashOrPass === enteredPassword) return true;
+  return false;
+}
+
 // API: Forgot Password / Temporary Password Dispatch
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
@@ -2270,6 +2372,25 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       randStr += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     const tempPassword = `DBUY-${randStr}`;
+    const hashedPassword = hashPasswordSyncServer(tempPassword);
+
+    // Save temporary password directly into server database
+    const existingUser = storeDb.registeredUsers[normalizedEmail] || {};
+    storeDb.registeredUsers[normalizedEmail] = {
+      ...existingUser,
+      email: normalizedEmail,
+      name: existingUser.name || (isAdmin ? 'Lasha (Admin)' : 'Customer'),
+      role: (isAdmin || existingUser.role === 'admin') ? 'admin' : 'customer',
+      passwordHash: hashedPassword,
+      createdAt: existingUser.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (isAdmin) {
+      storeDb.adminPasswordHash = hashedPassword;
+    }
+
+    saveStoreDatabase();
 
     const senderEmail = process.env.SMTP_FROM_EMAIL || 'support@dbuystore.com';
     const senderName = process.env.SMTP_FROM_NAME || 'DBUY Store Security';
@@ -2374,27 +2495,92 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       ? `მოგესალმებით!\n\nთქვენი DBUY Store-ის ახალი დროებითი პაროლია: ${tempPassword}\n\nგამოიყენეთ ეს პაროლი საიტზე შესასვლელად.\n\nგამომგზავნი: support@dbuystore.com\nDBUY Store Security`
       : `Hello!\n\nYour new DBUY Store temporary password is: ${tempPassword}\n\nUse this password to log in to your account.\n\nSender: support@dbuystore.com\nDBUY Store Security`;
 
-    const transporter = getMailTransporter();
-    await transporter.sendMail({
-      from: `"${senderName}" <${senderEmail}>`,
-      replyTo: senderEmail,
-      to: normalizedEmail,
-      subject,
-      text: textContent,
-      html: htmlContent,
-    });
-
-    console.log(`[AUTH-TEMP-PASSWORD] Dispatched temporary password to: ${normalizedEmail}`);
+    let emailSent = false;
+    try {
+      const transporter = getMailTransporter();
+      await transporter.sendMail({
+        from: `"${senderName}" <${senderEmail}>`,
+        replyTo: senderEmail,
+        to: normalizedEmail,
+        subject,
+        text: textContent,
+        html: htmlContent,
+      });
+      emailSent = true;
+      console.log(`[AUTH-TEMP-PASSWORD] Dispatched temporary password email to: ${normalizedEmail}`);
+    } catch (mailErr) {
+      console.warn(`[AUTH-TEMP-PASSWORD] Email send encountered issue (password still updated):`, mailErr);
+    }
 
     res.json({
       success: true,
       tempPassword,
       email: normalizedEmail,
-      message: isKa ? 'დროებითი პაროლი წარმატებით გაიგზავნა' : 'Temporary password sent successfully',
+      emailSent,
+      sender: senderEmail,
+      message: isKa ? 'დროებითი პაროლი წარმატებით გენერირებულია და გაიგზავნა' : 'Temporary password successfully generated and dispatched',
     });
   } catch (error) {
     console.error('[AUTH-TEMP-PASS-ERROR]', error);
-    res.status(500).json({ success: false, error: 'Failed to send temporary password' });
+    res.status(500).json({ success: false, error: 'Failed to generate temporary password' });
+  }
+});
+
+// API: Direct Password Change Endpoint
+app.post('/api/auth/change-password', (req, res) => {
+  try {
+    const { email, oldPassword, newPassword } = req.body;
+    if (!email || !oldPassword || !newPassword) {
+      res.status(400).json({ success: false, error: 'Email, old password, and new password are required' });
+      return;
+    }
+
+    const cleanEmail = String(email).trim().toLowerCase();
+    const isAdmin = cleanEmail === 'lashaarsiashvili@gmail.com';
+
+    let currentHash = storeDb.registeredUsers[cleanEmail]?.passwordHash;
+    if (isAdmin && !currentHash) {
+      currentHash = storeDb.adminPasswordHash || 'h_001f10c9bd0fb314';
+    }
+
+    if (!currentHash || !verifyPasswordServer(oldPassword, currentHash)) {
+      res.status(400).json({ success: false, error: 'Current password is incorrect' });
+      return;
+    }
+
+    if (String(newPassword).trim().length < 4) {
+      res.status(400).json({ success: false, error: 'New password must be at least 4 characters' });
+      return;
+    }
+
+    const newHashed = hashPasswordSyncServer(String(newPassword).trim());
+
+    if (storeDb.registeredUsers[cleanEmail]) {
+      storeDb.registeredUsers[cleanEmail].passwordHash = newHashed;
+      storeDb.registeredUsers[cleanEmail].updatedAt = new Date().toISOString();
+    } else {
+      storeDb.registeredUsers[cleanEmail] = {
+        email: cleanEmail,
+        name: isAdmin ? 'Lasha (Admin)' : 'Customer',
+        role: isAdmin ? 'admin' : 'customer',
+        passwordHash: newHashed,
+        createdAt: new Date().toISOString(),
+      };
+    }
+
+    if (isAdmin) {
+      storeDb.adminPasswordHash = newHashed;
+    }
+
+    saveStoreDatabase();
+
+    res.json({
+      success: true,
+      message: 'Password changed successfully',
+    });
+  } catch (err: any) {
+    console.error('Error changing password on server:', err);
+    res.status(500).json({ success: false, error: 'Failed to change password' });
   }
 });
 
@@ -2551,6 +2737,164 @@ app.get('/sitemap.xml', (req, res) => {
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
 ${xmlItems}
 </urlset>`);
+});
+
+// ==========================================
+// SMTP Configuration & Diagnostics Endpoints
+// ==========================================
+
+// GET: Current SMTP configuration info
+app.get('/api/admin/smtp', (req, res) => {
+  const customSmtp = (storeDb as any).smtpConfig || {};
+  res.json({
+    success: true,
+    host: customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.com',
+    port: customSmtp.port || process.env.SMTP_PORT || 465,
+    user: customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com',
+    hasPass: Boolean(customSmtp.pass || process.env.SMTP_PASS || process.env.ZOHO_PASSWORD),
+  });
+});
+
+// POST: Save updated SMTP configuration
+app.post('/api/admin/smtp', (req, res) => {
+  try {
+    const { host, port, user, pass } = req.body;
+    if (!(storeDb as any).smtpConfig) {
+      (storeDb as any).smtpConfig = {};
+    }
+
+    if (host !== undefined) (storeDb as any).smtpConfig.host = String(host).trim();
+    if (port !== undefined) (storeDb as any).smtpConfig.port = parseInt(String(port), 10) || 465;
+    if (user !== undefined) (storeDb as any).smtpConfig.user = String(user).trim();
+    if (pass !== undefined && pass !== '****') (storeDb as any).smtpConfig.pass = String(pass).trim();
+
+    saveStoreDatabase();
+
+    res.json({
+      success: true,
+      message: 'SMTP settings updated successfully',
+      smtp: {
+        host: (storeDb as any).smtpConfig.host,
+        port: (storeDb as any).smtpConfig.port,
+        user: (storeDb as any).smtpConfig.user,
+        hasPass: Boolean((storeDb as any).smtpConfig.pass),
+      },
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update SMTP settings' });
+  }
+});
+
+// POST: Test SMTP connection & send test message
+app.post('/api/admin/smtp/test', async (req, res) => {
+  try {
+    const transporter = getMailTransporter();
+    const meta = (transporter as any).meta;
+
+    if (!meta.hasPass) {
+      res.status(400).json({
+        success: false,
+        error: 'Zoho Mail Password / App Password is required! Please enter your Zoho password or App Password above and click "Save SMTP Settings" before testing.',
+        meta,
+      });
+      return;
+    }
+
+    // Verify SMTP connection
+    await transporter.verify();
+
+    // Send test email
+    const testResult = await transporter.sendMail({
+      from: `"DBUY System Test" <${meta.smtpUser}>`,
+      to: `${meta.smtpUser}, lashaarsiashvili@gmail.com`,
+      subject: `[DBUY Test] Zoho Mail SMTP Connected Successfully (${new Date().toLocaleTimeString()})`,
+      html: `
+        <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
+          <div style="background-color: #059669; padding: 16px 20px; border-radius: 10px; text-align: center; color: #ffffff; margin-bottom: 20px;">
+            <h2 style="margin: 0; font-size: 20px; font-weight: 800;">✅ Zoho Mail SMTP Connected!</h2>
+          </div>
+          <p style="font-size: 14px; color: #334155; line-height: 1.6;">
+            This diagnostic message confirms that DBUY Store is successfully authenticated with <strong>${meta.smtpUser}</strong> on server <strong>${meta.smtpHost}:${meta.smtpPort}</strong>.
+          </p>
+          <ul style="font-size: 13px; color: #475569; background-color: #f8fafc; padding: 14px 20px 14px 36px; border-radius: 10px; border: 1px solid #f1f5f9;">
+            <li><strong>Sender Email:</strong> ${meta.smtpUser}</li>
+            <li><strong>SMTP Server:</strong> ${meta.smtpHost}:${meta.smtpPort}</li>
+            <li><strong>Status:</strong> Active & Ready for Live OTP / Password Resets / Contact Emails</li>
+          </ul>
+          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
+          <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
+            DBUY Store Security & Mail Infrastructure • ${new Date().toISOString()}
+          </p>
+        </div>
+      `,
+      text: `Zoho Mail SMTP Connected Successfully for ${meta.smtpUser}!`,
+    });
+
+    res.json({
+      success: true,
+      message: `Successfully verified connection and dispatched test email to ${meta.smtpUser}`,
+      messageId: testResult.messageId,
+      meta,
+    });
+  } catch (err: any) {
+    console.error('[SMTP-TEST-ERROR]', err);
+    const errStr = String(err?.message || err?.response || err);
+    let userMessage = err?.message || 'SMTP connection failed';
+
+    if (errStr.includes('535') || errStr.includes('Authentication Failed') || errStr.includes('Invalid login')) {
+      userMessage = 'Zoho Mail Authentication Failed (535): The password or App Password entered was rejected by Zoho. ' +
+        'Please verify: 1) Your password is correct. 2) If 2FA is enabled in Zoho Accounts, generate a 16-character App Password at https://accounts.zoho.com (Security → App Passwords).';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: userMessage,
+      code: err?.code,
+      response: err?.response,
+    });
+  }
+});
+
+// ==========================================
+// Contact Messages Management Endpoints
+// ==========================================
+
+// GET: All received contact messages
+app.get('/api/contact/messages', (req, res) => {
+  const messages = Array.isArray((storeDb as any).contactMessages) ? (storeDb as any).contactMessages : [];
+  res.json({ success: true, messages });
+});
+
+// POST: Mark contact message as read/replied
+app.post('/api/contact/messages/mark-read', (req, res) => {
+  try {
+    const { id, status } = req.body;
+    if (!Array.isArray((storeDb as any).contactMessages)) {
+      (storeDb as any).contactMessages = [];
+    }
+    const idx = (storeDb as any).contactMessages.findIndex((m: any) => m.id === id);
+    if (idx !== -1) {
+      (storeDb as any).contactMessages[idx].status = status || 'read';
+      saveStoreDatabase();
+    }
+    res.json({ success: true, messages: (storeDb as any).contactMessages });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to update message status' });
+  }
+});
+
+// POST: Delete contact message
+app.post('/api/contact/messages/delete', (req, res) => {
+  try {
+    const { id } = req.body;
+    if (Array.isArray((storeDb as any).contactMessages)) {
+      (storeDb as any).contactMessages = (storeDb as any).contactMessages.filter((m: any) => m.id !== id);
+      saveStoreDatabase();
+    }
+    res.json({ success: true, messages: (storeDb as any).contactMessages });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to delete message' });
+  }
 });
 
 // JSON 404 handler for any unknown /api routes (prevents returning HTML SPA fallback for API calls)

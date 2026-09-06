@@ -58,7 +58,12 @@ import {
   Filter,
   ArrowUpDown,
   TrendingUp,
-  AlertTriangle
+  AlertTriangle,
+  Mail,
+  Send,
+  Inbox,
+  MessageSquare,
+  Server
 } from 'lucide-react';
 
 export const AdminDashboard: React.FC = () => {
@@ -149,7 +154,139 @@ export const AdminDashboard: React.FC = () => {
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security' | 'messages'>('analytics');
+
+  // Contact Messages & SMTP State
+  const [contactMessages, setContactMessages] = useState<Array<{
+    id: string;
+    name: string;
+    email: string;
+    orderNumber?: string;
+    subject: string;
+    message: string;
+    createdAt: string;
+    status: 'unread' | 'read' | 'replied';
+  }>>([]);
+  const [messageSearch, setMessageSearch] = useState('');
+  const [selectedMessage, setSelectedMessage] = useState<any | null>(null);
+
+  // SMTP Settings State
+  const [smtpForm, setSmtpForm] = useState({
+    host: 'smtppro.zoho.com',
+    port: 465,
+    user: 'support@dbuystore.com',
+    pass: '',
+  });
+  const [showSmtpPass, setShowSmtpPass] = useState(false);
+  const [hasServerPass, setHasServerPass] = useState(false);
+  const [testingSmtp, setTestingSmtp] = useState(false);
+  const [smtpTestResult, setSmtpTestResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
+
+  // Fetch messages and SMTP info
+  const fetchSmtpAndMessages = async () => {
+    try {
+      const [msgRes, smtpRes] = await Promise.all([
+        fetch('/api/contact/messages').then(r => r.json()),
+        fetch('/api/admin/smtp').then(r => r.json())
+      ]);
+      if (msgRes?.success) setContactMessages(msgRes.messages || []);
+      if (smtpRes?.success) {
+        setSmtpForm(prev => ({
+          ...prev,
+          host: smtpRes.host || 'smtppro.zoho.com',
+          port: smtpRes.port || 465,
+          user: smtpRes.user || 'support@dbuystore.com',
+        }));
+        setHasServerPass(smtpRes.hasPass);
+      }
+    } catch (err) {
+      console.warn('Error fetching SMTP or messages:', err);
+    }
+  };
+
+  useEffect(() => {
+    if (isAdmin) {
+      fetchSmtpAndMessages();
+    }
+  }, [isAdmin, activeTab]);
+
+  const handleMarkMessageRead = async (id: string, status: 'read' | 'replied') => {
+    try {
+      const res = await fetch('/api/contact/messages/mark-read', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, status }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setContactMessages(data.messages || []);
+        addToast(isKa ? 'სტატუსი განახლდა' : 'Status updated', 'success');
+      }
+    } catch {
+      addToast(isKa ? 'შეცდომა' : 'Error', 'error');
+    }
+  };
+
+  const handleDeleteMessage = async (id: string) => {
+    try {
+      const res = await fetch('/api/contact/messages/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setContactMessages(data.messages || []);
+        if (selectedMessage?.id === id) setSelectedMessage(null);
+        addToast(isKa ? 'შეტყობინება წაიშალა' : 'Message deleted', 'info');
+      }
+    } catch {
+      addToast(isKa ? 'შეცდომა' : 'Error', 'error');
+    }
+  };
+
+  const handleSaveSmtp = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const res = await fetch('/api/admin/smtp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(smtpForm),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setHasServerPass(data.smtp.hasPass);
+        addToast(isKa ? 'Zoho SMTP პარამეტრები წარმატებით შენახულია!' : 'Zoho SMTP settings saved successfully!', 'success');
+      } else {
+        addToast(data.error || 'Failed to save SMTP settings', 'error');
+      }
+    } catch {
+      addToast('Error saving SMTP settings', 'error');
+    }
+  };
+
+  const handleTestSmtp = async () => {
+    setTestingSmtp(true);
+    setSmtpTestResult(null);
+    try {
+      const res = await fetch('/api/admin/smtp/test', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+      const data = await res.json();
+      setSmtpTestResult(data);
+      if (data.success) {
+        addToast(isKa ? 'Zoho Mail SMTP დაკავშირდა წარმატებით! ტესტი გაიგზავნა.' : 'Zoho Mail SMTP connected successfully! Test email sent.', 'success');
+      } else {
+        addToast(data.error || 'SMTP Connection Test Failed', 'error');
+      }
+    } catch (err: any) {
+      setSmtpTestResult({ success: false, error: err?.message || 'Network error during test' });
+      addToast('SMTP Test Error', 'error');
+    } finally {
+      setTestingSmtp(false);
+    }
+  };
 
   // Product Add / Edit Modal
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -1390,6 +1527,23 @@ export const AdminDashboard: React.FC = () => {
           >
             <Lock className="w-4 h-4 text-amber-600" />
             <span>{isKa ? 'უსაფრთხოება' : 'Security'}</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('messages')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
+              activeTab === 'messages'
+                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Mail className="w-4 h-4 text-blue-600" />
+            <span>{isKa ? 'შეტყობინებები & Zoho Email' : 'Messages & Zoho Email'}</span>
+            {contactMessages.filter(m => m.status === 'unread').length > 0 && (
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500 text-white animate-pulse">
+                {contactMessages.filter(m => m.status === 'unread').length}
+              </span>
+            )}
           </button>
         </div>
 
@@ -3102,6 +3256,403 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* TAB 6: MESSAGES & ZOHO EMAIL SETTINGS */}
+        {activeTab === 'messages' && (
+          <div className="space-y-8">
+            
+            {/* ZOHO MAIL SMTP CONFIGURATION PANEL */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+              <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div className="flex items-center space-x-3.5">
+                  <div className="p-3 rounded-2xl bg-blue-50 text-blue-600 border border-blue-200">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-base font-black text-slate-900">
+                        {isKa ? '📧 Zoho Mail (support@dbuystore.com) პარამეტრები' : '📧 Zoho Mail (support@dbuystore.com) Setup'}
+                      </h3>
+                      <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center space-x-1 ${
+                        hasServerPass ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-800 border-amber-200'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${hasServerPass ? 'bg-emerald-500' : 'bg-amber-500 animate-pulse'}`} />
+                        <span>{hasServerPass ? (isKa ? 'აქტიურია (პაროლი შეყვანილია)' : 'Active (Password Saved)') : (isKa ? 'საჭიროებს პაროლს' : 'Password Required')}</span>
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {isKa 
+                        ? 'პაროლის აღდგენის დროებითი კოდები და მომხმარებლის კითხვები იგზავნება ოფიციალური support@dbuystore.com ფოსტით.'
+                        : 'Temporary recovery passwords and customer inquiry updates are dispatched via support@dbuystore.com.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-center space-x-2">
+                  <button
+                    type="button"
+                    onClick={handleTestSmtp}
+                    disabled={testingSmtp}
+                    className="px-4 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold shadow-md transition-all flex items-center space-x-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {testingSmtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                    <span>{testingSmtp ? (isKa ? 'მოწმდება...' : 'Testing...') : (isKa ? '⚡ Zoho SMTP კავშირის შემოწმება' : '⚡ Test Zoho SMTP Connection')}</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* SMTP Connection Result Banner */}
+              {smtpTestResult && (
+                <div className={`p-4 rounded-2xl border text-xs leading-relaxed transition-all ${
+                  smtpTestResult.success 
+                    ? 'bg-emerald-50 border-emerald-200 text-emerald-900' 
+                    : 'bg-red-50 border-red-200 text-red-900'
+                }`}>
+                  <div className="flex items-start space-x-2.5">
+                    {smtpTestResult.success ? (
+                      <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+                    )}
+                    <div className="space-y-1">
+                      <p className="font-bold text-sm">
+                        {smtpTestResult.success 
+                          ? (isKa ? '✅ Zoho Mail SMTP წარმატებით დაკავშირდა!' : '✅ Zoho Mail SMTP Connected Successfully!')
+                          : (isKa ? '❌ Zoho Mail-თან დაკავშირება ვერ მოხერხდა' : '❌ Zoho Mail Connection Failed')}
+                      </p>
+                      <p className="text-xs opacity-90">{smtpTestResult.message || smtpTestResult.error}</p>
+                      {smtpTestResult.error && (
+                        <p className="text-[11px] font-mono bg-white/60 p-2 rounded-lg mt-2 border border-red-200/60">
+                          {smtpTestResult.error}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveSmtp} className="space-y-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* SMTP Host */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {isKa ? 'SMTP სერვერის ჰოსტი (Zoho Server)' : 'SMTP Host'}
+                    </label>
+                    <select
+                      value={smtpForm.host}
+                      onChange={e => setSmtpForm({ ...smtpForm, host: e.target.value })}
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono"
+                    >
+                      <option value="smtppro.zoho.com">smtppro.zoho.com (Zoho Workplace / Custom Domain - Global)</option>
+                      <option value="smtppro.zoho.eu">smtppro.zoho.eu (Zoho Workplace / Custom Domain - Europe)</option>
+                      <option value="smtp.zoho.com">smtp.zoho.com (Zoho Personal)</option>
+                      <option value="smtp.zoho.eu">smtp.zoho.eu (Zoho Personal - Europe)</option>
+                    </select>
+                  </div>
+
+                  {/* SMTP Port */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {isKa ? 'SMTP პორტი (Port)' : 'SMTP Port'}
+                    </label>
+                    <select
+                      value={smtpForm.port}
+                      onChange={e => setSmtpForm({ ...smtpForm, port: parseInt(e.target.value, 10) })}
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono"
+                    >
+                      <option value={465}>465 (SSL / Secure Encrypted)</option>
+                      <option value={587}>587 (TLS / STARTTLS)</option>
+                    </select>
+                  </div>
+
+                  {/* Zoho Email User */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {isKa ? 'გამომგზავნი ელ-ფოსტის მისამართი' : 'Sender Email Address'}
+                    </label>
+                    <input
+                      type="email"
+                      required
+                      value={smtpForm.user}
+                      onChange={e => setSmtpForm({ ...smtpForm, user: e.target.value })}
+                      placeholder="support@dbuystore.com"
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono font-bold text-slate-800"
+                    />
+                  </div>
+
+                  {/* Zoho Mail Password or App Password */}
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                      {isKa ? 'Zoho Mail-ის პაროლი / აპლიკაციის პაროლი (App Password) *' : 'Zoho Mail Password / App Password *'}
+                    </label>
+                    <div className="relative">
+                      <input
+                        type={showSmtpPass ? 'text' : 'password'}
+                        value={smtpForm.pass}
+                        onChange={e => setSmtpForm({ ...smtpForm, pass: e.target.value })}
+                        placeholder={hasServerPass ? '•••••••••••••••• (Saved on Server)' : (isKa ? 'შეიყვანეთ Zoho პაროლი...' : 'Enter Zoho password...')}
+                        className="w-full pl-4 pr-10 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowSmtpPass(!showSmtpPass)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        {showSmtpPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                  <div className="text-[11px] text-slate-500 flex items-center space-x-1">
+                    <span>💡 {isKa ? 'თუ Zoho-ში ჩართული გაქვთ 2FA, შეიყვანეთ App Password' : 'If Zoho 2FA is enabled, generate an App Password in Zoho Security settings.'}</span>
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="px-6 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer"
+                  >
+                    <Save className="w-4 h-4" />
+                    <span>{isKa ? 'SMTP პარამეტრების შენახვა' : 'Save SMTP Settings'}</span>
+                  </button>
+                </div>
+              </form>
+
+              {/* Zoho Instructions Banner */}
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs text-slate-600">
+                <p className="font-bold text-slate-800 flex items-center space-x-1.5">
+                  <span>ℹ️</span>
+                  <span>{isKa ? 'როგორ დავაგენერიროთ Zoho App Password?' : 'How to generate a Zoho App Password?'}</span>
+                </p>
+                <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed text-slate-600">
+                  <li>{isKa ? 'შეხედით Zoho Accounts პორტალზე (accounts.zoho.com)' : 'Log in to Zoho Accounts (accounts.zoho.com)'}</li>
+                  <li>{isKa ? 'გადადით Security → App Passwords სექციაში' : 'Navigate to Security → Application-Specific Passwords'}</li>
+                  <li>{isKa ? 'დააჭირეთ Generate New Password, დაარქვით "DBUY Store" და დააკოპირეთ მიღებული 16-ნიშნა კოდი აქ.' : 'Click Generate New Password, label it "DBUY Store", and paste the generated 16-character code into the password field above.'}</li>
+                </ol>
+              </div>
+            </div>
+
+            {/* CUSTOMER CONTACT MESSAGES INBOX */}
+            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-6 sm:p-8 space-y-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-100">
+                <div className="flex items-center space-x-3">
+                  <div className="p-3 rounded-2xl bg-indigo-50 text-indigo-600 border border-indigo-200">
+                    <MessageSquare className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <div className="flex items-center space-x-2">
+                      <h3 className="text-base font-black text-slate-900">
+                        {isKa ? '📥 მომხმარებელთა შეტყობინებები (Contact Inbox)' : '📥 Customer Inquiries Inbox'}
+                      </h3>
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                        {contactMessages.length} {isKa ? 'წერილები' : 'total'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      {isKa ? 'საკონტაქტო ფორმიდან შემოსული ყველა კითხვა და შეტყობინება' : 'All inquiry forms submitted by users from the Contact page.'}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Message Search */}
+                <div className="relative min-w-[240px]">
+                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="text"
+                    value={messageSearch}
+                    onChange={e => setMessageSearch(e.target.value)}
+                    placeholder={isKa ? 'ძებნა სახელით, ფოსტით, თემით...' : 'Search messages...'}
+                    className="w-full pl-9 pr-4 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  />
+                </div>
+              </div>
+
+              {/* Messages Table */}
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                      <th className="py-3 px-4">{isKa ? 'თარიღი' : 'Date'}</th>
+                      <th className="py-3 px-4">{isKa ? 'მომხმარებელი' : 'Customer'}</th>
+                      <th className="py-3 px-4">{isKa ? 'თემა / შეკვეთა #' : 'Subject / Order #'}</th>
+                      <th className="py-3 px-4">{isKa ? 'შეტყობინების ტექსტი' : 'Message Preview'}</th>
+                      <th className="py-3 px-4">{isKa ? 'სტატუსი' : 'Status'}</th>
+                      <th className="py-3 px-4 text-right">{isKa ? 'მოქმედება' : 'Actions'}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                    {contactMessages
+                      .filter(m => {
+                        if (!messageSearch.trim()) return true;
+                        const q = messageSearch.toLowerCase();
+                        return (
+                          m.name?.toLowerCase().includes(q) ||
+                          m.email?.toLowerCase().includes(q) ||
+                          m.subject?.toLowerCase().includes(q) ||
+                          m.message?.toLowerCase().includes(q) ||
+                          m.orderNumber?.toLowerCase().includes(q)
+                        );
+                      })
+                      .map(msg => (
+                        <tr key={msg.id} className={`hover:bg-slate-50/80 transition-colors ${msg.status === 'unread' ? 'bg-blue-50/30 font-semibold' : ''}`}>
+                          <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap text-[11px]">
+                            {new Date(msg.createdAt).toLocaleString(isKa ? 'ka-GE' : 'en-US', {
+                              month: 'short',
+                              day: 'numeric',
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })}
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <p className="font-bold text-slate-900">{msg.name}</p>
+                            <a href={`mailto:${msg.email}`} className="text-blue-600 font-mono text-[11px] hover:underline">
+                              {msg.email}
+                            </a>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <p className="font-bold text-slate-800">{msg.subject}</p>
+                            {msg.orderNumber && (
+                              <span className="inline-block text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono mt-0.5">
+                                #{msg.orderNumber}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 max-w-[280px]">
+                            <p className="line-clamp-2 text-slate-600 text-xs">
+                              {msg.message}
+                            </p>
+                          </td>
+                          <td className="py-3.5 px-4 whitespace-nowrap">
+                            {msg.status === 'unread' ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                                🔴 {isKa ? 'წაუკითხავი' : 'Unread'}
+                              </span>
+                            ) : msg.status === 'replied' ? (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                                ✅ {isKa ? 'უპასუხა' : 'Replied'}
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                👁️ {isKa ? 'წაკითხული' : 'Read'}
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-3.5 px-4 text-right space-x-1.5 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedMessage(msg);
+                                if (msg.status === 'unread') handleMarkMessageRead(msg.id, 'read');
+                              }}
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                            >
+                              {isKa ? 'ნახვა' : 'View'}
+                            </button>
+                            <a
+                              href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)} [DBUY Support]`}
+                              onClick={() => handleMarkMessageRead(msg.id, 'replied')}
+                              className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors"
+                            >
+                              <Send className="w-3 h-3 mr-1" />
+                              <span>{isKa ? 'პასუხი' : 'Reply'}</span>
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteMessage(msg.id)}
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                              title="Delete Message"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+
+                    {contactMessages.length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="py-12 text-center text-slate-400">
+                          <MessageSquare className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                          <p className="font-bold text-slate-600">
+                            {isKa ? 'შეტყობინებები ჯერ არ არის' : 'No contact messages yet'}
+                          </p>
+                          <p className="text-xs text-slate-400 mt-1">
+                            {isKa ? 'საკონტაქტო გვერდიდან გამოგზავნილი წერილები გამოჩნდება აქ.' : 'Messages sent from the Contact page will appear here.'}
+                          </p>
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* MESSAGE DETAIL MODAL */}
+            {selectedMessage && (
+              <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+                <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden p-6 sm:p-8 space-y-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600">
+                        <Mail className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-base font-black text-slate-900">{selectedMessage.subject}</h3>
+                        <p className="text-xs text-slate-500">
+                          {new Date(selectedMessage.createdAt).toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedMessage(null)}
+                      className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <div className="space-y-4 text-xs text-slate-700">
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
+                      <p><strong>{isKa ? 'გამომგზავნი:' : 'From:'}</strong> {selectedMessage.name} (&lt;<a href={`mailto:${selectedMessage.email}`} className="text-blue-600 hover:underline">{selectedMessage.email}</a>&gt;)</p>
+                      {selectedMessage.orderNumber && (
+                        <p><strong>{isKa ? 'შეკვეთის ნომერი:' : 'Order #:'}</strong> #{selectedMessage.orderNumber}</p>
+                      )}
+                      <p><strong>{isKa ? 'ოფიციალური მიმღები:' : 'Delivered to:'}</strong> support@dbuystore.com</p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <p className="font-bold text-slate-900">{isKa ? 'შეტყობინების ტექსტი:' : 'Message Body:'}</p>
+                      <div className="p-4 rounded-2xl bg-white border border-slate-200 text-slate-800 whitespace-pre-wrap leading-relaxed font-sans shadow-xs">
+                        {selectedMessage.message}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMessage(selectedMessage.id)}
+                      className="px-4 py-2 rounded-xl text-red-600 hover:bg-red-50 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      {isKa ? 'წაშლა' : 'Delete'}
+                    </button>
+
+                    <a
+                      href={`mailto:${selectedMessage.email}?subject=Re: ${encodeURIComponent(selectedMessage.subject)} [DBUY Support]`}
+                      onClick={() => handleMarkMessageRead(selectedMessage.id, 'replied')}
+                      className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors flex items-center space-x-2"
+                    >
+                      <Send className="w-4 h-4" />
+                      <span>{isKa ? 'პასუხის გაგზავნა (Email Reply)' : 'Reply via Email'}</span>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         )}
 
