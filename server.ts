@@ -2981,6 +2981,20 @@ app.post('/api/admin/smtp/test', async (req, res) => {
       messageId: testResult.messageId,
       meta,
     });
+
+    // Auto-save verified SMTP config to storeDb
+    if (!(storeDb as any).smtpConfig) {
+      (storeDb as any).smtpConfig = {};
+    }
+    (storeDb as any).smtpConfig = {
+      host: smtpHost,
+      port: smtpPort,
+      user: smtpUser,
+      pass: smtpPass,
+      verified: true,
+      lastVerifiedAt: new Date().toISOString(),
+    };
+    saveStoreDatabase();
   } catch (err: any) {
     console.error('[SMTP-TEST-ERROR]', err);
     const errStr = String(err?.message || err?.response || err);
