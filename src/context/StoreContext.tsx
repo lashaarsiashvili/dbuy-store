@@ -607,7 +607,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const resolvedLogo = parsed.logoStyle || 'geometric-tech';
+        const resolvedLogo = parsed.logoStyle || 'bag-cart';
         return { ...defaultTheme, ...parsed, logoStyle: resolvedLogo };
       } catch (e) {
         console.error('Error parsing theme', e);

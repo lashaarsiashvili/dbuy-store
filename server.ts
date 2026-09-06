@@ -830,6 +830,10 @@ function sendMailWithRetry(options: {
       'cjmwVviQbiaq'
     ).replace(/\s+/g, '');
 
+    const smtpHost = String(customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu').trim();
+    const smtpPort = parseInt(String(customSmtp.port || process.env.SMTP_PORT || '465'), 10);
+    const smtpSecure = smtpPort === 465;
+
     const defaultFrom = `"DBUY Store" <${smtpUser}>`;
     let finalFrom = options.from ? options.from : defaultFrom;
 
@@ -847,12 +851,18 @@ function sendMailWithRetry(options: {
       },
     };
 
-    // Configurations to try in sequence: 465 SSL -> 587 STARTTLS -> 465 SSL Retry
+    // Configurations to try: Preferred custom SMTP config first, then alternative Zoho configs if applicable
     const configs = [
-      { host: 'smtp.zoho.eu', port: 465, secure: true },
-      { host: 'smtp.zoho.eu', port: 587, secure: false },
-      { host: 'smtp.zoho.eu', port: 465, secure: true },
+      { host: smtpHost, port: smtpPort, secure: smtpSecure },
     ];
+
+    if (smtpHost.includes('zoho') && configs.length < 2) {
+      const altPort = smtpPort === 465 ? 587 : 465;
+      configs.push({ host: smtpHost, port: altPort, secure: altPort === 465 });
+
+      const altHost = smtpHost.includes('.eu') ? smtpHost.replace('.eu', '.com') : smtpHost.replace('.com', '.eu');
+      configs.push({ host: altHost, port: smtpPort, secure: smtpPort === 465 });
+    }
 
     let lastError: any = null;
 
@@ -871,9 +881,9 @@ function sendMailWithRetry(options: {
           tls: {
             rejectUnauthorized: false,
           },
-          connectionTimeout: 10000,
-          greetingTimeout: 10000,
-          socketTimeout: 15000,
+          connectionTimeout: 2500, // Short timeout (2.5s) to fail fast and prevent serverless execution limit crash
+          greetingTimeout: 2000,
+          socketTimeout: 3000,
         });
 
         const info = await transporter.sendMail(mailPayload);
@@ -882,8 +892,8 @@ function sendMailWithRetry(options: {
       } catch (err: any) {
         lastError = err;
         console.warn(`[EMAIL-DISPATCH-ATTEMPT-FAILED] Attempt ${i + 1} (${cfg.host}:${cfg.port}) error:`, err?.message || err);
-        // Brief pause before retry
-        await new Promise((resolve) => setTimeout(resolve, 600));
+        // Minimal delay to fit within the 10-second serverless execution limits
+        await new Promise((resolve) => setTimeout(resolve, 300));
       }
     }
 
