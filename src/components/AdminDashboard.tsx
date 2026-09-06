@@ -253,9 +253,16 @@ export const AdminDashboard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(smtpForm),
       });
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        data = { success: false, error: `Server response error (${res.status}): ${text.substring(0, 200) || 'Empty response'}` };
+      }
       if (data.success) {
-        setHasServerPass(data.smtp.hasPass);
+        setHasServerPass(data.smtp?.hasPass ?? true);
         addToast(isKa ? 'Zoho SMTP პარამეტრები წარმატებით შენახულია!' : 'Zoho SMTP settings saved successfully!', 'success');
       } else {
         addToast(data.error || 'Failed to save SMTP settings', 'error');
@@ -272,10 +279,19 @@ export const AdminDashboard: React.FC = () => {
       const res = await fetch('/api/admin/smtp/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(smtpForm),
       });
-      const data = await res.json();
+      let data: any = {};
+      const contentType = res.headers.get('content-type');
+      if (contentType && contentType.includes('application/json')) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        data = { success: false, error: `Server response error (${res.status}): ${text.substring(0, 200) || 'Empty response'}` };
+      }
       setSmtpTestResult(data);
       if (data.success) {
+        setHasServerPass(true);
         addToast(isKa ? 'Zoho Mail SMTP დაკავშირდა წარმატებით! ტესტი გაიგზავნა.' : 'Zoho Mail SMTP connected successfully! Test email sent.', 'success');
       } else {
         addToast(data.error || 'SMTP Connection Test Failed', 'error');
@@ -3422,15 +3438,19 @@ export const AdminDashboard: React.FC = () => {
               </form>
 
               {/* Zoho Instructions Banner */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-2 text-xs text-slate-600">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs text-slate-600">
                 <p className="font-bold text-slate-800 flex items-center space-x-1.5">
                   <span>ℹ️</span>
-                  <span>{isKa ? 'როგორ დავაგენერიროთ Zoho App Password?' : 'How to generate a Zoho App Password?'}</span>
+                  <span>{isKa ? 'როგორ დავაგენერიროთ Zoho App Password და ჩავრთოთ SMTP?' : 'How to configure Zoho App Password & Enable SMTP?'}</span>
                 </p>
-                <ol className="list-decimal list-inside space-y-1 text-[11px] leading-relaxed text-slate-600">
-                  <li>{isKa ? 'შეხედით Zoho Accounts პორტალზე (accounts.zoho.com)' : 'Log in to Zoho Accounts (accounts.zoho.com)'}</li>
-                  <li>{isKa ? 'გადადით Security → App Passwords სექციაში' : 'Navigate to Security → Application-Specific Passwords'}</li>
-                  <li>{isKa ? 'დააჭირეთ Generate New Password, დაარქვით "DBUY Store" და დააკოპირეთ მიღებული 16-ნიშნა კოდი აქ.' : 'Click Generate New Password, label it "DBUY Store", and paste the generated 16-character code into the password field above.'}</li>
+                <ol className="list-decimal list-inside space-y-1.5 text-[11px] leading-relaxed text-slate-600">
+                  <li>{isKa ? 'შეხედით Zoho Accounts პორტალზე (accounts.zoho.com ან accounts.zoho.eu)' : 'Log in to Zoho Accounts (accounts.zoho.com or accounts.zoho.eu)'}</li>
+                  <li>{isKa ? 'გადადით Security → App Passwords სექციაში → დააჭირეთ Generate New Password ("DBUY Store") და დააკოპირეთ მიღებული 16-ნიშნა კოდი პაროლის ველში.' : 'Navigate to Security → Application-Specific Passwords → Click Generate New Password ("DBUY Store") and paste the 16-character code into the password field above.'}</li>
+                  <li className="font-semibold text-amber-800 bg-amber-50 p-2 rounded-lg border border-amber-200/70">
+                    {isKa 
+                      ? '⚠️ თუ გწერთ "554 5.7.8 Access Restricted": შედიხართ mail.zoho.com-ზე (ან mail.zoho.eu) → Settings ⚙️ → Mail Accounts → დააჭირეთ support@dbuystore.com-ს → აუცილებლად ჩართეთ "Enable SMTP Access" (მონიშნეთ ჩანართი).'
+                      : '⚠️ If getting "554 5.7.8 Access Restricted": Go to mail.zoho.com (or mail.zoho.eu) → Settings ⚙️ → Mail Accounts → Click support@dbuystore.com → Check "Enable SMTP Access".'}
+                  </li>
                 </ol>
               </div>
             </div>

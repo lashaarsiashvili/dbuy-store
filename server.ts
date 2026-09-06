@@ -590,6 +590,9 @@ function getMailTransporter() {
     tls: {
       rejectUnauthorized: false,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 15000,
   });
 
   (transporter as any).meta = {
@@ -2788,25 +2791,53 @@ app.post('/api/admin/smtp', (req, res) => {
 // POST: Test SMTP connection & send test message
 app.post('/api/admin/smtp/test', async (req, res) => {
   try {
-    const transporter = getMailTransporter();
-    const meta = (transporter as any).meta;
+    const { host, port, user, pass } = req.body || {};
+    const customSmtp = (storeDb as any)?.smtpConfig || {};
 
-    if (!meta.hasPass) {
+    const smtpHost = String(host || customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.com').trim();
+    const smtpPort = parseInt(String(port || customSmtp.port || process.env.SMTP_PORT || '465'), 10);
+    const smtpUser = String(user || customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com').trim();
+
+    let rawPass = pass;
+    if (!rawPass || rawPass === '****') {
+      rawPass = customSmtp.pass || process.env.SMTP_PASS || process.env.ZOHO_PASSWORD || '';
+    }
+    const smtpPass = String(rawPass).trim().replace(/\s+/g, '');
+
+    const meta = { smtpHost, smtpPort, smtpUser, hasPass: Boolean(smtpPass) };
+
+    if (!smtpPass) {
       res.status(400).json({
         success: false,
-        error: 'Zoho Mail Password / App Password is required! Please enter your Zoho password or App Password above and click "Save SMTP Settings" before testing.',
+        error: 'Zoho Mail Password / App Password is required! Please enter your 16-character Zoho App Password in the field above.',
         meta,
       });
       return;
     }
 
+    const testTransporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: smtpPort,
+      secure: smtpPort === 465,
+      auth: {
+        user: smtpUser,
+        pass: smtpPass,
+      },
+      tls: {
+        rejectUnauthorized: false,
+      },
+      connectionTimeout: 10000,
+      greetingTimeout: 10000,
+      socketTimeout: 15000,
+    });
+
     // Verify SMTP connection
-    await transporter.verify();
+    await testTransporter.verify();
 
     // Send test email
-    const testResult = await transporter.sendMail({
-      from: `"DBUY System Test" <${meta.smtpUser}>`,
-      to: `${meta.smtpUser}, lashaarsiashvili@gmail.com`,
+    const testResult = await testTransporter.sendMail({
+      from: `"DBUY System Test" <${smtpUser}>`,
+      to: `${smtpUser}, lashaarsiashvili@gmail.com`,
       subject: `[DBUY Test] Zoho Mail SMTP Connected Successfully (${new Date().toLocaleTimeString()})`,
       html: `
         <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
@@ -2814,11 +2845,11 @@ app.post('/api/admin/smtp/test', async (req, res) => {
             <h2 style="margin: 0; font-size: 20px; font-weight: 800;">✅ Zoho Mail SMTP Connected!</h2>
           </div>
           <p style="font-size: 14px; color: #334155; line-height: 1.6;">
-            This diagnostic message confirms that DBUY Store is successfully authenticated with <strong>${meta.smtpUser}</strong> on server <strong>${meta.smtpHost}:${meta.smtpPort}</strong>.
+            This diagnostic message confirms that DBUY Store is successfully authenticated with <strong>${smtpUser}</strong> on server <strong>${smtpHost}:${smtpPort}</strong>.
           </p>
           <ul style="font-size: 13px; color: #475569; background-color: #f8fafc; padding: 14px 20px 14px 36px; border-radius: 10px; border: 1px solid #f1f5f9;">
-            <li><strong>Sender Email:</strong> ${meta.smtpUser}</li>
-            <li><strong>SMTP Server:</strong> ${meta.smtpHost}:${meta.smtpPort}</li>
+            <li><strong>Sender Email:</strong> ${smtpUser}</li>
+            <li><strong>SMTP Server:</strong> ${smtpHost}:${smtpPort}</li>
             <li><strong>Status:</strong> Active & Ready for Live OTP / Password Resets / Contact Emails</li>
           </ul>
           <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
@@ -2827,12 +2858,12 @@ app.post('/api/admin/smtp/test', async (req, res) => {
           </p>
         </div>
       `,
-      text: `Zoho Mail SMTP Connected Successfully for ${meta.smtpUser}!`,
+      text: `Zoho Mail SMTP Connected Successfully for ${smtpUser}!`,
     });
 
     res.json({
       success: true,
-      message: `Successfully verified connection and dispatched test email to ${meta.smtpUser}`,
+      message: `Successfully verified connection and dispatched test email to ${smtpUser}`,
       messageId: testResult.messageId,
       meta,
     });
@@ -2841,9 +2872,15 @@ app.post('/api/admin/smtp/test', async (req, res) => {
     const errStr = String(err?.message || err?.response || err);
     let userMessage = err?.message || 'SMTP connection failed';
 
-    if (errStr.includes('535') || errStr.includes('Authentication Failed') || errStr.includes('Invalid login')) {
+    if (errStr.includes('554') || errStr.includes('Access Restricted')) {
+      userMessage = 'Zoho Mail Access Restricted (554 5.7.8): SMTP Access is disabled in your Zoho Mail account settings. ' +
+        'Fix: 1) Go to mail.zoho.com (or mail.zoho.eu) → Settings ⚙️ → Mail Accounts → Click "support@dbuystore.com" → Check "Enable SMTP Access". ' +
+        '2) Make sure Host is smtppro.zoho.com (or smtppro.zoho.eu for EU region). 3) Generate an App Password at accounts.zoho.com.';
+    } else if (errStr.includes('535') || errStr.includes('Authentication Failed') || errStr.includes('Invalid login')) {
       userMessage = 'Zoho Mail Authentication Failed (535): The password or App Password entered was rejected by Zoho. ' +
         'Please verify: 1) Your password is correct. 2) If 2FA is enabled in Zoho Accounts, generate a 16-character App Password at https://accounts.zoho.com (Security → App Passwords).';
+    } else if (errStr.includes('ETIMEDOUT') || errStr.includes('ESOCKETTIMEDOUT') || errStr.includes('timeout')) {
+      userMessage = 'Connection Timeout: Could not connect to SMTP server. Please ensure the port (465 SSL or 587 TLS) and server host are correct.';
     }
 
     res.status(500).json({
