@@ -434,15 +434,48 @@ if (rawRedisUrl && rawRedisToken && (rawRedisUrl.startsWith('https://') || rawRe
 // Firebase Firestore Integration
 let firebaseDb: any = null;
 try {
+  let firebaseConfig: any = {};
   const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
   if (fs.existsSync(firebaseConfigPath)) {
-    const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
+    try {
+      firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
+    } catch (parseErr) {
+      console.warn('[FIREBASE] Error parsing firebase-applet-config.json:', parseErr);
+    }
+  }
+
+  // Inject environment variable overrides from production deployment environment
+  const envApiKey = process.env.API_KEY || process.env.FIREBASE_API_KEY;
+  const envProjectId = process.env.PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
+  const envAppId = process.env.FIREBASE_APP_ID;
+  const envAuthDomain = process.env.FIREBASE_AUTH_DOMAIN;
+  const envStorageBucket = process.env.FIREBASE_STORAGE_BUCKET;
+  const envMessagingSenderId = process.env.FIREBASE_MESSAGING_SENDER_ID;
+
+  if (envApiKey) firebaseConfig.apiKey = envApiKey;
+  if (envProjectId) {
+    firebaseConfig.projectId = envProjectId;
+    if (!firebaseConfig.authDomain) {
+      firebaseConfig.authDomain = `${envProjectId}.firebaseapp.com`;
+    }
+    if (!firebaseConfig.storageBucket) {
+      firebaseConfig.storageBucket = `${envProjectId}.firebasestorage.app`;
+    }
+  }
+  if (envAppId) firebaseConfig.appId = envAppId;
+  if (envAuthDomain) firebaseConfig.authDomain = envAuthDomain;
+  if (envStorageBucket) firebaseConfig.storageBucket = envStorageBucket;
+  if (envMessagingSenderId) firebaseConfig.messagingSenderId = envMessagingSenderId;
+
+  if (firebaseConfig.apiKey && firebaseConfig.projectId) {
     const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
     try {
       setLogLevel('silent');
     } catch {}
     firebaseDb = getFirestore(fbApp, firebaseConfig.firestoreDatabaseId || undefined);
-    console.log('[FIREBASE] Connected to Firebase Firestore successfully!');
+    console.log('[FIREBASE] Connected to Firebase Firestore successfully (utilizing configuration from file/environment variables)!');
+  } else {
+    console.warn('[FIREBASE] Skipping initialization: missing required configuration fields (apiKey, projectId).');
   }
 } catch (fbErr) {
   console.warn('[FIREBASE] Could not initialize Firebase client:', fbErr instanceof Error ? fbErr.message : fbErr);
@@ -1122,6 +1155,19 @@ app.post('/api/upload-image', (req, res) => {
     saveUploadsMap();
     console.log(`[IMAGE-UPLOAD] Saved product image to ${filePath} and backup map (${(buffer.length / 1024).toFixed(1)} KB)`);
 
+    // Back up the uploaded image persistently in Firebase Firestore to survive container restarts
+    if (firebaseDb) {
+      const firestoreUploadPromise = setDoc(doc(firebaseDb, 'store_uploads', safeName), {
+        filename: safeName,
+        dataUrl: dataUrl,
+        uploadedAt: new Date().toISOString()
+      }, { merge: true })
+        .then(() => console.log(`[FIREBASE] Saved uploaded image backup for ${safeName} to Firestore successfully`))
+        .catch(err => console.error(`[FIREBASE] Failed to save uploaded image backup for ${safeName} to Firestore:`, err));
+      pendingPromises.add(firestoreUploadPromise);
+      firestoreUploadPromise.finally(() => pendingPromises.delete(firestoreUploadPromise));
+    }
+
     const publicUrl = `/uploads/${safeName}`;
     res.json({ success: true, url: publicUrl });
   } catch (err: any) {
@@ -1157,6 +1203,18 @@ app.post('/api/store/restore-images', (req, res) => {
             fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
             uploadsMap[filename] = dataUrl;
             restoredCount++;
+
+            // Save the restored file to Firestore persistently as well
+            if (firebaseDb) {
+              const firestoreUploadPromise = setDoc(doc(firebaseDb, 'store_uploads', filename), {
+                filename: filename,
+                dataUrl: dataUrl,
+                uploadedAt: new Date().toISOString()
+              }, { merge: true })
+                .catch(err => console.error(`[FIREBASE] Restore setDoc fail for ${filename}:`, err));
+              pendingPromises.add(firestoreUploadPromise);
+              firestoreUploadPromise.finally(() => pendingPromises.delete(firestoreUploadPromise));
+            }
           }
         } catch (writeErr) {
           console.error(`Failed to restore file ${filename}:`, writeErr);
@@ -1248,6 +1306,20 @@ function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
     uploadsMap[safeName] = dataUrl;
     saveUploadsMap();
     console.log(`[AUTO-DISK-IMAGE] Saved product image to disk & map: ${safeName} (${(buffer.length / 1024).toFixed(1)} KB)`);
+
+    // Back up the auto-converted image persistently in Firebase Firestore to survive container restarts
+    if (firebaseDb) {
+      const firestoreUploadPromise = setDoc(doc(firebaseDb, 'store_uploads', safeName), {
+        filename: safeName,
+        dataUrl: dataUrl,
+        uploadedAt: new Date().toISOString()
+      }, { merge: true })
+        .then(() => console.log(`[FIREBASE] Saved auto image backup for ${safeName} to Firestore successfully`))
+        .catch(err => console.error(`[FIREBASE] Failed to save auto image backup for ${safeName} to Firestore:`, err));
+      pendingPromises.add(firestoreUploadPromise);
+      firestoreUploadPromise.finally(() => pendingPromises.delete(firestoreUploadPromise));
+    }
+
     return `/uploads/${safeName}`;
   } catch (e) {
     console.error('Error saving base64 image to disk:', e);

@@ -11,6 +11,12 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    define: {
+      'process.env.API_KEY': JSON.stringify(process.env.API_KEY || process.env.FIREBASE_API_KEY || ''),
+      'process.env.PROJECT_ID': JSON.stringify(process.env.PROJECT_ID || process.env.FIREBASE_PROJECT_ID || ''),
+      'process.env.FIREBASE_API_KEY': JSON.stringify(process.env.FIREBASE_API_KEY || process.env.API_KEY || ''),
+      'process.env.FIREBASE_PROJECT_ID': JSON.stringify(process.env.FIREBASE_PROJECT_ID || process.env.PROJECT_ID || ''),
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
