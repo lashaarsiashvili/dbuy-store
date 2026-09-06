@@ -348,36 +348,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return text;
   };
 
-  // Track Firestore Quota state so we never stall execution or listen to frozen stale states
-  const firestoreWriteBlockedRef = useRef<boolean>(
-    typeof window !== 'undefined' && sessionStorage.getItem('dbuy_fb_quota_blocked') === 'true'
-  );
-
   const safeFirestoreSetDoc = async (documentRef: any, data: any, options: any = { merge: true }) => {
-    if (firestoreWriteBlockedRef.current) {
-      return;
-    }
     try {
-      // 3-second timeout protection: If Firestore write stream stalls due to quota exhaustion, abort cleanly
-      await Promise.race([
-        setDoc(documentRef, data, options),
-        new Promise((_, reject) => setTimeout(() => reject(new Error('FIRESTORE_WRITE_TIMEOUT')), 3000))
-      ]);
+      await setDoc(documentRef, data, options);
     } catch (err: any) {
-      if (
-        err?.code === 'resource-exhausted' ||
-        err?.message?.includes('RESOURCE_EXHAUSTED') ||
-        err?.message?.includes('Quota limit exceeded') ||
-        err?.message === 'FIRESTORE_WRITE_TIMEOUT'
-      ) {
-        firestoreWriteBlockedRef.current = true;
-        try {
-          sessionStorage.setItem('dbuy_fb_quota_blocked', 'true');
-        } catch {}
-        console.warn('[FIREBASE] Quota limit active: Server backend is authoritative persistence.');
-      } else {
-        console.warn('[FIREBASE] Notice saving doc:', err?.message || err);
-      }
+      console.warn('[FIREBASE] Notice saving doc:', err?.message || err);
     }
   };
 
@@ -632,7 +607,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        const resolvedLogo = (!parsed.logoStyle || parsed.logoStyle === 'geometric-tech') ? 'bag-cart' : parsed.logoStyle;
+        const resolvedLogo = parsed.logoStyle || 'geometric-tech';
         return { ...defaultTheme, ...parsed, logoStyle: resolvedLogo };
       } catch (e) {
         console.error('Error parsing theme', e);
@@ -1723,7 +1698,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       fbProductsUnsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
         const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
-        if (recentlyUpdatedLocally || firestoreWriteBlockedRef.current) {
+        if (recentlyUpdatedLocally) {
           return; // Skip if we recently modified products on this device
         }
 
@@ -1776,7 +1751,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // If Firestore write quota is exhausted, Firestore will never receive new writes, so its snapshot is frozen and stale.
         const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
         const isStaleSnapshot = Boolean(
-          firestoreWriteBlockedRef.current ||
           (data.lastUpdated && lastSyncTimestampRef.current && new Date(data.lastUpdated).getTime() < new Date(lastSyncTimestampRef.current).getTime())
         );
 
