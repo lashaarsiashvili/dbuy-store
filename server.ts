@@ -685,9 +685,10 @@ function saveStoreDatabase(): void {
   // 2. Automatically persist to Firebase Firestore - this MUST always execute even if disk writes are read-only!
   if (firebaseDb) {
     try {
-      // Create a clean payload WITHOUT giant base64 image maps to keep document size < 1MB
+      // Create a clean payload WITHOUT giant base64 image maps or products array to keep document size < 1MB and allow unlimited products
       const sanitizedStoreDb: Record<string, any> = { ...storeDb };
       delete sanitizedStoreDb.uploadsMap; // Remove base64 image map from main document
+      delete sanitizedStoreDb.products; // Remove products array from monolithic document to support unlimited products!
 
       // Ensure verified Zoho SMTP configuration is preserved in storeDb & Firestore
       if (!sanitizedStoreDb.smtpConfig || !sanitizedStoreDb.smtpConfig.pass) {
@@ -1872,46 +1873,7 @@ app.post('/api/store/order', (req, res) => {
   }
 });
 
-// POST: Update Theme
-app.post('/api/store/theme', (req, res) => {
-  try {
-    const { theme } = req.body;
-    if (!theme || typeof theme !== 'object') {
-      res.status(400).json({ success: false, error: 'Theme settings required' });
-      return;
-    }
-    storeDb.theme = { ...storeDb.theme, ...theme };
-    saveStoreDatabase();
 
-    res.json({ success: true, theme: storeDb.theme });
-  } catch (err) {
-    console.error('Error updating theme:', err);
-    res.status(500).json({ success: false, error: 'Failed to update theme' });
-  }
-});
-
-// POST: Update Billboards
-app.post('/api/store/billboards', (req, res) => {
-  try {
-    const { billboards, billboardIntervalSeconds } = req.body;
-    if (Array.isArray(billboards)) {
-      storeDb.billboards = billboards;
-    }
-    if (typeof billboardIntervalSeconds === 'number') {
-      storeDb.billboardIntervalSeconds = billboardIntervalSeconds;
-    }
-    saveStoreDatabase();
-
-    res.json({
-      success: true,
-      billboards: storeDb.billboards,
-      billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
-    });
-  } catch (err) {
-    console.error('Error updating billboards:', err);
-    res.status(500).json({ success: false, error: 'Failed to update billboards' });
-  }
-});
 
 // ==========================================
 // ==========================================

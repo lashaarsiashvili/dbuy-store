@@ -696,19 +696,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return 120; // Default 2 minutes (120 seconds) as requested!
   });
 
-  const saveBillboards = (slides: BillboardSlide[], intervalSec?: number) => {
-    setBillboards(slides);
-    localStorage.setItem('dbuy_billboards', JSON.stringify(slides));
+  const saveBillboards = async (slides: BillboardSlide[], intervalSec?: number) => {
     const currentInterval = intervalSec !== undefined ? intervalSec : billboardIntervalSeconds;
-    fetch('/api/store/billboards', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ billboards: slides, billboardIntervalSeconds: currentInterval }),
-    }).catch(err => console.error('Error syncing billboards to server:', err));
+    let finalSlides = slides;
 
+    // 1. Authoritative server backend persistence (to convert raw base64 to physical URLs)
     try {
-      safeFirestoreSetDoc(doc(db, 'store', 'database'), { billboards: slides, billboardIntervalSeconds: currentInterval });
-    } catch (e) {}
+      const res = await fetch('/api/store/billboards', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ billboards: slides, billboardIntervalSeconds: currentInterval }),
+      });
+      if (res.ok) {
+        const json = await res.json();
+        if (json && Array.isArray(json.billboards)) {
+          finalSlides = json.billboards;
+        }
+      }
+    } catch (err) {
+      console.error('Error syncing billboards to server:', err);
+    }
+
+    // 2. Set React state and localStorage with the optimized slides (no raw base64!)
+    setBillboards(finalSlides);
+    localStorage.setItem('dbuy_billboards', JSON.stringify(finalSlides));
+
+    // 3. Save optimized slides & interval to Firestore's store/database document
+    try {
+      await safeFirestoreSetDoc(doc(db, 'store', 'database'), {
+        billboards: finalSlides,
+        billboardIntervalSeconds: currentInterval,
+        lastUpdated: new Date().toISOString()
+      });
+    } catch (e) {
+      console.error('Error syncing billboards to Firestore:', e);
+    }
   };
 
   const updateBillboard = (id: string, updated: Partial<BillboardSlide>) => {
@@ -795,30 +817,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       };
     });
 
+    let finalProducts = sanitizedProducts;
     const nowIso = new Date().toISOString();
     lastLocalProductUpdateRef.current = Date.now();
-    lastSyncTimestampRef.current = nowIso;
-    setProducts(sanitizedProducts);
 
-    // 1. Quota-safe localStorage persistence (save products state safely)
-    try {
-      localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
-    } catch (storageErr) {
-      console.warn('localStorage quota warning:', storageErr);
-    }
-
-    // 2. Broadcast immediately to other open tabs/windows
-    if (typeof BroadcastChannel !== 'undefined') {
-      try {
-        const bc = new BroadcastChannel('dbuy_store_sync');
-        bc.postMessage({ type: 'PRODUCTS_UPDATED', products: sanitizedProducts, timestamp: Date.now() });
-        bc.close();
-      } catch (e) {
-        // ignore
-      }
-    }
-
-    // 3. Authoritative server backend persistence (immediate disk, memory & source backup)
+    // 1. Authoritative server backend persistence (immediate disk, memory & source backup)
+    // The server converts raw base64 images into physical persistent file URLs (e.g. /uploads/prod-XYZ.jpg)
     try {
       const res = await fetch('/api/store/products', {
         method: 'POST',
@@ -830,24 +834,46 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (json && json.lastUpdated) {
           lastSyncTimestampRef.current = json.lastUpdated;
         }
+        if (json && Array.isArray(json.products) && json.products.length > 0) {
+          finalProducts = json.products;
+        }
       }
     } catch (err) {
       console.error('Error syncing products to server:', err);
+    }
+
+    // 2. Set React state and localStorage with the optimized products (no raw base64!)
+    setProducts(finalProducts);
+    try {
+      localStorage.setItem('dbuy_products', JSON.stringify(finalProducts));
+    } catch (storageErr) {
+      console.warn('localStorage quota warning:', storageErr);
+    }
+
+    // 3. Broadcast immediately to other open tabs/windows
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('dbuy_store_sync');
+        bc.postMessage({ type: 'PRODUCTS_UPDATED', products: finalProducts, timestamp: Date.now() });
+        bc.close();
+      } catch (e) {
+        // ignore
+      }
     }
 
     // 4. Background persist to Firebase Firestore store/database (non-blocking) - omit products field to bypass the 1MB limit and support unlimited products
     safeFirestoreSetDoc(doc(db, 'store', 'database'), { lastUpdated: nowIso })
       .catch(() => {});
 
-    // 5. Automatic persistent sync to Firestore 'products' collection
+    // 5. Automatic persistent sync to Firestore 'products' collection (using optimized physical image URLs!)
     try {
-      sanitizedProducts.forEach(prod => {
+      finalProducts.forEach(prod => {
         safeFirestoreSetDoc(doc(db, 'products', prod.id), prod)
           .catch((err) => console.error(`Error saving product ${prod.id} to Firestore collection:`, err));
       });
 
       // Handle deletions
-      const nextIds = new Set(sanitizedProducts.map(p => p.id));
+      const nextIds = new Set(finalProducts.map(p => p.id));
       products.forEach(oldProd => {
         if (!nextIds.has(oldProd.id)) {
           safeFirestoreDeleteDoc(doc(db, 'products', oldProd.id))
