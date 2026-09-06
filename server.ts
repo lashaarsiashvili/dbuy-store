@@ -269,6 +269,15 @@ function initStoreDatabase(): StoreDatabase {
     uploadsMap = { ...uploadsMap, ...loadedDb.uploadsMap };
   }
 
+  const defaultSmtpConfig = {
+    host: 'smtp.zoho.eu',
+    port: 465,
+    user: 'support@dbuystore.com',
+    pass: 'cjmwVviQbiaq',
+    verified: true,
+    lastVerifiedAt: new Date().toISOString(),
+  };
+
   const initialDb: StoreDatabase = {
     products,
     registeredUsers: loadedDb?.registeredUsers || {},
@@ -282,6 +291,10 @@ function initStoreDatabase(): StoreDatabase {
     uploadsMap,
     lastUpdated: loadedDb?.lastUpdated || new Date().toISOString(),
   };
+
+  (initialDb as any).smtpConfig = (loadedDb as any)?.smtpConfig?.pass
+    ? { ...defaultSmtpConfig, ...(loadedDb as any).smtpConfig }
+    : defaultSmtpConfig;
 
   try {
     if (!fs.existsSync(DB_DIR)) {
@@ -397,13 +410,27 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
         let restoredCount = 0;
         uploadsSnap.forEach(uDoc => {
           const uData = uDoc.data();
-          if (uData?.filename && uData?.dataUrl) {
+          if (uData?.filename && uData?.dataUrl && typeof uData.dataUrl === 'string') {
             uploadsMap[uData.filename] = uData.dataUrl;
+            
+            // Re-create physical file on disk immediately
+            const cleanFilename = path.basename(uData.filename);
+            if (cleanFilename && cleanFilename !== '.' && cleanFilename !== '/') {
+              const filePath = path.join(UPLOADS_DIR, cleanFilename);
+              if (!fs.existsSync(filePath) && uData.dataUrl.startsWith('data:')) {
+                try {
+                  const matches = uData.dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+                  if (matches && matches[2]) {
+                    fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
+                  }
+                } catch (fErr) {}
+              }
+            }
             restoredCount++;
           }
         });
         if (restoredCount > 0) {
-          console.log(`[FIREBASE] Restored ${restoredCount} uploaded images from Firebase store_uploads!`);
+          console.log(`[FIREBASE] Restored ${restoredCount} uploaded images to disk & memory from Firebase store_uploads!`);
           saveUploadsMap();
           storeDb.uploadsMap = uploadsMap;
         }
@@ -493,32 +520,34 @@ function saveStoreDatabase(): void {
       const sanitizedStoreDb: Record<string, any> = { ...storeDb };
       delete sanitizedStoreDb.uploadsMap; // Remove base64 image map from main document
 
-      // In products array, if image or images contain raw inline base64 data URLs > 10KB, strip them
+      // In products array, if image or images contain raw inline base64 data URLs, persist them to disk
       if (Array.isArray(sanitizedStoreDb.products)) {
         sanitizedStoreDb.products = sanitizedStoreDb.products.map((p: any) => {
           if (!p) return p;
           const cleanP = { ...p };
-          if (typeof cleanP.image === 'string' && cleanP.image.startsWith('data:') && cleanP.image.length > 500) {
-            cleanP.image = '/uploads/placeholder.jpg';
+          if (typeof cleanP.image === 'string' && cleanP.image.startsWith('data:')) {
+            cleanP.image = persistBase64Image(cleanP.image, `prod-${cleanP.id || Date.now()}`);
           }
           if (Array.isArray(cleanP.images)) {
-            cleanP.images = cleanP.images.map((img: any) =>
-              typeof img === 'string' && img.startsWith('data:') && img.length > 500 ? '/uploads/placeholder.jpg' : img
+            cleanP.images = cleanP.images.map((img: any, i: number) =>
+              typeof img === 'string' && img.startsWith('data:')
+                ? persistBase64Image(img, `prod-${cleanP.id || Date.now()}-${i}`)
+                : img
             );
           }
           return cleanP;
         });
+        storeDb.products = sanitizedStoreDb.products;
       }
 
       setDoc(doc(firebaseDb, 'store', 'database'), sanitizedStoreDb, { merge: true })
         .then(() => console.log('[FIREBASE] Saved sanitized database to Firebase Firestore successfully'))
         .catch(err => console.warn('[FIREBASE] Error saving to Firebase:', err?.message || err));
 
-      // Persist uploaded image files to store_uploads collection (1 document per image)
+      // Persist uploaded image files to store_uploads collection (1 document per image, unlimited)
       if (uploadsMap && typeof uploadsMap === 'object') {
         const uploadKeys = Object.keys(uploadsMap);
-        // Save uploaded images as separate documents (staying safely under 1MB per document)
-        uploadKeys.slice(-30).forEach(filename => {
+        uploadKeys.forEach(filename => {
           const dataUrl = uploadsMap[filename];
           if (dataUrl && dataUrl.length < 900000) {
             const safeDocId = filename.replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -568,7 +597,7 @@ setInterval(() => {
 function getMailTransporter() {
   const customSmtp = (storeDb as any)?.smtpConfig || {};
 
-  const smtpHost = customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.eu';
+  const smtpHost = customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu';
   const smtpPort = parseInt(String(customSmtp.port || process.env.SMTP_PORT || '465'), 10);
   const smtpUser = customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com';
   const smtpPass = (
@@ -576,7 +605,7 @@ function getMailTransporter() {
     process.env.SMTP_PASS ||
     process.env.ZOHO_PASSWORD ||
     process.env.GMAIL_APP_PASSWORD ||
-    ''
+    'cjmwVviQbiaq'
   ).replace(/\s+/g, '');
 
   const transporter = nodemailer.createTransport({
@@ -2865,10 +2894,10 @@ app.get('/api/admin/smtp', (req, res) => {
   const customSmtp = (storeDb as any).smtpConfig || {};
   res.json({
     success: true,
-    host: customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.com',
+    host: customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu',
     port: customSmtp.port || process.env.SMTP_PORT || 465,
     user: customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com',
-    hasPass: Boolean(customSmtp.pass || process.env.SMTP_PASS || process.env.ZOHO_PASSWORD),
+    hasPass: Boolean(customSmtp.pass || process.env.SMTP_PASS || process.env.ZOHO_PASSWORD || 'cjmwVviQbiaq'),
   });
 });
 
@@ -2908,13 +2937,13 @@ app.post('/api/admin/smtp/test', async (req, res) => {
     const { host, port, user, pass } = req.body || {};
     const customSmtp = (storeDb as any)?.smtpConfig || {};
 
-    const smtpHost = String(host || customSmtp.host || process.env.SMTP_HOST || 'smtppro.zoho.eu').trim();
+    const smtpHost = String(host || customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu').trim();
     const smtpPort = parseInt(String(port || customSmtp.port || process.env.SMTP_PORT || '465'), 10);
     const smtpUser = String(user || customSmtp.user || process.env.SMTP_USER || 'support@dbuystore.com').trim();
 
     let rawPass = pass;
     if (!rawPass || rawPass === '****') {
-      rawPass = customSmtp.pass || process.env.SMTP_PASS || process.env.ZOHO_PASSWORD || '';
+      rawPass = customSmtp.pass || process.env.SMTP_PASS || process.env.ZOHO_PASSWORD || 'cjmwVviQbiaq';
     }
     const smtpPass = String(rawPass).trim().replace(/\s+/g, '');
 

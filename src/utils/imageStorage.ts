@@ -19,11 +19,22 @@ const getIDB = (): Promise<IDBDatabase> => {
   });
 };
 
+const normalizeUrlKey = (url: string): string => {
+  if (!url) return '';
+  if (url.startsWith('data:')) return '';
+  if (url.includes('/uploads/')) {
+    return '/uploads/' + url.split('/uploads/').pop();
+  }
+  return url;
+};
+
 /**
  * Saves a base64 image backup to IndexedDB mapped to its server URL.
  */
-export const saveImageBackupIDB = async (url: string, base64: string): Promise<void> => {
-  if (!url || !base64 || typeof window === 'undefined') return;
+export const saveImageBackupIDB = async (rawUrl: string, base64: string): Promise<void> => {
+  if (!rawUrl || !base64 || typeof window === 'undefined') return;
+  const url = normalizeUrlKey(rawUrl);
+  if (!url) return;
   try {
     const db = await getIDB();
     const tx = db.transaction('images', 'readwrite');
@@ -47,8 +58,10 @@ export const saveImageBackupIDB = async (url: string, base64: string): Promise<v
 /**
  * Retrieves a base64 image backup from IndexedDB by its server URL.
  */
-export const getImageBackupIDB = async (url: string): Promise<string | null> => {
-  if (!url || typeof window === 'undefined') return null;
+export const getImageBackupIDB = async (rawUrl: string): Promise<string | null> => {
+  if (!rawUrl || typeof window === 'undefined') return null;
+  const url = normalizeUrlKey(rawUrl);
+  if (!url) return null;
   try {
     const db = await getIDB();
     const tx = db.transaction('images', 'readonly');

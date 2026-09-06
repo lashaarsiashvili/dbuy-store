@@ -173,13 +173,13 @@ export const AdminDashboard: React.FC = () => {
 
   // SMTP Settings State
   const [smtpForm, setSmtpForm] = useState({
-    host: 'smtppro.zoho.com',
+    host: 'smtp.zoho.eu',
     port: 465,
     user: 'support@dbuystore.com',
-    pass: '',
+    pass: 'cjmwVviQbiaq',
   });
   const [showSmtpPass, setShowSmtpPass] = useState(false);
-  const [hasServerPass, setHasServerPass] = useState(false);
+  const [hasServerPass, setHasServerPass] = useState(true);
   const [testingSmtp, setTestingSmtp] = useState(false);
   const [smtpTestResult, setSmtpTestResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null);
 
@@ -194,11 +194,12 @@ export const AdminDashboard: React.FC = () => {
       if (smtpRes?.success) {
         setSmtpForm(prev => ({
           ...prev,
-          host: smtpRes.host || 'smtppro.zoho.com',
+          host: smtpRes.host || 'smtp.zoho.eu',
           port: smtpRes.port || 465,
           user: smtpRes.user || 'support@dbuystore.com',
+          pass: prev.pass || 'cjmwVviQbiaq',
         }));
-        setHasServerPass(smtpRes.hasPass);
+        setHasServerPass(smtpRes.hasPass ?? true);
       }
     } catch (err) {
       console.warn('Error fetching SMTP or messages:', err);
