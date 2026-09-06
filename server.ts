@@ -526,6 +526,8 @@ async function syncFromRedisOnStartup(): Promise<void> {
 // Initial sync calls
 syncFromFirebaseOnStartup().then(() => syncFromRedisOnStartup());
 
+let firestoreQuotaExceededUntil = 0;
+
 function saveStoreDatabase(): void {
   try {
     if (!fs.existsSync(DB_DIR)) {
@@ -584,15 +586,18 @@ function saveStoreDatabase(): void {
         storeDb.products = sanitizedStoreDb.products;
       }
 
-      setDoc(doc(firebaseDb, 'store', 'database'), sanitizedStoreDb, { merge: true })
-        .then(() => console.log('[FIREBASE] Saved sanitized database to Firebase Firestore successfully'))
-        .catch(err => {
-          if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED')) {
-            console.warn('[FIREBASE] Quota limit reached for today. Server disk persistence active.');
-          } else {
-            console.warn('[FIREBASE] Notice saving to Firebase:', err?.message || err);
-          }
-        });
+      if (Date.now() > firestoreQuotaExceededUntil) {
+        setDoc(doc(firebaseDb, 'store', 'database'), sanitizedStoreDb, { merge: true })
+          .then(() => console.log('[FIREBASE] Saved sanitized database to Firebase Firestore successfully'))
+          .catch(err => {
+            if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
+              firestoreQuotaExceededUntil = Date.now() + 30 * 60 * 1000;
+              console.warn('[FIREBASE] Quota limit reached for today. Server disk & memory persistence seamlessly active.');
+            } else {
+              console.warn('[FIREBASE] Notice saving to Firebase:', err?.message || err);
+            }
+          });
+      }
     }
 
     // Automatically persist to Vercel KV / Upstash Redis if available
@@ -870,13 +875,25 @@ Return ONLY a valid JSON object matching this schema without markdown formatting
 
         contents.push({ text: promptText });
 
-        const response = await ai.models.generateContent({
-          model: 'gemini-2.5-flash',
-          contents,
-          config: {
-            responseMimeType: 'application/json',
-          },
-        });
+        let response: any = null;
+        try {
+          response = await ai.models.generateContent({
+            model: 'gemini-3.6-flash',
+            contents,
+            config: {
+              responseMimeType: 'application/json',
+            },
+          });
+        } catch (modelErr: any) {
+          console.warn('[GEMINI] Note on gemini-3.6-flash, trying gemini-3.8-flash:', modelErr?.message || modelErr);
+          response = await ai.models.generateContent({
+            model: 'gemini-3.8-flash',
+            contents,
+            config: {
+              responseMimeType: 'application/json',
+            },
+          });
+        }
 
         if (response && response.text) {
           try {

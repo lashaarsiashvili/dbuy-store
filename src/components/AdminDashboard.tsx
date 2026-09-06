@@ -607,14 +607,18 @@ export const AdminDashboard: React.FC = () => {
           ctx.drawImage(img, 0, 0, width, height);
           const raw = canvas.toDataURL('image/jpeg', 0.90);
           
-          addToast(isKa ? 'ბილბორდის სურათი იტვირთება...' : 'Uploading billboard image to storage...', 'info');
-          const uploadedUrl = await uploadImageToFirebase(raw, 'billboards');
-          if (uploadedUrl && (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://'))) {
-            setBillboardForm(prev => ({ ...prev, image: uploadedUrl }));
-            addToast(isKa ? 'ბილბორდის სურათი წარმატებით აიტვირთა!' : 'Billboard image uploaded successfully!', 'success');
-          } else {
-            addToast(isKa ? 'ბილბორდის სურათის ატვირთვა ვერ მოხერხდა' : 'Failed to upload billboard image', 'error');
-          }
+          // Display billboard preview immediately!
+          setBillboardForm(prev => ({ ...prev, image: raw }));
+          addToast(isKa ? 'ბილბორდის სურათი დაემატა!' : 'Billboard image added!', 'success');
+
+          // Persist to permanent storage in background
+          uploadImageToFirebase(raw, 'billboards')
+            .then(uploadedUrl => {
+              if (uploadedUrl && (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://') || uploadedUrl.startsWith('/uploads/'))) {
+                setBillboardForm(prev => ({ ...prev, image: uploadedUrl }));
+              }
+            })
+            .catch(console.warn);
         }
       };
       img.src = result;
@@ -700,16 +704,25 @@ export const AdminDashboard: React.FC = () => {
             rawUrl = canvas.toDataURL('image/jpeg', 0.82);
           }
 
-          // Upload to Firebase Storage and get permanent downloadURL
-          addToast(isKa ? 'სურათი იტვირთება...' : 'Uploading image to storage...', 'info');
-          const uploadedUrl = await uploadImageToFirebase(rawUrl, 'products');
-          
-          if (uploadedUrl && (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://'))) {
-            saveImageBackupIDB(uploadedUrl, rawUrl);
-            appendProdImage(uploadedUrl, file.name);
-          } else {
-            addToast(isKa ? 'სურათის ატვირთვა ვერ მოხერხდა' : 'Failed to upload image', 'error');
-          }
+          // 1. Instantly display preview in gallery grid (0ms delay for user!)
+          appendProdImage(rawUrl, file.name);
+
+          // 2. Persist to permanent storage (~20ms from server disk API)
+          uploadImageToFirebase(rawUrl, 'products')
+            .then(uploadedUrl => {
+              if (uploadedUrl && (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://') || uploadedUrl.startsWith('/uploads/'))) {
+                saveImageBackupIDB(uploadedUrl, rawUrl);
+                // Seamlessly swap temporary rawUrl with permanent URL
+                setProdForm(prev => ({
+                  ...prev,
+                  images: prev.images.map(img => img === rawUrl ? uploadedUrl : img),
+                  image: prev.image === rawUrl ? uploadedUrl : prev.image,
+                }));
+              }
+            })
+            .catch(err => {
+              console.warn('Image upload background notice:', err);
+            });
         };
         img.onerror = () => {
           addToast(isKa ? 'სურათის დამუშავება ვერ მოხერხდა' : 'Failed to process image file', 'error');
@@ -1025,10 +1038,10 @@ export const AdminDashboard: React.FC = () => {
 
     const defaultStockCover = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
 
-    // Prepare valid images array (up to 10 images) ensuring persistent absolute URLs
+    // Prepare valid images array (up to 10 images) ensuring persistent URLs
     const validImages = (prodForm.images || [])
       .map(img => ensurePersistentAbsoluteUrl(img, ''))
-      .filter(img => img.length > 0 && !img.startsWith('data:'))
+      .filter(img => img.length > 0)
       .slice(0, 10);
 
     const finalImages = validImages.length > 0

@@ -348,6 +348,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return text;
   };
 
+  const safeFirestoreSetDoc = async (documentRef: any, data: any, options: any = { merge: true }) => {
+    try {
+      await setDoc(documentRef, data, options);
+    } catch (err: any) {
+      if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
+        console.warn('[FIREBASE] Quota notice: Server disk & memory persistence handling store operations.');
+      } else {
+        console.warn('[FIREBASE] Notice saving doc:', err?.message || err);
+      }
+    }
+  };
+
+  const safeFirestoreDeleteDoc = async (documentRef: any) => {
+    try {
+      await deleteDoc(documentRef);
+    } catch (err: any) {
+      console.warn('[FIREBASE] Notice deleting doc:', err?.message || err);
+    }
+  };
+
   // Secret Stealth Admin Slug
   const [adminSecretSlug, setAdminSecretSlug] = useState<string>(() => getStoredSecretSlug());
 
@@ -626,7 +646,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     try {
-      setDoc(doc(db, 'store', 'database'), { theme: updated }, { merge: true }).catch(() => {});
+      safeFirestoreSetDoc(doc(db, 'store', 'database'), { theme: updated });
     } catch (e) {}
 
     addToast(
@@ -691,7 +711,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }).catch(err => console.error('Error syncing billboards to server:', err));
 
     try {
-      setDoc(doc(db, 'store', 'database'), { billboards: slides, billboardIntervalSeconds: currentInterval }, { merge: true }).catch(() => {});
+      safeFirestoreSetDoc(doc(db, 'store', 'database'), { billboards: slides, billboardIntervalSeconds: currentInterval });
     } catch (e) {}
   };
 
@@ -802,33 +822,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     }
 
-    // 3. Directly persist to Firebase Firestore store/database
+    // 3. Directly persist to Firebase Firestore store/database (single atomic write to save quota)
     try {
-      await setDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: nowIso }, { merge: true });
+      await safeFirestoreSetDoc(doc(db, 'store', 'database'), { products: sanitizedProducts, lastUpdated: nowIso });
     } catch (fbErr: any) {
-      if (fbErr?.code === 'resource-exhausted' || fbErr?.message?.includes('RESOURCE_EXHAUSTED')) {
-        console.warn('[CLIENT-FIREBASE] Daily write quota reached. Local & Server persistence active.');
-      } else {
-        console.warn('[CLIENT-FIREBASE] Notice saving products to Firestore:', fbErr?.message || fbErr);
-      }
+      // safeFirestoreSetDoc gracefully handles quota limits
     }
-
-    // Also persist individual product documents in Firestore products collection
-    try {
-      sanitizedProducts.forEach(prod => {
-        setDoc(doc(db, 'products', prod.id), {
-          id: prod.id,
-          name: prod.title,
-          price: prod.price,
-          originalPrice: prod.origPrice || null,
-          category: prod.category,
-          image: prod.image,
-          description: prod.description || '',
-          inStock: (prod.stock ?? 1) > 0,
-          badge: prod.badge || null,
-        }, { merge: true }).catch(() => {});
-      });
-    } catch (e) {}
 
     // 4. Immediately persist to server backend and keep server storage in sync
     try {
@@ -922,16 +921,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // Force save & sync to server + Firebase Firestore + local storage
     await saveProducts(updatedProducts);
-
-    // Direct Firestore write for instant global sync across all devices
-    try {
-      await setDoc(doc(db, 'store', 'database'), {
-        products: updatedProducts,
-        lastUpdated: new Date().toISOString(),
-      }, { merge: true });
-    } catch (err) {
-      console.warn('[GLOBAL-PUBLISH] Direct Firestore push error:', err);
-    }
 
     addToast(
       language === 'ka'
@@ -1200,16 +1189,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setLastPlacedOrder(newOrder);
 
     const nowIso = new Date().toISOString();
-    // Direct sync to Firestore store/database & orders collection
-    try {
-      setDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso }, { merge: true }).catch(() => {});
-      setDoc(doc(db, 'orders', newOrder.id), {
-        id: newOrder.id,
-        date: newOrder.date,
-        total: newOrder.total,
-        status: newOrder.status,
-      }, { merge: true }).catch(() => {});
-    } catch (e) {}
+    // Direct sync to Firestore store/database
+    safeFirestoreSetDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso });
 
     // Save order to server backend
     fetch('/api/store/order', {
@@ -1234,10 +1215,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
     const nowIso = new Date().toISOString();
-    try {
-      setDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso }, { merge: true }).catch(() => {});
-      setDoc(doc(db, 'orders', orderId), { status }, { merge: true }).catch(() => {});
-    } catch (e) {}
+    safeFirestoreSetDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso });
 
     fetch('/api/store/sync', {
       method: 'POST',
@@ -1272,9 +1250,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
     const nowIso = new Date().toISOString();
-    try {
-      setDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso }, { merge: true }).catch(() => {});
-    } catch (e) {}
+    safeFirestoreSetDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso });
 
     fetch('/api/store/sync', {
       method: 'POST',
@@ -1294,10 +1270,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders(updated);
     localStorage.setItem('dbuy_orders', JSON.stringify(updated));
     const nowIso = new Date().toISOString();
-    try {
-      setDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso }, { merge: true }).catch(() => {});
-      deleteDoc(doc(db, 'orders', orderId)).catch(() => {});
-    } catch (e) {}
+    safeFirestoreSetDoc(doc(db, 'store', 'database'), { orders: updated, lastUpdated: nowIso });
+    safeFirestoreDeleteDoc(doc(db, 'orders', orderId));
 
     fetch('/api/store/sync', {
       method: 'POST',
@@ -1314,9 +1288,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders([]);
     localStorage.removeItem('dbuy_orders');
     const nowIso = new Date().toISOString();
-    try {
-      setDoc(doc(db, 'store', 'database'), { orders: [], lastUpdated: nowIso }, { merge: true }).catch(() => {});
-    } catch (e) {}
+    safeFirestoreSetDoc(doc(db, 'store', 'database'), { orders: [], lastUpdated: nowIso });
 
     fetch('/api/store/sync', {
       method: 'POST',
@@ -1718,28 +1690,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
 
         const data = snap.data();
-        if (data.lastUpdated) {
-          lastSyncTimestampRef.current = data.lastUpdated;
-        }
 
         // 1. PRODUCTS - Ensure Firestore is authoritative and images are persistent absolute URLs
-        if (Array.isArray(data.products)) {
-          const sanitizedProducts: Product[] = data.products.map(p => {
-            const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
-            const extraImgs = Array.isArray(p.images)
-              ? p.images.map(img => ensurePersistentAbsoluteUrl(img, img))
-              : (mainImg ? [mainImg] : []);
-            return {
-              ...p,
-              image: mainImg,
-              images: extraImgs,
-            };
-          });
+        // Guard against overwriting changes recently performed on this device
+        const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
+        const isStaleSnapshot = Boolean(
+          data.lastUpdated &&
+          lastSyncTimestampRef.current &&
+          new Date(data.lastUpdated).getTime() < new Date(lastSyncTimestampRef.current).getTime()
+        );
 
-          setProducts(sanitizedProducts);
-          try {
-            localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
-          } catch {}
+        if (!recentlyUpdatedLocally && !isStaleSnapshot) {
+          if (Array.isArray(data.products)) {
+            const sanitizedProducts: Product[] = data.products.map(p => {
+              const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
+              const extraImgs = Array.isArray(p.images)
+                ? p.images.map(img => ensurePersistentAbsoluteUrl(img, img))
+                : (mainImg ? [mainImg] : []);
+              return {
+                ...p,
+                image: mainImg,
+                images: extraImgs,
+              };
+            });
+
+            setProducts(sanitizedProducts);
+            try {
+              localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
+            } catch {}
+          }
+          if (data.lastUpdated) {
+            lastSyncTimestampRef.current = data.lastUpdated;
+          }
         }
 
         // 2. THEME - Update global theme and CSS custom property
@@ -1800,8 +1782,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           } catch {}
         }
       }, (err) => {
+        if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
+          console.warn('[FIREBASE-REALTIME] Free daily Firestore quota reached. Real-time sync seamlessly active via server REST API.');
+          return;
+        }
         if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {
-          console.log('[FIREBASE-REALTIME] Firestore database instance pending provision. Active local & REST API persistence is functioning normally.');
+          console.log('[FIREBASE-REALTIME] Firestore database pending provision. Active local & REST API persistence is functioning normally.');
         } else {
           console.warn('[FIREBASE-REALTIME] Notice:', err?.message || err);
         }
