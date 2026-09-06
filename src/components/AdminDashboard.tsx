@@ -12,6 +12,7 @@ import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
 import { StoreSyncModal } from './StoreSyncModal';
+import { uploadImageToFirebase } from '../utils/firebaseStorage';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -585,7 +586,7 @@ export const AdminDashboard: React.FC = () => {
       const result = e.target?.result as string;
       if (!result) return;
       const img = new Image();
-      img.onload = () => {
+      img.onload = async () => {
         const canvas = document.createElement('canvas');
         let width = img.width;
         let height = img.height;
@@ -605,7 +606,12 @@ export const AdminDashboard: React.FC = () => {
         if (ctx) {
           ctx.drawImage(img, 0, 0, width, height);
           const raw = canvas.toDataURL('image/jpeg', 0.90);
-          setBillboardForm(prev => ({ ...prev, image: raw }));
+          
+          addToast(isKa ? 'ბილბორდის სურათი იტვირთება...' : 'Uploading billboard image...', 'info');
+          const uploadedUrl = await uploadImageToFirebase(raw, 'billboards');
+          const finalUrl = uploadedUrl || raw;
+          
+          setBillboardForm(prev => ({ ...prev, image: finalUrl }));
           addToast(isKa ? 'ბილბორდის სურათი წარმატებით აიტვირთა!' : 'Billboard image uploaded successfully!', 'success');
         }
       };
@@ -692,23 +698,16 @@ export const AdminDashboard: React.FC = () => {
             rawUrl = canvas.toDataURL('image/jpeg', 0.82);
           }
 
-          // Convert to server file immediately so prodForm receives clean short URL
-          try {
-            const res = await fetch('/api/upload-image', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ dataUrl: rawUrl, filename: file.name }),
-            });
-            const json = await res.json();
-            if (json && json.success && json.url) {
-              saveImageBackupIDB(json.url, rawUrl);
-              appendProdImage(json.url, file.name);
-              return;
-            }
-          } catch (err) {
-            console.warn('Upload API call failed, using compressed base64 fallback:', err);
+          // Upload to Firebase Storage
+          addToast(isKa ? 'სურათი იტვირთება...' : 'Uploading image...', 'info');
+          const uploadedUrl = await uploadImageToFirebase(rawUrl, 'products');
+          
+          if (uploadedUrl) {
+            saveImageBackupIDB(uploadedUrl, rawUrl);
+            appendProdImage(uploadedUrl, file.name);
+          } else {
+            appendProdImage(rawUrl, file.name);
           }
-          appendProdImage(rawUrl, file.name);
         };
         img.onerror = () => {
           appendProdImage(result, file.name);
@@ -750,21 +749,16 @@ export const AdminDashboard: React.FC = () => {
 
     // Backup background upload if still base64
     if (url.startsWith('data:')) {
-      fetch('/api/upload-image', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dataUrl: url, filename: name }),
-      })
-        .then(r => r.json())
-        .then(json => {
-          if (json && json.success && json.url) {
-            saveImageBackupIDB(json.url, url);
+      uploadImageToFirebase(url, 'products')
+        .then(uploadedUrl => {
+          if (uploadedUrl) {
+            saveImageBackupIDB(uploadedUrl, url);
             setProdForm(prev => {
-              const updated = prev.images.map(img => img === url ? json.url : img);
+              const updated = prev.images.map(img => img === url ? uploadedUrl : img);
               return {
                 ...prev,
                 images: updated,
-                image: prev.image === url ? json.url : prev.image,
+                image: prev.image === url ? uploadedUrl : prev.image,
               };
             });
           }

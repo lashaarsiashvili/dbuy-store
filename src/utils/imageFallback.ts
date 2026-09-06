@@ -1,5 +1,6 @@
 import React from 'react';
 import { getImageBackupIDB } from './imageStorage';
+import { uploadImageToFirebase } from './firebaseStorage';
 
 /**
  * Clean, neutral SVG placeholder for products without an image or when an image fails to load.
@@ -32,12 +33,14 @@ export const handleImageError = (
       if (base64 && base64.startsWith('data:')) {
         target.src = base64;
         delete target.dataset.failed;
-        // Re-post to server to reconstitute the physical disk file
-        fetch('/api/upload-image', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dataUrl: base64, filename: failedUrl.split('/').pop() }),
-        }).catch(() => {});
+        // Re-upload to Firebase Storage if it's missing
+        uploadImageToFirebase(base64, 'recovered')
+          .then(newUrl => {
+            if (newUrl) {
+              target.src = newUrl;
+            }
+          })
+          .catch(() => {});
       } else if (!target.src.startsWith('data:image/svg+xml') && target.src !== fallbackSrc) {
         target.src = fallbackSrc;
       }
