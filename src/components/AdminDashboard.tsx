@@ -11,7 +11,7 @@ import { AdminAnalytics } from './AdminAnalytics';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
-import { StoreSyncModal } from './StoreSyncModal';
+
 import { uploadImageToFirebase, ensurePersistentAbsoluteUrl } from '../utils/firebaseStorage';
 import { 
   ShieldCheck, 
@@ -1333,14 +1333,7 @@ export const AdminDashboard: React.FC = () => {
               <span>{isKa ? 'პროდუქტის დამატება' : 'Add Product'}</span>
             </button>
 
-            <button
-              onClick={() => setIsSyncModalOpen(true)}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold flex items-center space-x-1.5 border border-slate-700 transition-colors cursor-pointer"
-              title={isKa ? 'ცოცხალი საიტის სინქრონიზაცია & ბაზა' : 'Live site sync & database'}
-            >
-              <Database className="w-3.5 h-3.5 text-blue-400" />
-              <span className="hidden md:inline">{isKa ? 'საიტის სინქრონიზაცია' : 'Live Sync'}</span>
-            </button>
+
 
             <a
               href="/api/download-zip"
@@ -4831,12 +4824,7 @@ export const AdminDashboard: React.FC = () => {
         allProducts={products}
       />
 
-      {/* Live Site Sync & Database Management Modal */}
-      <StoreSyncModal
-        isOpen={isSyncModalOpen}
-        onClose={() => setIsSyncModalOpen(false)}
-        isKa={isKa}
-      />
+
 
       {/* Order Tracking Management Modal */}
       {trackingModalOrder && (

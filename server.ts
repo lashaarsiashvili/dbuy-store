@@ -223,8 +223,13 @@ app.get('/uploads/:filename', (req, res) => {
       const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
       if (matches && matches[2]) {
         const buffer = Buffer.from(matches[2], 'base64');
-        fs.writeFileSync(filePath, buffer);
+        try {
+          fs.writeFileSync(filePath, buffer);
+        } catch (writeErr: any) {
+          console.warn('[DISK] Could not cache recovered image to read-only disk, serving directly from memory:', writeErr?.message || writeErr);
+        }
         res.setHeader('Content-Type', matches[1]);
+        res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
         return res.send(buffer);
       }
     } catch (err) {
@@ -631,26 +636,30 @@ dbInitPromise = (async () => {
 let firestoreQuotaExceededUntil = 0;
 
 function saveStoreDatabase(): void {
+  storeDb.lastUpdated = new Date().toISOString();
+  storeDb.uploadsMap = uploadsMap;
+  const serialized = JSON.stringify(storeDb, null, 2);
+
+  // 1. Try to save to local ephemeral disk, but catch and log read-only file system errors (e.g. on Vercel)
   try {
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
     }
-    storeDb.lastUpdated = new Date().toISOString();
-    storeDb.uploadsMap = uploadsMap;
-    const serialized = JSON.stringify(storeDb, null, 2);
-    
-    // Save to runtime ephemeral disk
     fs.writeFileSync(DB_FILE, serialized, 'utf-8');
 
-    // Save to source repository backup so data survives container cold starts
     const backupDir = path.dirname(CODE_BACKUP_FILE);
     if (!fs.existsSync(backupDir)) {
       fs.mkdirSync(backupDir, { recursive: true });
     }
     fs.writeFileSync(CODE_BACKUP_FILE, serialized, 'utf-8');
+    console.log('[DISK] Database saved successfully to local file storage.');
+  } catch (fsErr: any) {
+    console.warn('[DISK] Local filesystem is read-only or unavailable (e.g. Vercel Serverless). Skipping disk save.', fsErr?.message || fsErr);
+  }
 
-    // Automatically persist to Firebase Firestore
-    if (firebaseDb) {
+  // 2. Automatically persist to Firebase Firestore - this MUST always execute even if disk writes are read-only!
+  if (firebaseDb) {
+    try {
       // Create a clean payload WITHOUT giant base64 image maps to keep document size < 1MB
       const sanitizedStoreDb: Record<string, any> = { ...storeDb };
       delete sanitizedStoreDb.uploadsMap; // Remove base64 image map from main document
@@ -702,10 +711,14 @@ function saveStoreDatabase(): void {
         pendingPromises.add(firestorePromise);
         firestorePromise.finally(() => pendingPromises.delete(firestorePromise));
       }
+    } catch (fbErr: any) {
+      console.error('[FIREBASE] Failed to save database to Firestore:', fbErr?.message || fbErr);
     }
+  }
 
-    // Automatically persist to Vercel KV / Upstash Redis if available
-    if (redisClient) {
+  // 3. Automatically persist to Vercel KV / Upstash Redis if available
+  if (redisClient) {
+    try {
       const redisPromise = redisClient.set('dbuy_store_database', serialized)
         .then(() => console.log('[REDIS/KV] Saved database to Vercel KV / Upstash Redis successfully'))
         .catch(() => {
@@ -713,9 +726,9 @@ function saveStoreDatabase(): void {
         });
       pendingPromises.add(redisPromise);
       redisPromise.finally(() => pendingPromises.delete(redisPromise));
+    } catch (redisErr: any) {
+      console.error('[REDIS/KV] Failed to save database to Redis:', redisErr?.message || redisErr);
     }
-  } catch (err) {
-    console.error('Failed to save store database to file:', err);
   }
 }
 
@@ -1150,10 +1163,14 @@ app.post('/api/upload-image', (req, res) => {
     const safeName = `prod-${timestamp}-${rand}.${ext}`;
     const filePath = path.join(UPLOADS_DIR, safeName);
 
-    fs.writeFileSync(filePath, buffer);
+    try {
+      fs.writeFileSync(filePath, buffer);
+      console.log(`[IMAGE-UPLOAD] Saved product image physically to disk: ${filePath}`);
+    } catch (writeErr: any) {
+      console.warn('[IMAGE-UPLOAD] Disk is read-only (Vercel). Keeping image in-memory and Firestore:', writeErr?.message || writeErr);
+    }
     uploadsMap[safeName] = dataUrl;
     saveUploadsMap();
-    console.log(`[IMAGE-UPLOAD] Saved product image to ${filePath} and backup map (${(buffer.length / 1024).toFixed(1)} KB)`);
 
     // Back up the uploaded image persistently in Firebase Firestore to survive container restarts
     if (firebaseDb) {
@@ -1302,10 +1319,14 @@ function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
     const safeName = `${prefix}-${timestamp}-${rand}.${ext}`;
     const filePath = path.join(UPLOADS_DIR, safeName);
 
-    fs.writeFileSync(filePath, buffer);
+    try {
+      fs.writeFileSync(filePath, buffer);
+      console.log(`[AUTO-DISK-IMAGE] Saved product image physically to disk: ${safeName}`);
+    } catch (writeErr: any) {
+      console.warn('[AUTO-DISK-IMAGE] Disk is read-only (Vercel). Keeping image in-memory and Firestore:', writeErr?.message || writeErr);
+    }
     uploadsMap[safeName] = dataUrl;
     saveUploadsMap();
-    console.log(`[AUTO-DISK-IMAGE] Saved product image to disk & map: ${safeName} (${(buffer.length / 1024).toFixed(1)} KB)`);
 
     // Back up the auto-converted image persistently in Firebase Firestore to survive container restarts
     if (firebaseDb) {
