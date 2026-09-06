@@ -27,10 +27,28 @@ export const Hero: React.FC = () => {
     theme,
   } = useStore();
 
-  // Dynamically generate gorgeous, high-converting billboard slides from actual store products!
-  // This automatically features every single product on the front page rotation.
-  const dynamicSlides: BillboardSlide[] = products.length > 0 
-    ? products.map((p, idx) => {
+  // Filter products that have specific promo badges: "trending" (or "tranding"), "best seller", or "hot deal" (case-insensitive)
+  const promoProducts = products.filter(p => {
+    const badge = (p.badge || '').toLowerCase().trim();
+    return (
+      badge === 'trending' ||
+      badge === 'tranding' ||
+      badge === 'best seller' ||
+      badge === 'bestseller' ||
+      badge === 'hot deal' ||
+      badge === 'hotdeal' ||
+      badge === 'ტრენდული' ||
+      badge === 'ბესტსელერი' ||
+      badge === 'ცხელი შემოთავაზება'
+    );
+  });
+
+  // Use the filtered promotional products if any exist, otherwise gracefully fallback to all products
+  const productsToFeature = promoProducts.length > 0 ? promoProducts : products;
+
+  // Dynamically generate gorgeous, high-converting billboard slides from selected promo products!
+  const dynamicSlides: BillboardSlide[] = productsToFeature.length > 0 
+    ? productsToFeature.map((p, idx) => {
         const gradients = [
           'from-slate-950 via-slate-900 to-indigo-950',
           'from-slate-950 via-slate-900 to-emerald-950',
@@ -53,8 +71,8 @@ export const Hero: React.FC = () => {
           titleKa: p.title,
           subtitle: p.description ? p.description.replace(/<[^>]*>/g, '').substring(0, 160) + '...' : '',
           subtitleKa: p.description ? p.description.replace(/<[^>]*>/g, '').substring(0, 160) + '...' : '',
-          badge: p.isNew ? 'New Arrival' : (p.rating >= 4.7 ? 'Hot Seller' : 'Special Offer'),
-          badgeKa: p.isNew ? 'ახალი შემოტანილი' : (p.rating >= 4.7 ? 'ყველაზე გაყიდვადი' : 'სპეციალური შემოთავაზება'),
+          badge: p.badge || 'Promo Offer',
+          badgeKa: p.badge || 'სპეციალური შემოთავაზება',
           buttonText: 'Buy Now',
           buttonTextKa: 'ყიდვა',
           productId: p.id,
