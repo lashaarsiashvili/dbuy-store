@@ -2069,6 +2069,26 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* Auto-billboards Information Banner */}
+            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-3xl p-6 shadow-md relative overflow-hidden">
+              <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
+                <Layers className="w-40 h-40" />
+              </div>
+              <div className="relative z-10 flex items-start space-x-4">
+                <div className="p-3 bg-white/20 rounded-2xl">
+                  <Sparkles className="w-6 h-6 text-yellow-300 animate-pulse" />
+                </div>
+                <div className="space-y-1.5">
+                  <h4 className="text-base font-black tracking-tight">
+                    🌐 სარეკლამო ბანერები ახლა სრულად ავტომატიზებულია! (Automated Billboards Active)
+                  </h4>
+                  <p className="text-xs text-blue-100 leading-relaxed max-w-4xl">
+                    თქვენი მოთხოვნის შესაბამისად, მაღაზიაში დამატებული **ყველა პროდუქტი** ავტომატურად ხდება ინტერაქტიული სარეკლამო ბანერი მთავარ გვერდზე! სლაიდები ავტომატურად ტრიალებს და თითოეულ პროდუქტს უკეთებს რეკლამას, რაც ზრდის გაყიდვებს. აღარ არის საჭირო ბანერების ხელით დიზაინი და სურათების ატვირთვა.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Billboards Slides Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {billboards.map((slide, index) => {

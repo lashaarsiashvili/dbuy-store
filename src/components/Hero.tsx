@@ -27,8 +27,46 @@ export const Hero: React.FC = () => {
     theme,
   } = useStore();
 
-  const activeBillboards = billboards.filter(b => b.isActive);
-  const slides = activeBillboards.length > 0 ? activeBillboards : billboards;
+  // Dynamically generate gorgeous, high-converting billboard slides from actual store products!
+  // This automatically features every single product on the front page rotation.
+  const dynamicSlides: BillboardSlide[] = products.length > 0 
+    ? products.map((p, idx) => {
+        const gradients = [
+          'from-slate-950 via-slate-900 to-indigo-950',
+          'from-slate-950 via-slate-900 to-emerald-950',
+          'from-slate-950 via-slate-900 to-blue-950',
+          'from-slate-950 via-slate-900 to-rose-950',
+          'from-slate-950 via-slate-900 to-amber-950',
+          'from-slate-950 via-slate-900 to-violet-950',
+        ];
+        const bgGradient = gradients[idx % gradients.length];
+        const discount = p.origPrice && p.origPrice > p.price 
+          ? `-${Math.round((1 - p.price / p.origPrice) * 100)}%` 
+          : undefined;
+
+        return {
+          id: 'slide-' + p.id,
+          image: p.image || '',
+          bgImage: p.image || '',
+          bgGradient,
+          title: p.title,
+          titleKa: p.title,
+          subtitle: p.description ? p.description.replace(/<[^>]*>/g, '').substring(0, 160) + '...' : '',
+          subtitleKa: p.description ? p.description.replace(/<[^>]*>/g, '').substring(0, 160) + '...' : '',
+          badge: p.isNew ? 'New Arrival' : (p.rating >= 4.7 ? 'Hot Seller' : 'Special Offer'),
+          badgeKa: p.isNew ? 'ახალი შემოტანილი' : (p.rating >= 4.7 ? 'ყველაზე გაყიდვადი' : 'სპეციალური შემოთავაზება'),
+          buttonText: 'Buy Now',
+          buttonTextKa: 'ყიდვა',
+          productId: p.id,
+          category: p.category,
+          discountTag: discount,
+          isActive: true,
+        };
+      })
+    : billboards;
+
+  const activeBillboards = dynamicSlides.filter(b => b.isActive);
+  const slides = activeBillboards.length > 0 ? activeBillboards : dynamicSlides;
 
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
