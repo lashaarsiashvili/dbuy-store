@@ -349,7 +349,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Track Firestore Quota state so we never stall execution or listen to frozen stale states
-  const firestoreWriteBlockedRef = useRef<boolean>(false);
+  const firestoreWriteBlockedRef = useRef<boolean>(
+    typeof window !== 'undefined' && sessionStorage.getItem('dbuy_fb_quota_blocked') === 'true'
+  );
 
   const safeFirestoreSetDoc = async (documentRef: any, data: any, options: any = { merge: true }) => {
     if (firestoreWriteBlockedRef.current) {
@@ -369,6 +371,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         err?.message === 'FIRESTORE_WRITE_TIMEOUT'
       ) {
         firestoreWriteBlockedRef.current = true;
+        try {
+          sessionStorage.setItem('dbuy_fb_quota_blocked', 'true');
+        } catch {}
         console.warn('[FIREBASE] Quota limit active: Server backend is authoritative persistence.');
       } else {
         console.warn('[FIREBASE] Notice saving doc:', err?.message || err);

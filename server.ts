@@ -8,7 +8,7 @@ import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
+import { getFirestore, setLogLevel, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 
@@ -378,6 +378,9 @@ try {
   if (fs.existsSync(firebaseConfigPath)) {
     const firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
     const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
+    try {
+      setLogLevel('silent');
+    } catch {}
     firebaseDb = getFirestore(fbApp, firebaseConfig.firestoreDatabaseId || undefined);
     console.log('[FIREBASE] Connected to Firebase Firestore successfully!');
   }
