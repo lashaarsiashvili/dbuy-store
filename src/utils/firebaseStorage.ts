@@ -10,6 +10,17 @@ export const ensurePersistentAbsoluteUrl = (url: string, fallback = ''): string 
   if (!url || typeof url !== 'string') return fallback;
   const trimmed = url.trim();
   if (!trimmed) return fallback;
+
+  // If URL points to an internal Google Cloud Run preview container (e.g. ais-dev-*.run.app or ais-pre-*.run.app)
+  // rewrite it so it resolves seamlessly on the user's custom production domain or local deploy
+  if (trimmed.includes('run.app/uploads/')) {
+    const filename = trimmed.split('/uploads/').pop();
+    if (filename) {
+      const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
+      return `${origin}/uploads/${filename}`;
+    }
+  }
+
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }

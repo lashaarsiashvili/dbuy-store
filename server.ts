@@ -41,6 +41,55 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
+export const pendingPromises = new Set<Promise<any>>();
+
+// Serverless Interceptor Middleware:
+// Since Vercel is a serverless platform, any asynchronous calls (e.g. saving to Firestore,
+// Redis, or sending emails via Nodemailer) triggered during request processing will be
+// aborted if the HTTP response is sent before they finish.
+// This middleware intercepts res.json, res.send, and res.end to wait for all active
+// database writes and email dispatches to fully resolve before returning.
+app.use(async (req, res, next) => {
+  const originalJson = res.json;
+  const originalSend = res.send;
+  const originalEnd = res.end;
+
+  res.json = async function(body) {
+    if (pendingPromises.size > 0) {
+      try {
+        await Promise.all(Array.from(pendingPromises));
+      } catch (err) {
+        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.json:', err);
+      }
+    }
+    return originalJson.call(this, body);
+  } as any;
+
+  res.send = async function(body) {
+    if (pendingPromises.size > 0) {
+      try {
+        await Promise.all(Array.from(pendingPromises));
+      } catch (err) {
+        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.send:', err);
+      }
+    }
+    return originalSend.call(this, body);
+  } as any;
+
+  res.end = async function(chunk, encoding, cb) {
+    if (pendingPromises.size > 0) {
+      try {
+        await Promise.all(Array.from(pendingPromises));
+      } catch (err) {
+        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.end:', err);
+      }
+    }
+    return originalEnd.call(this, chunk, encoding, cb);
+  } as any;
+
+  next();
+});
+
 // Helper for safe JSON response parsing from external APIs (e.g. PayPal)
 async function safeJsonFromFetch(response: Response): Promise<{ ok: boolean; status: number; data: any; rawText: string }> {
   try {
@@ -590,7 +639,7 @@ function saveStoreDatabase(): void {
       }
 
       if (Date.now() > firestoreQuotaExceededUntil) {
-        setDoc(doc(firebaseDb, 'store', 'database'), sanitizedStoreDb, { merge: true })
+        const firestorePromise = setDoc(doc(firebaseDb, 'store', 'database'), sanitizedStoreDb, { merge: true })
           .then(() => console.log('[FIREBASE] Saved sanitized database to Firebase Firestore successfully'))
           .catch(err => {
             if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
@@ -600,16 +649,20 @@ function saveStoreDatabase(): void {
               console.warn('[FIREBASE] Notice saving to Firebase:', err?.message || err);
             }
           });
+        pendingPromises.add(firestorePromise);
+        firestorePromise.finally(() => pendingPromises.delete(firestorePromise));
       }
     }
 
     // Automatically persist to Vercel KV / Upstash Redis if available
     if (redisClient) {
-      redisClient.set('dbuy_store_database', serialized)
+      const redisPromise = redisClient.set('dbuy_store_database', serialized)
         .then(() => console.log('[REDIS/KV] Saved database to Vercel KV / Upstash Redis successfully'))
         .catch(() => {
           redisClient = null;
         });
+      pendingPromises.add(redisPromise);
+      redisPromise.finally(() => pendingPromises.delete(redisPromise));
     }
   } catch (err) {
     console.error('Failed to save store database to file:', err);
@@ -689,7 +742,7 @@ function getMailTransporter() {
 }
 
 // Resilient email dispatch helper with multi-port automatic retries
-async function sendMailWithRetry(options: {
+function sendMailWithRetry(options: {
   from?: string;
   to: string;
   subject: string;
@@ -697,81 +750,87 @@ async function sendMailWithRetry(options: {
   html?: string;
   replyTo?: string;
 }): Promise<{ success: boolean; messageId?: string; error?: string }> {
-  const customSmtp = (storeDb as any)?.smtpConfig || {};
-  const smtpUser = (
-    customSmtp.user ||
-    process.env.ZOHO_USER ||
-    process.env.SMTP_USER ||
-    'support@dbuystore.com'
-  ).trim();
-  const smtpPass = (
-    customSmtp.pass ||
-    process.env.ZOHO_APP_PASSWORD ||
-    process.env.ZOHO_PASSWORD ||
-    process.env.SMTP_PASS ||
-    process.env.GMAIL_APP_PASSWORD ||
-    'cjmwVviQbiaq'
-  ).replace(/\s+/g, '');
+  const promise = (async () => {
+    const customSmtp = (storeDb as any)?.smtpConfig || {};
+    const smtpUser = (
+      customSmtp.user ||
+      process.env.ZOHO_USER ||
+      process.env.SMTP_USER ||
+      'support@dbuystore.com'
+    ).trim();
+    const smtpPass = (
+      customSmtp.pass ||
+      process.env.ZOHO_APP_PASSWORD ||
+      process.env.ZOHO_PASSWORD ||
+      process.env.SMTP_PASS ||
+      process.env.GMAIL_APP_PASSWORD ||
+      'cjmwVviQbiaq'
+    ).replace(/\s+/g, '');
 
-  const defaultFrom = `"DBUY Store" <${smtpUser}>`;
-  let finalFrom = options.from ? options.from : defaultFrom;
+    const defaultFrom = `"DBUY Store" <${smtpUser}>`;
+    let finalFrom = options.from ? options.from : defaultFrom;
 
-  // Enforce correct envelope/from email matches Zoho authenticated user address
-  if (!finalFrom.includes(smtpUser)) {
-    finalFrom = `"DBUY Store" <${smtpUser}>`;
-  }
-
-  const mailPayload = {
-    ...options,
-    from: finalFrom,
-    headers: {
-      'X-Mailer': 'DBUY-Store-Mailer',
-      'X-Priority': '1 (Highest)',
-    },
-  };
-
-  // Configurations to try in sequence: 465 SSL -> 587 STARTTLS -> 465 SSL Retry
-  const configs = [
-    { host: 'smtp.zoho.eu', port: 465, secure: true },
-    { host: 'smtp.zoho.eu', port: 587, secure: false },
-    { host: 'smtp.zoho.eu', port: 465, secure: true },
-  ];
-
-  let lastError: any = null;
-
-  for (let i = 0; i < configs.length; i++) {
-    const cfg = configs[i];
-    try {
-      console.log(`[EMAIL-DISPATCH] Attempt ${i + 1}/${configs.length} via ${cfg.host}:${cfg.port} to ${mailPayload.to}`);
-      const transporter = nodemailer.createTransport({
-        host: cfg.host,
-        port: cfg.port,
-        secure: cfg.secure,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-        tls: {
-          rejectUnauthorized: false,
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-      });
-
-      const info = await transporter.sendMail(mailPayload);
-      console.log(`[EMAIL-DISPATCH-SUCCESS] Sent email to ${mailPayload.to} (MessageId: ${info.messageId})`);
-      return { success: true, messageId: info.messageId };
-    } catch (err: any) {
-      lastError = err;
-      console.warn(`[EMAIL-DISPATCH-ATTEMPT-FAILED] Attempt ${i + 1} (${cfg.host}:${cfg.port}) error:`, err?.message || err);
-      // Brief pause before retry
-      await new Promise((resolve) => setTimeout(resolve, 600));
+    // Enforce correct envelope/from email matches Zoho authenticated user address
+    if (!finalFrom.includes(smtpUser)) {
+      finalFrom = `"DBUY Store" <${smtpUser}>`;
     }
-  }
 
-  console.error('[EMAIL-DISPATCH-FATAL] All email send attempts failed:', lastError?.message || lastError);
-  return { success: false, error: lastError?.message || 'Failed to deliver email after retries' };
+    const mailPayload = {
+      ...options,
+      from: finalFrom,
+      headers: {
+        'X-Mailer': 'DBUY-Store-Mailer',
+        'X-Priority': '1 (Highest)',
+      },
+    };
+
+    // Configurations to try in sequence: 465 SSL -> 587 STARTTLS -> 465 SSL Retry
+    const configs = [
+      { host: 'smtp.zoho.eu', port: 465, secure: true },
+      { host: 'smtp.zoho.eu', port: 587, secure: false },
+      { host: 'smtp.zoho.eu', port: 465, secure: true },
+    ];
+
+    let lastError: any = null;
+
+    for (let i = 0; i < configs.length; i++) {
+      const cfg = configs[i];
+      try {
+        console.log(`[EMAIL-DISPATCH] Attempt ${i + 1}/${configs.length} via ${cfg.host}:${cfg.port} to ${mailPayload.to}`);
+        const transporter = nodemailer.createTransport({
+          host: cfg.host,
+          port: cfg.port,
+          secure: cfg.secure,
+          auth: {
+            user: smtpUser,
+            pass: smtpPass,
+          },
+          tls: {
+            rejectUnauthorized: false,
+          },
+          connectionTimeout: 10000,
+          greetingTimeout: 10000,
+          socketTimeout: 15000,
+        });
+
+        const info = await transporter.sendMail(mailPayload);
+        console.log(`[EMAIL-DISPATCH-SUCCESS] Sent email to ${mailPayload.to} (MessageId: ${info.messageId})`);
+        return { success: true, messageId: info.messageId };
+      } catch (err: any) {
+        lastError = err;
+        console.warn(`[EMAIL-DISPATCH-ATTEMPT-FAILED] Attempt ${i + 1} (${cfg.host}:${cfg.port}) error:`, err?.message || err);
+        // Brief pause before retry
+        await new Promise((resolve) => setTimeout(resolve, 600));
+      }
+    }
+
+    console.error('[EMAIL-DISPATCH-FATAL] All email send attempts failed:', lastError?.message || lastError);
+    return { success: false, error: lastError?.message || 'Failed to deliver email after retries' };
+  })();
+
+  pendingPromises.add(promise);
+  promise.finally(() => pendingPromises.delete(promise));
+  return promise;
 }
 
 // API Health Check
