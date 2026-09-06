@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Mail, Clock, Lightbulb, Send, CheckCircle2, MapPin } from 'lucide-react';
+import { smartApiFetch } from '../lib/api';
 
 export const ContactPage: React.FC = () => {
   const { t, addToast } = useStore();
@@ -25,7 +26,7 @@ export const ContactPage: React.FC = () => {
 
     setSubmitting(true);
     try {
-      const res = await fetch('/api/contact', {
+      const res = await smartApiFetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),

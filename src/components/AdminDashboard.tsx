@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
+import { smartApiFetch } from '../lib/api';
 import { Product, Order, BillboardSlide, LogoOptionId } from '../types';
 import { generateProductFeatures } from '../utils/productFeatures';
 import { generateProductAdCopy } from '../utils/adCopyGenerator';
@@ -248,7 +249,7 @@ export const AdminDashboard: React.FC = () => {
   const handleSaveSmtp = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const res = await fetch('/api/admin/smtp', {
+      const res = await smartApiFetch('/api/admin/smtp', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(smtpForm),
@@ -259,7 +260,12 @@ export const AdminDashboard: React.FC = () => {
         data = await res.json();
       } else {
         const text = await res.text();
-        data = { success: false, error: `Server response error (${res.status}): ${text.substring(0, 200) || 'Empty response'}` };
+        data = { 
+          success: false, 
+          error: res.status === 405 
+            ? (isKa ? 'სტატიკური ჰოსტინგის შეცდომა (405): რეალურ ჰოსტინგზე გაშვებულია მხოლოდ ფრონტენდი backend სერვერის (server.cjs) გარეშე. გააშვით Full-Stack Node.js სერვერი (npm start) ან მიუთითეთ /api რედაირექტი.' : 'Static Hosting Error (405): Your production host is serving static files without running the Node.js backend (server.cjs). Please run as Full-Stack Node.js app (npm start) or configure /api rewrite.')
+            : `Server response error (${res.status}): ${text.substring(0, 200) || 'Empty response'}` 
+        };
       }
       if (data.success) {
         setHasServerPass(data.smtp?.hasPass ?? true);
@@ -276,7 +282,7 @@ export const AdminDashboard: React.FC = () => {
     setTestingSmtp(true);
     setSmtpTestResult(null);
     try {
-      const res = await fetch('/api/admin/smtp/test', {
+      const res = await smartApiFetch('/api/admin/smtp/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(smtpForm),
@@ -287,7 +293,12 @@ export const AdminDashboard: React.FC = () => {
         data = await res.json();
       } else {
         const text = await res.text();
-        data = { success: false, error: `Server response error (${res.status}): ${text.substring(0, 200) || 'Empty response'}` };
+        data = { 
+          success: false, 
+          error: res.status === 405 
+            ? (isKa ? 'სტატიკური ჰოსტინგის შეცდომა (405): რეალურ ჰოსტინგზე გაშვებულია მხოლოდ ფრონტენდი backend სერვერის (server.cjs) გარეშე. გააშვით Full-Stack Node.js სერვერი (npm start) ან მიუთითეთ /api რედაირექტი.' : 'Static Hosting Error (405): Your production host is serving static files without running the Node.js backend (server.cjs). Please run as Full-Stack Node.js app (npm start) or configure /api rewrite.')
+            : `Server response error (${res.status}): ${text.substring(0, 200) || 'Empty response'}` 
+        };
       }
       setSmtpTestResult(data);
       if (data.success) {
