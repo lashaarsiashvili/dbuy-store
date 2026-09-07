@@ -1,8 +1,7 @@
 name = "dbuy-store"
 compatibility_date = "2024-01-01"
+main = "dist/server.cjs"
+assets = { directory = "./dist" }
 
 [build]
 command = "npm run build"
-
-[site]
-bucket = "./dist"
