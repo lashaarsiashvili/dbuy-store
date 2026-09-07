@@ -531,7 +531,9 @@ try {
   if (envStorageBucket) firebaseConfig.storageBucket = envStorageBucket;
   if (envMessagingSenderId) firebaseConfig.messagingSenderId = envMessagingSenderId;
 
-  if (firebaseConfig.apiKey && firebaseConfig.projectId) {
+  const ENABLE_FIREBASE = false; // Set to true to enable Firebase, false to use pure local JSON file storage with zero external dependencies
+
+  if (ENABLE_FIREBASE && firebaseConfig.apiKey && firebaseConfig.projectId) {
     const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
     try {
       setLogLevel('silent');
