@@ -7,19 +7,8 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
-// Firebase decoupled - pure offline-first mode
-const initializeApp = (...args: any[]) => ({});
-const getApps = () => [];
-const getFirestore = (...args: any[]) => ({});
-const setLogLevel = (...args: any[]) => {};
-const doc = (...args: any[]) => ({});
-const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
-const setDoc = async (...args: any[]) => {};
-const collection = (...args: any[]) => ({});
-const getDocs = async (...args: any[]) => ({
-  empty: true,
-  forEach: (cb: (doc: any) => void) => {}
-});
+import { initializeApp, getApps } from 'firebase/app';
+import { getFirestore, setLogLevel, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 
@@ -708,6 +697,110 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
   }
 }
 
+// Sync existing local uploaded image files from disk to Firebase Firestore store_uploads
+async function syncLocalUploadsToFirestore(): Promise<void> {
+  if (!firebaseDb) return;
+  console.log('[FIREBASE-UPLOADS-SYNC] Running local uploads synchronization with Firestore...');
+  try {
+    if (!fs.existsSync(UPLOADS_DIR)) {
+      console.log('[FIREBASE-UPLOADS-SYNC] Uploads directory does not exist yet.');
+      return;
+    }
+    const files = fs.readdirSync(UPLOADS_DIR);
+    console.log(`[FIREBASE-UPLOADS-SYNC] Found ${files.length} physical files in uploads directory.`);
+
+    // Fetch existing keys in Firestore store_uploads to avoid duplicate uploads
+    const existingUploadKeys = new Set<string>();
+    try {
+      const snap = await getDocs(collection(firebaseDb, 'store_uploads'));
+      if (snap && !snap.empty) {
+        snap.forEach(doc => {
+          existingUploadKeys.add(doc.id);
+        });
+      }
+    } catch (e) {
+      console.warn('[FIREBASE-UPLOADS-SYNC] Could not fetch existing store_uploads list. Proceeding anyway:', e);
+    }
+
+    let uploadCount = 0;
+    for (const filename of files) {
+      const filePath = path.join(UPLOADS_DIR, filename);
+      const stat = fs.statSync(filePath);
+      if (!stat.isFile()) continue;
+
+      if (existingUploadKeys.has(filename)) {
+        continue;
+      }
+
+      // Convert file to Base64 data URL
+      const ext = path.extname(filename).substring(1).toLowerCase();
+      let mime = 'image/jpeg';
+      if (ext === 'png') mime = 'image/png';
+      else if (ext === 'svg') mime = 'image/svg+xml';
+      else if (ext === 'gif') mime = 'image/gif';
+      else if (ext === 'webp') mime = 'image/webp';
+
+      try {
+        const buffer = fs.readFileSync(filePath);
+        const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
+
+        await setDoc(doc(firebaseDb, 'store_uploads', filename), {
+          filename,
+          dataUrl,
+          uploadedAt: new Date().toISOString()
+        }, { merge: true });
+        uploadCount++;
+        console.log(`[FIREBASE-UPLOADS-SYNC] Uploaded ${filename} (${buffer.length} bytes) to Firestore.`);
+      } catch (uploadErr) {
+        console.error(`[FIREBASE-UPLOADS-SYNC] Failed to upload ${filename} to Firestore:`, uploadErr);
+      }
+    }
+    console.log(`[FIREBASE-UPLOADS-SYNC] Upload synchronization complete. Uploaded ${uploadCount} new files.`);
+  } catch (err) {
+    console.error('[FIREBASE-UPLOADS-SYNC] Error during synchronization:', err);
+  }
+}
+
+function cleanAllStoreProductImageUrls(): void {
+  let modified = false;
+  if (Array.isArray(storeDb.products)) {
+    storeDb.products = storeDb.products.map((p: any) => {
+      if (!p) return p;
+      const cleanP = { ...p };
+      let changed = false;
+
+      if (typeof cleanP.image === 'string' && cleanP.image.includes('/uploads/')) {
+        const cleaned = '/uploads/' + cleanP.image.split('/uploads/').pop();
+        if (cleanP.image !== cleaned) {
+          cleanP.image = cleaned;
+          changed = true;
+        }
+      }
+
+      if (Array.isArray(cleanP.images)) {
+        const cleanedImgs = cleanP.images.map((img: any) => {
+          if (typeof img === 'string' && img.includes('/uploads/')) {
+            const cleaned = '/uploads/' + img.split('/uploads/').pop();
+            return cleaned;
+          }
+          return img;
+        });
+        if (JSON.stringify(cleanP.images) !== JSON.stringify(cleanedImgs)) {
+          cleanP.images = cleanedImgs;
+          changed = true;
+        }
+      }
+
+      if (changed) modified = true;
+      return cleanP;
+    });
+  }
+  if (modified) {
+    console.log('[NORMALIZE-URLS] Cleaned product image URLs to relative paths on startup.');
+    saveStoreDatabase();
+  }
+}
+
 // Sync from Vercel KV / Upstash Redis on startup if configured
 async function syncFromRedisOnStartup(): Promise<void> {
   if (!redisClient) return;
@@ -756,6 +849,16 @@ dbInitPromise = (async () => {
     console.error('[STARTUP-SYNC] Error syncing from Firebase on startup:', err);
   }
   try {
+    await syncLocalUploadsToFirestore();
+  } catch (err) {
+    console.error('[STARTUP-SYNC] Error uploading local files to Firestore on startup:', err);
+  }
+  try {
+    cleanAllStoreProductImageUrls();
+  } catch (err) {
+    console.error('[STARTUP-SYNC] Error normalizing product image URLs on startup:', err);
+  }
+  try {
     await syncFromRedisOnStartup();
   } catch (err) {
     console.error('[STARTUP-SYNC] Error syncing from Redis on startup:', err);
@@ -795,15 +898,24 @@ function saveStoreDatabase(): void {
         storeDb.products = storeDb.products.map((p: any) => {
           if (!p) return p;
           const cleanP = { ...p };
-          if (typeof cleanP.image === 'string' && cleanP.image.startsWith('data:')) {
-            cleanP.image = persistBase64Image(cleanP.image, `prod-${cleanP.id || Date.now()}`);
+          if (typeof cleanP.image === 'string') {
+            if (cleanP.image.startsWith('data:')) {
+              cleanP.image = persistBase64Image(cleanP.image, `prod-${cleanP.id || Date.now()}`);
+            } else if (cleanP.image.includes('/uploads/')) {
+              cleanP.image = '/uploads/' + cleanP.image.split('/uploads/').pop();
+            }
           }
           if (Array.isArray(cleanP.images)) {
-            cleanP.images = cleanP.images.map((img: any, i: number) =>
-              typeof img === 'string' && img.startsWith('data:')
-                ? persistBase64Image(img, `prod-${cleanP.id || Date.now()}-${i}`)
-                : img
-            );
+            cleanP.images = cleanP.images.map((img: any, i: number) => {
+              if (typeof img === 'string') {
+                if (img.startsWith('data:')) {
+                  return persistBase64Image(img, `prod-${cleanP.id || Date.now()}-${i}`);
+                } else if (img.includes('/uploads/')) {
+                  return '/uploads/' + img.split('/uploads/').pop();
+                }
+              }
+              return img;
+            });
           }
           return cleanP;
         });

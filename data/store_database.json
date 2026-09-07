@@ -40,12 +40,12 @@
       "origPrice": 249,
       "stock": 5,
       "badge": "Sale",
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788785750636-1788785762534-wtdux.jpg",
+      "image": "/uploads/prod-prod-1788785750636-1788785762534-wtdux.jpg",
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788785750636-0-1788785762747-yvjvf.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788785750636-1-1788785762958-l2xvv.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788785750636-2-1788785763193-m6p6g.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788785750636-3-1788785763407-1podr.jpg"
+        "/uploads/prod-prod-1788785750636-0-1788785762747-yvjvf.jpg",
+        "/uploads/prod-prod-1788785750636-1-1788785762958-l2xvv.jpg",
+        "/uploads/prod-prod-1788785750636-2-1788785763193-m6p6g.jpg",
+        "/uploads/prod-prod-1788785750636-3-1788785763407-1podr.jpg"
       ],
       "description": "Experience the perfect harmony of premium craftsmanship and everyday practicality. Engineered from high-durability materials with meticulous attention to detail, the PRO X SUPERLIGHT 2 elevates your daily routine with seamless convenience and modern style. Designed for discerning shoppers who value reliability, elegance, and outstanding performance.",
       "descriptionKa": "აღმოაჩინეთ უმაღლესი ხარისხისა და პრაქტიკულობის იდეალური შერწყმა. პრემიუმ მასალებითა და დახვეწილი დეტალებით შექმნილი PRO X SUPERLIGHT 2 თქვენს ყოველდღიურ ცხოვრებას ხდის უფრო მარტივს, თანამედროვესა და კომფორტულს. საუკეთესო არჩევანი მათთვის, ვინც აფასებს გამძლეობას, ესთეტიკას და ნამდვილ სანდოობას.",
@@ -63,14 +63,14 @@
     },
     {
       "rating": 5,
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788777272471-1788785763618-5bh58.jpg",
+      "image": "/uploads/prod-prod-1788777272471-1788785763618-5bh58.jpg",
       "price": 79,
       "descriptionKa": "აღმოაჩინეთ უმაღლესი ხარისხისა და პრაქტიკულობის იდეალური შერწყმა. პრემიუმ მასალებითა და დახვეწილი დეტალებით შექმნილი Ancient Nutrition Multi Collagen Protein 16oz / 454.5g თქვენს ყოველდღიურ ცხოვრებას ხდის უფრო მარტივს, თანამედროვესა და კომფორტულს. საუკეთესო არჩევანი მათთვის, ვინც აფასებს გამძლეობას, ესთეტიკას და ნამდვილ სანდოობას.",
       "reviewsCount": 1,
       "stock": 2,
       "title": "Ancient Nutrition Multi Collagen Protein 16oz / 454.5g",
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788777272471-0-1788785763829-i00fc.jpg"
+        "/uploads/prod-prod-1788777272471-0-1788785763829-i00fc.jpg"
       ],
       "description": "Experience the perfect harmony of premium craftsmanship and everyday practicality. Engineered from high-durability materials with meticulous attention to detail, the Ancient Nutrition Multi Collagen Protein 16oz / 454.5g elevates your daily routine with seamless convenience and modern style. Designed for discerning shoppers who value reliability, elegance, and outstanding performance.",
       "badge": "Sale",
@@ -102,10 +102,10 @@
       "category": "tech",
       "title": "Nutricost Marine Collagen Powder Wild Caught Fish(Unflavored)(8 oz)(28 Servings)",
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788777425106-0-1788785764253-ta28y.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788777425106-1-1788785764467-59kc8.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788777425106-2-1788785764678-94cew.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788777425106-3-1788785764890-u2ryv.jpg"
+        "/uploads/prod-prod-1788777425106-0-1788785764253-ta28y.jpg",
+        "/uploads/prod-prod-1788777425106-1-1788785764467-59kc8.jpg",
+        "/uploads/prod-prod-1788777425106-2-1788785764678-94cew.jpg",
+        "/uploads/prod-prod-1788777425106-3-1788785764890-u2ryv.jpg"
       ],
       "description": "Experience the perfect harmony of premium craftsmanship and everyday practicality. Engineered from high-durability materials with meticulous attention to detail, the Nutricost Marine Collagen Powder Wild Caught Fish(Unflavored)(8 oz)(28 Servings) elevates your daily routine with seamless convenience and modern style. Designed for discerning shoppers who value reliability, elegance, and outstanding performance.",
       "customSlug": "Nutricost-Marine-Collagen-Powder-Wild-Caught-FishUnflavored8-oz28-Servings",
@@ -113,22 +113,22 @@
       "stock": 5,
       "reviewsCount": 1,
       "isPublishedGlobally": true,
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788777425106-1788785764041-9szej.jpg",
+      "image": "/uploads/prod-prod-1788777425106-1788785764041-9szej.jpg",
       "price": 59,
       "rating": 5,
       "id": "prod-1788777425106"
     },
     {
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788775639253-0-1788785765335-0o8it.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788775639253-1-1788785765555-wk473.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788775639253-2-1788785765772-xkvvv.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788775639253-3-1788785765990-trxwn.jpg"
+        "/uploads/prod-prod-1788775639253-0-1788785765335-0o8it.jpg",
+        "/uploads/prod-prod-1788775639253-1-1788785765555-wk473.jpg",
+        "/uploads/prod-prod-1788775639253-2-1788785765772-xkvvv.jpg",
+        "/uploads/prod-prod-1788775639253-3-1788785765990-trxwn.jpg"
       ],
       "customSlug": "Smart-Water-Bottle-with-Reminder",
       "origPrice": 99,
       "titleKa": "ჭკვიანი თერმო-ბოთლი ტემპერატურის LED ინდიკატორით",
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788775639253-1788785765114-84zme.jpg",
+      "image": "/uploads/prod-prod-1788775639253-1788785765114-84zme.jpg",
       "price": 65,
       "id": "prod-1788775639253",
       "descriptionKa": "შეინარჩუნეთ იდეალური ენერგია და ტენიანობა მთელი დღის განმავლობაში. სამედიცინო ხარისხის 18/8 უჟანგავი ფოლადითა და ორმაგი ვაკუუმ-იზოლაციით დამზადებული ბოთლი ინარჩუნებს სიცივეს 24 საათით, ხოლო სითბოს 12 საათით. თავსახურზე მოთავსებული სენსორული LED ეკრანი გაჩვენებთ ტემპერატურას ერთი შეხებით.",
@@ -151,10 +151,10 @@
     {
       "descriptionKa": "შეინარჩუნეთ იდეალური ენერგია და ტენიანობა მთელი დღის განმავლობაში. სამედიცინო ხარისხის 18/8 უჟანგავი ფოლადითა და ორმაგი ვაკუუმ-იზოლაციით დამზადებული ბოთლი ინარჩუნებს სიცივეს 24 საათით, ხოლო სითბოს 12 საათით. თავსახურზე მოთავსებული სენსორული LED ეკრანი გაჩვენებთ ტემპერატურას ერთი შეხებით.",
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724519740-0-1788785766464-vi0i4.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724519740-1-1788785766720-e2rps.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724519740-2-1788785766942-y5hxa.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724519740-3-1788785767173-sl6yv.jpg"
+        "/uploads/prod-prod-1788724519740-0-1788785766464-vi0i4.jpg",
+        "/uploads/prod-prod-1788724519740-1-1788785766720-e2rps.jpg",
+        "/uploads/prod-prod-1788724519740-2-1788785766942-y5hxa.jpg",
+        "/uploads/prod-prod-1788724519740-3-1788785767173-sl6yv.jpg"
       ],
       "origPrice": 79,
       "features": [
@@ -164,7 +164,7 @@
         "🌱 Pure 18/8 Food-Grade Stainless Steel — BPA-free, zero metallic aftertaste"
       ],
       "price": 50,
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724519740-1788785766225-peerx.jpg",
+      "image": "/uploads/prod-prod-1788724519740-1788785766225-peerx.jpg",
       "category": "fitness",
       "stock": 9,
       "description": "Stay perfectly refreshed wherever life takes you. Crafted from surgical-grade 18/8 stainless steel with advanced double-wall vacuum insulation, this smart bottle keeps your beverages ice-cold for 24 hours or piping hot for 12 hours. Featuring a leakproof lid and an integrated LED touch temperature display.",
@@ -190,7 +190,7 @@
       "reviewsCount": 1,
       "origPrice": 99,
       "customSlug": "SportFlex-Whoop-Band-Dash",
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724361112-1788785767406-0gxvt.jpg",
+      "image": "/uploads/prod-prod-1788724361112-1788785767406-0gxvt.jpg",
       "price": 79,
       "rating": 5,
       "stock": 10,
@@ -201,9 +201,9 @@
       "title": "SportFlex Whoop Band - Dash",
       "badge": "Best Seller",
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724361112-0-1788785767637-2ipir.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724361112-1-1788785767861-pf1ph.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788724361112-2-1788785768091-avdta.jpg"
+        "/uploads/prod-prod-1788724361112-0-1788785767637-2ipir.jpg",
+        "/uploads/prod-prod-1788724361112-1-1788785767861-pf1ph.jpg",
+        "/uploads/prod-prod-1788724361112-2-1788785768091-avdta.jpg"
       ],
       "isPublishedGlobally": true
     },
@@ -212,15 +212,15 @@
       "customSlug": "smart-drinkware-bottle-with-sporty-sipper-lid",
       "origPrice": 69,
       "id": "prod-1788723441741",
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723441741-1788785768340-vh5cl.jpg",
+      "image": "/uploads/prod-prod-1788723441741-1788785768340-vh5cl.jpg",
       "price": 39,
       "descriptionKa": "შეინარჩუნეთ იდეალური ენერგია და ტენიანობა მთელი დღის განმავლობაში. სამედიცინო ხარისხის 18/8 უჟანგავი ფოლადითა და ორმაგი ვაკუუმ-იზოლაციით დამზადებული ბოთლი ინარჩუნებს სიცივეს 24 საათით, ხოლო სითბოს 12 საათით. თავსახურზე მოთავსებული სენსორული LED ეკრანი გაჩვენებთ ტემპერატურას ერთი შეხებით.",
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723441741-0-1788785768566-r68ml.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723441741-1-1788785768800-038mr.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723441741-2-1788785769024-qi91r.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723441741-3-1788785769252-gwwcl.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723441741-4-1788785769478-4susg.jpg"
+        "/uploads/prod-prod-1788723441741-0-1788785768566-r68ml.jpg",
+        "/uploads/prod-prod-1788723441741-1-1788785768800-038mr.jpg",
+        "/uploads/prod-prod-1788723441741-2-1788785769024-qi91r.jpg",
+        "/uploads/prod-prod-1788723441741-3-1788785769252-gwwcl.jpg",
+        "/uploads/prod-prod-1788723441741-4-1788785769478-4susg.jpg"
       ],
       "stock": 10,
       "description": "Stay perfectly refreshed wherever life takes you. Crafted from surgical-grade 18/8 stainless steel with advanced double-wall vacuum insulation, this smart bottle keeps your beverages ice-cold for 24 hours or piping hot for 12 hours. Featuring a leakproof lid and an integrated LED touch temperature display.",
@@ -250,16 +250,16 @@
       "badge": "Best Seller",
       "reviewsCount": 1,
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723082932-0-1788785769929-7c792.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723082932-1-1788785770156-6obw6.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723082932-2-1788785770384-gtln3.jpg"
+        "/uploads/prod-prod-1788723082932-0-1788785769929-7c792.jpg",
+        "/uploads/prod-prod-1788723082932-1-1788785770156-6obw6.jpg",
+        "/uploads/prod-prod-1788723082932-2-1788785770384-gtln3.jpg"
       ],
       "origPrice": 89,
       "publishedAt": "2026-09-06T19:31:22.932Z",
       "customSlug": "CamelBak-Podium-Steel-Insulated-Stainless-Steel-Bike-Water-Bottle-for-Cycling-Fitness-Sports-Fits-Most-Bike-Cages-22oz-Stainless",
       "descriptionKa": "დააფიქსირეთ გზის ყოველი დეტალი უმაღლესი სიცხადით. წინა და სალონის ორმაგი ლინზით, 170° ულტრა-ფართო ხედვითა და ინფრაწითელი ღამის ხედვის სისტემით აღჭურვილი ჭკვიანი ვიდეო-რეგისტრატორი თქვენი ავტომობილის 24/7 უსაფრთხოებას იცავს. ჩაშენებული WiFi და GPS გაძლევთ კადრების ტელეფონიდან მყისიერი ნახვისა და გადმოწერის შესაძლებლობას.",
       "description": "Capture every critical detail on the road with crystal-clear precision. Engineered with dual front and interior lenses, ultra-wide 170° angle viewing, and advanced infrared night vision, this high-performance dash camera safeguards your vehicle 24/7. Built-in WiFi and GPS allow instant smartphone playback and route tracking. Drive with unmatched security and peace of mind on every trip.",
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788723082932-1788785769702-glntg.jpg",
+      "image": "/uploads/prod-prod-1788723082932-1788785769702-glntg.jpg",
       "price": 55,
       "id": "prod-1788723082932",
       "titleKa": "ავტომობილის Full HD ორმაგი ვიდეო-რეგისტრატორი GPS-ით და ღამის ხედვით",
@@ -277,15 +277,15 @@
         "🛡️ 100% Satisfaction Guaranteed — Backed by DBUY Store quality warranty and fast dispatch"
       ],
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722861679-0-1788785770842-3thez.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722861679-1-1788785771073-dzj68.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722861679-2-1788785771316-160gh.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722861679-3-1788785771549-h0crw.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722861679-4-1788785771785-golm4.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722861679-5-1788785772030-fz41k.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722861679-6-1788785772279-xqts4.jpg"
+        "/uploads/prod-prod-1788722861679-0-1788785770842-3thez.jpg",
+        "/uploads/prod-prod-1788722861679-1-1788785771073-dzj68.jpg",
+        "/uploads/prod-prod-1788722861679-2-1788785771316-160gh.jpg",
+        "/uploads/prod-prod-1788722861679-3-1788785771549-h0crw.jpg",
+        "/uploads/prod-prod-1788722861679-4-1788785771785-golm4.jpg",
+        "/uploads/prod-prod-1788722861679-5-1788785772030-fz41k.jpg",
+        "/uploads/prod-prod-1788722861679-6-1788785772279-xqts4.jpg"
       ],
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722861679-1788785770612-epgs5.jpg",
+      "image": "/uploads/prod-prod-1788722861679-1788785770612-epgs5.jpg",
       "price": 299,
       "id": "prod-1788722861679",
       "customSlug": "The-Hume-Band-20",
@@ -317,13 +317,13 @@
       "reviewsCount": 1,
       "stock": 10,
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722697137-0-1788785772771-jf33p.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722697137-1-1788785773011-7yvzp.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722697137-2-1788785773252-voq6h.jpg"
+        "/uploads/prod-prod-1788722697137-0-1788785772771-jf33p.jpg",
+        "/uploads/prod-prod-1788722697137-1-1788785773011-7yvzp.jpg",
+        "/uploads/prod-prod-1788722697137-2-1788785773252-voq6h.jpg"
       ],
       "isPublishedGlobally": true,
       "description": "Capture every critical detail on the road with crystal-clear precision. Engineered with dual front and interior lenses, ultra-wide 170° angle viewing, and advanced infrared night vision, this high-performance dash camera safeguards your vehicle 24/7. Built-in WiFi and GPS allow instant smartphone playback and route tracking. Drive with unmatched security and peace of mind on every trip.",
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722697137-1788785772526-hsi8m.jpg",
+      "image": "/uploads/prod-prod-1788722697137-1788785772526-hsi8m.jpg",
       "price": 79,
       "origPrice": 99,
       "publishedAt": "2026-09-06T19:24:57.137Z",
@@ -332,15 +332,15 @@
     {
       "stock": 8,
       "images": [
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722508271-0-1788785773738-237pq.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722508271-1-1788785773989-j4dyb.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722508271-2-1788785774255-y70eh.jpg",
-        "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722508271-3-1788785774510-vprn2.jpg"
+        "/uploads/prod-prod-1788722508271-0-1788785773738-237pq.jpg",
+        "/uploads/prod-prod-1788722508271-1-1788785773989-j4dyb.jpg",
+        "/uploads/prod-prod-1788722508271-2-1788785774255-y70eh.jpg",
+        "/uploads/prod-prod-1788722508271-3-1788785774510-vprn2.jpg"
       ],
       "reviewsCount": 1,
       "descriptionKa": "აღმოაჩინეთ უმაღლესი ხარისხისა და პრაქტიკულობის იდეალური შერწყმა. პრემიუმ მასალებითა და დახვეწილი დეტალებით შექმნილი rode თქვენს ყოველდღიურ ცხოვრებას ხდის უფრო მარტივს, თანამედროვესა და კომფორტულს. საუკეთესო არჩევანი მათთვის, ვინც აფასებს გამძლეობას, ესთეტიკას და ნამდვილ სანდოობას.",
       "price": 279,
-      "image": "https://ais-dev-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/uploads/prod-prod-1788722508271-1788785773493-xh3us.jpg",
+      "image": "/uploads/prod-prod-1788722508271-1788785773493-xh3us.jpg",
       "rating": 5,
       "isPublishedGlobally": true,
       "origPrice": 299,
