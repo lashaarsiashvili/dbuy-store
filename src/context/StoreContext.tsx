@@ -32,9 +32,17 @@ import {
   filterOutAdminLogs
 } from '../utils/analytics';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
-import { db } from '../lib/firebase';
-import { doc, setDoc, deleteDoc, getDoc, onSnapshot, collection } from 'firebase/firestore';
 import { ensurePersistentAbsoluteUrl } from '../utils/firebaseStorage';
+
+// Firebase decoupled - pure offline-first mode mocks
+const db = {};
+const doc = (...args: any[]) => ({});
+const collection = (...args: any[]) => ({});
+const setDoc = async (...args: any[]) => {};
+const deleteDoc = async (...args: any[]) => {};
+const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
+const onSnapshot = (...args: any[]) => (() => {});
+
 
 interface StoreContextType {
   // Navigation & View
@@ -1849,171 +1857,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     refreshServerStore();
 
-    // Firebase Firestore Realtime Sync (Robust real-time synchronization across all sessions)
+    // Firebase Firestore Realtime Sync decoupled - pure offline-first mode active
     let fbUnsubscribe: (() => void) | null = null;
     let fbProductsUnsubscribe: (() => void) | null = null;
-    
-    try {
-      fbProductsUnsubscribe = onSnapshot(collection(db, 'products'), (snapshot) => {
-        const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
-        if (recentlyUpdatedLocally) {
-          return; // Skip if we recently modified products on this device
-        }
-
-        const fbProducts: Product[] = [];
-        snapshot.forEach((docSnap) => {
-          const p = docSnap.data() as any;
-          if (p && p.id) {
-            const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
-            const extraImgs = Array.isArray(p.images)
-              ? p.images.map((img: string) => ensurePersistentAbsoluteUrl(img, img))
-              : (mainImg ? [mainImg] : []);
-            fbProducts.push({
-              ...p,
-              image: mainImg,
-              images: extraImgs,
-            });
-          }
-        });
-
-        if (fbProducts.length > 0) {
-          fbProducts.sort((a, b) => {
-            const getTimestamp = (p: any) => {
-              if (p.publishedAt) return new Date(p.publishedAt).getTime();
-              if (p.createdAt) return new Date(p.createdAt).getTime();
-              if (typeof p.id === 'string' && p.id.startsWith('prod-')) {
-                const ts = parseInt(p.id.replace('prod-', ''), 10);
-                if (!isNaN(ts)) return ts;
-              }
-              return 0;
-            };
-            return getTimestamp(b) - getTimestamp(a);
-          });
-
-          setProducts(prevProducts => {
-            // Guard: prevent a newly booted or rate-limited/empty Firestore session from wiping out a populated local catalog
-            const isServerResetToDefault = fbProducts.length <= 4 && prevProducts.length > 4;
-            if (isServerResetToDefault && adminSecretSlug && prevProducts.length > 0) {
-              console.log('[FIREBASE-SNAP] Refusing to overwrite rich local catalog with a smaller snapshot.', {
-                localCount: prevProducts.length,
-                snapCount: fbProducts.length
-              });
-              return prevProducts;
-            }
-
-            try {
-              localStorage.setItem('dbuy_products', JSON.stringify(fbProducts));
-            } catch {}
-            return fbProducts;
-          });
-        }
-      }, (err) => {
-        if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
-          console.warn('[FIREBASE-REALTIME] Free daily Firestore products quota reached. Real-time sync seamlessly active via server REST API.');
-          return;
-        }
-        if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {
-          console.log('[FIREBASE-REALTIME] Products collection pending. REST API backup is functioning normally.');
-        } else {
-          console.warn('[FIREBASE-REALTIME] Notice in products collection listener:', err?.message || err);
-        }
-      });
-    } catch (err) {
-      console.error('[FIREBASE-REALTIME] Failed to subscribe to products collection:', err);
-    }
-
-    try {
-      const docRef = doc(db, 'store', 'database');
-      fbUnsubscribe = onSnapshot(docRef, (snap) => {
-        if (!snap.exists()) {
-          console.log('[FIREBASE-REALTIME] store/database document does not exist yet. Initializing.');
-          return;
-        }
-
-        const data = snap.data();
-
-        // 1. PRODUCTS - We bypass storing products in the monolithic store/database document to avoid the 1MB limit.
-        // Products are safely synced via the dedicated, separate 'products' collection onSnapshot listener.
-        if (data.lastUpdated) {
-          const isStaleSnapshot = Boolean(
-            lastSyncTimestampRef.current && new Date(data.lastUpdated).getTime() < new Date(lastSyncTimestampRef.current).getTime()
-          );
-          if (!isStaleSnapshot) {
-            lastSyncTimestampRef.current = data.lastUpdated;
-          }
-        }
-
-        // 2. THEME - Update global theme and CSS custom property
-        if (data.theme && typeof data.theme === 'object') {
-          setTheme(prev => {
-            const nextTheme = { ...prev, ...data.theme };
-            if (nextTheme.primaryColor) {
-              document.documentElement.style.setProperty('--theme-primary', nextTheme.primaryColor);
-            }
-            return nextTheme;
-          });
-          try {
-            localStorage.setItem('dbuy_theme', JSON.stringify(data.theme));
-          } catch {}
-        }
-
-        // 3. BILLBOARDS - Ensure billboard images are persistent absolute URLs
-        if (Array.isArray(data.billboards) && data.billboards.length > 0) {
-          const sanitizedBillboards: BillboardSlide[] = data.billboards.map(b => ({
-            ...b,
-            image: ensurePersistentAbsoluteUrl(b.image, b.image || ''),
-          }));
-          setBillboards(sanitizedBillboards);
-          try {
-            localStorage.setItem('dbuy_billboards', JSON.stringify(sanitizedBillboards));
-          } catch {}
-        }
-
-        // 4. BILLBOARD INTERVAL
-        if (typeof data.billboardIntervalSeconds === 'number') {
-          setBillboardIntervalSecondsState(data.billboardIntervalSeconds);
-          try {
-            localStorage.setItem('dbuy_billboard_interval', String(data.billboardIntervalSeconds));
-          } catch {}
-        }
-
-        // 5. ORDERS
-        if (Array.isArray(data.orders)) {
-          setOrders(data.orders);
-          try {
-            localStorage.setItem('dbuy_orders', JSON.stringify(data.orders));
-          } catch {}
-        }
-
-        // 6. REGISTERED USERS
-        if (data.registeredUsers && typeof data.registeredUsers === 'object') {
-          try {
-            localStorage.setItem('dbuy_registered_users', JSON.stringify(data.registeredUsers));
-            setRegisteredUsers(mapRegisteredUsersList(data.registeredUsers));
-          } catch {}
-        }
-
-        // 7. ADMIN SECRET SLUG
-        if (data.adminSecretSlug) {
-          setAdminSecretSlug(data.adminSecretSlug);
-          try {
-            localStorage.setItem('dbuy_admin_secret_slug', data.adminSecretSlug);
-          } catch {}
-        }
-      }, (err) => {
-        if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
-          console.warn('[FIREBASE-REALTIME] Free daily Firestore quota reached. Real-time sync seamlessly active via server REST API.');
-          return;
-        }
-        if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {
-          console.log('[FIREBASE-REALTIME] Firestore database pending provision. Active local & REST API persistence is functioning normally.');
-        } else {
-          console.warn('[FIREBASE-REALTIME] Notice:', err?.message || err);
-        }
-      });
-    } catch (e) {
-      console.warn('[FIREBASE-INIT] Error:', e);
-    }
 
     // BroadcastChannel cross-tab real-time sync
     let bc: BroadcastChannel | null = null;

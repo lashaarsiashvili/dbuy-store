@@ -7,8 +7,19 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, setLogLevel, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
+// Firebase decoupled - pure offline-first mode
+const initializeApp = (...args: any[]) => ({});
+const getApps = () => [];
+const getFirestore = (...args: any[]) => ({});
+const setLogLevel = (...args: any[]) => {};
+const doc = (...args: any[]) => ({});
+const getDoc = async (...args: any[]) => ({ exists: () => false, data: () => ({}) });
+const setDoc = async (...args: any[]) => {};
+const collection = (...args: any[]) => ({});
+const getDocs = async (...args: any[]) => ({
+  empty: true,
+  forEach: (cb: (doc: any) => void) => {}
+});
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 
