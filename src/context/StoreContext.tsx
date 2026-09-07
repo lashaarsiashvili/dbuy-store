@@ -1555,28 +1555,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     isSyncingRef.current = true;
     try {
-      // 1. Non-blocking background image restoration (so catalog fetch is instant)
-      loadImageBackupsIDB().then(idbImages => {
-        const legacyLocal = localStorage.getItem('dbuy_images_base64');
-        let imagesMap = { ...idbImages };
-        if (legacyLocal) {
-          try {
-            const legacyMap = JSON.parse(legacyLocal);
-            if (legacyMap && typeof legacyMap === 'object') {
-              imagesMap = { ...legacyMap, ...imagesMap };
-            }
-          } catch {}
-          localStorage.removeItem('dbuy_images_base64');
-        }
-        if (Object.keys(imagesMap).length > 0) {
-          fetch('/api/store/restore-images', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ imagesMap }),
-          }).catch(() => {});
-        }
-      }).catch(() => {});
-
       const url = (!force && lastSyncTimestampRef.current)
         ? `/api/store/sync?since=${encodeURIComponent(lastSyncTimestampRef.current)}&_t=${Date.now()}`
         : `/api/store/sync?_t=${Date.now()}`;
@@ -1619,7 +1597,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const isLocalNewer = new Date(localLastUpdated).getTime() > new Date(serverLastUpdated).getTime();
             const isServerResetToDefault = d.products.length <= 4 && prevProducts.length > 4;
 
-            if ((isLocalNewer || isServerResetToDefault) && adminSecretSlug && prevProducts.length > 0) {
+            if ((isLocalNewer || isServerResetToDefault) && isAdmin && prevProducts.length > 0) {
               console.log('[SYNC] Local products are newer or server was reset. Preserving and pushing to server.', {
                 localLastUpdated,
                 serverLastUpdated,
