@@ -133,6 +133,20 @@ export const saveImageBackupIDB = async (rawUrl: string, base64OrBlob: string | 
 };
 
 /**
+ * Deletes a corrupted or unwanted backup from IndexedDB.
+ */
+export const deleteImageBackupIDB = async (key: string): Promise<void> => {
+  if (!key || typeof window === 'undefined') return;
+  try {
+    const db = await getIDB();
+    const tx = db.transaction(STORE_NAME, 'readwrite');
+    tx.objectStore(STORE_NAME).delete(key);
+  } catch (e) {
+    console.warn('[IMAGE-STORAGE-IDB] Delete key failed:', e);
+  }
+};
+
+/**
  * Retrieves an image from IndexedDB mapped to a URL key.
  */
 export const getImageBackupIDB = async (rawUrl: string): Promise<string | null> => {
@@ -168,11 +182,8 @@ export const getImageBackupIDB = async (rawUrl: string): Promise<string | null> 
       if (result) {
         if (result.startsWith('data:') && !result.startsWith('data:image/')) {
           console.warn('[IMAGE-STORAGE-IDB] Detected corrupted non-image backup in IDB for key:', key);
-          // Delete corrupted entry from IDB
-          try {
-            const deleteTx = db.transaction(STORE_NAME, 'readwrite');
-            deleteTx.objectStore(STORE_NAME).delete(key);
-          } catch {}
+          // Delete corrupted entry from IDB asynchronously to prevent transaction deadlock
+          deleteImageBackupIDB(key);
           continue;
         }
         // Populate RAM cache
@@ -193,7 +204,8 @@ export const loadImageBackupsIDB = async (): Promise<Record<string, string>> => 
   if (typeof window === 'undefined') return {};
   try {
     const db = await getIDB();
-    const tx = db.transaction(STORE_NAME, 'readonly');
+    // Open a readwrite transaction so cursor.delete() is authorized
+    const tx = db.transaction(STORE_NAME, 'readwrite');
     const store = tx.objectStore(STORE_NAME);
     const request = store.openCursor();
     const result: Record<string, string> = {};
@@ -210,9 +222,10 @@ export const loadImageBackupsIDB = async (): Promise<Record<string, string>> => 
           } else {
             console.warn('[IMAGE-STORAGE-IDB] Deleting corrupted non-image cursor key:', key);
             try {
-              const deleteTx = db.transaction(STORE_NAME, 'readwrite');
-              deleteTx.objectStore(STORE_NAME).delete(key);
-            } catch {}
+              cursor.delete();
+            } catch (err) {
+              console.error('[IMAGE-STORAGE-IDB] cursor.delete() failed:', err);
+            }
           }
           cursor.continue();
         } else {
