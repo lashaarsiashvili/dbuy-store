@@ -1257,7 +1257,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     fetch('/api/store/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Admin-Slug': adminSecretSlug || ''
+      },
       body: JSON.stringify({ orders: updated }),
     }).catch(err => console.error('Error syncing orders to server:', err));
     addToast(`Order ${orderId} updated to "${status}"`, 'info');
@@ -1292,7 +1295,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     fetch('/api/store/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Admin-Slug': adminSecretSlug || ''
+      },
       body: JSON.stringify({ orders: updated }),
     }).catch(err => console.error('Error syncing tracking to server:', err));
     addToast(
@@ -1313,7 +1319,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     fetch('/api/store/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Admin-Slug': adminSecretSlug || ''
+      },
       body: JSON.stringify({ orders: updated }),
     }).catch(err => console.error('Error syncing orders deletion to server:', err));
     if (lastPlacedOrder?.id === orderId) {
@@ -1330,7 +1339,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     fetch('/api/store/sync', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 
+        'Content-Type': 'application/json',
+        'X-Admin-Slug': adminSecretSlug || ''
+      },
       body: JSON.stringify({ orders: [] }),
     }).catch(err => console.error('Error clearing orders on server:', err));
     addToast('Order history cleared', 'info');
@@ -1473,7 +1485,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         : `/api/store/sync?_t=${Date.now()}`;
 
       const res = await fetch(url, {
-        headers: { 'Cache-Control': 'no-cache, no-store' },
+        headers: { 
+          'Cache-Control': 'no-cache, no-store',
+          'X-Admin-Slug': adminSecretSlug || ''
+        },
       });
       if (!res.ok) return;
       const json = await res.json();
@@ -1655,7 +1670,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       // Push to server
       await fetch('/api/store/sync', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSecretSlug || ''
+        },
         body: JSON.stringify({
           products: newProducts,
           theme: newTheme,

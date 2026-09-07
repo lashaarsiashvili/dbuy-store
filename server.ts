@@ -32,11 +32,24 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // CORS headers for all incoming API requests
 app.use('/api', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Slug');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
     return;
+  }
+  next();
+});
+
+// Security Middleware to block unauthorized access to administrative endpoints
+app.use((req, res, next) => {
+  const path = req.path.toLowerCase();
+  if (path.startsWith('/api/admin/') || path.startsWith('/api/contact/messages')) {
+    const clientAdminSlug = req.headers['x-admin-slug'] as string | undefined;
+    if (!clientAdminSlug || clientAdminSlug !== storeDb.adminSecretSlug) {
+      console.warn(`[SECURITY-ALERT] Blocked unauthorized access attempt to: ${req.method} ${req.originalUrl}`);
+      return res.status(403).json({ success: false, error: 'Access Denied: Administrative authority required' });
+    }
   }
   next();
 });
@@ -1313,17 +1326,22 @@ app.get('/api/store/sync', (req, res) => {
       return;
     }
 
+    // Security Verification: Inspect X-Admin-Slug header to verify administrative authority
+    const clientAdminSlug = req.headers['x-admin-slug'] as string | undefined;
+    const isAuthorizedAdmin = clientAdminSlug && clientAdminSlug === storeDb.adminSecretSlug;
+
     res.json({
       success: true,
       data: {
         products: storeDb.products,
-        registeredUsers: storeDb.registeredUsers,
-        orders: storeDb.orders,
         theme: storeDb.theme,
         billboards: storeDb.billboards,
         billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
-        adminSecretSlug: storeDb.adminSecretSlug,
         lastUpdated: storeDb.lastUpdated,
+        // Highly Confidential Data Parameters: Scraped & protected unless properly authorized
+        registeredUsers: isAuthorizedAdmin ? storeDb.registeredUsers : [],
+        orders: isAuthorizedAdmin ? storeDb.orders : [],
+        adminSecretSlug: isAuthorizedAdmin ? storeDb.adminSecretSlug : '',
       },
     });
   } catch (err) {
@@ -1494,6 +1512,13 @@ app.post('/api/store/orders', (req, res) => {
 // POST full or partial store sync
 app.post('/api/store/sync', (req, res) => {
   try {
+    // Security Verification: Reject any modification attempts without the correct X-Admin-Slug header
+    const clientAdminSlug = req.headers['x-admin-slug'] as string | undefined;
+    if (!clientAdminSlug || clientAdminSlug !== storeDb.adminSecretSlug) {
+      console.warn('[SECURITY-ALERT] Unauthorized attempt to write to /api/store/sync blocked');
+      return res.status(403).json({ success: false, error: 'Access Denied: Administrative authority required' });
+    }
+
     const { products, registeredUsers, orders, theme, billboards, billboardIntervalSeconds, adminSecretSlug } = req.body;
     
     if (Array.isArray(products)) {
@@ -3207,8 +3232,10 @@ app.get('/sitemap.xml', (req, res) => {
   function generateSitemapSlug(title: string): string {
     return title
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+      .trim()
+      .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-');
   }
 
   const urls = [
@@ -3222,9 +3249,12 @@ app.get('/sitemap.xml', (req, res) => {
 
   if (storeDb && Array.isArray(storeDb.products)) {
     storeDb.products.forEach(p => {
-      const slug = p.customSlug || generateSitemapSlug(p.title);
+      const slug = p.customSlug?.trim() || generateSitemapSlug(p.title);
+      const urlPath = p.customSlug 
+        ? `/b/${encodeURIComponent(slug)}` 
+        : `/product/${p.id}/${encodeURIComponent(slug)}`;
       urls.push({
-        loc: `https://dbuystore.com/product/${slug}`,
+        loc: `https://dbuystore.com${urlPath}`,
         changefreq: 'weekly',
         priority: '0.9'
       });
@@ -3502,9 +3532,119 @@ async function setupFrontend() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    app.use(express.static(distPath));
+    // Serve static files with index: false to prevent default index.html serving
+    app.use(express.static(distPath, { index: false }));
+
+    const findProductBySlugOrId = (segment: string): any => {
+      if (!storeDb || !Array.isArray(storeDb.products)) return null;
+      const decoded = decodeURIComponent(segment).toLowerCase().trim();
+      return storeDb.products.find((p: any) => {
+        const idMatch = String(p.id) === decoded;
+        const slugMatch = p.customSlug && p.customSlug.toLowerCase().trim() === decoded;
+        const generatedSlug = p.title.toLowerCase()
+          .trim()
+          .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
+          .replace(/\s+/g, '-')
+          .replace(/-+/g, '-');
+        return idMatch || slugMatch || generatedSlug === decoded;
+      });
+    };
+
     app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
+      const urlPath = req.path;
+      const indexHtmlPath = path.join(distPath, 'index.html');
+
+      fs.readFile(indexHtmlPath, 'utf8', (err, htmlContent) => {
+        if (err) {
+          console.error('[SEO-FALLBACK] Error reading index.html:', err);
+          return res.sendFile(indexHtmlPath);
+        }
+
+        let seoTitle = 'DBUY Store — Quality Tech, Fitness & Everyday Essentials';
+        let seoDesc = 'Premium e-commerce storefront for tech, fitness, and everyday carry essentials with multi-currency, multi-language, cart, checkout, and admin dashboard.';
+        let seoImage = 'https://dbuystore.com/assets/logo.png';
+        let seoUrl = `https://dbuystore.com${req.originalUrl}`;
+        let productSchema = '';
+
+        const segments = urlPath.replace(/^\/+|\/+$/g, '').split('/');
+        let matchedProduct: any = null;
+
+        if (segments[0] === 'b' && segments[1]) {
+          matchedProduct = findProductBySlugOrId(segments[1]);
+        } else if (segments[0] === 'product' && segments[1]) {
+          matchedProduct = findProductBySlugOrId(segments[1]);
+          if (!matchedProduct && segments[2]) {
+            matchedProduct = findProductBySlugOrId(segments[2]);
+          }
+        }
+
+        if (matchedProduct) {
+          const descClean = (matchedProduct.shortDescription || matchedProduct.description || '')
+            .replace(/<[^>]*>/g, '')
+            .substring(0, 160)
+            .trim();
+          seoTitle = `${matchedProduct.title} — DBUY Store`;
+          seoDesc = descClean || seoDesc;
+          if (matchedProduct.image) {
+            seoImage = matchedProduct.image.startsWith('http') 
+              ? matchedProduct.image 
+              : `https://dbuystore.com${matchedProduct.image}`;
+          }
+
+          const ratingValue = matchedProduct.rating || 4.8;
+          const reviewCount = matchedProduct.reviewsCount || 12;
+          const offersStock = matchedProduct.stock && matchedProduct.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+
+          productSchema = `
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Product",
+      "name": "${matchedProduct.title.replace(/"/g, '\\"')}",
+      "image": "${seoImage}",
+      "description": "${descClean.replace(/"/g, '\\"')}",
+      "sku": "DBUY-${matchedProduct.id}",
+      "mpn": "DBUY-${matchedProduct.id}",
+      "brand": {
+        "@type": "Brand",
+        "name": "${(matchedProduct.brand || 'DBUY').replace(/"/g, '\\"')}"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "${ratingValue}",
+        "reviewCount": "${reviewCount}"
+      },
+      "offers": {
+        "@type": "Offer",
+        "url": "${seoUrl}",
+        "priceCurrency": "USD",
+        "price": "${matchedProduct.price}",
+        "itemCondition": "https://schema.org/NewCondition",
+        "availability": "${offersStock}"
+      }
+    }
+    </script>
+          `;
+        }
+
+        // Intercept and inject dynamic meta tags
+        let modifiedHtml = htmlContent
+          .replace(/<title>[^<]*<\/title>/, `<title>${seoTitle}</title>`)
+          .replace(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${seoDesc}" />`)
+          .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${seoTitle}" />`)
+          .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${seoDesc}" />`)
+          .replace(/<meta property="og:image" content="[^"]*"\s*\/?>/g, `<meta property="og:image" content="${seoImage}" />`);
+
+        if (!modifiedHtml.includes('property="og:image"')) {
+          modifiedHtml = modifiedHtml.replace('</head>', `  <meta property="og:image" content="${seoImage}" />\n  </head>`);
+        }
+
+        if (productSchema) {
+          modifiedHtml = modifiedHtml.replace('</head>', `${productSchema}\n  </head>`);
+        }
+
+        res.send(modifiedHtml);
+      });
     });
   }
 

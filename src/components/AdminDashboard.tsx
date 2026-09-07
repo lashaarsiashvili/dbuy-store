@@ -189,8 +189,8 @@ export const AdminDashboard: React.FC = () => {
   const fetchSmtpAndMessages = async () => {
     try {
       const [msgRes, smtpRes] = await Promise.all([
-        fetch('/api/contact/messages').then(r => r.json()),
-        fetch('/api/admin/smtp').then(r => r.json())
+        smartApiFetch('/api/contact/messages').then(r => r.json()),
+        smartApiFetch('/api/admin/smtp').then(r => r.json())
       ]);
       if (msgRes?.success) setContactMessages(msgRes.messages || []);
       if (smtpRes?.success) {
