@@ -510,12 +510,52 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
     if (docSnap.exists()) {
       const parsed = docSnap.data() as any;
       if (parsed) {
-        // In serverless / Vercel cloud environments, the local disk is ephemeral and resets on cold starts.
-        // Therefore, on startup we must always trust and pull the latest live database state from Firebase.
+        // Helper to get product timestamp for conflict resolution
+        const getProductTimestamp = (p: any): number => {
+          if (p.publishedAt) return new Date(p.publishedAt).getTime();
+          if (p.createdAt) return new Date(p.createdAt).getTime();
+          if (typeof p.id === 'string' && p.id.startsWith('prod-')) {
+            const ts = parseInt(p.id.replace('prod-', ''), 10);
+            if (!isNaN(ts)) return ts;
+          }
+          return 0;
+        };
+
+        // Helper to merge local/compiled products with remote/Firebase products
+        const mergeProductsLists = (localList: any[], remoteList: any[]): any[] => {
+          const map = new Map<string, any>();
+          
+          // First, add all products currently in memory (initially from codebase/files)
+          for (const p of localList) {
+            if (p && p.id) {
+              map.set(p.id, p);
+            }
+          }
+          
+          // Then, merge remote products
+          for (const p of remoteList) {
+            if (p && p.id) {
+              const existing = map.get(p.id);
+              if (!existing) {
+                map.set(p.id, p);
+              } else {
+                // If both exist, keep the newer one based on timestamp
+                const localTs = getProductTimestamp(existing);
+                const remoteTs = getProductTimestamp(p);
+                if (remoteTs >= localTs) {
+                  map.set(p.id, p);
+                }
+              }
+            }
+          }
+          
+          // Sort results to be consistent (newest first)
+          return Array.from(map.values()).sort((a, b) => getProductTimestamp(b) - getProductTimestamp(a));
+        };
 
         if (Array.isArray(parsed.products) && parsed.products.length > 0) {
-          console.log(`[FIREBASE] Loaded ${parsed.products.length} products from Firebase Firestore!`);
-          storeDb.products = parsed.products;
+          console.log(`[FIREBASE] Merging ${parsed.products.length} products from Firebase Firestore main document...`);
+          storeDb.products = mergeProductsLists(storeDb.products, parsed.products);
         }
 
         // Load from dedicated 'products' collection to bypass 1MB document size limits and support unlimited products
@@ -530,20 +570,8 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
               }
             });
             if (fbProducts.length > 0) {
-              console.log(`[FIREBASE] Loaded ${fbProducts.length} products from dedicated products collection!`);
-              fbProducts.sort((a, b) => {
-                const getTimestamp = (p: any) => {
-                  if (p.publishedAt) return new Date(p.publishedAt).getTime();
-                  if (p.createdAt) return new Date(p.createdAt).getTime();
-                  if (typeof p.id === 'string' && p.id.startsWith('prod-')) {
-                    const ts = parseInt(p.id.replace('prod-', ''), 10);
-                    if (!isNaN(ts)) return ts;
-                  }
-                  return 0;
-                };
-                return getTimestamp(b) - getTimestamp(a);
-              });
-              storeDb.products = fbProducts;
+              console.log(`[FIREBASE] Merging ${fbProducts.length} products from dedicated products collection...`);
+              storeDb.products = mergeProductsLists(storeDb.products, fbProducts);
             }
           }
         } catch (prodErr) {
