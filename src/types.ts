@@ -26,6 +26,7 @@ export interface Product {
   isDeal?: boolean;
   isPublishedGlobally?: boolean;
   publishedAt?: string;
+  views?: number;
 }
 
 export interface CartItem {
@@ -80,6 +81,7 @@ export interface ThemeSettings {
   announcementText: string;
   announcementVisible: boolean;
   primaryColor: string;
+  typographyTheme?: 'modern' | 'serif' | 'rounded' | 'industrial' | 'tech';
   heroTitle: string;
   heroSubtitle: string;
   eurRate: number;

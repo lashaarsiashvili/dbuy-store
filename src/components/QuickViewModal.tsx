@@ -31,6 +31,7 @@ export const QuickViewModal: React.FC = () => {
     isInWishlist,
     toggleWishlist,
     setIsCheckoutOpen,
+    incrementProductViews
   } = useStore();
 
   const [quantity, setQuantity] = useState(1);
@@ -41,6 +42,9 @@ export const QuickViewModal: React.FC = () => {
   useEffect(() => {
     setActiveImageIndex(0);
     setQuantity(1);
+    if (quickViewProduct?.id) {
+      incrementProductViews(quickViewProduct.id);
+    }
   }, [quickViewProduct?.id]);
 
   if (!quickViewProduct) return null;

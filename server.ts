@@ -532,9 +532,16 @@ async function syncFromFirebaseOnStartup(): Promise<void> {
             if (fbProducts.length > 0) {
               console.log(`[FIREBASE] Loaded ${fbProducts.length} products from dedicated products collection!`);
               fbProducts.sort((a, b) => {
-                const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-                const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-                return timeB - timeA;
+                const getTimestamp = (p: any) => {
+                  if (p.publishedAt) return new Date(p.publishedAt).getTime();
+                  if (p.createdAt) return new Date(p.createdAt).getTime();
+                  if (typeof p.id === 'string' && p.id.startsWith('prod-')) {
+                    const ts = parseInt(p.id.replace('prod-', ''), 10);
+                    if (!isNaN(ts)) return ts;
+                  }
+                  return 0;
+                };
+                return getTimestamp(b) - getTimestamp(a);
               });
               storeDb.products = fbProducts;
             }
@@ -698,6 +705,25 @@ function saveStoreDatabase(): void {
   // 2. Automatically persist to Firebase Firestore - this MUST always execute even if disk writes are read-only!
   if (firebaseDb) {
     try {
+      // In products array, if image or images contain raw inline base64 data URLs, persist them to disk FIRST
+      if (Array.isArray(storeDb.products)) {
+        storeDb.products = storeDb.products.map((p: any) => {
+          if (!p) return p;
+          const cleanP = { ...p };
+          if (typeof cleanP.image === 'string' && cleanP.image.startsWith('data:')) {
+            cleanP.image = persistBase64Image(cleanP.image, `prod-${cleanP.id || Date.now()}`);
+          }
+          if (Array.isArray(cleanP.images)) {
+            cleanP.images = cleanP.images.map((img: any, i: number) =>
+              typeof img === 'string' && img.startsWith('data:')
+                ? persistBase64Image(img, `prod-${cleanP.id || Date.now()}-${i}`)
+                : img
+            );
+          }
+          return cleanP;
+        });
+      }
+
       // Create a clean payload WITHOUT giant base64 image maps or products array to keep document size < 1MB and allow unlimited products
       const sanitizedStoreDb: Record<string, any> = { ...storeDb };
       delete sanitizedStoreDb.uploadsMap; // Remove base64 image map from main document
@@ -714,26 +740,6 @@ function saveStoreDatabase(): void {
           lastVerifiedAt: new Date().toISOString(),
         };
         (storeDb as any).smtpConfig = sanitizedStoreDb.smtpConfig;
-      }
-
-      // In products array, if image or images contain raw inline base64 data URLs, persist them to disk
-      if (Array.isArray(sanitizedStoreDb.products)) {
-        sanitizedStoreDb.products = sanitizedStoreDb.products.map((p: any) => {
-          if (!p) return p;
-          const cleanP = { ...p };
-          if (typeof cleanP.image === 'string' && cleanP.image.startsWith('data:')) {
-            cleanP.image = persistBase64Image(cleanP.image, `prod-${cleanP.id || Date.now()}`);
-          }
-          if (Array.isArray(cleanP.images)) {
-            cleanP.images = cleanP.images.map((img: any, i: number) =>
-              typeof img === 'string' && img.startsWith('data:')
-                ? persistBase64Image(img, `prod-${cleanP.id || Date.now()}-${i}`)
-                : img
-            );
-          }
-          return cleanP;
-        });
-        storeDb.products = sanitizedStoreDb.products;
       }
 
       if (Date.now() > firestoreQuotaExceededUntil) {
@@ -1453,6 +1459,40 @@ app.get('/api/store/products', (req, res) => {
     lastUpdated: storeDb.lastUpdated,
     products: storeDb.products,
   });
+});
+
+// POST: Increment product view count
+app.post('/api/store/products/:id/view', (req, res) => {
+  try {
+    const { id } = req.params;
+    const product = storeDb.products.find(p => p.id === id);
+    if (!product) {
+      res.status(404).json({ success: false, error: 'Product not found' });
+      return;
+    }
+
+    product.views = (product.views || 0) + 1;
+    saveStoreDatabase();
+    syncCatalogToInitialProducts(storeDb.products);
+
+    // Save the individual product directly to Firestore if connected
+    if (firebaseDb) {
+      setDoc(doc(firebaseDb, 'products', product.id), product, { merge: true })
+        .then(() => console.log(`[FIREBASE] Incremented views for product ${product.id} successfully`))
+        .catch((err: any) => console.error(`[FIREBASE] Error saving view increment for ${product.id}:`, err));
+    }
+
+    console.log(`[PRODUCT-VIEW] Product "${product.title}" view count incremented to ${product.views}`);
+
+    res.json({
+      success: true,
+      id: product.id,
+      views: product.views,
+    });
+  } catch (err: any) {
+    console.error('Error incrementing product views:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Failed to increment product views' });
+  }
 });
 
 // POST: Save theme settings explicitly

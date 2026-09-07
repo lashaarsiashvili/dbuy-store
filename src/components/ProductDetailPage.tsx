@@ -44,7 +44,8 @@ export const ProductDetailPage: React.FC = () => {
     getProductUrl,
     copyProductUrl,
     shareProduct,
-    recordVisit
+    recordVisit,
+    incrementProductViews
   } = useStore();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -69,6 +70,7 @@ export const ProductDetailPage: React.FC = () => {
       const displayTitle = (language === 'ka' && product.titleKa) ? product.titleKa : product.title;
       recordVisit(`Product: ${displayTitle}`);
       document.title = `${displayTitle} | DBUY Store`;
+      incrementProductViews(product.id);
     }
     return () => {
       document.title = 'DBUY - Quality Products for Modern Living';

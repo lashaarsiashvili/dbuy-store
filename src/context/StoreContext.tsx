@@ -71,6 +71,7 @@ interface StoreContextType {
   publishProductGlobally: (id: string) => Promise<boolean>;
   deleteProduct: (id: string) => void;
   clearAllProducts: () => void;
+  incrementProductViews: (productId: string) => Promise<void>;
 
   // Wishlist
   wishlist: string[];
@@ -215,6 +216,7 @@ const defaultTheme: ThemeSettings = {
   announcementText: 'Limited Time: Free Worldwide Express Shipping on Orders Over $50! | Use Code: DBUY10 for 10% Off',
   announcementVisible: true,
   primaryColor: '#3665f3',
+  typographyTheme: 'modern',
   heroTitle: 'Quality Products for Modern Living',
   heroSubtitle: 'Discover premium lifestyle, fitness, and tech accessories curated for your everyday needs.',
   eurRate: 0.92,
@@ -297,6 +299,50 @@ const parseRouteFromLocation = (
   if (lower === 'guarantee') return { page: 'guarantee', productId: null };
   if (lower === 'my-orders' || lower === 'orders') return { page: 'my-orders', productId: null };
   return { page: 'home', productId: null };
+};
+
+const loadGoogleFont = (themeName: string) => {
+  if (typeof document === 'undefined') return;
+  let fontUrl = '';
+  if (themeName === 'serif') {
+    fontUrl = 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,400..900&family=Lora:ital,wght@0,400..700;1,400..700&display=swap';
+  } else if (themeName === 'rounded') {
+    fontUrl = 'https://fonts.googleapis.com/css2?family=Outfit:wght@100..900&family=Quicksand:wght@300..700&display=swap';
+  } else if (themeName === 'industrial') {
+    fontUrl = 'https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300..700&display=swap';
+  } else if (themeName === 'tech') {
+    fontUrl = 'https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap';
+  } else if (themeName === 'modern') {
+    fontUrl = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&display=swap';
+  }
+
+  if (fontUrl) {
+    const id = `google-font-${themeName}`;
+    if (!document.getElementById(id)) {
+      const link = document.createElement('link');
+      link.id = id;
+      link.rel = 'stylesheet';
+      link.href = fontUrl;
+      document.head.appendChild(link);
+    }
+  }
+};
+
+const getFontFamilyValue = (themeName: string): string => {
+  loadGoogleFont(themeName);
+  switch (themeName) {
+    case 'serif':
+      return '"Lora", "Playfair Display", "Noto Serif Georgian", Georgia, serif';
+    case 'rounded':
+      return '"Outfit", "Quicksand", "Noto Sans Georgian", sans-serif';
+    case 'industrial':
+      return '"Space Grotesk", "Noto Sans Georgian", sans-serif';
+    case 'tech':
+      return '"Inter", "Noto Sans Georgian", sans-serif';
+    case 'modern':
+    default:
+      return '"Plus Jakarta Sans", "Noto Sans Georgian", sans-serif';
+  }
 };
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -616,12 +662,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return defaultTheme;
   });
 
-  // Synchronize CSS variable with theme primary color
+  // Synchronize CSS variable with theme primary color & font family
   useEffect(() => {
     if (theme?.primaryColor) {
       document.documentElement.style.setProperty('--theme-primary', theme.primaryColor);
     }
-  }, [theme?.primaryColor]);
+    if (theme?.typographyTheme) {
+      document.documentElement.style.setProperty('--theme-font', getFontFamilyValue(theme.typographyTheme));
+    }
+  }, [theme?.primaryColor, theme?.typographyTheme]);
 
   const updateTheme = async (newSettings: Partial<ThemeSettings>) => {
     const updated = { ...theme, ...newSettings };
@@ -629,6 +678,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('dbuy_theme', JSON.stringify(updated));
     if (updated.primaryColor) {
       document.documentElement.style.setProperty('--theme-primary', updated.primaryColor);
+    }
+    if (updated.typographyTheme) {
+      document.documentElement.style.setProperty('--theme-font', getFontFamilyValue(updated.typographyTheme));
     }
 
     try {
@@ -658,6 +710,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('dbuy_theme', JSON.stringify(defaultTheme));
     if (defaultTheme.primaryColor) {
       document.documentElement.style.setProperty('--theme-primary', defaultTheme.primaryColor);
+    }
+    if (defaultTheme.typographyTheme) {
+      document.documentElement.style.setProperty('--theme-font', getFontFamilyValue(defaultTheme.typographyTheme));
     }
     try {
       await fetch('/api/store/theme', {
@@ -846,6 +901,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setProducts(finalProducts);
     try {
       localStorage.setItem('dbuy_products', JSON.stringify(finalProducts));
+      localStorage.setItem('dbuy_products_last_updated', nowIso);
     } catch (storageErr) {
       console.warn('localStorage quota warning:', storageErr);
     }
@@ -982,6 +1038,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         : `Deleted "${deleted?.title || 'Product'}"`, 
       'info'
     );
+  };
+
+  const incrementProductViews = async (productId: string) => {
+    try {
+      const isCurrentAdmin =
+        isAdmin ||
+        user.role === 'admin' ||
+        user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+        user.email?.toLowerCase().trim() === 'admin@dbuy.com' ||
+        currentPage === 'admin' ||
+        excludeAdminVisits ||
+        isExcludedAdminDevice();
+
+      if (isCurrentAdmin) {
+        return;
+      }
+
+      const res = await fetch(`/api/store/products/${productId}/view`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+      });
+
+      if (res.ok) {
+        const json = await res.json();
+        if (json && json.success && typeof json.views === 'number') {
+          setProducts(prev =>
+            prev.map(p => (p.id === productId ? { ...p, views: json.views } : p))
+          );
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to increment product views:', err);
+    }
   };
 
   // Filters & Sorting
@@ -1514,9 +1603,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               return prevProducts;
             }
 
+            // Last-Write-Wins (LWW) conflict resolution:
+            // If local products have a newer timestamp than the server's last updated timestamp,
+            // and we are logged in as admin, we should preserve local products and push them to repair the server database.
+            const localLastUpdated = localStorage.getItem('dbuy_products_last_updated') || '0';
+            const serverLastUpdated = d.lastUpdated || '0';
+            const isLocalNewer = new Date(localLastUpdated).getTime() > new Date(serverLastUpdated).getTime();
+            const isServerResetToDefault = d.products.length <= 4 && prevProducts.length > 4;
+
+            if ((isLocalNewer || isServerResetToDefault) && adminSecretSlug && prevProducts.length > 0) {
+              console.log('[SYNC] Local products are newer or server was reset. Preserving and pushing to server.', {
+                localLastUpdated,
+                serverLastUpdated,
+                localCount: prevProducts.length,
+                serverCount: d.products.length
+              });
+              // Non-blocking background push to restore the server
+              setTimeout(() => {
+                saveProducts(prevProducts);
+              }, 1000);
+              return prevProducts;
+            }
+
             // Otherwise, adopt the authoritative server products catalog
             try {
               localStorage.setItem('dbuy_products', JSON.stringify(d.products));
+              if (d.lastUpdated) {
+                localStorage.setItem('dbuy_products_last_updated', d.lastUpdated);
+              }
             } catch {}
             return d.products;
           });
@@ -1764,15 +1878,34 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
         if (fbProducts.length > 0) {
           fbProducts.sort((a, b) => {
-            const timeA = a.publishedAt ? new Date(a.publishedAt).getTime() : 0;
-            const timeB = b.publishedAt ? new Date(b.publishedAt).getTime() : 0;
-            return timeB - timeA;
+            const getTimestamp = (p: any) => {
+              if (p.publishedAt) return new Date(p.publishedAt).getTime();
+              if (p.createdAt) return new Date(p.createdAt).getTime();
+              if (typeof p.id === 'string' && p.id.startsWith('prod-')) {
+                const ts = parseInt(p.id.replace('prod-', ''), 10);
+                if (!isNaN(ts)) return ts;
+              }
+              return 0;
+            };
+            return getTimestamp(b) - getTimestamp(a);
           });
 
-          setProducts(fbProducts);
-          try {
-            localStorage.setItem('dbuy_products', JSON.stringify(fbProducts));
-          } catch {}
+          setProducts(prevProducts => {
+            // Guard: prevent a newly booted or rate-limited/empty Firestore session from wiping out a populated local catalog
+            const isServerResetToDefault = fbProducts.length <= 4 && prevProducts.length > 4;
+            if (isServerResetToDefault && adminSecretSlug && prevProducts.length > 0) {
+              console.log('[FIREBASE-SNAP] Refusing to overwrite rich local catalog with a smaller snapshot.', {
+                localCount: prevProducts.length,
+                snapCount: fbProducts.length
+              });
+              return prevProducts;
+            }
+
+            try {
+              localStorage.setItem('dbuy_products', JSON.stringify(fbProducts));
+            } catch {}
+            return fbProducts;
+          });
         }
       }, (err) => {
         if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
@@ -1918,12 +2051,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
     window.addEventListener('storage', handleStorageChange);
 
-    // Periodic auto-sync every 3 seconds for fast real-time updates across desktop and mobile devices
+    // Periodic auto-sync every 30 seconds for real-time backup sync across desktop and mobile devices
     const interval = setInterval(() => {
       if (document.visibilityState === 'visible') {
         refreshServerStore();
       }
-    }, 3000);
+    }, 30000);
 
     // Sync on tab focus / phone screen wakeup / network reconnect
     const handleVisibilityChange = () => {
@@ -2524,6 +2657,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         publishProductGlobally,
         deleteProduct,
         clearAllProducts,
+        incrementProductViews,
         wishlist,
         toggleWishlist,
         removeFromWishlist,

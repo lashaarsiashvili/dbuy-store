@@ -408,7 +408,7 @@ export const AdminDashboard: React.FC = () => {
   const [productSearch, setProductSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock'>('all');
-  const [productSort, setProductSort] = useState<'default' | 'price_asc' | 'price_desc' | 'stock_desc' | 'stock_asc' | 'title_asc'>('default');
+  const [productSort, setProductSort] = useState<'default' | 'price_asc' | 'price_desc' | 'stock_desc' | 'stock_asc' | 'title_asc' | 'views_desc'>('default');
 
   // Orders table search & status filter
   const [orderSearch, setOrderSearch] = useState('');
@@ -419,6 +419,7 @@ export const AdminDashboard: React.FC = () => {
     announcementText: string;
     announcementVisible: boolean;
     primaryColor: string;
+    typographyTheme: 'modern' | 'serif' | 'rounded' | 'industrial' | 'tech';
     heroTitle: string;
     heroSubtitle: string;
     eurRate: number;
@@ -428,6 +429,7 @@ export const AdminDashboard: React.FC = () => {
     announcementText: theme?.announcementText || '',
     announcementVisible: theme?.announcementVisible ?? true,
     primaryColor: theme?.primaryColor || '#2563eb',
+    typographyTheme: theme?.typographyTheme || 'modern',
     heroTitle: theme?.heroTitle || '',
     heroSubtitle: theme?.heroSubtitle || '',
     eurRate: theme?.eurRate ?? 0.92,
@@ -441,6 +443,7 @@ export const AdminDashboard: React.FC = () => {
         announcementText: theme.announcementText || '',
         announcementVisible: theme.announcementVisible ?? true,
         primaryColor: theme.primaryColor || '#2563eb',
+        typographyTheme: theme.typographyTheme || 'modern',
         heroTitle: theme.heroTitle || '',
         heroSubtitle: theme.heroSubtitle || '',
         eurRate: theme.eurRate ?? 0.92,
@@ -1152,6 +1155,7 @@ export const AdminDashboard: React.FC = () => {
     if (productSort === 'stock_desc') return b.stock - a.stock;
     if (productSort === 'stock_asc') return a.stock - b.stock;
     if (productSort === 'title_asc') return a.title.localeCompare(b.title);
+    if (productSort === 'views_desc') return (b.views || 0) - (a.views || 0);
     return 0;
   });
 
@@ -1733,6 +1737,7 @@ export const AdminDashboard: React.FC = () => {
                     <option value="stock_desc">{isKa ? 'მარაგი: მაღალი' : 'Stock: High to Low'}</option>
                     <option value="stock_asc">{isKa ? 'მარაგი: დაბალი' : 'Stock: Low to High'}</option>
                     <option value="title_asc">{isKa ? 'სახელი: A-Z' : 'Title: A to Z'}</option>
+                    <option value="views_desc">{isKa ? 'ნახვები: კლებადი' : 'Views: High to Low'}</option>
                   </select>
                 </div>
 
@@ -1769,13 +1774,14 @@ export const AdminDashboard: React.FC = () => {
                       <th className="p-4">{isKa ? 'ფასი' : 'Price'}</th>
                       <th className="p-4">{isKa ? 'მარაგი' : 'Stock'}</th>
                       <th className="p-4">{isKa ? 'ბეიჯი' : 'Badge'}</th>
+                      <th className="p-4">{isKa ? 'ნახვები' : 'Views'}</th>
                       <th className="p-4 text-right">{isKa ? 'მოქმედებები' : 'Actions'}</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {filteredProducts.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="p-12 text-center text-slate-400">
+                        <td colSpan={9} className="p-12 text-center text-slate-400">
                           <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
                           <p className="font-semibold text-slate-700">
                             {isKa ? 'პროდუქტი ვერ მოიძებნა' : 'No products match your criteria'}
@@ -1904,6 +1910,12 @@ export const AdminDashboard: React.FC = () => {
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>
                             )}
+                          </td>
+                          <td className="p-4 font-bold text-slate-800">
+                            <div className="flex items-center space-x-1">
+                              <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span>{prod.views || 0}</span>
+                            </div>
                           </td>
                           <td className="p-4 text-right space-x-1">
                             <button
@@ -2351,6 +2363,46 @@ export const AdminDashboard: React.FC = () => {
                       title="Custom color picker"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Typography / Font Theme Settings */}
+              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800">
+                    🔤 საიტის შრიფტების სტილი / Typography Theme
+                  </label>
+                  <p className="text-[11px] text-slate-500">
+                    აირჩიეთ საიტის ტიპოგრაფიული დიზაინი, რომელიც შეესაბამება თქვენი ბრენდის ხასიათს
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-5 gap-2 pt-1">
+                  {[
+                    { id: 'modern', name: 'Modern Sans', font: 'Plus Jakarta Sans', desc: 'თანამედროვე, ელეგანტური' },
+                    { id: 'tech', name: 'High-Tech Inter', font: 'Inter', desc: 'სუფთა, მინიმალისტური' },
+                    { id: 'serif', name: 'Classic Serif', font: 'Lora', desc: 'კლასიკური, ძვირადღირებული' },
+                    { id: 'rounded', name: 'Cozy Outfit', font: 'Outfit', desc: 'რბილი, მეგობრული' },
+                    { id: 'industrial', name: 'Space Grotesk', font: 'Space Grotesk', desc: 'ინდუსტრიული, თამამი' },
+                  ].map(fontOption => (
+                    <button
+                      key={fontOption.id}
+                      type="button"
+                      onClick={() => setThemeForm(prev => ({ ...prev, typographyTheme: fontOption.id as any }))}
+                      className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                        themeForm.typographyTheme === fontOption.id
+                          ? 'border-slate-900 bg-white shadow-sm ring-2 ring-blue-500/40 text-slate-900'
+                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                      }`}
+                    >
+                      <span className="text-[13px] font-bold block" style={{ fontFamily: fontOption.font }}>
+                        {fontOption.name}
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-1 block">
+                        {fontOption.desc}
+                      </span>
+                    </button>
+                  ))}
                 </div>
               </div>
 
