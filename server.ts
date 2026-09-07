@@ -295,6 +295,52 @@ function syncCatalogToInitialProducts(products: any[]): void {
   }
 }
 
+function generateSitemapSlug(title: string): string {
+  return title
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+}
+
+function generateSitemapXML(products: any[]): string {
+  const urls = [
+    { loc: 'https://dbuystore.com/', changefreq: 'daily', priority: '1.0' },
+    { loc: 'https://dbuystore.com/about', changefreq: 'weekly', priority: '0.8' },
+    { loc: 'https://dbuystore.com/contact', changefreq: 'weekly', priority: '0.8' },
+    { loc: 'https://dbuystore.com/guarantee', changefreq: 'monthly', priority: '0.7' },
+    { loc: 'https://dbuystore.com/returns', changefreq: 'monthly', priority: '0.7' },
+    { loc: 'https://dbuystore.com/privacy', changefreq: 'monthly', priority: '0.7' }
+  ];
+
+  if (Array.isArray(products)) {
+    products.forEach(p => {
+      if (!p) return;
+      const slug = p.customSlug?.trim() || generateSitemapSlug(p.title);
+      const urlPath = p.customSlug 
+        ? `/b/${encodeURIComponent(slug)}` 
+        : `/product/${p.id}/${encodeURIComponent(slug)}`;
+      urls.push({
+        loc: `https://dbuystore.com${urlPath}`,
+        changefreq: 'weekly',
+        priority: '0.9'
+      });
+    });
+  }
+
+  const xmlItems = urls.map(item => `  <url>
+    <loc>${item.loc}</loc>
+    <changefreq>${item.changefreq}</changefreq>
+    <priority>${item.priority}</priority>
+  </url>`).join('\n');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+${xmlItems}
+</urlset>`;
+}
+
 const CODE_BACKUP_FILE = path.join(process.cwd(), 'src', 'data', 'storeBackup.json');
 
 function initStoreDatabase(): StoreDatabase {
@@ -802,6 +848,27 @@ function saveStoreDatabase(): void {
     } catch (redisErr: any) {
       console.error('[REDIS/KV] Failed to save database to Redis:', redisErr?.message || redisErr);
     }
+  }
+
+  // 4. Automatically generate a physical static sitemap.xml on the local filesystem
+  try {
+    const sitemapCode = generateSitemapXML(storeDb.products || []);
+    const publicSitemapPath = path.join(process.cwd(), 'public', 'sitemap.xml');
+    const distSitemapPath = path.join(process.cwd(), 'dist', 'sitemap.xml');
+
+    const publicDir = path.dirname(publicSitemapPath);
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+    fs.writeFileSync(publicSitemapPath, sitemapCode, 'utf-8');
+
+    const distDir = path.dirname(distSitemapPath);
+    if (fs.existsSync(distDir)) {
+      fs.writeFileSync(distSitemapPath, sitemapCode, 'utf-8');
+    }
+    console.log('[SITEMAP] Automatically updated static physical sitemap.xml on disk.');
+  } catch (sitemapErr: any) {
+    console.warn('[SITEMAP] Failed to write static sitemap.xml to disk (continuing with dynamic backup):', sitemapErr?.message);
   }
 }
 
@@ -3297,49 +3364,13 @@ Sitemap: https://dbuystore.com/sitemap.xml`);
 
 // Dynamic XML Sitemap for absolute transparency and crawl verification
 app.get('/sitemap.xml', (req, res) => {
-  function generateSitemapSlug(title: string): string {
-    return title
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
+  try {
+    const xml = generateSitemapXML(storeDb.products || []);
+    res.header('Content-Type', 'application/xml');
+    res.send(xml);
+  } catch (err: any) {
+    res.status(500).type('text/plain').send('Failed to generate sitemap');
   }
-
-  const urls = [
-    { loc: 'https://dbuystore.com/', changefreq: 'daily', priority: '1.0' },
-    { loc: 'https://dbuystore.com/about', changefreq: 'weekly', priority: '0.8' },
-    { loc: 'https://dbuystore.com/contact', changefreq: 'weekly', priority: '0.8' },
-    { loc: 'https://dbuystore.com/guarantee', changefreq: 'monthly', priority: '0.7' },
-    { loc: 'https://dbuystore.com/returns', changefreq: 'monthly', priority: '0.7' },
-    { loc: 'https://dbuystore.com/privacy', changefreq: 'monthly', priority: '0.7' }
-  ];
-
-  if (storeDb && Array.isArray(storeDb.products)) {
-    storeDb.products.forEach(p => {
-      const slug = p.customSlug?.trim() || generateSitemapSlug(p.title);
-      const urlPath = p.customSlug 
-        ? `/b/${encodeURIComponent(slug)}` 
-        : `/product/${p.id}/${encodeURIComponent(slug)}`;
-      urls.push({
-        loc: `https://dbuystore.com${urlPath}`,
-        changefreq: 'weekly',
-        priority: '0.9'
-      });
-    });
-  }
-
-  const xmlItems = urls.map(item => `  <url>
-    <loc>${item.loc}</loc>
-    <changefreq>${item.changefreq}</changefreq>
-    <priority>${item.priority}</priority>
-  </url>`).join('\n');
-
-  res.header('Content-Type', 'application/xml');
-  res.send(`<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-${xmlItems}
-</urlset>`);
 });
 
 // ==========================================
