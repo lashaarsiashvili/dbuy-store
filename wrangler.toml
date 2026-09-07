@@ -1,7 +1,6 @@
 name = "dbuy-store"
-compatibility_date = "2024-01-01"
 main = "dist/server.cjs"
-assets = { directory = "./dist" }
+compatibility_date = "2024-01-01"
 
-[build]
-command = "npm run build"
+[assets]
+directory = "./dist"
