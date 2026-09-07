@@ -7,8 +7,14 @@ const DB_NAME = 'dbuy_image_backups';
 const DB_VERSION = 1;
 const STORE_NAME = 'images';
 
+let cachedDB: IDBDatabase | null = null;
+let idbInFlightPromise: Promise<IDBDatabase> | null = null;
+
 const getIDB = (): Promise<IDBDatabase> => {
-  return new Promise((resolve, reject) => {
+  if (cachedDB) return Promise.resolve(cachedDB);
+  if (idbInFlightPromise) return idbInFlightPromise;
+
+  idbInFlightPromise = new Promise<IDBDatabase>((resolve, reject) => {
     if (typeof indexedDB === 'undefined') {
       reject(new Error('IndexedDB is not supported in this environment'));
       return;
@@ -20,9 +26,23 @@ const getIDB = (): Promise<IDBDatabase> => {
         db.createObjectStore(STORE_NAME);
       }
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      cachedDB = request.result;
+      idbInFlightPromise = null;
+      
+      // Clear cache on unexpected close
+      cachedDB.onclose = () => {
+        cachedDB = null;
+      };
+      resolve(cachedDB);
+    };
+    request.onerror = () => {
+      idbInFlightPromise = null;
+      reject(request.error);
+    };
   });
+
+  return idbInFlightPromise;
 };
 
 // ============================================================================
@@ -101,11 +121,9 @@ export const saveImageBackupIDB = async (rawUrl: string, base64OrBlob: string | 
 
     return new Promise<void>((resolve, reject) => {
       tx.oncomplete = () => {
-        db.close();
         resolve();
       };
       tx.onerror = () => {
-        db.close();
         reject(tx.error);
       };
     });
@@ -139,13 +157,11 @@ export const getImageBackupIDB = async (rawUrl: string): Promise<string | null> 
       });
 
       if (result) {
-        db.close();
         // Populate RAM cache
         keysToTry.forEach((k) => memoryImageCache.set(k, result));
         return result;
       }
     }
-    db.close();
     return null;
   } catch (e) {
     return null;
@@ -174,12 +190,10 @@ export const loadImageBackupsIDB = async (): Promise<Record<string, string>> => 
           memoryImageCache.set(key, val);
           cursor.continue();
         } else {
-          db.close();
           resolve(result);
         }
       };
       request.onerror = () => {
-        db.close();
         reject(request.error);
       };
     });
@@ -243,38 +257,55 @@ export const resolveAndCacheImage = async (rawUrl: string): Promise<string> => {
 
 /**
  * Preloads and caches product images into IndexedDB and RAM cache.
+ * Throttled and delayed so it never blocks the initial critical render/sync path.
  */
+let preloadTimeoutId: any = null;
+
 export const preloadProductImages = async (
   products: Array<{ id?: string | number; image?: string; images?: string[] }>
 ): Promise<void> => {
   if (!Array.isArray(products) || typeof window === 'undefined') return;
 
-  for (const product of products) {
-    if (!product) continue;
-
-    if (product.image) {
-      if (product.image.startsWith('data:')) {
-        const idKey = `prod-${product.id}-img`;
-        memoryImageCache.set(idKey, product.image);
-        saveImageBackupIDB(idKey, product.image).catch(() => {});
-      } else {
-        resolveAndCacheImage(product.image).catch(() => {});
-      }
-    }
-
-    if (Array.isArray(product.images)) {
-      product.images.forEach((img, idx) => {
-        if (!img) return;
-        if (img.startsWith('data:')) {
-          const idKey = `prod-${product.id}-img-${idx}`;
-          memoryImageCache.set(idKey, img);
-          saveImageBackupIDB(idKey, img).catch(() => {});
-        } else {
-          resolveAndCacheImage(img).catch(() => {});
-        }
-      });
-    }
+  if (preloadTimeoutId) {
+    clearTimeout(preloadTimeoutId);
   }
+
+  preloadTimeoutId = setTimeout(async () => {
+    try {
+      for (const product of products) {
+        if (!product) continue;
+
+        if (product.image) {
+          if (product.image.startsWith('data:')) {
+            const idKey = `prod-${product.id}-img`;
+            memoryImageCache.set(idKey, product.image);
+            saveImageBackupIDB(idKey, product.image).catch(() => {});
+          } else {
+            resolveAndCacheImage(product.image).catch(() => {});
+          }
+        }
+
+        // Give mobile CPU thread breathing room between product records
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        if (Array.isArray(product.images) && product.images.length > 0) {
+          for (let idx = 0; idx < product.images.length; idx++) {
+            const img = product.images[idx];
+            if (!img) continue;
+            if (img.startsWith('data:')) {
+              const idKey = `prod-${product.id}-img-${idx}`;
+              memoryImageCache.set(idKey, img);
+              saveImageBackupIDB(idKey, img).catch(() => {});
+            } else {
+              resolveAndCacheImage(img).catch(() => {});
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('[IMAGE-PRELOADER] Background preloading paused:', e);
+    }
+  }, 1200); // Deferred by 1.2s to prioritize initial render & network sync
 };
 
 /**
