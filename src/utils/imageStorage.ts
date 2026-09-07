@@ -140,7 +140,16 @@ export const getImageBackupIDB = async (rawUrl: string): Promise<string | null> 
 
   // Direct memory cache hit check
   const syncHit = getCachedImageUrlSync(rawUrl);
-  if (syncHit) return syncHit;
+  if (syncHit) {
+    if (syncHit.startsWith('data:') && !syncHit.startsWith('data:image/')) {
+      // Corrupted in RAM memory cache, delete it
+      memoryImageCache.delete(rawUrl);
+      const normKey = normalizeUrlKey(rawUrl);
+      if (normKey) memoryImageCache.delete(normKey);
+    } else {
+      return syncHit;
+    }
+  }
 
   const keysToTry = [rawUrl, normalizeUrlKey(rawUrl)].filter(Boolean);
 
@@ -157,6 +166,15 @@ export const getImageBackupIDB = async (rawUrl: string): Promise<string | null> 
       });
 
       if (result) {
+        if (result.startsWith('data:') && !result.startsWith('data:image/')) {
+          console.warn('[IMAGE-STORAGE-IDB] Detected corrupted non-image backup in IDB for key:', key);
+          // Delete corrupted entry from IDB
+          try {
+            const deleteTx = db.transaction(STORE_NAME, 'readwrite');
+            deleteTx.objectStore(STORE_NAME).delete(key);
+          } catch {}
+          continue;
+        }
         // Populate RAM cache
         keysToTry.forEach((k) => memoryImageCache.set(k, result));
         return result;
@@ -186,8 +204,16 @@ export const loadImageBackupsIDB = async (): Promise<Record<string, string>> => 
         if (cursor) {
           const key = String(cursor.key);
           const val = String(cursor.value);
-          result[key] = val;
-          memoryImageCache.set(key, val);
+          if (val.startsWith('data:image/')) {
+            result[key] = val;
+            memoryImageCache.set(key, val);
+          } else {
+            console.warn('[IMAGE-STORAGE-IDB] Deleting corrupted non-image cursor key:', key);
+            try {
+              const deleteTx = db.transaction(STORE_NAME, 'readwrite');
+              deleteTx.objectStore(STORE_NAME).delete(key);
+            } catch {}
+          }
           cursor.continue();
         } else {
           resolve(result);
@@ -230,8 +256,13 @@ export const resolveAndCacheImage = async (rawUrl: string): Promise<string> => {
       try {
         const response = await fetch(rawUrl, { cache: 'force-cache' });
         if (response.ok) {
+          const contentType = response.headers.get('content-type') || '';
+          if (!contentType.startsWith('image/')) {
+            console.warn('[IMAGE-STORAGE] Skipped non-image content-type:', contentType, 'for', rawUrl);
+            return rawUrl;
+          }
           const blob = await response.blob();
-          if (blob && blob.size > 0) {
+          if (blob && blob.size > 0 && blob.type.startsWith('image/')) {
             await saveImageBackupIDB(rawUrl, blob);
             const cached = getCachedImageUrlSync(rawUrl);
             if (cached) return cached;
