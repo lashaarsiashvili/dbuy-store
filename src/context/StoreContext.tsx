@@ -734,6 +734,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(t('toasts.themeReset'), 'info');
   };
 
+  // Helper to sanitize any image URL so it resolves as a relative URL (safeguarding against old domain CORS / 404s)
+  const sanitizeImageUrl = (url: string | undefined): string => {
+    if (!url || typeof url !== 'string') return '';
+    const trimmed = url.trim();
+    if (trimmed.includes('/uploads/')) {
+      return '/uploads/' + trimmed.split('/uploads/').pop();
+    }
+    return trimmed;
+  };
+
+  const sanitizeProductUrls = (p: Product): Product => {
+    const mainImage = sanitizeImageUrl(p.image);
+    const extraImages = Array.isArray(p.images)
+      ? p.images.map(img => sanitizeImageUrl(img))
+      : (mainImage ? [mainImage] : []);
+    return {
+      ...p,
+      image: mainImage,
+      images: extraImages
+    };
+  };
+
+  const sanitizeBillboardUrls = (b: BillboardSlide): BillboardSlide => {
+    return {
+      ...b,
+      image: sanitizeImageUrl(b.image),
+      bgImage: sanitizeImageUrl(b.bgImage)
+    };
+  };
+
   // Rotating Billboard Banners
   const [billboards, setBillboards] = useState<BillboardSlide[]>(() => {
     const saved = localStorage.getItem('dbuy_billboards');
@@ -741,13 +771,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       try {
         const parsed: BillboardSlide[] = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return parsed.map(sanitizeBillboardUrls);
         }
       } catch (e) {
         console.error('Error parsing billboards', e);
       }
     }
-    return initialBillboards;
+    return initialBillboards.map(sanitizeBillboardUrls);
   });
 
   const [billboardIntervalSeconds, setBillboardIntervalSecondsState] = useState<number>(() => {
@@ -845,15 +875,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (saved !== null) {
       try {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
-          return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map(sanitizeProductUrls);
         }
       } catch (e) {
         console.error('Error parsing saved products from localStorage:', e);
       }
     }
-    // Only used on very first clean install when localStorage is completely empty
-    return initialProducts;
+    // Only used on very first clean install when localStorage is completely empty or empty
+    return initialProducts.map(sanitizeProductUrls);
   });
 
   // Pre-cache product images to IndexedDB and RAM cache to prevent image loss during re-renders or state updates
@@ -1612,13 +1642,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             }
 
             // Otherwise, adopt the authoritative server products catalog
+            const sanitized = d.products.map(sanitizeProductUrls);
             try {
-              localStorage.setItem('dbuy_products', JSON.stringify(d.products));
+              localStorage.setItem('dbuy_products', JSON.stringify(sanitized));
               if (d.lastUpdated) {
                 localStorage.setItem('dbuy_products_last_updated', d.lastUpdated);
               }
             } catch {}
-            return d.products;
+            return sanitized;
           });
         }
         if (d.registeredUsers && typeof d.registeredUsers === 'object') {
@@ -1640,8 +1671,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           localStorage.setItem('dbuy_theme', JSON.stringify(d.theme));
         }
         if (Array.isArray(d.billboards) && d.billboards.length > 0) {
-          setBillboards(d.billboards);
-          localStorage.setItem('dbuy_billboards', JSON.stringify(d.billboards));
+          const sanitizedBillboards = d.billboards.map(sanitizeBillboardUrls);
+          setBillboards(sanitizedBillboards);
+          localStorage.setItem('dbuy_billboards', JSON.stringify(sanitizedBillboards));
         }
         if (typeof d.billboardIntervalSeconds === 'number') {
           setBillboardIntervalSecondsState(d.billboardIntervalSeconds);
