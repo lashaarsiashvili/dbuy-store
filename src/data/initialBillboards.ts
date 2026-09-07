@@ -1,3 +1,3 @@
-import { BillboardSlide } from '../types';
+import { Billboard } from '../types';
 
-export const initialBillboards: BillboardSlide[] = [];
+export const initialBillboards: Billboard[] = [];
