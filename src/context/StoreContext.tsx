@@ -873,16 +873,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [products, setProducts] = useState<Product[]>(() => {
     try {
-      const cachedVersion = localStorage.getItem('dbuy_catalog_version');
-      if (cachedVersion !== CURRENT_CATALOG_VERSION) {
-        localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
-        localStorage.removeItem('dbuy_products');
-        localStorage.removeItem('dbuy_products_last_updated');
-        const fresh = initialProducts.map(sanitizeProductUrls);
-        localStorage.setItem('dbuy_products', JSON.stringify(fresh));
-        return fresh;
-      }
-
       const saved = localStorage.getItem('dbuy_products');
       if (saved !== null) {
         const parsed = JSON.parse(saved);
@@ -896,7 +886,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const fresh = initialProducts.map(sanitizeProductUrls);
     try {
       localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
-      localStorage.removeItem('dbuy_products_last_updated');
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));
     } catch (e) {}
     return fresh;
@@ -1621,30 +1610,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         if (Array.isArray(d.products)) {
           setProducts(prevProducts => {
-            // Check if local update was made very recently (within 30 seconds) by an admin on THIS specific device
-            const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 30000;
-
-            // If this device recently modified products, preserve local user edits
-            if (recentlyUpdatedLocally) {
-              return prevProducts;
-            }
-
-            // Last-Write-Wins (LWW) conflict resolution:
-            // If local products have a newer timestamp than the server's last updated timestamp,
-            // and we are logged in as admin and local has more products, preserve local user edits.
+            const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 60000;
             const localLastUpdated = localStorage.getItem('dbuy_products_last_updated') || '0';
             const serverLastUpdated = d.lastUpdated || '0';
             const isLocalNewer = new Date(localLastUpdated).getTime() > new Date(serverLastUpdated).getTime();
-            const isServerResetToDefault = d.products.length <= 4 && prevProducts.length > 4;
 
-            if (isServerResetToDefault && isAdmin && prevProducts.length > 0) {
-              console.log('[SYNC] Server was reset to default. Preserving and pushing to server.', {
-                localCount: prevProducts.length,
-                serverCount: d.products.length
-              });
-              setTimeout(() => {
-                saveProducts(prevProducts);
-              }, 1000);
+            if (recentlyUpdatedLocally || isLocalNewer || prevProducts.length < d.products.length || isAdmin) {
+              if (prevProducts.length < d.products.length) {
+                setTimeout(() => {
+                  saveProducts(prevProducts);
+                }, 500);
+              }
               return prevProducts;
             }
 
