@@ -35,57 +35,101 @@ export const ApplePayLogo: React.FC<{ className?: string; fill?: string }> = ({
   </svg>
 );
 
+export const GooglePayVector: React.FC<{
+  className?: string;
+  isDark?: boolean;
+}> = ({ className = 'h-5 w-auto', isDark = false }) => {
+  const payColor = isDark ? '#FFFFFF' : '#3C4043';
+  const hasHeight = className.includes('h-');
+  const baseSize = hasHeight ? '' : 'h-5 w-auto';
+
+  return (
+    <svg
+      viewBox="0 0 64 24"
+      className={`inline-block shrink-0 ${baseSize} ${className}`.trim()}
+      style={{ aspectRatio: '64/24' }}
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-label="Google Pay"
+      role="img"
+    >
+      {/* Google 4-Color 'G' Icon */}
+      <path
+        d="M21.3 10.18h-9.36v3.64h5.39c-.23 1.25-.94 2.31-1.99 3.02l3.22 2.5c1.88-1.74 2.97-4.3 2.97-7.34 0-.61-.06-1.22-.18-1.82z"
+        fill="#4285F4"
+      />
+      <path
+        d="M11.94 22c2.7 0 4.97-.9 6.63-2.43l-3.22-2.5c-.9.6-2.05.95-3.41.95-2.62 0-4.84-1.77-5.63-4.15L2.97 16.4C4.66 19.74 8.04 22 11.94 22z"
+        fill="#34A853"
+      />
+      <path
+        d="M6.31 13.87c-.2-.6-.31-1.24-.31-1.87s.11-1.27.31-1.87L2.97 7.6A9.98 9.98 0 001.94 12c0 1.61.38 3.14 1.03 4.4l3.34-2.53z"
+        fill="#FBBC05"
+      />
+      <path
+        d="M11.94 5.98c1.47 0 2.79.51 3.83 1.5l2.87-2.87C16.9 3.01 14.63 2 11.94 2 8.04 2 4.66 4.26 2.97 7.6l3.34 2.53c.79-2.38 3.01-4.15 5.63-4.15z"
+        fill="#EA4335"
+      />
+
+      {/* Official Vector 'P' */}
+      <path
+        d="M26 18.67V1h6c1.06 0 2.02.23 2.88.69.86.44 1.54 1.08 2.05 1.9.52.81.78 1.74.78 2.81 0 1.06-.26 2-.78 2.82-.5.82-1.19 1.46-2.05 1.92-.86.45-1.82.67-2.88.67h-3.32v6.86H26zm2.68-9.43h3.39c.63 0 1.17-.13 1.61-.4.44-.27.77-.63 1-1.06.24-.44.37-.9.37-1.38 0-.48-.13-.93-.37-1.36-.23-.43-.56-.78-1-1.06-.44-.28-.98-.42-1.61-.42h-3.39v5.68z"
+        fill={payColor}
+      />
+
+      {/* Official Vector 'a' */}
+      <path
+        d="M43.44 19.06c-.91 0-1.71-.18-2.39-.54-.68-.36-1.23-.86-1.63-1.48-.39-.64-.59-1.37-.59-2.2 0-.9.23-1.67.68-2.3.47-.62 1.09-1.1 1.85-1.43.78-.33 1.65-.49 2.59-.49.54 0 1.02.04 1.46.12.44.07.83.15 1.17.25.34.1.61.2.81.32v-.67c0-.82-.3-1.48-.88-1.97-.59-.5-1.34-.74-2.27-.74-.63 0-1.24.15-1.8.44-.57.28-1.03.67-1.39 1.16l-1.78-1.4c.36-.52.79-.95 1.29-1.31.52-.37 1.1-.65 1.73-.84.64-.2 1.31-.3 2.03-.3 1.78 0 3.17.45 4.14 1.35.98.89 1.46 2.14 1.46 3.75v7.88h-2.53v-1.56h-.15c-.23.33-.53.64-.9.94-.36.3-.78.54-1.27.72-.49.19-1.03.29-1.63.29zm.46-2.17c.69 0 1.29-.16 1.81-.49.52-.33.93-.76 1.22-1.28.31-.55.46-1.13.46-1.76-.37-.21-.81-.38-1.31-.51-.51-.15-1.05-.23-1.64-.23-1.06 0-1.81.22-2.27.65-.45.42-.68.96-.68 1.6 0 .59.21 1.08.63 1.46.44.37 1.04.56 1.78.56z"
+        fill={payColor}
+      />
+
+      {/* Official Vector 'y' */}
+      <path
+        d="M56.59 23.38c-.05.12-.11.23-.17.35-.05.13-.08.22-.1.27h-2.8c.08-.18.2-.43.34-.76.16-.33.32-.66.46-.99.1-.21.2-.44.3-.69.11-.25.22-.5.34-.77.13-.26.25-.51.36-.76l.93-2.05-5.2-11.9h2.93l3.56 8.59h.12l3.56-8.59H64l-6.44 15.01c-.11.28-.24.58-.39.89-.13.31-.25.59-.36.84-.1.26-.18.45-.22.56z"
+        fill={payColor}
+      />
+    </svg>
+  );
+};
+
+/**
+ * Official Web Google Pay Mark (Approved Acceptance Badge)
+ * Used in payment method lists, checkout selectors, and footers.
+ * Enclosed in an approved white card container with #DADCE0 border
+ * and guaranteed 0.5x G-height clear space.
+ */
+export const GooglePayMark: React.FC<{
+  className?: string;
+  badgeClassName?: string;
+}> = ({ className = 'h-4 w-auto', badgeClassName = '' }) => {
+  const vectorClass = className.includes('h-') ? className : `h-4 w-auto ${className}`.trim();
+  return (
+    <div
+      className={`inline-flex items-center justify-center bg-white px-2 py-1 rounded-[6px] border border-[#DADCE0] shadow-2xs shrink-0 ${badgeClassName}`.trim()}
+      title="Google Pay"
+    >
+      <GooglePayVector className={vectorClass} isDark={false} />
+    </div>
+  );
+};
+
 export const GooglePayLogo: React.FC<{
   className?: string;
   isDark?: boolean;
   useCapsule?: boolean;
 }> = ({ className = 'h-5 w-auto', isDark = false, useCapsule = false }) => {
-  const content = (
-    <div className="flex items-center space-x-1">
-      <svg viewBox="0 0 24 24" className="w-4 h-4 shrink-0" aria-label="Google">
-        <path
-          fill="#4285F4"
-          d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.82-2.4 3.68v3.05h3.88c2.27-2.09 3.665-5.17 3.665-9.17z"
-        />
-        <path
-          fill="#34A853"
-          d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.05c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.25v3.13C3.28 21.43 7.35 24 12 24z"
-        />
-        <path
-          fill="#FBBC05"
-          d="M5.28 14.27c-.25-.72-.38-1.49-.38-2.27s.13-1.55.38-2.27V6.6H1.25C.45 8.2.0 10.05.0 12s.45 3.8 1.25 5.4l4.03-3.13z"
-        />
-        <path
-          fill="#EA4335"
-          d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.35 0 3.28 2.57 1.25 6.6l4.03 3.13c.95-2.83 3.6-4.98 6.72-4.98z"
-        />
-      </svg>
-      <span
-        style={{
-          fontFamily:
-            'Google Sans, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
-          fontWeight: 700,
-        }}
-        className={`text-sm tracking-tight leading-none ${
-          useCapsule ? 'text-slate-800' : isDark ? 'text-white' : 'text-slate-800'
-        }`}
-      >
-        Pay
-      </span>
-    </div>
-  );
-
   if (useCapsule) {
+    const vectorClass = className.includes('h-') ? className : `h-4 w-auto ${className}`.trim();
     return (
       <div
-        className={`inline-flex items-center justify-center bg-white px-2.5 py-1 rounded-full border border-slate-200 shadow-2xs ${className}`}
+        className="inline-flex items-center justify-center bg-white px-2.5 py-1 rounded-full border border-[#DADCE0] shadow-2xs shrink-0"
       >
-        {content}
+        <GooglePayVector className={vectorClass} isDark={false} />
       </div>
     );
   }
 
-  return <div className={`flex items-center ${className}`}>{content}</div>;
+  return <GooglePayVector className={className} isDark={isDark} />;
 };
 
 export const PayPalLogo: React.FC<{

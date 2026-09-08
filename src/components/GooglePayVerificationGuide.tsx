@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GooglePayLogo } from './PaymentLogos';
+import { GooglePayLogo, GooglePayMark } from './PaymentLogos';
 import { OfficialGooglePayButton } from './OfficialGooglePayButton';
 import { CheckCircle2, Copy, Check, ExternalLink, ShieldCheck, Camera, Info, ArrowLeft } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
@@ -111,7 +111,7 @@ export const GooglePayVerificationGuide: React.FC<GooglePayVerificationGuideProp
                 <div className="grid grid-cols-3 gap-3">
                   {/* Google Pay - Active */}
                   <div className="p-3 rounded-xl border-2 border-black bg-black text-white flex flex-col items-center justify-center space-y-1.5 shadow-sm">
-                    <GooglePayLogo useCapsule={true} className="scale-95" />
+                    <GooglePayLogo className="h-5 w-auto" isDark={true} />
                     <span className="text-[11px] font-bold text-slate-200">Google Pay</span>
                   </div>
 
@@ -131,7 +131,7 @@ export const GooglePayVerificationGuide: React.FC<GooglePayVerificationGuideProp
                 <div className="pt-2">
                   <div className="w-full h-12 bg-black text-white rounded-xl flex items-center justify-center space-x-2 font-medium cursor-pointer shadow-md">
                     <span className="text-sm">Buy with</span>
-                    <GooglePayLogo isDark={true} className="scale-100" />
+                    <GooglePayLogo className="h-5.5 w-auto" isDark={true} />
                     <span className="text-xs text-slate-400 font-mono pl-1">• $29.99</span>
                   </div>
                 </div>
@@ -162,15 +162,13 @@ export const GooglePayVerificationGuide: React.FC<GooglePayVerificationGuideProp
                   {/* Google Pay Header */}
                   <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/80">
                     <div className="flex items-center space-x-2">
-                      <div className="w-7 h-7 rounded-full bg-white border border-slate-200 flex items-center justify-center shadow-xs">
-                        <span className="text-blue-600 font-bold text-sm">G</span>
-                      </div>
+                      <GooglePayMark className="h-4 w-auto" />
                       <div>
                         <div className="font-bold text-xs text-slate-900 flex items-center space-x-1">
                           <span>Dbuy store</span>
-                          <span className="text-[10px] text-slate-400 font-normal">• dbuy.ge</span>
+                          <span className="text-[10px] text-slate-400 font-normal">• dbuystore.com</span>
                         </div>
-                        <div className="text-[10px] text-slate-500 font-mono">lashaarsiashvili@gmail.com</div>
+                        <div className="text-[10px] text-slate-500 font-mono">support@dbuystore.com</div>
                       </div>
                     </div>
                     <div className="text-right">
@@ -286,7 +284,7 @@ export const GooglePayVerificationGuide: React.FC<GooglePayVerificationGuideProp
                   <div className="flex justify-between items-center border-b border-slate-200 pb-2">
                     <span className="text-slate-500">Payment Method:</span>
                     <div className="flex items-center space-x-1.5 font-bold text-slate-900">
-                      <GooglePayLogo useCapsule={true} className="scale-90" />
+                      <GooglePayMark className="h-4 w-auto" />
                     </div>
                   </div>
 

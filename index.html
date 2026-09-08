@@ -62,15 +62,42 @@
     <meta property="og:description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials with multi-currency, multi-language, cart, checkout, and admin dashboard." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <!-- Error resilience script for 3rd-party cross-origin SDKs -->
+    <script>
+      window.onerror = function(message, source, lineno, colno, error) {
+        if (message === 'Script error.' || !source || (typeof message === 'string' && message.toLowerCase().indexOf('script error') !== -1)) {
+          return true;
+        }
+        return false;
+      };
+      window.addEventListener('unhandledrejection', function(event) {
+        if (event && event.reason) {
+          var str = String(event.reason.message || event.reason);
+          if (str.indexOf('Script error') !== -1) {
+            event.preventDefault();
+          }
+        }
+      });
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Georgian:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Official PayPal v6 Web SDK & Mobile Wallets (Google Pay & Apple Pay) -->
-    <script src="https://www.paypal.com/web-sdk/v6/core"></script>
-    <script src="https://pay.google.com/gp/p/js/pay.js"></script>
-    <script src="https://applepay.cdn-apple.com/jsapi/1.latest/apple-pay-sdk.js"></script>
-    <!-- Tidio Live Chat Integration -->
-    <script src="//code.tidio.co/radmhxcgm3exg6pc97v4jgudpghcks5k.js" async></script>
+    <!-- Google Pay API -->
+    <script src="https://pay.google.com/gp/p/js/pay.js" async></script>
+    <!-- Tidio Live Chat Integration (Safe asynchronous loading) -->
+    <script>
+      (function() {
+        try {
+          if (typeof window !== 'undefined' && !window.location.hostname.includes('ais-dev') && !window.location.hostname.includes('ais-pre')) {
+            var tidioScript = document.createElement('script');
+            tidioScript.src = '//code.tidio.co/radmhxcgm3exg6pc97v4jgudpghcks5k.js';
+            tidioScript.async = true;
+            tidioScript.onerror = function() {};
+            document.head.appendChild(tidioScript);
+          }
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-500 selection:text-white">
     <div id="root"></div>

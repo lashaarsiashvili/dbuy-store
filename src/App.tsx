@@ -27,13 +27,6 @@ const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || LIVE_PAYPAL_CLIE
 const MainLayout: React.FC = () => {
   const { currentPage, recordVisit } = useStore();
 
-  // Initialize PayPal Web SDK v6 core instance
-  useEffect(() => {
-    getPayPalV6Instance(paypalClientId).catch((err) => {
-      console.warn('PayPal Web SDK v6 initialization notice:', err);
-    });
-  }, []);
-
   // Scroll to top on page change and log view
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
