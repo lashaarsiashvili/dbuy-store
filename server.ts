@@ -141,6 +141,7 @@ const DB_FILE = path.join(DB_DIR, 'store_database.json');
 
 // Dedicated persistent uploads directory for product images
 const UPLOADS_DIR = path.join(DB_DIR, 'uploads');
+const PUBLIC_UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
 // Persistent base64 backup map stored inside the source repository (src/data/uploadedImagesBackup.json)
 // This guarantees image data is never lost even if Cloud Run reboots or wipes ephemeral /data storage!
 const UPLOADS_MAP_FILE = path.join(process.cwd(), 'src', 'data', 'uploadedImagesBackup.json');
@@ -150,8 +151,22 @@ try {
   if (!fs.existsSync(UPLOADS_DIR)) {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   }
+  if (!fs.existsSync(PUBLIC_UPLOADS_DIR)) {
+    fs.mkdirSync(PUBLIC_UPLOADS_DIR, { recursive: true });
+  }
 } catch (err) {
   console.error('Error creating uploads directory:', err);
+}
+
+function writeImageToBothDirs(filename: string, buffer: Buffer): void {
+  const filePath1 = path.join(UPLOADS_DIR, filename);
+  const filePath2 = path.join(PUBLIC_UPLOADS_DIR, filename);
+  try {
+    fs.writeFileSync(filePath1, buffer);
+  } catch (e) {}
+  try {
+    fs.writeFileSync(filePath2, buffer);
+  } catch (e) {}
 }
 
 // Persistent base64 backup map to ensure uploaded files are never lost
@@ -1439,11 +1454,10 @@ app.post('/api/upload-image', (req, res) => {
     const timestamp = Date.now();
     const rand = Math.random().toString(36).substring(2, 8);
     const safeName = `prod-${timestamp}-${rand}.${ext}`;
-    const filePath = path.join(UPLOADS_DIR, safeName);
 
     try {
-      fs.writeFileSync(filePath, buffer);
-      console.log(`[IMAGE-UPLOAD] Saved product image physically to disk: ${filePath}`);
+      writeImageToBothDirs(safeName, buffer);
+      console.log(`[IMAGE-UPLOAD] Saved product image physically to disk and public: ${safeName}`);
     } catch (writeErr: any) {
       console.warn('[IMAGE-UPLOAD] Disk is read-only (Vercel). Keeping image in-memory and Firestore:', writeErr?.message || writeErr);
     }
@@ -1600,13 +1614,12 @@ function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
     const timestamp = Date.now();
     const rand = Math.random().toString(36).substring(2, 7);
     const safeName = `${prefix}-${timestamp}-${rand}.${ext}`;
-    const filePath = path.join(UPLOADS_DIR, safeName);
 
     try {
-      fs.writeFileSync(filePath, buffer);
-      console.log(`[AUTO-DISK-IMAGE] Saved product image physically to disk: ${safeName}`);
+      writeImageToBothDirs(safeName, buffer);
+      console.log(`[AUTO-DISK-IMAGE] Saved product image physically to disk and public: ${safeName}`);
     } catch (writeErr: any) {
-      console.warn('[AUTO-DISK-IMAGE] Disk is read-only (Vercel). Keeping image in-memory and Firestore:', writeErr?.message || writeErr);
+      console.warn('[AUTO-DISK-IMAGE] Disk write warning:', writeErr?.message || writeErr);
     }
     uploadsMap[safeName] = dataUrl;
     saveUploadsMap();
