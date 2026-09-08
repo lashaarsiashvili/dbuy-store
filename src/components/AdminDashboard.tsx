@@ -345,6 +345,35 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Test Branded Order Email State and Handler
+  const [sendingTestOrderEmail, setSendingTestOrderEmail] = useState(false);
+  const handleTestOrderEmail = async () => {
+    setSendingTestOrderEmail(true);
+    try {
+      const target = smtpForm.user || 'support@dbuystore.com';
+      const res = await smartApiFetch('/api/admin/send-test-order-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: target }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        addToast(
+          isKa 
+            ? `პროფესიონალური ორდერის იმეილი წარმატებით გაიგზავნა მისამართზე: ${target}`
+            : `Branded order confirmation email sent to ${target}`,
+          'success'
+        );
+      } else {
+        addToast(data.message || data.error || 'Failed to send test order email', 'error');
+      }
+    } catch (err: any) {
+      addToast(err?.message || 'Error sending test order email', 'error');
+    } finally {
+      setSendingTestOrderEmail(false);
+    }
+  };
+
   // Product Add / Edit Modal
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
@@ -3421,7 +3450,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center space-x-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={handleTestSmtp}
@@ -3430,6 +3459,17 @@ export const AdminDashboard: React.FC = () => {
                   >
                     {testingSmtp ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                     <span>{testingSmtp ? (isKa ? 'მოწმდება...' : 'Testing...') : (isKa ? '⚡ Zoho SMTP კავშირის შემოწმება' : '⚡ Test Zoho SMTP Connection')}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTestOrderEmail}
+                    disabled={sendingTestOrderEmail}
+                    className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md transition-all flex items-center space-x-2 cursor-pointer disabled:opacity-50"
+                    title={isKa ? 'გააგზავნეთ სატესტო პროფესიონალური შეკვეთის დადასტურების ელ-ფოსტა' : 'Send a sample branded order receipt email to verify styling'}
+                  >
+                    {sendingTestOrderEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <ShoppingBag className="w-4 h-4" />}
+                    <span>{sendingTestOrderEmail ? (isKa ? 'იგზავნება...' : 'Sending...') : (isKa ? '🛍️ შეკვეთის იმეილის ტესტი' : '🛍️ Send Test Order Email')}</span>
                   </button>
                 </div>
               </div>

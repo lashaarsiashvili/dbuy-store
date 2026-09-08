@@ -15,11 +15,13 @@ import { useStore } from '../context/StoreContext';
 interface GooglePayVerificationGuideProps {
   isOpen: boolean;
   onClose: () => void;
+  onOpenLiveSheet?: () => void;
 }
 
 export const GooglePayVerificationGuide: React.FC<GooglePayVerificationGuideProps> = ({
   isOpen,
   onClose,
+  onOpenLiveSheet,
 }) => {
   const [activeTab, setActiveTab] = useState<'screen1' | 'screen2' | 'screen3'>('screen1');
   const [copiedText, setCopiedText] = useState(false);
@@ -146,6 +148,30 @@ export const GooglePayVerificationGuide: React.FC<GooglePayVerificationGuideProp
           {/* TAB 2: Google Pay API Payment Screen */}
           {activeTab === 'screen2' && (
             <div className="space-y-4">
+              {onOpenLiveSheet && (
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-600 rounded-xl p-3.5 text-white flex items-center justify-between shadow-md">
+                  <div>
+                    <div className="font-bold text-xs flex items-center space-x-1.5">
+                      <span>📸</span>
+                      <span>ცოცხალი საიტის ფანჯრის ამოხტომა (Live Interactive Popup)</span>
+                    </div>
+                    <p className="text-[11px] text-blue-100 mt-0.5">
+                      ამოაგდეთ Google Pay-ს ნამდვილი ფანჯარა პირდაპირ საიტის თავზე და გადაუღეთ სქრინშოტი (Desktop ან Android რეჟიმით).
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onOpenLiveSheet();
+                    }}
+                    className="px-3 py-2 bg-white hover:bg-slate-100 text-blue-700 font-bold text-xs rounded-xl shadow-xs shrink-0 transition-all cursor-pointer whitespace-nowrap ml-2"
+                  >
+                    ▶ ფანჯრის გახსნა
+                  </button>
+                </div>
+              )}
+
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs text-blue-900 space-y-1">
                 <div className="font-bold flex items-center space-x-1.5">
                   <CheckCircle2 className="w-4 h-4 text-blue-600" />

@@ -11,6 +11,7 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getFirestore, setLogLevel, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
+import { buildCustomerOrderEmail, buildAdminOrderAlertEmail } from './src/utils/orderEmailTemplates';
 
 dotenv.config();
 
@@ -2117,32 +2118,28 @@ app.post('/api/store/order', (req, res) => {
 
     // Dispatch order notification email to support@dbuystore.com & admin & customer
     try {
-      const transporter = getMailTransporter();
       const customerEmail = newOrder.customerInfo?.email || newOrder.email || '';
-      const customerName = newOrder.customerInfo?.fullName || newOrder.customerInfo?.name || newOrder.name || 'Valued Customer';
-      const totalAmount = newOrder.total || newOrder.totalPrice || 0;
-      const currency = newOrder.currency || 'USD';
       
-      const itemsList = Array.isArray(newOrder.items)
-        ? newOrder.items.map((i: any) => `- ${i.title || i.name || 'Product'} (x${i.quantity || 1}) - $${Number(i.price || 0).toFixed(2)}`).join('\n')
-        : 'Order Items';
-
-      // 1. Admin / Store Alert Email to support@dbuystore.com
+      // 1. Admin / Store Alert Email to support@dbuystore.com & lashaarsiashvili@gmail.com
+      const adminEmailData = buildAdminOrderAlertEmail(newOrder);
       sendMailWithRetry({
         from: '"DBUY Store Orders" <support@dbuystore.com>',
         to: 'support@dbuystore.com, lashaarsiashvili@gmail.com',
-        subject: `[DBUY New Order] #${newOrder.id} - $${Number(totalAmount).toFixed(2)}`,
-        text: `New order placed on DBUY Store!\n\nOrder ID: #${newOrder.id}\nCustomer: ${customerName} (${customerEmail || 'No Email'})\nTotal: $${Number(totalAmount).toFixed(2)} ${currency}\nPayment Method: ${newOrder.paymentMethod || 'Online Payment'}\nAddress: ${newOrder.customerInfo?.address || newOrder.address || 'N/A'}\n\nItems:\n${itemsList}\n\nDBUY Store Management`,
-      });
+        subject: adminEmailData.subject,
+        html: adminEmailData.html,
+        text: adminEmailData.text,
+      }).catch(err => console.warn('[ORDER-EMAIL-ADMIN-WARN]', err?.message));
 
-      // 2. Confirmation Email to Customer
+      // 2. High-end Branded Confirmation Email to Customer
       if (customerEmail && customerEmail.includes('@')) {
+        const customerEmailData = buildCustomerOrderEmail(newOrder);
         sendMailWithRetry({
           from: '"DBUY Store" <support@dbuystore.com>',
           to: customerEmail,
-          subject: `Order Confirmation - DBUY Store #${newOrder.id}`,
-          text: `Hello ${customerName},\n\nThank you for shopping at DBUY Store! We have received your order #${newOrder.id}.\n\nTotal: $${Number(totalAmount).toFixed(2)} ${currency}\nPayment Method: ${newOrder.paymentMethod || 'Online Payment'}\n\nItems:\n${itemsList}\n\nIf you have any questions, feel free to contact us at support@dbuystore.com.\n\nBest regards,\nDBUY Store Team`,
-        });
+          subject: customerEmailData.subject,
+          html: customerEmailData.html,
+          text: customerEmailData.text,
+        }).catch(err => console.warn('[ORDER-EMAIL-CUSTOMER-WARN]', err?.message));
       }
     } catch (mailErr) {
       console.warn('[ORDER-EMAIL] Error dispatching order emails:', mailErr);
@@ -2616,8 +2613,9 @@ app.post('/api/googlepay/process-payment', async (req, res) => {
     });
 
     // Automatically record order in storeDb if orderDetails passed
+    let recordedOrder: any = null;
     if (orderDetails && typeof orderDetails === 'object') {
-      const newOrder = {
+      recordedOrder = {
         ...orderDetails,
         id: orderDetails.id || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
         paymentMethod: 'googlepay',
@@ -2626,22 +2624,56 @@ app.post('/api/googlepay/process-payment', async (req, res) => {
         status: 'Processing',
         createdAt: new Date().toISOString(),
       };
-      const existingIdx = storeDb.orders.findIndex((o: any) => o.id === newOrder.id);
+      const existingIdx = storeDb.orders.findIndex((o: any) => o.id === recordedOrder.id);
       if (existingIdx >= 0) {
-        storeDb.orders[existingIdx] = newOrder;
+        storeDb.orders[existingIdx] = recordedOrder;
       } else {
-        storeDb.orders.unshift(newOrder);
+        storeDb.orders.unshift(recordedOrder);
       }
       saveStoreDatabase();
     }
 
     try {
+      const orderForEmail = {
+        id: recordedOrder?.id || `GPAY-${txnId.slice(-8)}`,
+        total: Number(amount || 0),
+        currency,
+        paymentMethod: 'googlepay',
+        googlePayTransactionId: txnId,
+        customerInfo: {
+          fullName: payer.name,
+          email: payer.email,
+          phone: (payer as any)?.phone,
+          address: payer.address,
+          city: payer.city,
+          zip: payer.zip,
+          country: payer.country,
+        },
+        items: recordedOrder?.items || [
+          { title: description || 'DBUY Store Product', price: Number(amount || 0), quantity: 1 }
+        ],
+        createdAt: new Date().toISOString(),
+      };
+
+      const adminEmailData = buildAdminOrderAlertEmail(orderForEmail);
       sendMailWithRetry({
         from: '"DBUY Payments" <support@dbuystore.com>',
         to: 'lashaarsiashvili@gmail.com, support@dbuystore.com',
-        subject: `[DBUY Order] Google Pay Payment: $${Number(amount || 0).toFixed(2)} (${txnId})`,
-        text: `A new order has been paid via Google Pay!\n\nTransaction ID: ${txnId}\nAmount: $${Number(amount || 0).toFixed(2)} ${currency}\nCustomer: ${payer.name} (${payer.email})\nAddress: ${payer.address}, ${payer.city}, ${payer.country}\nPayee: lashafrommadrid@gmail.com\n\nDBUY Store`,
-      });
+        subject: adminEmailData.subject,
+        html: adminEmailData.html,
+        text: adminEmailData.text,
+      }).catch(e => console.warn('[GPAY-EMAIL-ADMIN-WARN]', e?.message));
+
+      if (payer.email && payer.email.includes('@')) {
+        const custEmailData = buildCustomerOrderEmail(orderForEmail);
+        sendMailWithRetry({
+          from: '"DBUY Store" <support@dbuystore.com>',
+          to: payer.email,
+          subject: custEmailData.subject,
+          html: custEmailData.html,
+          text: custEmailData.text,
+        }).catch(e => console.warn('[GPAY-EMAIL-CUSTOMER-WARN]', e?.message));
+      }
     } catch (e) {
       // ignore
     }
@@ -2722,8 +2754,9 @@ app.post('/api/applepay/authorize', async (req, res) => {
     });
 
     // Automatically record order in storeDb if orderDetails passed
+    let recordedAppleOrder: any = null;
     if (orderDetails && typeof orderDetails === 'object') {
-      const newOrder = {
+      recordedAppleOrder = {
         ...orderDetails,
         id: orderDetails.id || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
         paymentMethod: 'applepay',
@@ -2732,22 +2765,56 @@ app.post('/api/applepay/authorize', async (req, res) => {
         status: 'Processing',
         createdAt: new Date().toISOString(),
       };
-      const existingIdx = storeDb.orders.findIndex((o: any) => o.id === newOrder.id);
+      const existingIdx = storeDb.orders.findIndex((o: any) => o.id === recordedAppleOrder.id);
       if (existingIdx >= 0) {
-        storeDb.orders[existingIdx] = newOrder;
+        storeDb.orders[existingIdx] = recordedAppleOrder;
       } else {
-        storeDb.orders.unshift(newOrder);
+        storeDb.orders.unshift(recordedAppleOrder);
       }
       saveStoreDatabase();
     }
 
     try {
+      const orderForEmail = {
+        id: recordedAppleOrder?.id || `APAY-${txnId.slice(-8)}`,
+        total: Number(amount || 0),
+        currency,
+        paymentMethod: 'applepay',
+        applePayTransactionId: txnId,
+        customerInfo: {
+          fullName: payer.name,
+          email: payer.email,
+          phone: (payer as any)?.phone,
+          address: payer.address,
+          city: payer.city,
+          zip: payer.zip,
+          country: payer.country,
+        },
+        items: recordedAppleOrder?.items || [
+          { title: 'DBUY Store Purchase via Apple Pay', price: Number(amount || 0), quantity: 1 }
+        ],
+        createdAt: new Date().toISOString(),
+      };
+
+      const adminEmailData = buildAdminOrderAlertEmail(orderForEmail);
       sendMailWithRetry({
         from: '"DBUY Payments" <support@dbuystore.com>',
         to: 'lashaarsiashvili@gmail.com, support@dbuystore.com',
-        subject: `[DBUY Order] Apple Pay Payment: $${Number(amount || 0).toFixed(2)} (${txnId})`,
-        text: `A new order has been authorized via Apple Pay!\n\nTransaction ID: ${txnId}\nAmount: $${Number(amount || 0).toFixed(2)} ${currency}\nCustomer: ${payer.name} (${payer.email})\nAddress: ${payer.address}, ${payer.city}, ${payer.country}\nPayee: lashafrommadrid@gmail.com\n\nDBUY Store`,
-      });
+        subject: adminEmailData.subject,
+        html: adminEmailData.html,
+        text: adminEmailData.text,
+      }).catch(e => console.warn('[APAY-EMAIL-ADMIN-WARN]', e?.message));
+
+      if (payer.email && payer.email.includes('@')) {
+        const custEmailData = buildCustomerOrderEmail(orderForEmail);
+        sendMailWithRetry({
+          from: '"DBUY Store" <support@dbuystore.com>',
+          to: payer.email,
+          subject: custEmailData.subject,
+          html: custEmailData.html,
+          text: custEmailData.text,
+        }).catch(e => console.warn('[APAY-EMAIL-CUSTOMER-WARN]', e?.message));
+      }
     } catch (e) {
       // ignore
     }
@@ -3693,6 +3760,74 @@ app.post('/api/admin/smtp/test', async (req, res) => {
       code: err?.code,
       response: err?.response,
     });
+  }
+});
+
+// Test / Preview Order Confirmation Email Dispatch
+app.post('/api/admin/send-test-order-email', async (req, res) => {
+  try {
+    const targetEmail = (req.body?.email || 'lashaarsiashvili@gmail.com').trim();
+    const sampleOrder = {
+      id: `DBUY-${Math.floor(100000 + Math.random() * 900000)}`,
+      customerInfo: {
+        fullName: 'Lasha Arsiashvili',
+        email: targetEmail,
+        phone: '+995 599 00 00 00',
+        address: 'Rustaveli Avenue 12',
+        city: 'Tbilisi',
+        postalCode: '0108',
+        country: 'Georgia',
+      },
+      items: [
+        {
+          id: 'prod-sample-1',
+          title: 'Premium Ergonomic Noise-Cancelling Headphones',
+          price: 129.99,
+          quantity: 1,
+          selectedColor: 'Midnight Black',
+          image: '/uploads/headphones.jpg',
+        },
+        {
+          id: 'prod-sample-2',
+          title: 'Smart Touch Activity & Sleep Tracker',
+          price: 59.99,
+          quantity: 1,
+          selectedColor: 'Space Grey',
+          image: '/uploads/tracker.jpg',
+        },
+      ],
+      total: 189.98,
+      currency: 'USD',
+      paymentMethod: 'Google Pay',
+      googlePayTransactionId: `GPAY-VERIFIED-${Date.now().toString().slice(-6)}`,
+      createdAt: new Date().toISOString(),
+      status: 'Processing',
+    };
+
+    const customerEmailData = buildCustomerOrderEmail(sampleOrder);
+    const adminEmailData = buildAdminOrderAlertEmail(sampleOrder);
+
+    // Dispatch to customer target
+    const result = await sendMailWithRetry({
+      from: '"DBUY Store" <support@dbuystore.com>',
+      to: targetEmail,
+      subject: customerEmailData.subject,
+      html: customerEmailData.html,
+      text: customerEmailData.text,
+    });
+
+    res.json({
+      success: result.success,
+      message: result.success
+        ? `Professional order confirmation email sent to ${targetEmail}!`
+        : `Email delivery status: ${result.error || 'Check SMTP configuration'}`,
+      order: sampleOrder,
+      subject: customerEmailData.subject,
+      adminSubject: adminEmailData.subject,
+      previewHtml: customerEmailData.html,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to dispatch sample order email' });
   }
 });
 

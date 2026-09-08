@@ -102,27 +102,137 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
     const smtpUser = env?.ZOHO_USER || 'support@dbuystore.com';
     const smtpPass = env?.ZOHO_PASSWORD || 'Lashalasha1@';
 
-    // Dispatch asynchronous order alert email without blocking response
+    // Dispatch asynchronous order alert email with professional store branding
     const orderAlertHtml = `
       <!DOCTYPE html>
       <html>
-        <body style="font-family: -apple-system, sans-serif; padding: 20px; background-color: #f8fafc;">
-          <div style="max-width: 580px; margin: 0 auto; background: #fff; border-radius: 12px; border: 1px solid #e2e8f0; padding: 24px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; border-bottom: 2px solid #000; padding-bottom: 12px; margin-bottom: 16px;">
-              <h2 style="margin: 0; color: #000;"> Apple Pay Order Authorized</h2>
-              <span style="background: #000; color: #fff; padding: 4px 10px; border-radius: 9999px; font-weight: bold; font-size: 12px;">Verified</span>
-            </div>
-            <p><strong>Transaction ID:</strong> ${txnId}</p>
-            <p><strong>Amount:</strong> $${formattedAmount} ${currency}</p>
-            <p><strong>Customer:</strong> ${payer.name} (${payer.email})</p>
-            <p><strong>Shipping Address:</strong> ${payer.address}, ${payer.city} ${payer.zip}, ${payer.country}</p>
-            <p style="margin-top: 16px; font-size: 12px; color: #64748b;">DBUY Store Official Payment Gateway</p>
-          </div>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px 12px; background-color: #f1f5f9; color: #0f172a; margin: 0;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);">
+            <tr>
+              <td style="background-color: #0f172a; padding: 24px 28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td>
+                      <div style="font-size: 22px; font-weight: 900; color: #ffffff;">DBUY<span style="color: #3b82f6;">.</span> STORE</div>
+                      <div style="font-size: 12px; color: #94a3b8; font-weight: 500;">Apple Pay Transaction Authorized</div>
+                    </td>
+                    <td style="text-align: right;">
+                      <span style="background-color: #000000; color: #ffffff; padding: 6px 14px; border-radius: 9999px; font-size: 12px; font-weight: 800; text-transform: uppercase;">
+                         $${formattedAmount} ${currency}
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 28px;">
+                <h2 style="margin: 0 0 16px 0; font-size: 18px; color: #0f172a; font-weight: 800;">Apple Pay Order Confirmed</h2>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 20px; font-size: 13px;">
+                  <tr>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #64748b; width: 35%;">Transaction ID:</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 800; color: #1e40af; font-family: monospace;">${txnId}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #64748b;">Customer:</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 700; color: #0f172a;">${payer.name} (${payer.email})</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #64748b;">Shipping Destination:</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${payer.address}, ${payer.city} ${payer.zip}, ${payer.country}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px 14px; font-weight: 600; color: #64748b;">Payment Method:</td>
+                    <td style="padding: 10px 14px; font-weight: 700; color: #0f172a;">Apple Pay Authorized</td>
+                  </tr>
+                </table>
+                <div style="background: linear-gradient(135deg, #eff6ff 0%, #f0fdf4 100%); border: 1px solid #bfdbfe; border-radius: 12px; padding: 14px 18px; font-size: 12px; color: #1e3a8a; line-height: 1.5; margin-bottom: 20px;">
+                  <strong>⚡ Instant Express Dispatch:</strong> This order has been processed via Apple Pay and logged in the DBUY Store management system.
+                </div>
+                <div style="text-align: center;">
+                  <a href="https://dbuystore.com/admin" style="display: inline-block; background-color: #0f172a; color: #ffffff; padding: 12px 28px; border-radius: 10px; font-size: 13px; font-weight: 700; text-decoration: none;">
+                    Open Store Admin Panel
+                  </a>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 28px; text-align: center; font-size: 11px; color: #94a3b8;">
+                DBUY Store Official Payment Gateway • support@dbuystore.com
+              </td>
+            </tr>
+          </table>
         </body>
       </html>
     `;
 
-    // Fire and forget email notification
+    // Customer receipt HTML
+    const customerReceiptHtml = `
+      <!DOCTYPE html>
+      <html>
+        <head><meta charset="utf-8"></head>
+        <body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; padding: 24px 12px; background-color: #f1f5f9; color: #0f172a; margin: 0;">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);">
+            <tr>
+              <td style="background-color: #0f172a; padding: 24px 28px;">
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td>
+                      <div style="font-size: 22px; font-weight: 900; color: #ffffff;">DBUY<span style="color: #3b82f6;">.</span> STORE</div>
+                      <div style="font-size: 12px; color: #94a3b8; font-weight: 500;">Official Order Receipt</div>
+                    </td>
+                    <td style="text-align: right;">
+                      <span style="background-color: rgba(16, 185, 129, 0.2); border: 1px solid #10b981; color: #34d399; padding: 6px 14px; border-radius: 9999px; font-size: 11px; font-weight: 800; text-transform: uppercase;">
+                        ✓ Confirmed
+                      </span>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding: 28px;">
+                <h1 style="margin: 0 0 8px 0; font-size: 20px; font-weight: 800; color: #0f172a;">Thank You, ${payer.name}!</h1>
+                <p style="margin: 0 0 20px 0; font-size: 14px; color: #475569; line-height: 1.5;">
+                  Your Apple Pay purchase of <strong>$${formattedAmount} ${currency}</strong> has been successfully authorized and confirmed.
+                </p>
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 20px; font-size: 13px;">
+                  <tr>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #64748b; width: 35%;">Transaction ID:</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 800; color: #1e40af; font-family: monospace;">${txnId}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #64748b;">Amount Paid:</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 800; color: #0f172a;">$${formattedAmount} ${currency}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; font-weight: 600; color: #64748b;">Shipping Destination:</td>
+                    <td style="padding: 10px 14px; border-bottom: 1px solid #e2e8f0; color: #0f172a;">${payer.address}, ${payer.city} ${payer.zip}, ${payer.country}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding: 10px 14px; font-weight: 600; color: #64748b;">Payment Method:</td>
+                    <td style="padding: 10px 14px; font-weight: 700; color: #0f172a;">Apple Pay</td>
+                  </tr>
+                </table>
+                <div style="text-align: center; margin-top: 24px;">
+                  <a href="https://dbuystore.com" style="display: inline-block; background-color: #2563eb; color: #ffffff; padding: 12px 30px; border-radius: 10px; font-size: 13px; font-weight: 700; text-decoration: none;">
+                    Return to DBUY Store
+                  </a>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 16px 28px; text-align: center; font-size: 11px; color: #94a3b8;">
+                Need help? Contact us anytime at <a href="mailto:support@dbuystore.com" style="color: #2563eb; text-decoration: none;">support@dbuystore.com</a> • DBUY Store LLC
+              </td>
+            </tr>
+          </table>
+        </body>
+      </html>
+    `;
+
+    // 1. Fire and forget admin notification
     sendOrderEmail({
       host: 'smtp.zoho.eu',
       port: 465,
@@ -133,7 +243,22 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
       subject: `[DBUY Order]  Apple Pay: $${formattedAmount} (${txnId})`,
       html: orderAlertHtml,
       text: `Apple Pay Order Authorized!\nTxn ID: ${txnId}\nAmount: $${formattedAmount} ${currency}\nCustomer: ${payer.name} (${payer.email})\nAddress: ${payer.address}, ${payer.city}, ${payer.country}`,
-    }).catch((e) => console.warn('Order email notice:', e));
+    }).catch((e) => console.warn('Apple Pay email admin notice:', e));
+
+    // 2. Dispatch Customer Receipt if customer email provided
+    if (payer.email && payer.email.includes('@')) {
+      sendOrderEmail({
+        host: 'smtp.zoho.eu',
+        port: 465,
+        user: smtpUser,
+        pass: smtpPass,
+        from: smtpUser,
+        to: [payer.email],
+        subject: `Order Confirmation - DBUY Store ($${formattedAmount})`,
+        html: customerReceiptHtml,
+        text: `Thank you for your purchase!\nOrder Amount: $${formattedAmount} ${currency}\nTransaction ID: ${txnId}\nDBUY Store`,
+      }).catch((e) => console.warn('Apple Pay email customer notice:', e));
+    }
 
     return new Response(
       JSON.stringify({

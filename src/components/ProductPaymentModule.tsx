@@ -5,6 +5,7 @@ import { useStore } from "../context/StoreContext";
 import { safeApiFetch } from "../utils/apiSafe";
 import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
+import { GooglePaySheetModal } from "./GooglePaySheetModal";
 import { PayPalV6CardFields } from "./PayPalV6CardFields";
 import { startPayPalV6ApplePayCheckout, startPayPalV6GooglePayCheckout } from "../utils/paypalV6";
 import {
@@ -110,6 +111,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   const [isGooglePayReady, setIsGooglePayReady] = useState<boolean | null>(
     null,
   );
+  const [isGooglePaySheetOpen, setIsGooglePaySheetOpen] = useState(false);
 
   // Digital Wallet support states
 
@@ -604,8 +606,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   };
 
   // Handle Google Pay Checkout with Direct Verified Authorization
-  const handleGooglePaySubmit = async () => {
-    await executeGooglePayPayment();
+  const handleGooglePaySubmit = () => {
+    setIsGooglePaySheetOpen(true);
   };
 
   // Handle Real Card Checkout via PayPal Gateway Capture
@@ -1540,6 +1542,21 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           </div>
         </div>
       )}
+
+      {/* Realistic Google Pay Interactive Payment Sheet Modal */}
+      <GooglePaySheetModal
+        isOpen={isGooglePaySheetOpen}
+        onClose={() => setIsGooglePaySheetOpen(false)}
+        onConfirmPayment={async () => {
+          setIsGooglePaySheetOpen(false);
+          await executeGooglePayPayment();
+        }}
+        totalAmount={totalAmountUSD}
+        formattedAmount={formatPrice(totalAmountUSD)}
+        customerEmail={walletCustomerEmail}
+        customerName={walletCustomerName}
+        isProcessing={isProcessing}
+      />
     </div>
   );
 };

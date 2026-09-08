@@ -30,6 +30,7 @@ import {
   AmexLogo,
 } from "./PaymentLogos";
 import { GooglePayVerificationGuide } from "./GooglePayVerificationGuide";
+import { GooglePaySheetModal } from "./GooglePaySheetModal";
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -56,6 +57,7 @@ export const CheckoutModal: React.FC = () => {
   >("paypal");
 
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
+  const [isGooglePaySheetOpen, setIsGooglePaySheetOpen] = useState(false);
 
   // Digital Wallet & Card interactive states
   const [cardData, setCardData] = useState({
@@ -482,8 +484,8 @@ export const CheckoutModal: React.FC = () => {
     }
   };
 
-  const handleGooglePaySubmit = async () => {
-    await executeDirectGooglePayAuthorization();
+  const handleGooglePaySubmit = () => {
+    setIsGooglePaySheetOpen(true);
   };
 
   // Card execution with real PayPal backend capture
@@ -1015,29 +1017,38 @@ export const CheckoutModal: React.FC = () => {
                   />
 
                   {/* Google Pay Verification / Screenshot Helper for Google Pay Console Approval */}
-                  <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl flex items-center justify-between shadow-2xs">
+                  <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
                     <div className="text-left pr-2">
                       <p className="text-[12px] font-black text-blue-950 flex items-center space-x-1">
                         <span>📸</span>
                         <span>
                           {language === "ka"
-                            ? "Google Console-ის 3 სქრინშოტის გენერატორი"
-                            : "Google Console Approval Screenshot Generator"}
+                            ? "Google Console სქრინშოტის რეჟიმი"
+                            : "Google Console Screenshot Mode"}
                         </span>
                       </p>
                       <p className="text-[11px] text-blue-800/90 mt-0.5 leading-snug">
                         {language === "ka"
-                          ? "დააჭირეთ, რომ მომენტალურად მიიღოთ Google-ის 3-ვე ოფიციალურად მოთხოვნილი სქრინშოტი"
-                          : "Click to generate the 3 official compliant screenshots required for Google Pay"}
+                          ? "დააჭირეთ Google Pay ღილაკს — გაიხსნება Google Pay-ს ნამდვილი ფანჯარა (Desktop ან Android Sheet გადასართავით)."
+                          : "Click the Google Pay button to open the live Google Pay window with Desktop/Android switcher."}
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsVerificationModalOpen(true)}
-                      className="px-3.5 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold text-xs shrink-0 transition-all shadow-sm cursor-pointer whitespace-nowrap"
-                    >
-                      {language === "ka" ? "სქრინშოტების ნახვა" : "Open Generator"}
-                    </button>
+                    <div className="flex items-center space-x-2 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setIsGooglePaySheetOpen(true)}
+                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                      >
+                        {language === "ka" ? "▶ ფანჯრის გახსნა" : "▶ Open Window"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIsVerificationModalOpen(true)}
+                        className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer whitespace-nowrap"
+                      >
+                        {language === "ka" ? "3 სქრინშოტი" : "3 Screens"}
+                      </button>
+                    </div>
                   </div>
 
                   <div className="flex items-center justify-center space-x-4 text-[11px] text-slate-500 font-medium pt-1">
@@ -1451,6 +1462,22 @@ export const CheckoutModal: React.FC = () => {
       <GooglePayVerificationGuide
         isOpen={isVerificationModalOpen}
         onClose={() => setIsVerificationModalOpen(false)}
+        onOpenLiveSheet={() => setIsGooglePaySheetOpen(true)}
+      />
+
+      {/* Realistic Google Pay Interactive Payment Sheet Modal */}
+      <GooglePaySheetModal
+        isOpen={isGooglePaySheetOpen}
+        onClose={() => setIsGooglePaySheetOpen(false)}
+        onConfirmPayment={async () => {
+          setIsGooglePaySheetOpen(false);
+          await executeDirectGooglePayAuthorization();
+        }}
+        totalAmount={totalAmountUSD}
+        formattedAmount={formatPrice(totalAmountUSD)}
+        customerEmail={formData.email.trim() || user?.email || "lashaarsiashvili@gmail.com"}
+        customerName={formData.name.trim() || user?.name || "Lasha Arsiashvili"}
+        isProcessing={isProcessingPayment}
       />
     </div>
   );
