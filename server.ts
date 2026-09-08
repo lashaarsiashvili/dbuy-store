@@ -1019,11 +1019,14 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
-// Helper to configure nodemailer transporter
-function getMailTransporter() {
+// Shared high-performance pooled transporter for Zoho SMTP
+let cachedPooledTransporter: any = null;
+let lastSmtpConfigKey = '';
+
+function getPooledMailTransporter() {
   const customSmtp = (storeDb as any)?.smtpConfig || {};
 
-  let smtpHost = customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu';
+  let smtpHost = String(customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu').trim();
   if (smtpHost.includes('smtppro') || !smtpHost) {
     smtpHost = 'smtp.zoho.eu';
   }
@@ -1043,7 +1046,19 @@ function getMailTransporter() {
     'cjmwVviQbiaq'
   ).replace(/\s+/g, '');
 
-  const transporter = nodemailer.createTransport({
+  const key = `${smtpHost}:${smtpPort}:${smtpUser}:${smtpPass}`;
+  if (cachedPooledTransporter && lastSmtpConfigKey === key) {
+    return cachedPooledTransporter;
+  }
+
+  if (cachedPooledTransporter) {
+    try { cachedPooledTransporter.close(); } catch {}
+  }
+
+  cachedPooledTransporter = nodemailer.createTransport({
+    pool: true,
+    maxConnections: 3,
+    maxMessages: 200,
     host: smtpHost,
     port: smtpPort,
     secure: smtpPort === 465,
@@ -1059,17 +1074,16 @@ function getMailTransporter() {
     socketTimeout: 15000,
   });
 
-  (transporter as any).meta = {
-    smtpHost,
-    smtpPort,
-    smtpUser,
-    hasPass: Boolean(smtpPass),
-  };
-
-  return transporter;
+  lastSmtpConfigKey = key;
+  return cachedPooledTransporter;
 }
 
-// Resilient email dispatch helper with multi-port automatic retries
+// Helper to configure standalone nodemailer transporter
+function getMailTransporter() {
+  return getPooledMailTransporter();
+}
+
+// Resilient, high-speed email dispatch helper
 function sendMailWithRetry(options: {
   from?: string;
   to: string;
@@ -1116,54 +1130,41 @@ function sendMailWithRetry(options: {
       },
     };
 
-    // Configurations to try: Preferred custom SMTP config first, then alternative Zoho configs if applicable
-    const configs = [
-      { host: smtpHost, port: smtpPort, secure: smtpSecure },
-    ];
-
-    if (smtpHost.includes('zoho') && configs.length < 2) {
-      const altPort = smtpPort === 465 ? 587 : 465;
-      configs.push({ host: smtpHost, port: altPort, secure: altPort === 465 });
-
-      const altHost = smtpHost.includes('.eu') ? smtpHost.replace('.eu', '.com') : smtpHost.replace('.com', '.eu');
-      configs.push({ host: altHost, port: smtpPort, secure: smtpPort === 465 });
+    // 1. First attempt: Fast pooled connection (< 1s delivery)
+    try {
+      const pooled = getPooledMailTransporter();
+      const info = await pooled.sendMail(mailPayload);
+      console.log(`[EMAIL-DISPATCH-FAST] Successfully sent email to ${mailPayload.to} (MessageId: ${info.messageId})`);
+      return { success: true, messageId: info.messageId };
+    } catch (fastErr: any) {
+      console.warn(`[EMAIL-DISPATCH-FAST-RETRY] Pooled transport error (${fastErr?.message || fastErr}), attempting fresh direct connection...`);
     }
 
-    let lastError: any = null;
+    // 2. Second attempt: Fresh direct connection with generous timeouts
+    try {
+      const directTransporter = nodemailer.createTransport({
+        host: smtpHost,
+        port: smtpPort,
+        secure: smtpSecure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
+      });
 
-    for (let i = 0; i < configs.length; i++) {
-      const cfg = configs[i];
-      try {
-        console.log(`[EMAIL-DISPATCH] Attempt ${i + 1}/${configs.length} via ${cfg.host}:${cfg.port} to ${mailPayload.to}`);
-        const transporter = nodemailer.createTransport({
-          host: cfg.host,
-          port: cfg.port,
-          secure: cfg.secure,
-          auth: {
-            user: smtpUser,
-            pass: smtpPass,
-          },
-          tls: {
-            rejectUnauthorized: false,
-          },
-          connectionTimeout: 2500, // Short timeout (2.5s) to fail fast and prevent serverless execution limit crash
-          greetingTimeout: 2000,
-          socketTimeout: 3000,
-        });
-
-        const info = await transporter.sendMail(mailPayload);
-        console.log(`[EMAIL-DISPATCH-SUCCESS] Sent email to ${mailPayload.to} (MessageId: ${info.messageId})`);
-        return { success: true, messageId: info.messageId };
-      } catch (err: any) {
-        lastError = err;
-        console.warn(`[EMAIL-DISPATCH-ATTEMPT-FAILED] Attempt ${i + 1} (${cfg.host}:${cfg.port}) error:`, err?.message || err);
-        // Minimal delay to fit within the 10-second serverless execution limits
-        await new Promise((resolve) => setTimeout(resolve, 300));
-      }
+      const info = await directTransporter.sendMail(mailPayload);
+      console.log(`[EMAIL-DISPATCH-DIRECT-SUCCESS] Sent email to ${mailPayload.to} (MessageId: ${info.messageId})`);
+      return { success: true, messageId: info.messageId };
+    } catch (directErr: any) {
+      console.error('[EMAIL-DISPATCH-FATAL] Direct transport attempt failed:', directErr?.message || directErr);
+      return { success: false, error: directErr?.message || 'Failed to deliver email' };
     }
-
-    console.error('[EMAIL-DISPATCH-FATAL] All email send attempts failed:', lastError?.message || lastError);
-    return { success: false, error: lastError?.message || 'Failed to deliver email after retries' };
   })();
 
   pendingPromises.add(promise);
@@ -3291,20 +3292,28 @@ app.post('/api/contact', async (req, res) => {
     (storeDb as any).contactMessages.unshift(msgRecord);
     saveStoreDatabase();
 
-    // Send email dispatch
-    try {
-      const formattedDate = new Date().toLocaleString('en-US', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-        timeZone: 'UTC',
-      }) + ' UTC';
+    // Respond immediately to the frontend to ensure instantaneous UI response (zero spinner hang)
+    res.json({
+      success: true,
+      message: 'Message dispatched successfully to support@dbuystore.com',
+      id: msgRecord.id,
+    });
 
-      await sendMailWithRetry({
-        from: `"DBUY Contact Form" <${supportEmail}>`,
-        replyTo: `${name} <${email}>`,
-        to: recipients.join(', '),
-        subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
-        html: `
+    // Send email dispatches in background via pooled SMTP
+    (async () => {
+      try {
+        const formattedDate = new Date().toLocaleString('en-US', {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+          timeZone: 'UTC',
+        }) + ' UTC';
+
+        await sendMailWithRetry({
+          from: `"DBUY Contact Form" <${supportEmail}>`,
+          replyTo: `${name} <${email}>`,
+          to: recipients.join(', '),
+          subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
+          html: `
           <!DOCTYPE html>
           <html>
             <head>
@@ -3460,20 +3469,16 @@ app.post('/api/contact', async (req, res) => {
         text: `Hello ${name},\n\nThank you for contacting DBUY Store! We have received your message and sent it directly to support@dbuystore.com.\n\nOur customer support team will respond within 12–24 hours.\n\nBest regards,\nDBUY Support Team\nsupport@dbuystore.com`,
       }).catch(e => console.warn('[CONTACT-AUTOREPLY-WARN]', e?.message));
 
-    } catch (mailErr) {
-      console.warn('[CONTACT-EMAIL-DISPATCH-WARN] Email notification failed, message saved in DB:', mailErr);
-    }
-
-    console.log(`[CONTACT-MESSAGE-DISPATCH] Saved and dispatched contact message from ${name} (${email}) to support@dbuystore.com`);
-
-    res.json({
-      success: true,
-      message: 'Message dispatched successfully to support@dbuystore.com',
-      id: msgRecord.id,
-    });
+      } catch (mailErr) {
+        console.warn('[CONTACT-EMAIL-DISPATCH-WARN] Email notification failed, message saved in DB:', mailErr);
+      }
+      console.log(`[CONTACT-MESSAGE-DISPATCH] Saved and dispatched contact message from ${name} (${email}) to support@dbuystore.com`);
+    })();
   } catch (err: any) {
     console.error('[CONTACT-EMAIL-ERROR]', err);
-    res.status(500).json({ success: false, error: err?.message || 'Failed to send message' });
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: err?.message || 'Failed to send message' });
+    }
   }
 });
 

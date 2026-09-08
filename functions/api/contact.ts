@@ -255,21 +255,7 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
       </html>
     `;
 
-    // Send primary email to support and admin
-    await sendSmtpsMail({
-      host: 'smtp.zoho.eu',
-      port: 465,
-      user: smtpUser,
-      pass: smtpPass,
-      from: `"DBUY Contact Form" <${smtpUser}>`,
-      to: recipients,
-      replyTo: `${name} <${email}>`,
-      subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
-      html: notificationHtml,
-      text: `Customer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\n\nMessage:\n${message}`,
-    });
-
-    // 2. Customer auto-acknowledgement email (non-blocking)
+    // 2. Customer auto-acknowledgement email
     const customerAckHtml = `
       <!DOCTYPE html>
       <html>
@@ -312,20 +298,47 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
       </html>
     `;
 
-    try {
-      await sendSmtpsMail({
-        host: 'smtp.zoho.eu',
-        port: 465,
-        user: smtpUser,
-        pass: smtpPass,
-        from: `"DBUY Customer Care" <${smtpUser}>`,
-        to: [email],
-        subject: `Message Received - DBUY Customer Care [${subject || 'Inquiry'}]`,
-        html: customerAckHtml,
-        text: `Hello ${name},\n\nWe received your message regarding "${subject || 'Inquiry'}". Our team will respond shortly.\n\nBest regards,\nDBUY Support Team`,
-      });
-    } catch (ackErr) {
-      console.warn('[Cloudflare Pages Function] Customer ACK warning:', ackErr);
+    // Background email dispatch worker task
+    const bgTask = (async () => {
+      try {
+        await sendSmtpsMail({
+          host: 'smtp.zoho.eu',
+          port: 465,
+          user: smtpUser,
+          pass: smtpPass,
+          from: `"DBUY Contact Form" <${smtpUser}>`,
+          to: recipients,
+          replyTo: `${name} <${email}>`,
+          subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
+          html: notificationHtml,
+          text: `Customer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\n\nMessage:\n${message}`,
+        });
+
+        try {
+          await sendSmtpsMail({
+            host: 'smtp.zoho.eu',
+            port: 465,
+            user: smtpUser,
+            pass: smtpPass,
+            from: `"DBUY Customer Care" <${smtpUser}>`,
+            to: [email],
+            subject: `Message Received - DBUY Customer Care [${subject || 'Inquiry'}]`,
+            html: customerAckHtml,
+            text: `Hello ${name},\n\nWe received your message regarding "${subject || 'Inquiry'}". Our team will respond shortly.\n\nBest regards,\nDBUY Support Team`,
+          });
+        } catch (ackErr) {
+          console.warn('[Cloudflare Pages Function] Customer ACK warning:', ackErr);
+        }
+      } catch (err) {
+        console.error('[Cloudflare Pages Function] Background dispatch error:', err);
+      }
+    })();
+
+    // If waitUntil is supported by the runtime, use it to return immediately (0ms perceived lag)
+    if (typeof (context as any).waitUntil === 'function') {
+      (context as any).waitUntil(bgTask);
+    } else {
+      await bgTask;
     }
 
     return new Response(
