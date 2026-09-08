@@ -2047,31 +2047,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const registeredMap = getRegisteredUsersMap();
     const existing = registeredMap[cleanEmail];
 
-    // If account exists and has mandatory address data
-    if (existing && existing.address && existing.city && existing.country) {
-      const loggedUser: User = {
-        name: existing.name || profile.name || 'Customer',
-        email: cleanEmail,
-        isLoggedIn: true,
-        role: (cleanEmail === 'lashaarsiashvili@gmail.com' || existing.role === 'admin') ? 'admin' : 'customer',
-        country: existing.country,
-        city: existing.city,
-        zip: existing.zip || '',
-        address: existing.address,
-        phone: existing.phone || '',
-        createdAt: existing.createdAt || new Date().toISOString(),
-        provider: 'google',
-        picture: profile.picture || existing.picture,
-      };
-      setUser(loggedUser);
-      localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
-      setIsAuthModalOpen(false);
-      addToast(t('toasts.welcome', { name: loggedUser.name }), 'success');
-      return { isComplete: true, user: loggedUser };
-    }
+    const loggedUser: User = {
+      name: existing?.name || profile.name || 'Customer',
+      email: cleanEmail,
+      isLoggedIn: true,
+      role: (cleanEmail === 'lashaarsiashvili@gmail.com' || existing?.role === 'admin') ? 'admin' : 'customer',
+      country: existing?.country || profile.country || 'Georgia',
+      city: existing?.city || profile.city || 'Tbilisi',
+      zip: existing?.zip || profile.zip || '',
+      address: existing?.address || profile.address || '',
+      phone: existing?.phone || profile.phone || '',
+      createdAt: existing?.createdAt || new Date().toISOString(),
+      provider: 'google',
+      picture: profile.picture || existing?.picture,
+    };
 
-    // Otherwise, needs to complete required address info
-    return { isComplete: false };
+    registeredMap[cleanEmail] = {
+      ...registeredMap[cleanEmail],
+      ...loggedUser,
+    };
+    localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
+    refreshRegisteredUsers();
+
+    setUser(loggedUser);
+    localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
+    setIsAuthModalOpen(false);
+    addToast(t('toasts.welcome', { name: loggedUser.name }), 'success');
+    return { isComplete: true, user: loggedUser };
   };
 
   const demoLogin = () => {

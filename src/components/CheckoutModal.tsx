@@ -636,14 +636,14 @@ export const CheckoutModal: React.FC = () => {
           {step === 1 && (
             <form onSubmit={handleStep1Submit} className="space-y-4">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 mb-1">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
                   {t("checkout.shippingTitle")}
                 </h3>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.fullName")} *
                   </label>
                   <input
@@ -654,12 +654,12 @@ export const CheckoutModal: React.FC = () => {
                       setFormData({ ...formData, name: e.target.value })
                     }
                     placeholder="Full Name"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.email")} *
                   </label>
                   <input
@@ -670,13 +670,13 @@ export const CheckoutModal: React.FC = () => {
                       setFormData({ ...formData, email: e.target.value })
                     }
                     placeholder="name@example.com"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   {t("checkout.address")} *
                 </label>
                 <input
@@ -687,13 +687,13 @@ export const CheckoutModal: React.FC = () => {
                     setFormData({ ...formData, address: e.target.value })
                   }
                   placeholder="Street address, apartment, suite"
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.city")} *
                   </label>
                   <input
@@ -704,11 +704,11 @@ export const CheckoutModal: React.FC = () => {
                       setFormData({ ...formData, city: e.target.value })
                     }
                     placeholder="City"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.zip")}
                   </label>
                   <input
@@ -718,11 +718,11 @@ export const CheckoutModal: React.FC = () => {
                       setFormData({ ...formData, zip: e.target.value })
                     }
                     placeholder="0105"
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500 font-mono"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-slate-700 mb-1">
+                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.country")}
                   </label>
                   <select
@@ -730,10 +730,10 @@ export const CheckoutModal: React.FC = () => {
                     onChange={(e) =>
                       setFormData({ ...formData, country: e.target.value })
                     }
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
                   >
                     {ALL_COUNTRIES.map((c) => (
-                      <option key={c.code} value={c.name}>
+                      <option key={c.code} value={c.name} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
                         {c.name}
                       </option>
                     ))}
@@ -757,36 +757,36 @@ export const CheckoutModal: React.FC = () => {
           {step === 2 && (
             <div className="space-y-5">
               <div>
-                <h3 className="text-sm font-bold text-slate-900 mb-1">
+                <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-1">
                   {t("checkout.paymentTitle")}
                 </h3>
-                <p className="text-xs text-slate-500">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   {t("checkout.paypalOnlyNotice")}
                 </p>
               </div>
 
               {/* Order Summary */}
-              <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
-                <h4 className="text-xs font-bold text-slate-800">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">
                   {t("checkout.orderSummary")} ({cart.length} items)
                 </h4>
 
-                <div className="space-y-1 text-xs text-slate-600">
+                <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
                   <div className="flex justify-between">
                     <span>{t("cart.subtotal")}</span>
-                    <span className="font-semibold">
+                    <span className="font-semibold text-slate-900 dark:text-white">
                       {formatPrice(cartSubtotalUSD)}
                     </span>
                   </div>
                   {promoDiscountPercent > 0 && (
-                    <div className="flex justify-between text-emerald-600 font-semibold">
+                    <div className="flex justify-between text-emerald-600 dark:text-emerald-400 font-semibold">
                       <span>{t("cart.discount")}</span>
                       <span>-{formatPrice(discountAmountUSD)}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
                     <span>{t("cart.shipping")}</span>
-                    <span className="font-semibold">
+                    <span className="font-semibold text-slate-900 dark:text-white">
                       {shippingAmountUSD === 0
                         ? t("cart.free")
                         : formatPrice(shippingAmountUSD)}
@@ -794,13 +794,13 @@ export const CheckoutModal: React.FC = () => {
                   </div>
                   <div className="flex justify-between">
                     <span>{t("cart.tax")}</span>
-                    <span className="font-semibold">
+                    <span className="font-semibold text-slate-900 dark:text-white">
                       {formatPrice(taxAmountUSD)}
                     </span>
                   </div>
-                  <div className="flex justify-between font-bold text-slate-900 pt-2 border-t border-slate-200 text-sm">
+                  <div className="flex justify-between font-bold text-slate-900 dark:text-white pt-2 border-t border-slate-200 dark:border-slate-700 text-sm">
                     <span>{t("checkout.totalToPay")}</span>
-                    <span className="text-blue-600 font-black">
+                    <span className="text-blue-600 dark:text-blue-400 font-black">
                       {formatPrice(totalAmountUSD)}
                     </span>
                   </div>
@@ -810,13 +810,13 @@ export const CheckoutModal: React.FC = () => {
               {/* Payment Gateway Method Tabs */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold text-slate-700">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
                     {language === "ka"
                       ? "აირჩიეთ გადახდის მეთოდი"
                       : "Select Payment Method"}
                   </span>
-                  <div className="flex items-center space-x-1 text-[11px] text-slate-500 font-medium">
-                    <Lock className="w-3.5 h-3.5 text-emerald-600" />
+                  <div className="flex items-center space-x-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                     <span>256-bit SSL</span>
                   </div>
                 </div>
@@ -828,8 +828,8 @@ export const CheckoutModal: React.FC = () => {
                     onClick={() => setActivePaymentMethod("applepay")}
                     className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
                       activePaymentMethod === "applepay"
-                        ? "border-black bg-black text-white shadow-md ring-2 ring-black/25"
-                        : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:border-slate-300 shadow-xs"
+                        ? "border-black bg-black text-white shadow-md ring-2 ring-black/25 dark:border-white dark:bg-white dark:text-black"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
                     }`}
                   >
                     <div className="h-5 flex items-center justify-center">
@@ -847,8 +847,8 @@ export const CheckoutModal: React.FC = () => {
                     onClick={() => setActivePaymentMethod("googlepay")}
                     className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
                       activePaymentMethod === "googlepay"
-                        ? "border-black bg-black text-white shadow-md ring-2 ring-black/20"
-                        : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:border-slate-300 shadow-xs"
+                        ? "border-black bg-black text-white shadow-md ring-2 ring-black/20 dark:border-white dark:bg-white dark:text-black"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
                     }`}
                   >
                     <div className="h-5 flex items-center justify-center">
@@ -867,7 +867,7 @@ export const CheckoutModal: React.FC = () => {
                     className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
                       activePaymentMethod === "paypal"
                         ? "border-[#003087] bg-[#003087] text-white shadow-md ring-2 ring-[#003087]/25"
-                        : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:border-slate-300 shadow-xs"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
                     }`}
                   >
                     <div className="h-5 flex items-center justify-center">
@@ -886,7 +886,7 @@ export const CheckoutModal: React.FC = () => {
                     className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
                       activePaymentMethod === "card"
                         ? "border-blue-600 bg-blue-600 text-white shadow-md ring-2 ring-blue-600/25"
-                        : "border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:border-slate-300 shadow-xs"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
                     }`}
                   >
                     <div className="h-5 flex items-center justify-center space-x-1">
@@ -1184,22 +1184,22 @@ export const CheckoutModal: React.FC = () => {
                   {/* Direct Card Fallback Form */}
                   <form
                     onSubmit={handleCardSubmit}
-                    className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3"
+                    className="p-4 bg-slate-50/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3"
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
                         {language === "ka"
                           ? "პირდაპირი საბანკო ბარათი (Manual Fallback)"
                           : "Direct Card Entry (Manual Fallback)"}
                       </span>
-                      <span className="text-[10px] text-slate-400 font-mono">
+                      <span className="text-[10px] text-slate-400 dark:text-slate-500 font-mono">
                         SSL 256-bit Encrypted
                       </span>
                     </div>
 
                     <div className="space-y-2.5">
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           {language === "ka"
                             ? "ბარათის მფლობელი"
                             : "Cardholder Name"}
@@ -1215,12 +1215,12 @@ export const CheckoutModal: React.FC = () => {
                             }))
                           }
                           placeholder={formData.name || "John Doe"}
-                          className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
 
                       <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           {language === "ka" ? "ბარათის ნომერი" : "Card Number"}
                         </label>
                         <input
@@ -1236,13 +1236,13 @@ export const CheckoutModal: React.FC = () => {
                             setCardData((prev) => ({ ...prev, number: val }));
                           }}
                           placeholder="4000 1234 5678 9010"
-                          className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                       </div>
 
                       <div className="grid grid-cols-2 gap-2">
                         <div>
-                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             {language === "ka" ? "ვადა" : "Exp Date"}
                           </label>
                           <input
@@ -1258,11 +1258,11 @@ export const CheckoutModal: React.FC = () => {
                               setCardData((prev) => ({ ...prev, expiry: val }));
                             }}
                             placeholder="MM/YY"
-                            className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
+                            className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
                           />
                         </div>
                         <div>
-                          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             CVC / CVV
                           </label>
                           <input
@@ -1286,7 +1286,7 @@ export const CheckoutModal: React.FC = () => {
                               }))
                             }
                             placeholder="•••"
-                            className="w-full px-3 py-2 text-xs font-mono bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-center placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                            className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
                           />
                         </div>
                       </div>
@@ -1294,7 +1294,7 @@ export const CheckoutModal: React.FC = () => {
                       <button
                         type="submit"
                         disabled={isProcessingPayment}
-                        className="w-full mt-3 py-3.5 px-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-black text-white rounded-xl font-bold text-xs flex items-center justify-between shadow-lg shadow-slate-900/10 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50 border border-slate-700/50"
+                        className="w-full mt-3 py-3.5 px-5 bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-black dark:from-blue-600 dark:via-blue-700 dark:to-blue-600 text-white rounded-xl font-bold text-xs flex items-center justify-between shadow-lg shadow-slate-900/10 transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50 border border-slate-700/50"
                       >
                         <div className="flex items-center space-x-2">
                           <Lock className="w-4 h-4 text-emerald-400" />

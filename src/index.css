@@ -38,7 +38,7 @@
   textarea::-webkit-input-placeholder,
   input::-moz-placeholder,
   textarea::-moz-placeholder {
-    transition: opacity 0.1s ease, color 0.1s ease;
+    transition: opacity 0.15s ease;
   }
 
   input:focus::placeholder,
@@ -54,8 +54,50 @@
   input:focus::-moz-placeholder,
   textarea:focus::-moz-placeholder {
     opacity: 0 !important;
-    color: transparent !important;
-    -webkit-text-fill-color: transparent !important;
+  }
+
+  /* Universal high-contrast readability for form controls in Light & Dark mode */
+  input, textarea, select {
+    color: #0f172a;
+  }
+
+  .dark input,
+  .dark textarea,
+  .dark select {
+    color: #f8fafc;
+  }
+
+  /* Universal browser autofill contrast guard (prevents invisible white-on-white text) */
+  input:-webkit-autofill,
+  input:-webkit-autofill:hover, 
+  input:-webkit-autofill:focus,
+  textarea:-webkit-autofill,
+  textarea:-webkit-autofill:hover,
+  textarea:-webkit-autofill:focus,
+  select:-webkit-autofill,
+  select:-webkit-autofill:hover,
+  select:-webkit-autofill:focus {
+    -webkit-text-fill-color: #0f172a !important;
+    -webkit-box-shadow: 0 0 0px 1000px #ffffff inset !important;
+    box-shadow: 0 0 0px 1000px #ffffff inset !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #0f172a !important;
+  }
+
+  .dark input:-webkit-autofill,
+  .dark input:-webkit-autofill:hover, 
+  .dark input:-webkit-autofill:focus,
+  .dark textarea:-webkit-autofill,
+  .dark textarea:-webkit-autofill:hover,
+  .dark textarea:-webkit-autofill:focus,
+  .dark select:-webkit-autofill,
+  .dark select:-webkit-autofill:hover,
+  .dark select:-webkit-autofill:focus {
+    -webkit-text-fill-color: #f8fafc !important;
+    -webkit-box-shadow: 0 0 0px 1000px #1e293b inset !important;
+    box-shadow: 0 0 0px 1000px #1e293b inset !important;
+    transition: background-color 5000s ease-in-out 0s !important;
+    caret-color: #f8fafc !important;
   }
 }
 

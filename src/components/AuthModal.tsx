@@ -45,7 +45,7 @@ const GOOGLE_CLIENT_ID =
 const GoogleSignInButton: React.FC<{
   onComplete: (email: string, name: string, picture?: string) => void;
 }> = ({ onComplete }) => {
-  const { t, language } = useStore();
+  const { t, language, addToast } = useStore();
   const [loading, setLoading] = useState(false);
 
   const login = useGoogleLogin({
@@ -68,11 +68,25 @@ const GoogleSignInButton: React.FC<{
         }
       } catch (err) {
         console.error("Failed to fetch google user info", err);
+        addToast(
+          language === "ka"
+            ? "Google პროფილიდან მონაცემების მიღება ვერ მოხერხდა. გთხოვთ გამოიყენოთ სწრაფი რეგისტრაცია იმეილით."
+            : "Failed to fetch Google profile. Please use quick email registration.",
+          "error",
+        );
       } finally {
         setLoading(false);
       }
     },
-    onError: (error) => console.error("Google Login Failed", error),
+    onError: (error) => {
+      console.warn("Google Login Restricted/Failed", error);
+      addToast(
+        language === "ka"
+          ? "Google ავტორიზაცია შეზღუდულია ამ დომენზე (Origin 401). გთხოვთ გამოიყენოთ სწრაფი რეგისტრაცია იმეილით."
+          : "Google sign-in is restricted on this domain (Origin 401). Please use quick email registration.",
+        "warning",
+      );
+    },
   });
 
   return (
@@ -80,7 +94,7 @@ const GoogleSignInButton: React.FC<{
       type="button"
       disabled={loading}
       onClick={() => login()}
-      className="w-full py-2.5 px-4 rounded-xl border border-slate-300 hover:bg-slate-50 active:scale-98 text-slate-700 font-bold text-xs transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer mt-1"
+      className="w-full py-2.5 px-4 rounded-xl border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-98 text-slate-700 dark:text-slate-200 font-bold text-xs transition-all shadow-xs flex items-center justify-center space-x-2 cursor-pointer mt-1"
     >
       {loading ? (
         <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
@@ -121,6 +135,7 @@ export const AuthModal: React.FC = () => {
     loginWithGoogleProfile,
     registerUser,
     resetUserPassword,
+    registeredUsers,
     theme,
     isDarkMode,
     addToast,
@@ -129,8 +144,10 @@ export const AuthModal: React.FC = () => {
   const [tab, setTab] = useState<"login" | "register">("login");
   const [viewMode, setViewMode] = useState<"auth" | "forgot">("auth");
 
-  // Registration Multi-Step State: 1 = Personal & Security, 2 = Address & Region
+  // Registration states
   const [regStep, setRegStep] = useState<1 | 2>(1);
+  const [showOptionalAddress, setShowOptionalAddress] = useState(false);
+  const [isSubmittingReg, setIsSubmittingReg] = useState(false);
 
   // Form Fields
   const [name, setName] = useState("");
@@ -186,6 +203,122 @@ export const AuthModal: React.FC = () => {
   };
 
   // Clean and reset all sensitive input states whenever modal opens, closes, or switches tabs
+  // Real-time validation touched tracking
+  const [touched, setTouched] = useState<Record<string, boolean>>({});
+
+  const markTouched = (field: string) => {
+    setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
+  };
+
+  const isValidEmail = (val: string): boolean => {
+    const clean = val.trim();
+    return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(clean);
+  };
+
+  // Login Form Validation Errors & States
+  const loginEmailError = touched.loginEmail
+    ? !email.trim()
+      ? t("auth.error.emailRequired")
+      : !isValidEmail(email)
+      ? t("auth.error.emailInvalid")
+      : null
+    : null;
+  const isLoginEmailValid = Boolean(touched.loginEmail && email.trim() && isValidEmail(email));
+
+  const loginPasswordError = touched.loginPassword
+    ? !password
+      ? t("auth.error.passwordRequired")
+      : null
+    : null;
+  const isLoginPasswordValid = Boolean(touched.loginPassword && password.length > 0);
+
+  // Registration Step 1 Errors & States
+  const regNameError = touched.regName
+    ? !name.trim()
+      ? t("auth.error.nameRequired")
+      : name.trim().length < 2
+      ? t("auth.error.nameMin")
+      : null
+    : null;
+  const isRegNameValid = Boolean(touched.regName && name.trim().length >= 2);
+
+  const regEmailError = touched.regEmail
+    ? !email.trim()
+      ? t("auth.error.emailRequired")
+      : !isValidEmail(email)
+      ? t("auth.error.emailInvalid")
+      : null
+    : null;
+  const isRegEmailValid = Boolean(touched.regEmail && email.trim() && isValidEmail(email));
+
+  const regPasswordError = touched.regPassword
+    ? !password
+      ? t("auth.error.passwordRequired")
+      : password.length < 6
+      ? t("auth.error.passwordMin")
+      : null
+    : null;
+  const isRegPasswordValid = Boolean(touched.regPassword && password.length >= 6);
+
+  const regConfirmError = touched.regConfirm
+    ? !confirmPassword
+      ? t("auth.error.confirmRequired")
+      : confirmPassword !== password
+      ? t("auth.error.passwordMismatch")
+      : null
+    : null;
+  const isRegConfirmValid = Boolean(
+    confirmPassword &&
+    confirmPassword === password &&
+    password.length >= 6
+  );
+
+  // Registration Step 2 Errors & States
+  const regCountryError = touched.regCountry
+    ? !country.trim()
+      ? t("auth.error.countryRequired")
+      : null
+    : null;
+  const isRegCountryValid = Boolean(country.trim().length > 0);
+
+  const regCityError = touched.regCity
+    ? !city.trim()
+      ? t("auth.error.cityRequired")
+      : null
+    : null;
+  const isRegCityValid = Boolean(touched.regCity && city.trim().length > 0);
+
+  const regZipError = touched.regZip
+    ? !zip.trim()
+      ? t("auth.error.zipRequired")
+      : null
+    : null;
+  const isRegZipValid = Boolean(touched.regZip && zip.trim().length > 0);
+
+  const regPhoneError = touched.regPhone && phone.trim()
+    ? phone.trim().length < 4
+      ? t("auth.error.phoneInvalid")
+      : null
+    : null;
+  const isRegPhoneValid = Boolean(touched.regPhone && phone.trim().length >= 4 && !regPhoneError);
+
+  const regAddressError = touched.regAddress
+    ? !address.trim()
+      ? t("auth.error.addressRequired")
+      : null
+    : null;
+  const isRegAddressValid = Boolean(touched.regAddress && address.trim().length > 0);
+
+  // Forgot Password Errors & States
+  const forgotEmailError = touched.forgotEmail
+    ? !forgotEmail.trim()
+      ? t("auth.error.emailRequired")
+      : !isValidEmail(forgotEmail)
+      ? t("auth.error.emailInvalid")
+      : null
+    : null;
+  const isForgotEmailValid = Boolean(touched.forgotEmail && forgotEmail.trim() && isValidEmail(forgotEmail));
+
   useEffect(() => {
     if (!isAuthModalOpen) {
       setName("");
@@ -204,6 +337,7 @@ export const AuthModal: React.FC = () => {
       setRegStep(1);
       setViewMode("auth");
       setTempPassSentTo(null);
+      setTouched({});
     }
   }, [isAuthModalOpen]);
 
@@ -217,6 +351,7 @@ export const AuthModal: React.FC = () => {
     setIsRegPasswordFocused(false);
     setIsRegConfirmFocused(false);
     setTempPassSentTo(null);
+    setTouched({});
   };
 
   // Countdown timer for lockout
@@ -235,6 +370,20 @@ export const AuthModal: React.FC = () => {
     e.preventDefault();
     const cleanEmail = sanitizeInput(email).toLowerCase();
 
+    // Trigger visual validation for all login fields
+    setTouched((prev) => ({ ...prev, loginEmail: true, loginPassword: true }));
+
+    if (!cleanEmail || !isValidEmail(cleanEmail) || !password) {
+      if (!cleanEmail) {
+        addToast(t("auth.error.emailRequired"), "warning");
+      } else if (!isValidEmail(cleanEmail)) {
+        addToast(t("auth.error.emailInvalid"), "warning");
+      } else if (!password) {
+        addToast(t("auth.error.passwordRequired"), "warning");
+      }
+      return;
+    }
+
     // Check rate limit
     const limit = checkRateLimit(cleanEmail);
     if (!limit.allowed && limit.waitSeconds) {
@@ -251,6 +400,7 @@ export const AuthModal: React.FC = () => {
       resetAttempts(cleanEmail);
       setFailedAttemptsMap((prev) => ({ ...prev, [cleanEmail]: 0 }));
       setPassword("");
+      setTouched({});
     } else {
       setPassword("");
       const currentFailures = (failedAttemptsMap[cleanEmail] || 0) + 1;
@@ -273,9 +423,10 @@ export const AuthModal: React.FC = () => {
   // Handle Forgot Password submission
   const handleForgotSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched((prev) => ({ ...prev, forgotEmail: true }));
     const cleanEmail = sanitizeInput(forgotEmail || email).toLowerCase();
-    if (!cleanEmail || !cleanEmail.includes("@")) {
-      addToast(t("checkout.email"), "warning");
+    if (!cleanEmail || !isValidEmail(cleanEmail)) {
+      addToast(t("auth.error.emailInvalid"), "warning");
       return;
     }
 
@@ -317,88 +468,88 @@ export const AuthModal: React.FC = () => {
     }
   };
 
-  // Step 1 validation: Personal info & password
-  const handleRegStep1Submit = (e: React.FormEvent) => {
+  // Direct 1-Step Registration Submit
+  const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setTouched((prev) => ({
+      ...prev,
+      regName: true,
+      regEmail: true,
+      regPassword: true,
+      regConfirm: true,
+    }));
+
     if (!name.trim()) {
-      addToast(t("checkout.fullName"), "warning");
+      addToast(t("auth.error.nameRequired"), "warning");
       return;
     }
-    if (!email.trim() || !email.includes("@")) {
-      addToast(t("checkout.email"), "warning");
+    if (name.trim().length < 2) {
+      addToast(t("auth.error.nameMin"), "warning");
+      return;
+    }
+    if (!email.trim() || !isValidEmail(email)) {
+      addToast(t("auth.error.emailInvalid"), "warning");
       return;
     }
     if (password.length < 6) {
-      addToast(t("auth.pwdMin"), "warning");
+      addToast(t("auth.error.passwordMin"), "warning");
       return;
     }
     if (password !== confirmPassword) {
-      addToast(t("auth.confirmPassword"), "error");
+      addToast(t("auth.error.passwordMismatch"), "error");
       return;
     }
-    setRegStep(2);
+
+    // Validate phone only if user entered one
+    if (phone.trim() && phone.trim().length < 4) {
+      addToast(t("auth.error.phoneInvalid"), "warning");
+      return;
+    }
+
+    setIsSubmittingReg(true);
+    try {
+      const cleanEmail = sanitizeInput(email).toLowerCase();
+
+      // Check if user is already registered
+      const existing = (registeredUsers || []).find(
+        (u) => u.email.toLowerCase() === cleanEmail,
+      );
+      if (existing) {
+        addToast(t("auth.emailAlreadyRegistered"), "info");
+        setTab("login");
+        setEmail(cleanEmail);
+        setIsSubmittingReg(false);
+        return;
+      }
+
+      // Complete registration directly
+      registerUser({
+        name: sanitizeInput(name),
+        email: cleanEmail,
+        password: password,
+        provider: "email",
+        country: sanitizeInput(country) || "Georgia",
+        city: sanitizeInput(city) || "Tbilisi",
+        zip: sanitizeInput(zip) || "",
+        address: sanitizeInput(address) || "",
+        phone: sanitizeInput(phone) || "",
+      });
+    } finally {
+      setIsSubmittingReg(false);
+    }
   };
 
-  // Step 2 validation: Address, Country, City, Zip & direct registration completion
-  const handleRegStep2Submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!country.trim()) {
-      addToast(t("auth.country"), "warning");
-      return;
-    }
-    if (!city.trim()) {
-      addToast(t("auth.city"), "warning");
-      return;
-    }
-    if (!zip.trim()) {
-      addToast(t("auth.zip"), "warning");
-      return;
-    }
-    if (!address.trim()) {
-      addToast(t("auth.address"), "warning");
-      return;
-    }
-
-    // Direct registration with mandatory address info
-    const cleanEmail = sanitizeInput(email).toLowerCase();
-    registerUser({
-      name: sanitizeInput(name),
-      email: cleanEmail,
-      password: authProvider === "google" ? undefined : password,
-      provider: authProvider,
-      country: sanitizeInput(country),
-      city: sanitizeInput(city),
-      zip: sanitizeInput(zip),
-      address: sanitizeInput(address),
-      phone: sanitizeInput(phone),
-    });
-  };
-
-  const handleGoogleAccountSelected = (gEmail: string, gName: string) => {
+  const handleGoogleAccountSelected = (
+    gEmail: string,
+    gName: string,
+    gPicture?: string,
+  ) => {
     const cleanEmail = gEmail.trim().toLowerCase();
-    const result = loginWithGoogleProfile({
+    loginWithGoogleProfile({
       email: cleanEmail,
       name: gName,
+      picture: gPicture,
     });
-
-    if (result.isComplete) {
-      
-      return;
-    }
-
-    // Account requires mandatory address details to finish registration
-    setName(gName);
-    setEmail(cleanEmail);
-    setAuthProvider("google");
-    setTab("register");
-    setRegStep(2);
-    
-    addToast(
-      language === "ka"
-        ? "Google პროფილი დაკავშირებულია! გთხოვთ მიუთითოთ თქვენი მისამართი რეგისტრაციის დასასრულებლად."
-        : "Google account linked! Please enter your mandatory shipping address to complete registration.",
-      "info",
-    );
   };
 
   return (
@@ -435,26 +586,26 @@ export const AuthModal: React.FC = () => {
           {viewMode === "forgot" ? (
             <div className="space-y-4 animate-in fade-in duration-200">
               <div className="text-center pb-1">
-                <div className="w-12 h-12 rounded-2xl bg-blue-50 border border-blue-100 flex items-center justify-center mx-auto mb-3 text-blue-600 shadow-xs">
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 flex items-center justify-center mx-auto mb-3 text-blue-600 dark:text-blue-400 shadow-xs">
                   <KeyRound className="w-6 h-6" />
                 </div>
-                <h3 className="text-base font-bold text-slate-900">
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
                   {t("auth.resetPasswordTitle")}
                 </h3>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto leading-relaxed">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-sm mx-auto leading-relaxed">
                   {t("auth.resetPasswordDesc")}
                 </p>
               </div>
 
               {tempPassSentTo ? (
-                <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs space-y-3.5 shadow-xs">
+                <div className="p-4 rounded-2xl bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800 text-emerald-800 dark:text-emerald-200 text-xs space-y-3.5 shadow-xs">
                   <div className="flex items-start space-x-2.5">
                     <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                     <div>
-                      <p className="font-bold text-emerald-950 text-sm">
+                      <p className="font-bold text-emerald-950 dark:text-emerald-300 text-sm">
                         {language === "ka" ? "დროებითი პაროლი შეიქმნა!" : "Temporary Password Generated!"}
                       </p>
-                      <p className="text-[11px] text-emerald-800 mt-0.5">
+                      <p className="text-[11px] text-emerald-800 dark:text-emerald-400 mt-0.5">
                         {language === "ka"
                           ? `გამომგზავნი: support@dbuystore.com • მიმღები: ${tempPassSentTo}`
                           : `Sender: support@dbuystore.com • Sent to: ${tempPassSentTo}`}
@@ -463,17 +614,17 @@ export const AuthModal: React.FC = () => {
                   </div>
 
                   {generatedTempPassword && (
-                    <div className="p-3.5 bg-white border border-emerald-300 rounded-xl space-y-2">
+                    <div className="p-3.5 bg-white dark:bg-slate-800 border border-emerald-300 dark:border-emerald-700 rounded-xl space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase text-slate-500 tracking-wider">
+                        <span className="text-[10px] font-bold uppercase text-slate-500 dark:text-slate-400 tracking-wider">
                           {language === "ka" ? "თქვენი დროებითი პაროლი:" : "Your Temporary Password:"}
                         </span>
-                        <span className="text-[10px] text-emerald-700 font-bold px-2 py-0.5 bg-emerald-100 rounded-full">
+                        <span className="text-[10px] text-emerald-700 dark:text-emerald-300 font-bold px-2 py-0.5 bg-emerald-100 dark:bg-emerald-900/60 rounded-full">
                           {language === "ka" ? "აქტიურია" : "Active"}
                         </span>
                       </div>
-                      <div className="flex items-center justify-between bg-slate-50 p-2.5 rounded-lg border border-slate-200">
-                        <span className="font-mono text-base font-extrabold text-slate-900 select-all tracking-wider">
+                      <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200 dark:border-slate-700">
+                        <span className="font-mono text-base font-extrabold text-slate-900 dark:text-white select-all tracking-wider">
                           {generatedTempPassword}
                         </span>
                         <button
@@ -491,7 +642,7 @@ export const AuthModal: React.FC = () => {
                           <span>{language === "ka" ? "კოპირება" : "Copy"}</span>
                         </button>
                       </div>
-                      <p className="text-[10.5px] text-slate-500 italic mt-1 text-center">
+                      <p className="text-[10.5px] text-slate-500 dark:text-slate-400 italic mt-1 text-center">
                         📧 {language === "ka" 
                           ? "წერილები იგზავნება support@dbuystore.com-დან. შეამოწმეთ Inbox და Spam/Junk საქაღალდე."
                           : "Dispatched from support@dbuystore.com. Please check your Inbox & Spam/Junk folder."}
@@ -526,11 +677,17 @@ export const AuthModal: React.FC = () => {
               ) : (
                 <form onSubmit={handleForgotSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       {t("auth.email")}
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                      <Mail className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                        forgotEmailError
+                          ? "text-red-500 dark:text-red-400"
+                          : isForgotEmailValid
+                          ? "text-emerald-500 dark:text-emerald-400"
+                          : "text-slate-400"
+                      }`} />
                       <input
                         type="email"
                         required
@@ -546,12 +703,35 @@ export const AuthModal: React.FC = () => {
                           (e.target as HTMLInputElement).placeholder = "";
                           if (forgotEmail) e.target.select();
                         }}
-                        onBlur={() => setIsForgotEmailFocused(false)}
-                        onChange={(e) => setForgotEmail(e.target.value)}
+                        onBlur={() => {
+                          setIsForgotEmailFocused(false);
+                          markTouched("forgotEmail");
+                        }}
+                        onChange={(e) => {
+                          setForgotEmail(e.target.value);
+                          if (touched.forgotEmail) markTouched("forgotEmail");
+                        }}
                         placeholder={isForgotEmailFocused ? "" : "you@example.com"}
-                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                        className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                          forgotEmailError
+                            ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                            : isForgotEmailValid
+                            ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                            : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                        }`}
                       />
+                      {forgotEmailError ? (
+                        <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                      ) : isForgotEmailValid ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                      ) : null}
                     </div>
+                    {forgotEmailError && (
+                      <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{forgotEmailError}</span>
+                      </p>
+                    )}
                   </div>
 
                   <button
@@ -579,7 +759,7 @@ export const AuthModal: React.FC = () => {
                         setViewMode("auth");
                         setTab("login");
                       }}
-                      className="text-xs font-semibold text-slate-500 hover:text-slate-800 transition-colors inline-flex items-center space-x-1 cursor-pointer"
+                      className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors inline-flex items-center space-x-1 cursor-pointer"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
                       <span>{t("auth.backToSignIn")}</span>
@@ -591,14 +771,14 @@ export const AuthModal: React.FC = () => {
           ) : (
             <>
               {/* Tab Switcher */}
-              <div className="flex border-b border-slate-200 mb-6">
+              <div className="flex border-b border-slate-200 dark:border-slate-800 mb-6">
                 <button
                   type="button"
                   onClick={() => handleTabSwitch("login")}
                   className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
                     tab === "login"
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-slate-500 hover:text-slate-700"
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   }`}
                 >
                   {t("auth.signInTab")}
@@ -608,8 +788,8 @@ export const AuthModal: React.FC = () => {
                   onClick={() => handleTabSwitch("register")}
                   className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
                     tab === "register"
-                      ? "border-blue-600 text-blue-600"
-                      : "border-transparent text-slate-500 hover:text-slate-700"
+                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
+                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
                   }`}
                 >
                   {t("auth.registerTab")}
@@ -620,7 +800,7 @@ export const AuthModal: React.FC = () => {
               {tab === "login" && (
                 <form onSubmit={handleLoginSubmit} className="space-y-4">
                   {lockoutSec > 0 && (
-                    <div className="p-3.5 rounded-2xl bg-red-50 border border-red-200 text-red-700 text-xs flex items-center space-x-2">
+                    <div className="p-3.5 rounded-2xl bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-xs flex items-center space-x-2">
                       <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
                       <span>
                         {t("auth.lockoutWarning", { sec: String(lockoutSec) })}
@@ -631,7 +811,7 @@ export const AuthModal: React.FC = () => {
                   {/* 3 Failed Attempts: Offer Forgot Password */}
                   {(failedAttemptsMap[email.trim().toLowerCase()] || 0) >=
                     3 && (
-                    <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200">
+                    <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/60 border border-amber-200 dark:border-amber-900 text-amber-900 dark:text-amber-200 text-xs flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 animate-in fade-in duration-200">
                       <div className="flex items-start space-x-2">
                         <KeyRound className="w-4 h-4 shrink-0 text-amber-600 mt-0.5" />
                         <span className="leading-snug font-medium">
@@ -653,11 +833,17 @@ export const AuthModal: React.FC = () => {
                   )}
 
                   <div>
-                    <label className="block text-xs font-semibold text-slate-700 mb-1">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       {t("auth.email")}
                     </label>
                     <div className="relative">
-                      <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                      <Mail className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                        loginEmailError
+                          ? "text-red-500 dark:text-red-400"
+                          : isLoginEmailValid
+                          ? "text-emerald-500 dark:text-emerald-400"
+                          : "text-slate-400"
+                      }`} />
                       <input
                         type="email"
                         required
@@ -673,17 +859,40 @@ export const AuthModal: React.FC = () => {
                           (e.target as HTMLInputElement).placeholder = "";
                           if (email) e.target.select();
                         }}
-                        onBlur={() => setIsLoginEmailFocused(false)}
-                        onChange={(e) => setEmail(e.target.value)}
+                        onBlur={() => {
+                          setIsLoginEmailFocused(false);
+                          markTouched("loginEmail");
+                        }}
+                        onChange={(e) => {
+                          setEmail(e.target.value);
+                          if (touched.loginEmail) markTouched("loginEmail");
+                        }}
                         placeholder={isLoginEmailFocused ? "" : "you@example.com"}
-                        className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                        className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                          loginEmailError
+                            ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                            : isLoginEmailValid
+                            ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                            : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                        }`}
                       />
+                      {loginEmailError ? (
+                        <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                      ) : isLoginEmailValid ? (
+                        <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                      ) : null}
                     </div>
+                    {loginEmailError && (
+                      <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{loginEmailError}</span>
+                      </p>
+                    )}
                   </div>
 
                   <div>
                     <div className="flex items-center justify-between mb-1">
-                      <label className="block text-xs font-semibold text-slate-700">
+                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
                         {t("auth.password")}
                       </label>
                       <button
@@ -692,13 +901,19 @@ export const AuthModal: React.FC = () => {
                           setForgotEmail(email.trim());
                           setViewMode("forgot");
                         }}
-                        className="text-[11px] font-semibold text-blue-600 hover:text-blue-700 hover:underline cursor-pointer"
+                        className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 hover:underline cursor-pointer"
                       >
                         {t("auth.forgotPassword")}
                       </button>
                     </div>
                     <div className="relative">
-                      <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                      <Lock className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                        loginPasswordError
+                          ? "text-red-500 dark:text-red-400"
+                          : isLoginPasswordValid
+                          ? "text-emerald-500 dark:text-emerald-400"
+                          : "text-slate-400"
+                      }`} />
                       <input
                         type={showPassword ? "text" : "password"}
                         required
@@ -726,17 +941,32 @@ export const AuthModal: React.FC = () => {
                             (e.target as HTMLInputElement).select();
                           }
                         }}
-                        onBlur={() => setIsLoginPasswordFocused(false)}
-                        onChange={(e) => setPassword(e.target.value)}
+                        onBlur={() => {
+                          setIsLoginPasswordFocused(false);
+                          markTouched("loginPassword");
+                        }}
+                        onChange={(e) => {
+                          setPassword(e.target.value);
+                          if (touched.loginPassword) markTouched("loginPassword");
+                        }}
                         placeholder={isLoginPasswordFocused ? "" : t("auth.passwordPlaceholder")}
-                        className="w-full pl-9 pr-16 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                        className={`w-full pl-9 pr-16 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                          loginPasswordError
+                            ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                            : isLoginPasswordValid
+                            ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                            : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                        }`}
                       />
                       <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
                         {password.length > 0 && (
                           <button
                             type="button"
-                            onClick={() => setPassword("")}
-                            className="p-1 rounded-md text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                            onClick={() => {
+                              setPassword("");
+                              markTouched("loginPassword");
+                            }}
+                            className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
                             title={language === "ka" ? "გასუფთავება" : "Clear"}
                           >
                             <X className="w-3.5 h-3.5" />
@@ -745,7 +975,7 @@ export const AuthModal: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="p-1 rounded-md text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                          className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
                           title={
                             showPassword ? "Hide password" : "Show password"
                           }
@@ -758,6 +988,12 @@ export const AuthModal: React.FC = () => {
                         </button>
                       </div>
                     </div>
+                    {loginPasswordError && (
+                      <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                        <span>{loginPasswordError}</span>
+                      </p>
+                    )}
                   </div>
 
                   <button
@@ -765,7 +1001,7 @@ export const AuthModal: React.FC = () => {
                     disabled={lockoutSec > 0}
                     className={`w-full py-3 rounded-xl font-bold text-xs shadow-md transition-colors flex items-center justify-center space-x-2 cursor-pointer ${
                       lockoutSec > 0
-                        ? "bg-slate-300 text-slate-500 cursor-not-allowed"
+                        ? "bg-slate-300 dark:bg-slate-800 text-slate-500 dark:text-slate-400 cursor-not-allowed"
                         : "bg-blue-600 hover:bg-blue-700 text-white"
                     }`}
                   >
@@ -776,13 +1012,13 @@ export const AuthModal: React.FC = () => {
                   {/* Google Sign-in Divider & Button */}
                   <div className="pt-2">
                     <div className="relative flex items-center justify-center py-2">
-                      <div className="border-t border-slate-200 w-full" />
-                      <span className="bg-white px-3 text-[11px] text-slate-400 font-medium shrink-0 uppercase tracking-wider">
+                      <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
+                      <span className="bg-white dark:bg-slate-900 px-3 text-[11px] text-slate-400 dark:text-slate-500 font-medium shrink-0 uppercase tracking-wider">
                         {language === "ka"
                           ? "ან გააგრძელეთ"
                           : "or continue with"}
                       </span>
-                      <div className="border-t border-slate-200 w-full" />
+                      <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
                     </div>
 
                     <GoogleSignInButton
@@ -797,17 +1033,17 @@ export const AuthModal: React.FC = () => {
                 <div>
                   {/* Steps Progress Indicator (2 Steps) */}
                   <div className="mb-6">
-                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 mb-2">
+                    <div className="flex items-center justify-between text-[11px] font-bold text-slate-500 dark:text-slate-400 mb-2">
                       <span
                         className={
-                          regStep >= 1 ? "text-blue-600 font-extrabold" : ""
+                          regStep >= 1 ? "text-blue-600 dark:text-blue-400 font-extrabold" : ""
                         }
                       >
                         {t("auth.step1Label")}
                       </span>
                       <span
                         className={
-                          regStep >= 2 ? "text-blue-600 font-extrabold" : ""
+                          regStep >= 2 ? "text-blue-600 dark:text-blue-400 font-extrabold" : ""
                         }
                       >
                         {t("auth.step2Label")}
@@ -815,10 +1051,10 @@ export const AuthModal: React.FC = () => {
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${regStep >= 1 ? "bg-blue-600" : "bg-slate-200"}`}
+                        className={`h-1.5 rounded-full transition-all ${regStep >= 1 ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"}`}
                       />
                       <div
-                        className={`h-1.5 rounded-full transition-all ${regStep >= 2 ? "bg-blue-600" : "bg-slate-200"}`}
+                        className={`h-1.5 rounded-full transition-all ${regStep >= 2 ? "bg-blue-600" : "bg-slate-200 dark:bg-slate-700"}`}
                       />
                     </div>
                   </div>
@@ -830,11 +1066,17 @@ export const AuthModal: React.FC = () => {
                       className="space-y-3.5"
                     >
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           {t("auth.fullName")}
                         </label>
                         <div className="relative">
-                          <UserIcon className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                          <UserIcon className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                            regNameError
+                              ? "text-red-500 dark:text-red-400"
+                              : isRegNameValid
+                              ? "text-emerald-500 dark:text-emerald-400"
+                              : "text-slate-400"
+                          }`} />
                           <input
                             type="text"
                             required
@@ -850,20 +1092,49 @@ export const AuthModal: React.FC = () => {
                               (e.target as HTMLInputElement).placeholder = "";
                               if (name) e.target.select();
                             }}
-                            onBlur={() => setIsRegNameFocused(false)}
-                            onChange={(e) => setName(e.target.value)}
+                            onBlur={() => {
+                              setIsRegNameFocused(false);
+                              markTouched("regName");
+                            }}
+                            onChange={(e) => {
+                              setName(e.target.value);
+                              if (touched.regName) markTouched("regName");
+                            }}
                             placeholder={isRegNameFocused ? "" : t("auth.fullNamePlaceholder")}
-                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                            className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                              regNameError
+                                ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                : isRegNameValid
+                                ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                            }`}
                           />
+                          {regNameError ? (
+                            <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                          ) : isRegNameValid ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                          ) : null}
                         </div>
+                        {regNameError && (
+                          <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{regNameError}</span>
+                          </p>
+                        )}
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           {t("auth.email")}
                         </label>
                         <div className="relative">
-                          <Mail className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                          <Mail className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                            regEmailError
+                              ? "text-red-500 dark:text-red-400"
+                              : isRegEmailValid
+                              ? "text-emerald-500 dark:text-emerald-400"
+                              : "text-slate-400"
+                          }`} />
                           <input
                             type="email"
                             required
@@ -879,21 +1150,50 @@ export const AuthModal: React.FC = () => {
                               (e.target as HTMLInputElement).placeholder = "";
                               if (email) e.target.select();
                             }}
-                            onBlur={() => setIsRegEmailFocused(false)}
-                            onChange={(e) => setEmail(e.target.value)}
+                            onBlur={() => {
+                              setIsRegEmailFocused(false);
+                              markTouched("regEmail");
+                            }}
+                            onChange={(e) => {
+                              setEmail(e.target.value);
+                              if (touched.regEmail) markTouched("regEmail");
+                            }}
                             placeholder={isRegEmailFocused ? "" : "you@example.com"}
-                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                            className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                              regEmailError
+                                ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                : isRegEmailValid
+                                ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                            }`}
                           />
+                          {regEmailError ? (
+                            <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                          ) : isRegEmailValid ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                          ) : null}
                         </div>
+                        {regEmailError && (
+                          <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{regEmailError}</span>
+                          </p>
+                        )}
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             {t("auth.password")}
                           </label>
                           <div className="relative">
-                            <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                            <Lock className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                              regPasswordError
+                                ? "text-red-500 dark:text-red-400"
+                                : isRegPasswordValid
+                                ? "text-emerald-500 dark:text-emerald-400"
+                                : "text-slate-400"
+                            }`} />
                             <input
                               type={showPassword ? "text" : "password"}
                               required
@@ -921,31 +1221,62 @@ export const AuthModal: React.FC = () => {
                                   (e.target as HTMLInputElement).select();
                                 }
                               }}
-                              onBlur={() => setIsRegPasswordFocused(false)}
-                              onChange={(e) => setPassword(e.target.value)}
+                              onBlur={() => {
+                                setIsRegPasswordFocused(false);
+                                markTouched("regPassword");
+                              }}
+                              onChange={(e) => {
+                                setPassword(e.target.value);
+                                if (touched.regPassword) markTouched("regPassword");
+                              }}
                               placeholder={isRegPasswordFocused ? "" : t("auth.pwdMin")}
-                              className="w-full pl-9 pr-8 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                              className={`w-full pl-9 pr-14 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                                regPasswordError
+                                  ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                  : isRegPasswordValid
+                                  ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                  : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                              }`}
                             />
-                            <button
-                              type="button"
-                              onClick={() => setShowPassword(!showPassword)}
-                              className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
-                            >
-                              {showPassword ? (
-                                <EyeOff className="w-3.5 h-3.5" />
-                              ) : (
-                                <Eye className="w-3.5 h-3.5" />
-                              )}
-                            </button>
+                            <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
+                              {regPasswordError ? (
+                                <AlertCircle className="w-3.5 h-3.5 text-red-500" />
+                              ) : isRegPasswordValid ? (
+                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
+                              ) : null}
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5"
+                              >
+                                {showPassword ? (
+                                  <EyeOff className="w-3.5 h-3.5" />
+                                ) : (
+                                  <Eye className="w-3.5 h-3.5" />
+                                )}
+                              </button>
+                            </div>
                           </div>
+                          {regPasswordError && (
+                            <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{regPasswordError}</span>
+                            </p>
+                          )}
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             {t("auth.confirmPassword")}
                           </label>
                           <div className="relative">
-                            <Lock className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                            <Lock className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                              regConfirmError
+                                ? "text-red-500 dark:text-red-400"
+                                : isRegConfirmValid
+                                ? "text-emerald-500 dark:text-emerald-400"
+                                : "text-slate-400"
+                            }`} />
                             <input
                               type={showPassword ? "text" : "password"}
                               required
@@ -973,40 +1304,61 @@ export const AuthModal: React.FC = () => {
                                   (e.target as HTMLInputElement).select();
                                 }
                               }}
-                              onBlur={() => setIsRegConfirmFocused(false)}
-                              onChange={(e) =>
-                                setConfirmPassword(e.target.value)
-                              }
+                              onBlur={() => {
+                                setIsRegConfirmFocused(false);
+                                markTouched("regConfirm");
+                              }}
+                              onChange={(e) => {
+                                setConfirmPassword(e.target.value);
+                                if (touched.regConfirm) markTouched("regConfirm");
+                              }}
                               placeholder={isRegConfirmFocused ? "" : t("auth.confirmPassword")}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                              className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                                regConfirmError
+                                  ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                  : isRegConfirmValid
+                                  ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                  : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                              }`}
                             />
+                            {regConfirmError ? (
+                              <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : isRegConfirmValid ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : null}
                           </div>
+                          {regConfirmError && (
+                            <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{regConfirmError}</span>
+                            </p>
+                          )}
                         </div>
                       </div>
 
                       {/* Password Strength Meter */}
                       {password && (
-                        <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                        <div className="p-2.5 bg-slate-50 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 space-y-1.5">
                           <div className="flex items-center justify-between text-[11px]">
-                            <span className="font-semibold text-slate-600">
+                            <span className="font-semibold text-slate-600 dark:text-slate-400">
                               {t("auth.pwdStrength")}
                             </span>
-                            <span className="font-bold text-slate-800">
+                            <span className="font-bold text-slate-800 dark:text-white">
                               {getStrengthLabel(pwdStrength.score)}
                             </span>
                           </div>
                           <div className="grid grid-cols-4 gap-1 h-1.5">
                             <div
-                              className={`rounded-full transition-all ${pwdStrength.score >= 1 ? pwdStrength.color : "bg-slate-200"}`}
+                              className={`rounded-full transition-all ${pwdStrength.score >= 1 ? pwdStrength.color : "bg-slate-200 dark:bg-slate-700"}`}
                             />
                             <div
-                              className={`rounded-full transition-all ${pwdStrength.score >= 2 ? pwdStrength.color : "bg-slate-200"}`}
+                              className={`rounded-full transition-all ${pwdStrength.score >= 2 ? pwdStrength.color : "bg-slate-200 dark:bg-slate-700"}`}
                             />
                             <div
-                              className={`rounded-full transition-all ${pwdStrength.score >= 3 ? pwdStrength.color : "bg-slate-200"}`}
+                              className={`rounded-full transition-all ${pwdStrength.score >= 3 ? pwdStrength.color : "bg-slate-200 dark:bg-slate-700"}`}
                             />
                             <div
-                              className={`rounded-full transition-all ${pwdStrength.score >= 4 ? pwdStrength.color : "bg-slate-200"}`}
+                              className={`rounded-full transition-all ${pwdStrength.score >= 4 ? pwdStrength.color : "bg-slate-200 dark:bg-slate-700"}`}
                             />
                           </div>
                         </div>
@@ -1023,13 +1375,13 @@ export const AuthModal: React.FC = () => {
                       {/* Google Quick Register Option */}
                       <div className="pt-2">
                         <div className="relative flex items-center justify-center py-2">
-                          <div className="border-t border-slate-200 w-full" />
-                          <span className="bg-white px-3 text-[11px] text-slate-400 font-medium shrink-0 uppercase tracking-wider">
+                          <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
+                          <span className="bg-white dark:bg-slate-900 px-3 text-[11px] text-slate-400 dark:text-slate-500 font-medium shrink-0 uppercase tracking-wider">
                             {language === "ka"
                               ? "ან რეგისტრაცია"
                               : "or register with"}
                           </span>
-                          <div className="border-t border-slate-200 w-full" />
+                          <div className="border-t border-slate-200 dark:border-slate-800 w-full" />
                         </div>
 
                         <GoogleSignInButton
@@ -1046,8 +1398,8 @@ export const AuthModal: React.FC = () => {
                       className="space-y-3.5"
                     >
                       {authProvider === "google" && (
-                        <div className="p-3 bg-blue-50/80 border border-blue-200 rounded-2xl flex items-start space-x-2 text-xs text-blue-900">
-                          <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div className="p-3 bg-blue-50/80 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-900 rounded-2xl flex items-start space-x-2 text-xs text-blue-900 dark:text-blue-200">
+                          <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
                           <div>
                             <p className="font-bold">
                               {language === "ka"
@@ -1055,7 +1407,7 @@ export const AuthModal: React.FC = () => {
                                 : "Google Account Verified"}{" "}
                               ({email})
                             </p>
-                            <p className="text-[11px] text-blue-700 mt-0.5">
+                            <p className="text-[11px] text-blue-700 dark:text-blue-400 mt-0.5">
                               {language === "ka"
                                 ? "მისამართის ყველა მონაცემის შეყვანა აუცილებელია შეკვეთების მისაღებად."
                                 : "All shipping address details are mandatory for order deliveries."}
@@ -1065,32 +1417,65 @@ export const AuthModal: React.FC = () => {
                       )}
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             {t("auth.country")}
                           </label>
                           <div className="relative">
-                            <Globe className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                            <Globe className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                              regCountryError
+                                ? "text-red-500 dark:text-red-400"
+                                : isRegCountryValid
+                                ? "text-emerald-500 dark:text-emerald-400"
+                                : "text-slate-400"
+                            }`} />
                             <select
                               required
                               value={country}
-                              onChange={(e) => setCountry(e.target.value)}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                              onBlur={() => markTouched("regCountry")}
+                              onChange={(e) => {
+                                setCountry(e.target.value);
+                                if (touched.regCountry) markTouched("regCountry");
+                              }}
+                              className={`w-full pl-9 pr-8 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all focus:outline-hidden cursor-pointer ${
+                                regCountryError
+                                  ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                  : isRegCountryValid
+                                  ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                  : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                              }`}
                             >
                               {ALL_COUNTRIES.map((c) => (
-                                <option key={c.code} value={c.name}>
+                                <option key={c.code} value={c.name} className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">
                                   {c.name}
                                 </option>
                               ))}
                             </select>
+                            {regCountryError ? (
+                              <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : isRegCountryValid ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : null}
                           </div>
+                          {regCountryError && (
+                            <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{regCountryError}</span>
+                            </p>
+                          )}
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             {t("auth.city")}
                           </label>
                           <div className="relative">
-                            <Building2 className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                            <Building2 className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                              regCityError
+                                ? "text-red-500 dark:text-red-400"
+                                : isRegCityValid
+                                ? "text-emerald-500 dark:text-emerald-400"
+                                : "text-slate-400"
+                            }`} />
                             <input
                               type="text"
                               required
@@ -1104,22 +1489,49 @@ export const AuthModal: React.FC = () => {
                               }}
                               onBlur={(e) => {
                                 (e.target as HTMLInputElement).placeholder = t("auth.cityPlaceholder");
+                                markTouched("regCity");
                               }}
-                              onChange={(e) => setCity(e.target.value)}
+                              onChange={(e) => {
+                                setCity(e.target.value);
+                                if (touched.regCity) markTouched("regCity");
+                              }}
                               placeholder={t("auth.cityPlaceholder")}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                              className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                                regCityError
+                                  ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                  : isRegCityValid
+                                  ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                  : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                              }`}
                             />
+                            {regCityError ? (
+                              <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : isRegCityValid ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : null}
                           </div>
+                          {regCityError && (
+                            <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{regCityError}</span>
+                            </p>
+                          )}
                         </div>
                       </div>
 
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             {t("auth.zip")}
                           </label>
                           <div className="relative">
-                            <KeyRound className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                            <KeyRound className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                              regZipError
+                                ? "text-red-500 dark:text-red-400"
+                                : isRegZipValid
+                                ? "text-emerald-500 dark:text-emerald-400"
+                                : "text-slate-400"
+                            }`} />
                             <input
                               type="text"
                               required
@@ -1133,20 +1545,47 @@ export const AuthModal: React.FC = () => {
                               }}
                               onBlur={(e) => {
                                 (e.target as HTMLInputElement).placeholder = t("auth.zipPlaceholder");
+                                markTouched("regZip");
                               }}
-                              onChange={(e) => setZip(e.target.value)}
+                              onChange={(e) => {
+                                setZip(e.target.value);
+                                if (touched.regZip) markTouched("regZip");
+                              }}
                               placeholder={t("auth.zipPlaceholder")}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                              className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all font-mono placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                                regZipError
+                                  ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                  : isRegZipValid
+                                  ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                  : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                              }`}
                             />
+                            {regZipError ? (
+                              <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : isRegZipValid ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : null}
                           </div>
+                          {regZipError && (
+                            <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{regZipError}</span>
+                            </p>
+                          )}
                         </div>
 
                         <div>
-                          <label className="block text-xs font-semibold text-slate-700 mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             {t("auth.phone")}
                           </label>
                           <div className="relative">
-                            <Phone className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                            <Phone className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                              regPhoneError
+                                ? "text-red-500 dark:text-red-400"
+                                : isRegPhoneValid
+                                ? "text-emerald-500 dark:text-emerald-400"
+                                : "text-slate-400"
+                            }`} />
                             <input
                               type="tel"
                               value={phone}
@@ -1159,21 +1598,48 @@ export const AuthModal: React.FC = () => {
                               }}
                               onBlur={(e) => {
                                 (e.target as HTMLInputElement).placeholder = t("auth.phonePlaceholder");
+                                markTouched("regPhone");
                               }}
-                              onChange={(e) => setPhone(e.target.value)}
+                              onChange={(e) => {
+                                setPhone(e.target.value);
+                                if (touched.regPhone) markTouched("regPhone");
+                              }}
                               placeholder={t("auth.phonePlaceholder")}
-                              className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                              className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                                regPhoneError
+                                  ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                  : isRegPhoneValid
+                                  ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                  : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                              }`}
                             />
+                            {regPhoneError ? (
+                              <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : isRegPhoneValid ? (
+                              <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                            ) : null}
                           </div>
+                          {regPhoneError && (
+                            <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                              <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>{regPhoneError}</span>
+                            </p>
+                          )}
                         </div>
                       </div>
 
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 mb-1">
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           {t("auth.address")}
                         </label>
                         <div className="relative">
-                          <MapPin className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                          <MapPin className={`w-4 h-4 absolute left-3 top-3 transition-colors ${
+                            regAddressError
+                              ? "text-red-500 dark:text-red-400"
+                              : isRegAddressValid
+                              ? "text-emerald-500 dark:text-emerald-400"
+                              : "text-slate-400"
+                          }`} />
                           <input
                             type="text"
                             required
@@ -1187,19 +1653,40 @@ export const AuthModal: React.FC = () => {
                             }}
                             onBlur={(e) => {
                               (e.target as HTMLInputElement).placeholder = t("auth.addressPlaceholder");
+                              markTouched("regAddress");
                             }}
-                            onChange={(e) => setAddress(e.target.value)}
+                            onChange={(e) => {
+                              setAddress(e.target.value);
+                              if (touched.regAddress) markTouched("regAddress");
+                            }}
                             placeholder={t("auth.addressPlaceholder")}
-                            className="w-full pl-9 pr-3 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                            className={`w-full pl-9 pr-9 py-2.5 text-xs rounded-xl text-slate-900 dark:text-white transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:outline-hidden ${
+                              regAddressError
+                                ? "bg-red-50/50 dark:bg-red-950/25 border-2 border-red-500 dark:border-red-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-red-500/30"
+                                : isRegAddressValid
+                                ? "bg-slate-50 dark:bg-slate-800 border border-emerald-500/80 dark:border-emerald-500/80 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-emerald-500/30"
+                                : "bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500"
+                            }`}
                           />
+                          {regAddressError ? (
+                            <AlertCircle className="w-4 h-4 text-red-500 absolute right-3 top-3 pointer-events-none" />
+                          ) : isRegAddressValid ? (
+                            <CheckCircle2 className="w-4 h-4 text-emerald-500 absolute right-3 top-3 pointer-events-none" />
+                          ) : null}
                         </div>
+                        {regAddressError && (
+                          <p className="flex items-center space-x-1.5 text-[11px] font-medium text-red-500 dark:text-red-400 mt-1.5 animate-in fade-in slide-in-from-top-1 duration-150">
+                            <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                            <span>{regAddressError}</span>
+                          </p>
+                        )}
                       </div>
 
                       <div className="flex items-center space-x-2 pt-2">
                         <button
                           type="button"
                           onClick={() => setRegStep(1)}
-                          className="w-1/3 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer"
+                          className="w-1/3 py-3 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors flex items-center justify-center space-x-1 cursor-pointer"
                         >
                           <ArrowLeft className="w-3.5 h-3.5" />
                           <span>{t("auth.back")}</span>

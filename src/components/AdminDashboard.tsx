@@ -1215,40 +1215,40 @@ export const AdminDashboard: React.FC = () => {
   // 1. Gate if not authenticated as admin
   if (!isAdmin) {
     return (
-      <div className="min-h-[75vh] flex items-center justify-center px-4 py-12 bg-slate-900 text-white">
-        <div className="w-full max-w-md bg-slate-800 border border-slate-700 rounded-3xl p-8 shadow-2xl space-y-6 text-center">
-          <div className="inline-flex p-4 rounded-2xl bg-amber-500/20 text-amber-400 border border-amber-500/30">
+      <div className="min-h-[75vh] flex items-center justify-center px-4 py-12 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white transition-colors">
+        <div className="w-full max-w-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-3xl p-8 shadow-2xl space-y-6 text-center">
+          <div className="inline-flex p-4 rounded-2xl bg-amber-500/10 dark:bg-amber-500/20 text-amber-600 dark:text-amber-400 border border-amber-500/30">
             <Lock className="w-8 h-8" />
           </div>
 
           <div className="space-y-1.5">
-            <h2 className="text-xl font-black text-white">
+            <h2 className="text-xl font-black text-slate-900 dark:text-white">
               {isKa ? 'ადმინისტრატორის ავტორიზაცია' : 'Administrator Authorization'}
             </h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               {isKa ? (
-                <>ადმინ პანელზე წვდომა დაცულია. გთხოვთ შეიყვანოთ ადმინის (<span className="text-amber-300 font-semibold">lashaarsiashvili@gmail.com</span>) პაროლი.</>
+                <>ადმინ პანელზე წვდომა დაცულია. გთხოვთ შეიყვანოთ ადმინის (<span className="text-amber-600 dark:text-amber-300 font-semibold">lashaarsiashvili@gmail.com</span>) პაროლი.</>
               ) : (
-                <>Admin panel access is protected. Please enter admin (<span className="text-amber-300 font-semibold">lashaarsiashvili@gmail.com</span>) password.</>
+                <>Admin panel access is protected. Please enter admin (<span className="text-amber-600 dark:text-amber-300 font-semibold">lashaarsiashvili@gmail.com</span>) password.</>
               )}
             </p>
           </div>
 
           <form onSubmit={handlePinSubmit} className="space-y-4 text-left">
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 {isKa ? 'ადმინისტრატორის ელ-ფოსტა' : 'Administrator Email'}
               </label>
               <input
                 type="email"
                 disabled
                 value="lashaarsiashvili@gmail.com"
-                className="w-full px-4 py-2.5 text-xs bg-slate-950 border border-slate-700 rounded-xl text-slate-400 font-mono select-none"
+                className="w-full px-4 py-2.5 text-xs bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-400 font-mono select-none"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-300 mb-1">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 {isKa ? 'ადმინისტრატორის პაროლი' : 'Admin Password'}
               </label>
               <div className="relative">
@@ -1276,14 +1276,14 @@ export const AdminDashboard: React.FC = () => {
                     setAuthError(false);
                   }}
                   placeholder={isKa ? 'შეიყვანეთ პაროლი...' : 'Enter password...'}
-                  className="w-full pl-4 pr-16 py-2.5 text-sm bg-slate-900 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                  className="w-full pl-4 pr-16 py-2.5 text-sm bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                 />
                 <div className="absolute right-2.5 top-2.5 flex items-center space-x-1">
                   {pinInput.length > 0 && (
                     <button
                       type="button"
                       onClick={() => setPinInput('')}
-                      className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                      className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       title={isKa ? 'გასუფთავება' : 'Clear'}
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1292,7 +1292,7 @@ export const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPinPassword(!showPinPassword)}
-                    className="p-1 rounded-md text-slate-400 hover:text-white hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     title={showPinPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPinPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -1300,7 +1300,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
               {authError && (
-                <p className="text-xs text-red-400 font-medium mt-1.5">
+                <p className="text-xs text-red-500 dark:text-red-400 font-medium mt-1.5">
                   {isKa ? 'პაროლი არასწორია! გთხოვთ სცადოთ თავიდან.' : 'Incorrect password! Please try again.'}
                 </p>
               )}
@@ -1315,7 +1315,7 @@ export const AdminDashboard: React.FC = () => {
             </button>
           </form>
 
-          <div className="pt-2 border-t border-slate-700/80">
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700/80">
             <button
               onClick={() => setCurrentPage('home')}
               className="text-xs text-slate-400 hover:text-white transition-colors cursor-pointer"
@@ -3282,7 +3282,7 @@ export const AdminDashboard: React.FC = () => {
               {/* Password Change Form */}
               <form onSubmit={handlePasswordChangeSubmit} className="max-w-xl space-y-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     {isKa ? 'ძველი პაროლი (Current Password) *' : 'Current Password *'}
                   </label>
                   <input
@@ -3293,13 +3293,13 @@ export const AdminDashboard: React.FC = () => {
                     onClick={e => (e.target as HTMLInputElement).select()}
                     onChange={e => setOldPasswordInput(e.target.value)}
                     placeholder={isKa ? 'შეიყვანეთ მიმდინარე პაროლი...' : 'Enter current password...'}
-                    className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                    className="w-full px-4 py-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                   />
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       {isKa ? 'ახალი პაროლი (New Password) *' : 'New Password *'}
                     </label>
                     <input
@@ -3310,11 +3310,11 @@ export const AdminDashboard: React.FC = () => {
                       onClick={e => (e.target as HTMLInputElement).select()}
                       onChange={e => setNewPasswordInput(e.target.value)}
                       placeholder={isKa ? 'ახალი პაროლი...' : 'New password...'}
-                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                     />
                   </div>
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       {isKa ? 'გაიმეორეთ ახალი პაროლი *' : 'Confirm New Password *'}
                     </label>
                     <input
@@ -3325,7 +3325,7 @@ export const AdminDashboard: React.FC = () => {
                       onClick={e => (e.target as HTMLInputElement).select()}
                       onChange={e => setConfirmPasswordInput(e.target.value)}
                       placeholder={isKa ? 'გაიმეორეთ ახალი პაროლი...' : 'Confirm new password...'}
-                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-amber-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
                     />
                   </div>
                 </div>

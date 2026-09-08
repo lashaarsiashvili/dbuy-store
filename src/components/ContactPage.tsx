@@ -207,7 +207,7 @@ export const ContactPage: React.FC = () => {
                       value={form.name ?? ''}
                       onChange={e => setForm({ ...form, name: e.target.value })}
                       placeholder="e.g. John Doe"
-                      className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                     />
                   </div>
 
@@ -221,7 +221,7 @@ export const ContactPage: React.FC = () => {
                       value={form.email ?? ''}
                       onChange={e => setForm({ ...form, email: e.target.value })}
                       placeholder="e.g. john@example.com"
-                      className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                     />
                   </div>
 
@@ -235,7 +235,7 @@ export const ContactPage: React.FC = () => {
                         value={form.orderNumber ?? ''}
                         onChange={e => setForm({ ...form, orderNumber: e.target.value })}
                         placeholder="e.g. #DBUY-10492"
-                        className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                        className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                       />
                     </div>
 
@@ -246,13 +246,13 @@ export const ContactPage: React.FC = () => {
                       <select
                         value={form.subject ?? 'General Inquiry'}
                         onChange={e => setForm({ ...form, subject: e.target.value })}
-                        className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden cursor-pointer"
+                        className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden cursor-pointer"
                       >
-                        <option value="General Inquiry">{t('contact.form.subject.general')}</option>
-                        <option value="Order Status">{t('contact.form.subject.order')}</option>
-                        <option value="Return / Refund">{t('contact.form.subject.return')}</option>
-                        <option value="Product Support">{t('contact.form.subject.support')}</option>
-                        <option value="Other">{t('contact.form.subject.other')}</option>
+                        <option value="General Inquiry" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{t('contact.form.subject.general')}</option>
+                        <option value="Order Status" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{t('contact.form.subject.order')}</option>
+                        <option value="Return / Refund" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{t('contact.form.subject.return')}</option>
+                        <option value="Product Support" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{t('contact.form.subject.support')}</option>
+                        <option value="Other" className="bg-white dark:bg-slate-800 text-slate-900 dark:text-white">{t('contact.form.subject.other')}</option>
                       </select>
                     </div>
                   </div>
@@ -267,7 +267,7 @@ export const ContactPage: React.FC = () => {
                       value={form.message ?? ''}
                       onChange={e => setForm({ ...form, message: e.target.value })}
                       placeholder="How can we assist you today?"
-                      className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-800 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                      className="w-full px-3.5 py-2 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 border border-slate-200 dark:border-slate-700 rounded-xl focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                     />
                   </div>
 
