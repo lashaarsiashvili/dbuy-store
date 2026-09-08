@@ -3,6 +3,7 @@
 
 // @ts-ignore
 import { connect } from 'cloudflare:sockets';
+import { WorkerMailer } from 'worker-mailer';
 
 interface Env {
   ZOHO_USER?: string;
@@ -94,38 +95,40 @@ async function sendSmtpsMail(options: {
   // 6. DATA command
   await sendCommand('DATA', 354);
 
-  // 7. Construct MIME payload
+  // 7. Construct RFC-5322 MIME payload with mandatory header-body separators
   const boundary = '----=_Part_' + Date.now() + '_' + Math.random().toString(36).slice(2);
   const encodedSubject = '=?UTF-8?B?' + btoa(unescape(encodeURIComponent(options.subject))) + '?=';
   const base64Text = btoa(unescape(encodeURIComponent(options.text || options.subject)));
   const base64Html = btoa(unescape(encodeURIComponent(options.html)));
 
-  const rawLines = [
+  const headerLines = [
     `From: ${options.from}`,
     `To: ${options.to.join(', ')}`,
-    options.replyTo ? `Reply-To: ${options.replyTo}` : '',
+    ...(options.replyTo ? [`Reply-To: ${options.replyTo}`] : []),
     `Subject: ${encodedSubject}`,
     `Date: ${new Date().toUTCString()}`,
     `MIME-Version: 1.0`,
     `Content-Type: multipart/alternative; boundary="${boundary}"`,
-    '',
+  ];
+
+  const mimeBody = [
+    ...headerLines,
+    '', // Mandatory blank line separating headers from body
     `--${boundary}`,
-    `Content-Type: text/plain; charset=UTF-8`,
-    `Content-Transfer-Encoding: base64`,
-    '',
+    'Content-Type: text/plain; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '', // Mandatory blank line separating part header from body
     base64Text,
-    '',
     `--${boundary}`,
-    `Content-Type: text/html; charset=UTF-8`,
-    `Content-Transfer-Encoding: base64`,
-    '',
+    'Content-Type: text/html; charset=UTF-8',
+    'Content-Transfer-Encoding: base64',
+    '', // Mandatory blank line separating part header from body
     base64Html,
-    '',
     `--${boundary}--`,
     '.',
-  ].filter(l => l !== '').join('\r\n');
+  ].join('\r\n');
 
-  await sendCommand(rawLines, 250);
+  await sendCommand(mimeBody, 250);
 
   // 8. QUIT
   try {
@@ -298,8 +301,38 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
       </html>
     `;
 
-    // Background email dispatch worker task
-    const bgTask = (async () => {
+    // 1. Primary email dispatch (WorkerMailer with SMTPS raw socket fallback)
+    let sendMethod = '';
+    let lastSendErr: any = null;
+
+    try {
+      await WorkerMailer.send(
+        {
+          host: 'smtp.zoho.eu',
+          port: 465,
+          secure: true,
+          authType: ['login', 'plain'],
+          credentials: {
+            username: smtpUser,
+            password: smtpPass,
+          },
+          socketTimeoutMs: 15000,
+          responseTimeoutMs: 15000,
+        },
+        {
+          from: { name: 'DBUY Contact Form', email: smtpUser },
+          to: recipients.map(r => ({ email: r })),
+          reply: { name, email },
+          subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
+          html: notificationHtml,
+          text: `Customer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\n\nMessage:\n${message}`,
+        }
+      );
+      sendMethod = 'WorkerMailer';
+    } catch (wmErr: any) {
+      console.warn('[Cloudflare Pages] WorkerMailer failed, trying direct socket fallback:', wmErr?.message || wmErr);
+      lastSendErr = wmErr;
+
       try {
         await sendSmtpsMail({
           host: 'smtp.zoho.eu',
@@ -313,36 +346,47 @@ export const onRequestPost = async (context: { request: Request; env: Env }) => 
           html: notificationHtml,
           text: `Customer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\n\nMessage:\n${message}`,
         });
-
-        try {
-          await sendSmtpsMail({
-            host: 'smtp.zoho.eu',
-            port: 465,
-            user: smtpUser,
-            pass: smtpPass,
-            from: `"DBUY Customer Care" <${smtpUser}>`,
-            to: [email],
-            subject: `Message Received - DBUY Customer Care [${subject || 'Inquiry'}]`,
-            html: customerAckHtml,
-            text: `Hello ${name},\n\nWe received your message regarding "${subject || 'Inquiry'}". Our team will respond shortly.\n\nBest regards,\nDBUY Support Team`,
-          });
-        } catch (ackErr) {
-          console.warn('[Cloudflare Pages Function] Customer ACK warning:', ackErr);
-        }
-      } catch (err) {
-        console.error('[Cloudflare Pages Function] Background dispatch error:', err);
+        sendMethod = 'DirectSocketFallback';
+        lastSendErr = null;
+      } catch (fallbackErr: any) {
+        lastSendErr = fallbackErr;
       }
-    })();
-
-    // If waitUntil is supported by the runtime, use it to return immediately (0ms perceived lag)
-    if (typeof (context as any).waitUntil === 'function') {
-      (context as any).waitUntil(bgTask);
-    } else {
-      await bgTask;
     }
 
+    if (!sendMethod) {
+      console.error('[Cloudflare Pages Function] All dispatch attempts failed:', lastSendErr);
+      return new Response(
+        JSON.stringify({ success: false, error: lastSendErr?.message || 'Failed to dispatch email to support@dbuystore.com' }),
+        { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // 2. Non-blocking customer auto-acknowledgement
+    try {
+      WorkerMailer.send(
+        {
+          host: 'smtp.zoho.eu',
+          port: 465,
+          secure: true,
+          authType: ['login', 'plain'],
+          credentials: { username: smtpUser, password: smtpPass },
+        },
+        {
+          from: { name: 'DBUY Customer Care', email: smtpUser },
+          to: [{ name, email }],
+          subject: `Message Received - DBUY Customer Care [${subject || 'Inquiry'}]`,
+          html: customerAckHtml,
+          text: `Hello ${name},\n\nWe received your message regarding "${subject || 'Inquiry'}". Our team will respond shortly.\n\nBest regards,\nDBUY Support Team`,
+        }
+      ).catch(() => {});
+    } catch {}
+
     return new Response(
-      JSON.stringify({ success: true, message: 'Message successfully sent to DBUY Support' }),
+      JSON.stringify({
+        success: true,
+        message: 'Message successfully sent to DBUY Support',
+        method: sendMethod,
+      }),
       { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
     );
   } catch (err: any) {
