@@ -621,7 +621,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   };
 
   return (
-    <div className="rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-slate-50/90 via-white to-white p-5 sm:p-6 shadow-sm space-y-5">
+    <div className="isolate relative z-0 rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-slate-50/90 via-white to-white p-5 sm:p-6 shadow-sm space-y-5">
       {/* Header with Amount & Live PayPal Security Badge */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-4 border-b border-slate-200">
         <div>

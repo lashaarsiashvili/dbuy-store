@@ -39,7 +39,7 @@ export const WishlistDrawer: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 overflow-hidden">
+    <div className="fixed inset-0 z-[200] overflow-hidden">
       {/* Dark Backdrop */}
       <div
         className="absolute inset-0 bg-slate-900/60 backdrop-blur-xs transition-opacity animate-in fade-in duration-200"

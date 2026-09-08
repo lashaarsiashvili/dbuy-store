@@ -8,7 +8,7 @@ export const ToastContainer: React.FC = () => {
   if (toasts.length === 0) return null;
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col space-y-2 pointer-events-none">
+    <div className="fixed bottom-5 right-5 z-[300] flex flex-col space-y-2 pointer-events-none">
       {toasts.map(toast => {
         return (
           <div
