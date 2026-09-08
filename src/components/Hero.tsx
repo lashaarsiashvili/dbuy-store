@@ -62,17 +62,24 @@ export const Hero: React.FC = () => {
           ? `-${Math.round((1 - p.price / p.origPrice) * 100)}%` 
           : undefined;
 
+        const badgeKaMap: Record<string, string> = {
+          'Best Seller': 'ბესტსელერი',
+          'Hot Deal': 'ცხელი შეთავაზება',
+          'Trending': 'ტრენდული',
+          'New': 'ახალი',
+        };
+
         return {
           id: 'slide-' + p.id,
           image: p.image || '',
           bgImage: p.image || '',
           bgGradient,
           title: p.title,
-          titleKa: p.title,
+          titleKa: p.titleKa || p.title,
           subtitle: p.description ? p.description.replace(/<[^>]*>/g, '').substring(0, 160) + '...' : '',
-          subtitleKa: p.description ? p.description.replace(/<[^>]*>/g, '').substring(0, 160) + '...' : '',
+          subtitleKa: p.descriptionKa ? p.descriptionKa.replace(/<[^>]*>/g, '').substring(0, 160) + '...' : (p.description ? p.description.replace(/<[^>]*>/g, '').substring(0, 160) + '...' : ''),
           badge: p.badge || 'Promo Offer',
-          badgeKa: p.badge || 'სპეციალური შემოთავაზება',
+          badgeKa: (p.badge && badgeKaMap[p.badge]) || p.badge || 'სპეციალური შემოთავაზება',
           buttonText: 'Buy Now',
           buttonTextKa: 'ყიდვა',
           productId: p.id,
