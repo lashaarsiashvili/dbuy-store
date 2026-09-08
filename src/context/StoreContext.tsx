@@ -221,7 +221,7 @@ interface StoreContextType {
 }
 
 const defaultTheme: ThemeSettings = {
-  announcementText: 'Limited Time: Free Worldwide Express Shipping on Orders Over $50! | Use Code: DBUY10 for 10% Off',
+  announcementText: 'Limited Time: Free Worldwide Express Shipping on Orders Over $50! ',
   announcementVisible: true,
   primaryColor: '#3665f3',
   typographyTheme: 'modern',
@@ -1208,12 +1208,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const applyPromoCode = (code: string): boolean => {
     const upper = code.trim().toUpperCase();
-    if (upper === 'DBUY10') {
-      setPromoCode('DBUY10');
-      setPromoDiscountPercent(10);
-      addToast('Promo code DBUY10 applied: 10% OFF!', 'success');
-      return true;
-    }
     if (upper === 'SAVE20') {
       setPromoCode('SAVE20');
       setPromoDiscountPercent(20);
@@ -1226,7 +1220,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       addToast('Promo code FREESHIP applied!', 'success');
       return true;
     }
-    addToast('Invalid promo code. Try "DBUY10" or "SAVE20"', 'warning');
+    addToast('Invalid promo code. Please enter a valid code', 'warning');
     return false;
   };
 

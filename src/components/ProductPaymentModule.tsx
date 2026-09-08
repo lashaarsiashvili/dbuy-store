@@ -444,8 +444,18 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         onError: (err) => {
           setIsProcessing(false);
           setGatewayMessage("");
-          console.error("Apple Pay error:", err);
-          addToast(isKa ? "Apple Pay ავტორიზაცია ვერ მოხერხდა" : "Apple Pay payment failed", "error");
+          console.warn("Apple Pay notice:", err);
+          const msg = err?.message || "";
+          if (msg.includes("not supported") || msg.includes("not active")) {
+            addToast(
+              isKa
+                ? " Apple Pay არ არის მხარდაჭერილი ამ მოწყობილობაზე/ბრაუზერში. გთხოვთ გამოიყენოთ Safari ან საბანკო ბარათი / PayPal."
+                : " Apple Pay is not supported on this browser/device. Please use Safari on Apple device or Card / PayPal.",
+              "info"
+            );
+          } else {
+            addToast(isKa ? "Apple Pay ავტორიზაცია ვერ მოხერხდა" : "Apple Pay payment failed", "error");
+          }
         },
         onCancel: () => {
           setIsProcessing(false);
@@ -491,8 +501,18 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         onError: (err) => {
           setIsProcessing(false);
           setGatewayMessage("");
-          console.error("Google Pay authorization error:", err);
-          addToast(isKa ? "Google Pay გადახდა ვერ განხორციელდა" : "Google Pay payment failed", "error");
+          console.warn("Google Pay notice:", err);
+          const msg = err?.message || "";
+          if (msg.includes("not supported") || msg.includes("not active") || msg.includes("not available")) {
+            addToast(
+              isKa
+                ? "Google Pay არ არის გააქტიურებული ამ ბრაუზერში. გთხოვთ გამოიყენოთ საბანკო ბარათი ან PayPal."
+                : "Google Pay is not available on this browser/device. Please use Card or PayPal.",
+              "info"
+            );
+          } else {
+            addToast(isKa ? "Google Pay გადახდა ვერ განხორციელდა" : "Google Pay payment failed", "error");
+          }
         },
         onCancel: () => {
           setIsProcessing(false);
@@ -1204,141 +1224,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               />
             </div>
 
-            {/* Alternative Direct Card Form */}
-            <form
-              onSubmit={handleCardSubmit}
-              className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3.5"
-            >
-              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
-                <div className="flex items-center space-x-2">
-                  <CreditCard className="w-4 h-4 text-blue-700" />
-                  <span className="text-xs font-bold text-slate-900">
-                    {isKa
-                      ? "საბანკო ბარათის ალტერნატიული ფორმა (Manual Entry)"
-                      : "Alternative Card Gateway (Manual Entry)"}
-                  </span>
-                </div>
-                <div className="flex items-center space-x-1.5">
-                  <VisaLogo className="h-4 w-auto" />
-                  <MastercardLogo className="h-4 w-auto" />
-                  <AmexLogo className="h-4 w-auto" />
-                </div>
-              </div>
-
-              <div className="space-y-2.5">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                    {isKa ? "ბარათის მფლობელის სახელი" : "Name on Card"}
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={cardName}
-                    onChange={(e) => setCardName(e.target.value)}
-                    placeholder="Full Name"
-                    className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-medium"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 mb-1 flex items-center justify-between">
-                    <span>{isKa ? "ბარათის ნომერი" : "Card Number"}</span>
-                    {getCardBrand() && (
-                      <span className="text-[10px] font-black text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                        {getCardBrand()}
-                      </span>
-                    )}
-                  </label>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      value={cardNumber}
-                      onChange={(e) => handleCardNumberChange(e.target.value)}
-                      placeholder="4000 1234 5678 9010"
-                      maxLength={19}
-                      className="w-full px-3.5 py-2.5 pl-10 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
-                    />
-                    <CreditCard className="w-4 h-4 text-slate-400 absolute left-3.5 top-3" />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      {isKa ? "ვადა (MM/YY)" : "Expiry (MM/YY)"}
-                    </label>
-                    <input
-                      type="text"
-                      required
-                      value={cardExpiry}
-                      onChange={(e) => handleExpiryChange(e.target.value)}
-                      placeholder="12/28"
-                      maxLength={5}
-                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 mb-1">
-                      CVC / CVV
-                    </label>
-                    <input
-                      type="password"
-                      required
-                      value={cardCvc}
-                      onMouseDown={(e) => {
-                        (e.target as HTMLInputElement).placeholder = "";
-                      }}
-                      onFocus={(e) => {
-                        (e.target as HTMLInputElement).placeholder = "";
-                      }}
-                      onBlur={(e) => {
-                        (e.target as HTMLInputElement).placeholder = "•••";
-                      }}
-                      onChange={(e) => setCardCvc(e.target.value.slice(0, 4))}
-                      placeholder="•••"
-                      maxLength={4}
-                      className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-emerald-500 focus:outline-hidden font-mono placeholder:text-slate-400 placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Large Card Pay Button */}
-              <button
-                type="submit"
-                disabled={isProcessing}
-                className="w-full h-14 rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900 hover:from-black hover:to-black active:scale-[0.99] text-white font-bold text-sm sm:text-base transition-all shadow-lg shadow-slate-900/10 flex items-center justify-between px-5 cursor-pointer disabled:opacity-60 border border-slate-700/50"
-              >
-                {isProcessing ? (
-                  <div className="w-full flex items-center justify-center space-x-2">
-                    <Loader2 className="w-5 h-5 animate-spin text-white" />
-                    <span>
-                      {isKa
-                        ? "ბარათის დამუშავება..."
-                        : "Processing Card Payment..."}
-                    </span>
-                  </div>
-                ) : (
-                  <>
-                    <div className="flex items-center space-x-2.5">
-                      <Lock className="w-4 h-4 text-emerald-400" />
-                      <span>
-                        {isKa
-                          ? `გადახდა: ${formatPrice(totalAmountUSD)}`
-                          : `Pay with Card • ${formatPrice(totalAmountUSD)}`}
-                      </span>
-                    </div>
-                    <div className="flex items-center space-x-1.5 opacity-90">
-                      <VisaLogo className="h-3.5 w-auto" />
-                      <MastercardLogo className="h-3.5 w-auto" />
-                      <AmexLogo className="h-3.5 w-auto" />
-                    </div>
-                  </>
-                )}
-              </button>
-            </form>
+            
           </div>
         )}
       </div>

@@ -201,9 +201,34 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
     return;
   }
 
+  // Ensure Google Pay JS SDK is loaded
+  if (!(window as any).google?.payments?.api?.PaymentsClient) {
+    try {
+      await new Promise<void>((resolve) => {
+        const existingScript = document.querySelector('script[src*="pay.js"]');
+        if (existingScript) {
+          if ((window as any).google?.payments?.api?.PaymentsClient) return resolve();
+          existingScript.addEventListener('load', () => resolve());
+          existingScript.addEventListener('error', () => resolve());
+          setTimeout(resolve, 2000);
+        } else {
+          const script = document.createElement('script');
+          script.src = 'https://pay.google.com/gp/p/js/pay.js';
+          script.async = true;
+          script.onload = () => resolve();
+          script.onerror = () => resolve();
+          document.head.appendChild(script);
+          setTimeout(resolve, 2000);
+        }
+      });
+    } catch (e) {
+      console.warn('[PAYPAL-v6-GOOGLEPAY] Failed to load Google Pay JS SDK:', e);
+    }
+  }
+
   const google = (window as any).google;
   if (!google?.payments?.api?.PaymentsClient) {
-    onError(new Error('Google Pay SDK is not loaded'));
+    onError(new Error('Google Pay SDK is not available on this browser/device'));
     return;
   }
 
@@ -213,7 +238,6 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
     const googlePaySession = googlePaySdk?.session;
     const googlePayConfig = googlePaySdk?.config;
 
-    // Use PRODUCTION environment for live real payments
     const paymentsClient = new google.payments.api.PaymentsClient({
       environment: 'PRODUCTION',
       paymentDataCallbacks: {
@@ -221,169 +245,134 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
           try {
             console.log('[PAYPAL-v6-GOOGLEPAY] Google Pay authorized callback received:', paymentData);
             
-            // Step 1: Create PayPal order with googlePay payment source
-            const orderPayload = {
-              intent: 'CAPTURE',
-              amount: formattedAmount,
-              currency: 'USD',
-              description: label,
-              purchaseUnits: [
-                {
-                  amount: {
-                    currencyCode: 'USD',
-                    value: formattedAmount,
-                    breakdown: {
-                      itemTotal: {
-                        currencyCode: 'USD',
-                        value: formattedAmount,
-                      },
-                    },
-                  },
-                },
-              ],
-              paymentSource: {
-                googlePay: {
-                  attributes: {
-                    verification: {
-                      method: 'SCA_WHEN_REQUIRED',
-                    },
-                  },
-                },
-              },
-            };
-
-            const createRes = await fetch('/paypal-api/checkout/orders/create', {
+            const orderRes = await fetch('/paypal-api/checkout/orders', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(orderPayload),
+              body: JSON.stringify({
+                amountUSD: formattedAmount,
+                paymentSource: 'google_pay',
+              }),
             });
-            const createData = await createRes.json();
-            const orderId = createData.id || createData.orderId;
+            const orderData = await orderRes.json();
+            if (!orderData.orderId && !orderData.id) throw new Error(orderData.error || 'Failed to create PayPal order');
+            const orderId = orderData.orderId || orderData.id;
 
-            if (!orderId) {
-              throw new Error(createData.error || 'Failed to create PayPal order for Google Pay');
+            if (googlePaySession && typeof googlePaySession.confirmPayment === 'function') {
+              await googlePaySession.confirmPayment({
+                orderId,
+                paymentMethodData: paymentData.paymentMethodData
+              });
             }
 
-            // Step 2: Confirm order with Google Pay session if available
-            if (googlePaySession && typeof googlePaySession.confirmOrder === 'function') {
-              try {
-                const confirmResult = await googlePaySession.confirmOrder({
-                  orderId,
-                  paymentMethodData: paymentData.paymentMethodData,
-                });
-                console.log('[PAYPAL-v6-GOOGLEPAY] Order confirmed with PayPal SDK:', confirmResult);
-              } catch (confirmErr) {
-                console.warn('[PAYPAL-v6-GOOGLEPAY] confirmOrder notice (proceeding to capture):', confirmErr);
-              }
-            }
-
-            // Step 3: Capture order to deposit funds to PayPal merchant account
             const captureRes = await fetch(`/paypal-api/checkout/orders/${orderId}/capture`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
             });
-            const captureData = await captureRes.json();
-            console.log('[PAYPAL-v6-GOOGLEPAY] Capture completed:', captureData);
+            const captureResult = await captureRes.json();
 
-            const payerInfo = {
-              name: paymentData.shippingAddress?.name || customerInfo?.name || 'Google Pay Customer',
+            const payerInfo = paymentData.paymentMethodData?.info?.billingAddress || {};
+            const payer = {
+              name: payerInfo.name || customerInfo?.name || 'Google Pay Customer',
               email: paymentData.email || customerInfo?.email || 'customer@dbuystore.com',
-              address: paymentData.shippingAddress?.address1 || customerInfo?.address || 'Shipping Address',
-              city: paymentData.shippingAddress?.locality || customerInfo?.city || 'Tbilisi',
-              zip: paymentData.shippingAddress?.postalCode || customerInfo?.zip || '0100',
-              country: paymentData.shippingAddress?.countryCode || customerInfo?.country || 'Georgia',
+              address: payerInfo.address1 || customerInfo?.address || 'Shipping Address',
+              city: payerInfo.locality || customerInfo?.city || 'Tbilisi',
+              zip: payerInfo.postalCode || customerInfo?.zip || '0100',
+              country: payerInfo.countryCode || customerInfo?.country || 'Georgia',
             };
 
-            const txnId = captureData.capture?.id || captureData.id || `GPAY-PP-${orderId}`;
+            const txnId = captureResult?.capture?.id || captureResult?.id || `GPAY-PP-${orderId}`;
 
             onSuccess({
               transactionId: txnId,
               orderId,
-              payer: payerInfo,
-              token: paymentData.paymentMethodData?.tokenizationData?.token,
+              payer,
+              token: paymentData.paymentMethodData?.tokenizationData?.token
             });
 
             return { transactionState: 'SUCCESS' };
           } catch (err: any) {
-            console.error('[PAYPAL-v6-GOOGLEPAY] Authorization / Capture error:', err);
+            console.error('[PAYPAL-v6-GOOGLEPAY] Payment authorization failed:', err);
             onError(err);
             return {
               transactionState: 'ERROR',
-              error: { message: err?.message || 'Google Pay transaction failed' },
+              error: { intent: 'PAYMENT_AUTHORIZATION', message: err?.message || 'Payment failed' }
             };
           }
-        },
-      },
+        }
+      }
     });
 
-    // Determine allowed payment methods
-    const allowedPaymentMethods = googlePayConfig?.allowedPaymentMethods || [
-      {
-        type: 'CARD',
-        parameters: {
-          allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
-          allowedCardNetworks: ['AMEX', 'DISCOVER', 'JCB', 'MASTERCARD', 'VISA'],
-          billingAddressRequired: true,
-          billingAddressParameters: { format: 'FULL' },
-        },
-        tokenizationSpecification: {
-          type: 'PAYMENT_GATEWAY',
+    const defaultIsReadyToPayRequest = {
+      apiVersion: 2,
+      apiVersionMinor: 0,
+      allowedPaymentMethods: [
+        {
+          type: 'CARD',
           parameters: {
-            gateway: 'paypal',
-            gatewayMerchantId: 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8',
+            allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+            allowedCardNetworks: ['AMEX', 'DISCOVER', 'JCB', 'MASTERCARD', 'VISA'],
           },
         },
-      },
-    ];
-
-    const paymentDataRequest = {
-      apiVersion: googlePayConfig?.apiVersion || 2,
-      apiVersionMinor: googlePayConfig?.apiVersionMinor || 0,
-      allowedPaymentMethods,
-      merchantInfo: {
-        merchantId: 'BCR2DN6DVKZOLJDJ',
-        merchantName: 'Dbuy store',
-        ...(googlePayConfig?.merchantInfo || {}),
-      },
-      transactionInfo: {
-        displayItems: [
-          {
-            label: 'Subtotal',
-            type: 'SUBTOTAL',
-            price: (Number(formattedAmount) * 0.9).toFixed(2),
-          },
-          {
-            label: 'Tax',
-            type: 'TAX',
-            price: (Number(formattedAmount) * 0.1).toFixed(2),
-          },
-        ],
-        countryCode: googlePayConfig?.countryCode || 'US',
-        currencyCode: 'USD',
-        totalPriceStatus: 'FINAL',
-        totalPrice: formattedAmount,
-        totalPriceLabel: 'Total',
-      },
-      callbackIntents: ['PAYMENT_AUTHORIZATION'],
-      emailRequired: true,
-      shippingAddressRequired: false,
+      ],
     };
 
-    // Prompt user with Google Pay native sheet
-    try {
-      const paymentData = await paymentsClient.loadPaymentData(paymentDataRequest);
-      console.log('[PAYPAL-v6-GOOGLEPAY] loadPaymentData response:', paymentData);
-    } catch (gpayErr: any) {
-      throw gpayErr;
-    }
-  } catch (err: any) {
-    if (err?.statusCode === 'CANCELED') {
-      console.log('[PAYPAL-v6-GOOGLEPAY] Google Pay cancelled by user');
-      if (onCancel) onCancel();
+    const defaultPaymentDataRequest = {
+      apiVersion: 2,
+      apiVersionMinor: 0,
+      allowedPaymentMethods: [
+        {
+          type: 'CARD',
+          parameters: {
+            allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
+            allowedCardNetworks: ['AMEX', 'DISCOVER', 'JCB', 'MASTERCARD', 'VISA'],
+          },
+          tokenizationSpecification: {
+            type: 'PAYMENT_GATEWAY',
+            parameters: {
+              gateway: 'paypal',
+              gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID,
+            },
+          },
+        },
+      ],
+    };
+
+    const isReadyToPayRequest = googlePayConfig?.isReadyToPayRequest 
+      ? Object.assign({}, googlePayConfig.isReadyToPayRequest)
+      : defaultIsReadyToPayRequest;
+
+    const readyToPay = await paymentsClient.isReadyToPay(isReadyToPayRequest);
+
+    if (readyToPay?.result || readyToPay) {
+      const paymentDataRequest = googlePayConfig?.paymentDataRequest 
+        ? Object.assign({}, googlePayConfig.paymentDataRequest)
+        : JSON.parse(JSON.stringify(defaultPaymentDataRequest));
+
+      paymentDataRequest.transactionInfo = {
+        totalPriceStatus: 'FINAL',
+        totalPrice: formattedAmount,
+        currencyCode: 'USD',
+        countryCode: 'US',
+      };
+      paymentDataRequest.merchantInfo = {
+        merchantName: label,
+      };
+
+      paymentsClient.loadPaymentData(paymentDataRequest).catch((err: any) => {
+        if (err.statusCode === 'CANCELED') {
+          console.log('[PAYPAL-v6-GOOGLEPAY] Google Pay cancelled by user');
+          if (onCancel) onCancel();
+        } else {
+          onError(err);
+        }
+      });
     } else {
-      console.error('[PAYPAL-v6-GOOGLEPAY] Error opening Google Pay:', err);
-      onError(err);
+      throw new Error('Google Pay is not available on this device/browser');
     }
+
+  } catch (err: any) {
+    console.error('[PAYPAL-v6-GOOGLEPAY] Error starting Google Pay checkout:', err);
+    onError(err);
   }
 }
 
@@ -406,12 +395,11 @@ export async function startPayPalV6ApplePayCheckout(options: ProcessPaymentOptio
 
   try {
     const applePaySdk = await getPayPalApplePaySession();
-    const merchantCapabilities = applePaySdk?.config.merchantCapabilities || ['supports3DS'];
-    const supportedNetworks = applePaySdk?.config.supportedNetworks || ['visa', 'masterCard', 'amex', 'discover'];
+    const merchantCapabilities = applePaySdk?.config?.merchantCapabilities || ['supports3DS'];
+    const supportedNetworks = applePaySdk?.config?.supportedNetworks || ['visa', 'masterCard', 'amex', 'discover'];
     const paypalSession = applePaySdk?.session;
 
     const formattedAmount = Number(amountUSD || 0).toFixed(2);
-
     const paymentRequest = {
       countryCode: 'US',
       currencyCode: 'USD',
@@ -437,7 +425,8 @@ export async function startPayPalV6ApplePayCheckout(options: ProcessPaymentOptio
           });
           applePaySession.completeMerchantValidation(payload.merchantSession || payload);
         } else {
-          const res = await fetch('/api/applepay/validate-merchant', {
+          // Fallback proxy
+          const res = await fetch('/paypal-api/applepay/validate-merchant', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ validationURL: event.validationURL }),
@@ -452,61 +441,43 @@ export async function startPayPalV6ApplePayCheckout(options: ProcessPaymentOptio
       }
     };
 
-    applePaySession.onpaymentmethodselected = () => {
-      if (typeof applePaySession.completePaymentMethodSelection === 'function') {
-        applePaySession.completePaymentMethodSelection({
-          newTotal: paymentRequest.total,
-        });
-      }
-    };
-
     applePaySession.onpaymentauthorized = async (event: any) => {
       try {
-        const createOrderRes = await fetch('/api/paypal/create-order', {
+        const orderRes = await fetch('/paypal-api/checkout/orders', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            amount: formattedAmount,
-            currency: 'USD',
-            description: label,
+            amountUSD: formattedAmount,
             paymentSource: 'apple_pay',
           }),
         });
-        const orderData = await createOrderRes.json();
+        const orderData = await orderRes.json();
+        if (!orderData.orderId && !orderData.id) throw new Error(orderData.error || 'Failed to create PayPal order');
         const orderId = orderData.orderId || orderData.id;
 
-        if (!orderId) {
-          throw new Error('Could not generate PayPal order ID for Apple Pay');
+        if (paypalSession && typeof paypalSession.confirmPayment === 'function') {
+          await paypalSession.confirmPayment({
+            orderId,
+            token: event.payment.token,
+            billingContact: event.payment.billingContact
+          });
         }
-
-        if (paypalSession && typeof paypalSession.confirmOrder === 'function') {
-          try {
-            await paypalSession.confirmOrder({
-              orderId,
-              token: event.payment.token,
-              billingContact: event.payment.billingContact,
-              shippingContact: event.payment.shippingContact,
-            });
-          } catch (confirmErr) {
-            console.warn('[PAYPAL-v6-APPLEPAY] confirmOrder notice:', confirmErr);
-          }
-        }
-
-        const captureRes = await fetch('/api/paypal/capture-order', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ orderID: orderId }),
-        });
-        const captureResult = await captureRes.json();
 
         applePaySession.completePayment({
           status: ApplePaySession.STATUS_SUCCESS,
         });
 
+        const captureRes = await fetch(`/paypal-api/checkout/orders/${orderId}/capture`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+        const captureResult = await captureRes.json();
+
         const shipping = event.payment.shippingContact;
         const billing = event.payment.billingContact;
+        
         const payer = {
-          name: shipping?.givenName ? `${shipping.givenName} ${shipping.familyName || ''}`.trim() : (customerInfo?.name || 'Apple Pay Customer'),
+          name: shipping?.name || billing?.name || customerInfo?.name || 'Apple Pay Customer',
           email: shipping?.emailAddress || billing?.emailAddress || customerInfo?.email || 'customer@dbuystore.com',
           address: shipping?.addressLines?.join(', ') || customerInfo?.address || 'Shipping Address',
           city: shipping?.locality || customerInfo?.city || 'Tbilisi',
@@ -515,7 +486,7 @@ export async function startPayPalV6ApplePayCheckout(options: ProcessPaymentOptio
         };
 
         const txnId = captureResult?.capture?.id || captureResult?.id || `APAY-PP-${orderId}`;
-
+        
         onSuccess({
           transactionId: txnId,
           orderId,
@@ -537,7 +508,7 @@ export async function startPayPalV6ApplePayCheckout(options: ProcessPaymentOptio
     };
 
     applePaySession.begin();
-  } catch (err) {
+  } catch (err: any) {
     console.error('[PAYPAL-v6-APPLEPAY] Error starting Apple Pay checkout:', err);
     onError(err);
   }

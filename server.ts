@@ -1088,6 +1088,7 @@ function getMailTransporter() {
 function sendMailWithRetry(options: {
   from?: string;
   to: string;
+  bcc?: string;
   subject: string;
   text?: string;
   html?: string;
@@ -2136,6 +2137,7 @@ app.post('/api/store/order', (req, res) => {
         sendMailWithRetry({
           from: '"DBUY Store" <support@dbuystore.com>',
           to: customerEmail,
+          bcc: 'dbuystore.com+4f18ff2f22@invite.trustpilot.com',
           subject: customerEmailData.subject,
           html: customerEmailData.html,
           text: customerEmailData.text,
@@ -2316,16 +2318,8 @@ async function handleCreatePayPalOrder(amount: string | number, currency = 'USD'
 
     const { ok, data: orderData } = await safeJsonFromFetch(response);
     if (!ok) {
-      console.warn('[PAYPAL-ERROR] Create Order Failed, providing secure gateway fallback token:', orderData);
-      const fallbackId = `PP-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      return {
-        success: true,
-        id: fallbackId,
-        orderId: fallbackId,
-        approveUrl: `https://www.paypal.com/checkoutnow?token=${fallbackId}`,
-        testMode: true,
-        merchantPayee: 'lashafrommadrid@gmail.com',
-      };
+      console.warn('[PAYPAL-ERROR] Create Order Failed:', orderData);
+      throw new Error(orderData?.message || orderData?.error_description || 'Failed to create PayPal order');
     }
 
     const approveUrl = orderData?.links?.find((l: any) => l.rel === 'approve')?.href || 
@@ -2381,17 +2375,17 @@ app.post('/api/paypal/create-order', async (req, res) => {
 });
 
 // v6 API route alias for order creation
-app.post(['/paypal-api/checkout/orders/create', '/paypal-api/checkout/orders/create-with-sample-data'], async (req, res) => {
+app.post(['/paypal-api/checkout/orders', '/paypal-api/checkout/orders/create', '/paypal-api/checkout/orders/create-with-sample-data'], async (req, res) => {
   try {
     const { purchaseUnits, purchase_units, amount, currency = 'USD', description } = req.body;
-    const orderAmt = amount || purchaseUnits?.[0]?.amount?.value || purchase_units?.[0]?.amount?.value || '10.00';
+    const orderAmt = amount || req.body.amountUSD || purchaseUnits?.[0]?.amount?.value || purchase_units?.[0]?.amount?.value || '10.00';
     const orderCurr = currency || purchaseUnits?.[0]?.amount?.currencyCode || purchase_units?.[0]?.amount?.currency_code || 'USD';
     const desc = description || purchaseUnits?.[0]?.description || 'DBUY Store Order';
 
     const result = await handleCreatePayPalOrder(orderAmt, orderCurr, desc, 'GET_FROM_FILE', req.body.paymentSource || req.body.payment_source);
-    res.json({ id: result.id, orderId: result.id, ...result });
+    res.json({ id: result.id, orderId: result.id, payment_id: result.id, client_secret: result.id, ...result });
   } catch (err: any) {
-    res.status(500).json({ success: false, error: err.message });
+    res.status(500).json({ error: err.message || 'Payment gateway error' });
   }
 });
 

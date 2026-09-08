@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "mkdir -p public/uploads && (cp -r data/uploads/* public/uploads/ 2>/dev/null || true) && tsx scripts/sync-catalog.ts && tsx scripts/generate-sitemap.ts && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
+    "build": "mkdir -p public/uploads && (cp -r data/uploads/. public/uploads/ 2>/dev/null || true) && tsx scripts/sync-catalog.ts && tsx scripts/generate-sitemap.ts && vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
@@ -27,7 +27,10 @@
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^6.2.3",
-    "worker-mailer": "^1.2.1"
+    "worker-mailer": "^1.2.1",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "esbuild": "^0.25.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260908.1",
@@ -35,10 +38,7 @@
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^8.0.1",
     "autoprefixer": "^10.4.21",
-    "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
-    "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
     "vite": "^6.2.3"
   }
 }
