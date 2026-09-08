@@ -29,8 +29,6 @@ import {
   MastercardLogo,
   AmexLogo,
 } from "./PaymentLogos";
-import { GooglePayVerificationGuide } from "./GooglePayVerificationGuide";
-import { GooglePaySheetModal } from "./GooglePaySheetModal";
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -56,8 +54,6 @@ export const CheckoutModal: React.FC = () => {
     "paypal" | "applepay" | "googlepay" | "card"
   >("paypal");
 
-  const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
-  const [isGooglePaySheetOpen, setIsGooglePaySheetOpen] = useState(false);
 
   // Digital Wallet & Card interactive states
   const [cardData, setCardData] = useState({
@@ -295,7 +291,7 @@ export const CheckoutModal: React.FC = () => {
     }
   };
 
-  const handleNativeApplePayAttempt = async () => {
+    const handleApplePaySubmit = async () => {
     setIsProcessingPayment(true);
     try {
       await startPayPalV6ApplePayCheckout({
@@ -318,8 +314,8 @@ export const CheckoutModal: React.FC = () => {
           setStep(3);
           addToast(
             language === "ka"
-              ? "Apple Pay გადახდა წარმატებით შესრულდა PayPal v6 არხით!"
-              : "Apple Pay authorized successfully via PayPal v6!",
+              ? " Apple Pay გადახდა წარმატებით შესრულდა!"
+              : " Apple Pay authorized successfully!",
             "success",
           );
         },
@@ -348,144 +344,56 @@ export const CheckoutModal: React.FC = () => {
     }
   };
 
-  const executeDirectApplePayAuthorization = async () => {
+  const handleGooglePaySubmit = async () => {
     setIsProcessingPayment(true);
-    addToast(
-      language === "ka"
-        ? " Apple Pay ავტორიზაცია..."
-        : "Authorizing  Apple Pay...",
-      "info",
-    );
-
     try {
-      let data: any = null;
-      try {
-        const res = await fetch("/api/applepay/authorize", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: totalAmountUSD,
-            currency: "USD",
-            customerInfo: formData,
-            paymentToken: `APPLEPAY-WEB-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-          }),
-        });
-        const text = await res.text();
-        data = text ? JSON.parse(text) : null;
-      } catch (apiErr) {
-        console.warn("Apple Pay API notice, proceeding with verified order:", apiErr);
-      }
-
-      const verifiedTxnId =
-        data?.transactionId ||
-        `APAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
-      placeOrder({
-        customerName: (data?.payer?.name || formData.name).trim(),
-        email: (data?.payer?.email || formData.email).trim(),
-        address: (data?.payer?.address || formData.address).trim(),
-        city: (data?.payer?.city || formData.city).trim(),
-        zip: (data?.payer?.zip || formData.zip).trim(),
-        country: (data?.payer?.country || formData.country).trim(),
-        paymentMethod: "applepay",
-        applePayTransactionId: verifiedTxnId,
-        paypalTransactionId: verifiedTxnId,
+      await startPayPalV6GooglePayCheckout({
+        amountUSD: totalAmountUSD,
+        label: "DBUY Store Checkout",
+        customerInfo: formData,
+        onSuccess: (details) => {
+          const orderID = details.orderId || details.transactionId;
+          setIsProcessingPayment(false);
+          placeOrder({
+            customerName: (details?.payer?.name || formData.name).trim(),
+            email: (details?.payer?.email || formData.email).trim(),
+            address: (details?.payer?.address || formData.address).trim(),
+            city: (details?.payer?.city || formData.city).trim(),
+            zip: (details?.payer?.zip || formData.zip).trim(),
+            country: (details?.payer?.country || formData.country).trim(),
+            paymentMethod: "googlepay",
+            googlePayTransactionId: orderID,
+            paypalTransactionId: orderID,
+          });
+          setStep(3);
+          addToast(
+            language === "ka"
+              ? "Google Pay გადახდა წარმატებით შესრულდა!"
+              : "Google Pay processed successfully!",
+            "success",
+          );
+        },
+        onError: (err) => {
+          setIsProcessingPayment(false);
+          console.error("Google Pay authorization error:", err);
+          addToast(
+            language === "ka"
+              ? "Google Pay გადახდა ვერ განხორციელდა"
+              : "Google Pay payment failed",
+            "error",
+          );
+        },
+        onCancel: () => {
+          setIsProcessingPayment(false);
+          addToast(
+            language === "ka" ? "Google Pay გადახდა გაუქმდა" : "Google Pay payment cancelled",
+            "warning"
+          );
+        }
       });
-
-      setStep(3);
-      addToast(
-        language === "ka"
-          ? " Apple Pay გადახდა წარმატებით შესრულდა!"
-          : " Apple Pay processed successfully!",
-        "success",
-      );
-    } catch (err: any) {
-      console.error("Apple Pay direct authorization error:", err);
-      addToast(
-        err?.message ||
-          (language === "ka"
-            ? "Apple Pay გადახდა ვერ მოხერხდა"
-            : "Apple Pay payment failed"),
-        "error",
-      );
-    } finally {
+    } catch(err) {
       setIsProcessingPayment(false);
     }
-  };
-
-  const handleApplePaySubmit = async () => {
-    await executeDirectApplePayAuthorization();
-  };
-
-  const executeDirectGooglePayAuthorization = async () => {
-    setIsProcessingPayment(true);
-    addToast(
-      language === "ka"
-        ? "Google Pay ავტორიზაცია..."
-        : "Authorizing Google Pay...",
-      "info",
-    );
-
-    try {
-      let data: any = null;
-      try {
-        const res = await fetch("/api/googlepay/process-payment", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            amount: totalAmountUSD,
-            currency: "USD",
-            customerInfo: formData,
-            paymentData: {
-              token: `GPAY-WEB-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            },
-          }),
-        });
-        const text = await res.text();
-        data = text ? JSON.parse(text) : null;
-      } catch (apiErr) {
-        console.warn("Google Pay API notice, proceeding with verified order:", apiErr);
-      }
-
-      const verifiedTxnId =
-        data?.transactionId ||
-        `GPAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-
-      placeOrder({
-        customerName: (data?.payer?.name || formData.name).trim(),
-        email: (data?.payer?.email || formData.email).trim(),
-        address: (data?.payer?.address || formData.address).trim(),
-        city: (data?.payer?.city || formData.city).trim(),
-        zip: (data?.payer?.zip || formData.zip).trim(),
-        country: (data?.payer?.country || formData.country).trim(),
-        paymentMethod: "googlepay",
-        googlePayTransactionId: verifiedTxnId,
-        paypalTransactionId: verifiedTxnId,
-      });
-
-      setStep(3);
-      addToast(
-        language === "ka"
-          ? "Google Pay გადახდა წარმატებით შესრულდა!"
-          : "Google Pay processed successfully!",
-        "success",
-      );
-    } catch (err: any) {
-      console.error("Google Pay direct authorization error:", err);
-      addToast(
-        err?.message ||
-          (language === "ka"
-            ? "Google Pay გადახდა ვერ განხორციელდა"
-            : "Google Pay payment failed"),
-        "error",
-      );
-    } finally {
-      setIsProcessingPayment(false);
-    }
-  };
-
-  const handleGooglePaySubmit = () => {
-    setIsGooglePaySheetOpen(true);
   };
 
   // Card execution with real PayPal backend capture
@@ -1017,39 +925,7 @@ export const CheckoutModal: React.FC = () => {
                   />
 
                   {/* Google Pay Verification / Screenshot Helper for Google Pay Console Approval */}
-                  <div className="p-3.5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 shadow-2xs">
-                    <div className="text-left pr-2">
-                      <p className="text-[12px] font-black text-blue-950 flex items-center space-x-1">
-                        <span>📸</span>
-                        <span>
-                          {language === "ka"
-                            ? "Google Console სქრინშოტის რეჟიმი"
-                            : "Google Console Screenshot Mode"}
-                        </span>
-                      </p>
-                      <p className="text-[11px] text-blue-800/90 mt-0.5 leading-snug">
-                        {language === "ka"
-                          ? "დააჭირეთ Google Pay ღილაკს — გაიხსნება Google Pay-ს ნამდვილი ფანჯარა (Desktop ან Android Sheet გადასართავით)."
-                          : "Click the Google Pay button to open the live Google Pay window with Desktop/Android switcher."}
-                      </p>
-                    </div>
-                    <div className="flex items-center space-x-2 shrink-0">
-                      <button
-                        type="button"
-                        onClick={() => setIsGooglePaySheetOpen(true)}
-                        className="px-3 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white rounded-xl font-bold text-xs transition-all shadow-sm cursor-pointer whitespace-nowrap"
-                      >
-                        {language === "ka" ? "▶ ფანჯრის გახსნა" : "▶ Open Window"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setIsVerificationModalOpen(true)}
-                        className="px-3 py-2 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer whitespace-nowrap"
-                      >
-                        {language === "ka" ? "3 სქრინშოტი" : "3 Screens"}
-                      </button>
-                    </div>
-                  </div>
+                  
 
                   <div className="flex items-center justify-center space-x-4 text-[11px] text-slate-500 font-medium pt-1">
                     <div className="flex items-center space-x-1">
@@ -1458,27 +1334,7 @@ export const CheckoutModal: React.FC = () => {
         </div>
       </div>
 
-      {/* Google Pay Approval Screenshot Generator Modal */}
-      <GooglePayVerificationGuide
-        isOpen={isVerificationModalOpen}
-        onClose={() => setIsVerificationModalOpen(false)}
-        onOpenLiveSheet={() => setIsGooglePaySheetOpen(true)}
-      />
-
-      {/* Realistic Google Pay Interactive Payment Sheet Modal */}
-      <GooglePaySheetModal
-        isOpen={isGooglePaySheetOpen}
-        onClose={() => setIsGooglePaySheetOpen(false)}
-        onConfirmPayment={async () => {
-          setIsGooglePaySheetOpen(false);
-          await executeDirectGooglePayAuthorization();
-        }}
-        totalAmount={totalAmountUSD}
-        formattedAmount={formatPrice(totalAmountUSD)}
-        customerEmail={formData.email.trim() || user?.email || "lashaarsiashvili@gmail.com"}
-        customerName={formData.name.trim() || user?.name || "Lasha Arsiashvili"}
-        isProcessing={isProcessingPayment}
-      />
+      
     </div>
   );
 };

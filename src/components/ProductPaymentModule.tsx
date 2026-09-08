@@ -5,7 +5,6 @@ import { useStore } from "../context/StoreContext";
 import { safeApiFetch } from "../utils/apiSafe";
 import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
-import { GooglePaySheetModal } from "./GooglePaySheetModal";
 import { PayPalV6CardFields } from "./PayPalV6CardFields";
 import { startPayPalV6ApplePayCheckout, startPayPalV6GooglePayCheckout } from "../utils/paypalV6";
 import {
@@ -111,8 +110,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   const [isGooglePayReady, setIsGooglePayReady] = useState<boolean | null>(
     null,
   );
-  const [isGooglePaySheetOpen, setIsGooglePaySheetOpen] = useState(false);
-
+  
   // Digital Wallet support states
 
   useEffect(() => {
@@ -415,199 +413,96 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   ]);
 
   // Execute verified Apple Pay payment authorization
-  const executeApplePayPayment = async () => {
+  const handleApplePaySubmit = async () => {
     setIsProcessing(true);
-    setGatewayMessage(
-      isKa
-        ? "Apple Pay ავტორიზაცია და გადახდის დადასტურება..."
-        : "Authorizing Apple Pay transaction and confirming order...",
-    );
-
+    setGatewayMessage(isKa ? "Apple Pay ავტორიზაცია..." : "Authorizing Apple Pay...");
     try {
-      const appleToken = `APAY-TOKEN-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
-      const { data: authResult } = await safeApiFetch(
-        "/api/applepay/authorize",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            paymentToken: appleToken,
-            token: appleToken,
-            amount: totalAmountUSD,
-            currency: "USD",
-            shippingContact: {
-              givenName: walletCustomerName,
-              emailAddress: walletCustomerEmail,
-              addressLines: [walletAddress],
-              locality: walletCity,
-              postalCode: walletZip,
-              countryCode: walletCountry === "Georgia" ? "GE" : "US",
-            },
-            customerInfo: {
-              name: walletCustomerName,
-              email: walletCustomerEmail,
-              address: walletAddress,
-              city: walletCity,
-              zip: walletZip,
-              country: walletCountry,
-            },
-            orderDetails: {
-              customer: {
-                name: walletCustomerName,
-                email: walletCustomerEmail,
-                address: walletAddress,
-                city: walletCity,
-                zip: walletZip,
-                country: walletCountry,
-              },
-              items: [
-                {
-                  product,
-                  quantity,
-                  selectedColor: product.colors?.[0] || "Default",
-                },
-              ],
-              total: totalAmountUSD,
-              subtotal: product.price * quantity,
-              shippingCost: 0,
-              tax: 0,
-            },
-          }),
+      await startPayPalV6ApplePayCheckout({
+        amountUSD: totalAmountUSD,
+        label: "DBUY Store Checkout",
+        customerInfo: {
+          name: walletCustomerName,
+          email: walletCustomerEmail,
+          address: walletAddress,
+          city: walletCity,
+          zip: walletZip,
+          country: walletCountry
         },
-      );
-
-      const verifiedTxnId =
-        authResult?.transactionId || appleToken;
-      const payer = authResult?.payer || {};
-
-      handleCompleteOrder("applepay", verifiedTxnId, {
-        name: payer.name || walletCustomerName,
-        email: payer.email || walletCustomerEmail,
-        address: payer.address || walletAddress,
-        city: payer.city || walletCity,
-        zip: payer.zip || walletZip,
-        country: payer.country || walletCountry,
+        onSuccess: (details) => {
+          setIsProcessing(false);
+          setGatewayMessage("");
+          handleCompleteOrder("applepay", details.transactionId || `APAY-${Date.now()}`, {
+            name: details.payer?.name || walletCustomerName,
+            email: details.payer?.email || walletCustomerEmail,
+            address: details.payer?.address || walletAddress,
+            city: details.payer?.city || walletCity,
+            zip: details.payer?.zip || walletZip,
+            country: details.payer?.country || walletCountry
+          });
+          addToast(isKa ? " Apple Pay გადახდა წარმატებით შესრულდა!" : " Apple Pay authorized successfully!", "success");
+        },
+        onError: (err) => {
+          setIsProcessing(false);
+          setGatewayMessage("");
+          console.error("Apple Pay error:", err);
+          addToast(isKa ? "Apple Pay ავტორიზაცია ვერ მოხერხდა" : "Apple Pay payment failed", "error");
+        },
+        onCancel: () => {
+          setIsProcessing(false);
+          setGatewayMessage("");
+        }
       });
-
-      addToast(
-        isKa
-          ? ` Apple Pay გადახდა წარმატებით შესრულდა!`
-          : `Apple Pay authorized successfully!`,
-        "success",
-      );
-    } catch (err: any) {
-      console.error("Apple Pay execution error:", err);
-      addToast(
-        err?.message ||
-          (isKa
-            ? "Apple Pay ავტორიზაცია ვერ მოხერხდა"
-            : "Apple Pay authorization failed"),
-        "error",
-      );
-    } finally {
+    } catch(err) {
       setIsProcessing(false);
       setGatewayMessage("");
     }
-  };
-
-  // Handle Real Apple Pay Checkout with Direct Verified Authorization
-  const handleApplePaySubmit = async () => {
-    await executeApplePayPayment();
   };
 
   // Execute verified Google Pay payment authorization
-  const executeGooglePayPayment = async () => {
+  const handleGooglePaySubmit = async () => {
     setIsProcessing(true);
-    setGatewayMessage(
-      isKa
-        ? "Google Pay ტრანზაქციის გადამოწმება და გატარება..."
-        : "Verifying Google Pay transaction and confirming order...",
-    );
-
+    setGatewayMessage(isKa ? "Google Pay ავტორიზაცია..." : "Authorizing Google Pay...");
     try {
-      const { data: processResult } = await safeApiFetch(
-        "/api/googlepay/process-payment",
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            paymentData: {
-              token: `GPAY-TOKEN-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
-            },
-            amount: totalAmountUSD,
-            currency: "USD",
-            description: `DBUY Google Pay: ${product.title} (x${quantity})`,
-            customerInfo: {
-              name: walletCustomerName,
-              email: walletCustomerEmail,
-              address: walletAddress,
-              city: walletCity,
-              zip: walletZip,
-              country: walletCountry,
-            },
-            orderDetails: {
-              customer: {
-                name: walletCustomerName,
-                email: walletCustomerEmail,
-                address: walletAddress,
-                city: walletCity,
-                zip: walletZip,
-                country: walletCountry,
-              },
-              items: [
-                {
-                  product,
-                  quantity,
-                  selectedColor: product.colors?.[0] || "Default",
-                },
-              ],
-              total: totalAmountUSD,
-              subtotal: product.price * quantity,
-              shippingCost: 0,
-              tax: 0,
-            },
-          }),
+      await startPayPalV6GooglePayCheckout({
+        amountUSD: totalAmountUSD,
+        label: "DBUY Store Checkout",
+        customerInfo: {
+          name: walletCustomerName,
+          email: walletCustomerEmail,
+          address: walletAddress,
+          city: walletCity,
+          zip: walletZip,
+          country: walletCountry
         },
-      );
-
-      const verifiedTxnId =
-        processResult?.transactionId ||
-        `GPAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
-      const payer = processResult?.payer || {};
-
-      handleCompleteOrder("googlepay", verifiedTxnId, {
-        name: payer.name || walletCustomerName,
-        email: payer.email || walletCustomerEmail,
-        address: payer.address || walletAddress,
-        city: payer.city || walletCity,
-        zip: payer.zip || walletZip,
-        country: payer.country || walletCountry,
+        onSuccess: (details) => {
+          const orderID = details.orderId || details.transactionId;
+          setIsProcessing(false);
+          setGatewayMessage("");
+          handleCompleteOrder("googlepay", orderID || `GPAY-${Date.now()}`, {
+            name: details?.payer?.name || walletCustomerName,
+            email: details?.payer?.email || walletCustomerEmail,
+            address: details?.payer?.address || walletAddress,
+            city: details?.payer?.city || walletCity,
+            zip: details?.payer?.zip || walletZip,
+            country: details?.payer?.country || walletCountry
+          });
+          addToast(isKa ? "Google Pay გადახდა წარმატებით შესრულდა!" : "Google Pay processed successfully!", "success");
+        },
+        onError: (err) => {
+          setIsProcessing(false);
+          setGatewayMessage("");
+          console.error("Google Pay authorization error:", err);
+          addToast(isKa ? "Google Pay გადახდა ვერ განხორციელდა" : "Google Pay payment failed", "error");
+        },
+        onCancel: () => {
+          setIsProcessing(false);
+          setGatewayMessage("");
+        }
       });
-
-      addToast(
-        isKa
-          ? `Google Pay გადახდა წარმატებით შესრულდა!`
-          : `Google Pay payment authorized successfully!`,
-        "success",
-      );
-    } catch (err: any) {
-      console.error("Google Pay execution error:", err);
-      addToast(
-        err?.message ||
-          (isKa
-            ? "Google Pay გადახდა ვერ განხორციელდა"
-            : "Google Pay processing failed"),
-        "error",
-      );
-    } finally {
+    } catch(err) {
       setIsProcessing(false);
       setGatewayMessage("");
     }
-  };
-
-  // Handle Google Pay Checkout with Direct Verified Authorization
-  const handleGooglePaySubmit = () => {
-    setIsGooglePaySheetOpen(true);
   };
 
   // Handle Real Card Checkout via PayPal Gateway Capture
@@ -1544,19 +1439,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       )}
 
       {/* Realistic Google Pay Interactive Payment Sheet Modal */}
-      <GooglePaySheetModal
-        isOpen={isGooglePaySheetOpen}
-        onClose={() => setIsGooglePaySheetOpen(false)}
-        onConfirmPayment={async () => {
-          setIsGooglePaySheetOpen(false);
-          await executeGooglePayPayment();
-        }}
-        totalAmount={totalAmountUSD}
-        formattedAmount={formatPrice(totalAmountUSD)}
-        customerEmail={walletCustomerEmail}
-        customerName={walletCustomerName}
-        isProcessing={isProcessing}
-      />
+      
     </div>
   );
 };

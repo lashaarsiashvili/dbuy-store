@@ -2,6 +2,100 @@ import { Product } from '../types';
 
 export const initialProducts: Product[] = [
   {
+    "title": "Smart Water Bottle: 32 oz Hydration Tracker with APP",
+    "titleKa": "ჭკვიანი თერმო-ბოთლი ტემპერატურის LED ინდიკატორით",
+    "customSlug": "Smart-Water-Bottle-32-oz-Hydration-Tracker-with-APP",
+    "category": "fitness",
+    "price": 69,
+    "origPrice": 99,
+    "stock": 5,
+    "badge": "New",
+    "image": "/uploads/prod-prod-1788877210563-1788877213604-1h9rv.jpg",
+    "images": [
+      "/uploads/prod-prod-1788877210563-0-1788877213900-80n0m.jpg",
+      "/uploads/prod-prod-1788877210563-1-1788877214207-cljm1.jpg",
+      "/uploads/prod-prod-1788877210563-2-1788877214520-ccflo.jpg",
+      "/uploads/prod-prod-1788877210563-3-1788877214827-3y0o7.jpg",
+      "/uploads/prod-prod-1788877210563-4-1788877215111-2h35h.jpg"
+    ],
+    "description": "Stay perfectly refreshed wherever life takes you. Crafted from surgical-grade 18/8 stainless steel with advanced double-wall vacuum insulation, this smart bottle keeps your beverages ice-cold for 24 hours or piping hot for 12 hours. Featuring a leakproof lid and an integrated LED touch temperature display.",
+    "descriptionKa": "შეინარჩუნეთ იდეალური ენერგია და ტენიანობა მთელი დღის განმავლობაში. სამედიცინო ხარისხის 18/8 უჟანგავი ფოლადითა და ორმაგი ვაკუუმ-იზოლაციით დამზადებული ბოთლი ინარჩუნებს სიცივეს 24 საათით, ხოლო სითბოს 12 საათით. თავსახურზე მოთავსებული სენსორული LED ეკრანი გაჩვენებთ ტემპერატურას ერთი შეხებით.",
+    "rating": 5,
+    "reviewsCount": 1,
+    "features": [
+      "❄️ 24h Cold / 12h Hot Insulation — Double-wall vacuum technology keeps drinks fresh",
+      "🌡️ Touch LED Temperature Display — Monitor drink temperature with a gentle tap",
+      "🔒 100% Leakproof & Condensation-Free — Safe for backpacks, car holders, and gym bags",
+      "🌱 Pure 18/8 Food-Grade Stainless Steel — BPA-free, zero metallic aftertaste"
+    ],
+    "isPublishedGlobally": true,
+    "publishedAt": "2026-09-08T14:20:10.563Z",
+    "id": "prod-1788877210563"
+  },
+  {
+    "title": "Vita Smart Water Bottle",
+    "titleKa": "ჭკვიანი თერმო-ბოთლი ტემპერატურის LED ინდიკატორით",
+    "customSlug": "smart-living-essential",
+    "category": "tech",
+    "price": 69,
+    "origPrice": 99,
+    "stock": 5,
+    "badge": "Best Seller",
+    "image": "/uploads/prod-prod-1788877024412-1788877027549-n3jw2.jpg",
+    "images": [
+      "/uploads/prod-prod-1788877024412-0-1788877027840-tusaz.jpg",
+      "/uploads/prod-prod-1788877024412-1-1788877028124-foppv.jpg",
+      "/uploads/prod-prod-1788877024412-2-1788877028409-i80ky.jpg",
+      "/uploads/prod-prod-1788877024412-3-1788877028678-dksyl.jpg",
+      "/uploads/prod-prod-1788877024412-4-1788877028979-yktv7.jpg",
+      "/uploads/prod-prod-1788877024412-5-1788877029282-yccdv.jpg"
+    ],
+    "description": "Stay perfectly refreshed wherever life takes you. Crafted from surgical-grade 18/8 stainless steel with advanced double-wall vacuum insulation, this smart bottle keeps your beverages ice-cold for 24 hours or piping hot for 12 hours. Featuring a leakproof lid and an integrated LED touch temperature display.",
+    "descriptionKa": "შეინარჩუნეთ იდეალური ენერგია და ტენიანობა მთელი დღის განმავლობაში. სამედიცინო ხარისხის 18/8 უჟანგავი ფოლადითა და ორმაგი ვაკუუმ-იზოლაციით დამზადებული ბოთლი ინარჩუნებს სიცივეს 24 საათით, ხოლო სითბოს 12 საათით. თავსახურზე მოთავსებული სენსორული LED ეკრანი გაჩვენებთ ტემპერატურას ერთი შეხებით.",
+    "rating": 5,
+    "reviewsCount": 1,
+    "features": [
+      "❄️ 24h Cold / 12h Hot Insulation — Double-wall vacuum technology keeps drinks fresh",
+      "🌡️ Touch LED Temperature Display — Monitor drink temperature with a gentle tap",
+      "🔒 100% Leakproof & Condensation-Free — Safe for backpacks, car holders, and gym bags",
+      "🌱 Pure 18/8 Food-Grade Stainless Steel — BPA-free, zero metallic aftertaste"
+    ],
+    "isPublishedGlobally": true,
+    "publishedAt": "2026-09-08T14:17:04.412Z",
+    "id": "prod-1788877024412"
+  },
+  {
+    "title": "G309 LIGHTSPEED - Genshin Impact Edition",
+    "titleKa": "G309 LIGHTSPEED - Genshin Impact Edition",
+    "customSlug": "G309-LIGHTSPEED-Genshin-Impact-Edition",
+    "category": "tech",
+    "price": 119,
+    "origPrice": 149,
+    "stock": 5,
+    "badge": "Sale",
+    "image": "/uploads/prod-prod-1788876872896-0-1788876875852-usiiy.jpg",
+    "images": [
+      "/uploads/prod-prod-1788876872896-0-1788876875852-usiiy.jpg",
+      "/uploads/prod-prod-1788876872896-1-1788876876120-e8x1l.jpg",
+      "/uploads/prod-prod-1788876872896-2-1788876876426-8b18l.jpg",
+      "/uploads/prod-prod-1788876872896-3-1788876876732-xcr3i.jpg",
+      "/uploads/prod-prod-1788876872896-4-1788876877039-hpvmx.jpg"
+    ],
+    "description": "Experience the perfect harmony of premium craftsmanship and everyday practicality. Engineered from high-durability materials with meticulous attention to detail, the G309 LIGHTSPEED - Genshin Impact Edition elevates your daily routine with seamless convenience and modern style. Designed for discerning shoppers who value reliability, elegance, and outstanding performance.",
+    "descriptionKa": "აღმოაჩინეთ უმაღლესი ხარისხისა და პრაქტიკულობის იდეალური შერწყმა. პრემიუმ მასალებითა და დახვეწილი დეტალებით შექმნილი G309 LIGHTSPEED - Genshin Impact Edition თქვენს ყოველდღიურ ცხოვრებას ხდის უფრო მარტივს, თანამედროვესა და კომფორტულს. საუკეთესო არჩევანი მათთვის, ვინც აფასებს გამძლეობას, ესთეტიკას და ნამდვილ სანდოობას.",
+    "rating": 5,
+    "reviewsCount": 1,
+    "features": [
+      "⭐ Premium Build Quality — Engineered with durable, wear-resistant high-grade materials",
+      "✨ Sleek Modern Aesthetics — Complements any professional or lifestyle environment",
+      "🎯 Designed for Daily Reliability — Rigorously tested for continuous performance",
+      "🛡️ 100% Satisfaction Guaranteed — Backed by DBUY Store quality warranty and fast dispatch"
+    ],
+    "isPublishedGlobally": true,
+    "publishedAt": "2026-09-08T14:17:19.098Z",
+    "id": "prod-1788876872896"
+  },
+  {
     "title": "PRO X2 SUPERSTRIKE",
     "titleKa": "PRO X2 SUPERSTRIKE",
     "customSlug": "PRO-X2-SUPERSTRIKE",
@@ -60,7 +154,8 @@ export const initialProducts: Product[] = [
     ],
     "isPublishedGlobally": true,
     "publishedAt": "2026-09-07T12:55:50.636Z",
-    "id": "prod-1788785750636"
+    "id": "prod-1788785750636",
+    "views": 2
   },
   {
     "rating": 5,
@@ -133,7 +228,7 @@ export const initialProducts: Product[] = [
     "price": 65,
     "id": "prod-1788775639253",
     "descriptionKa": "შეინარჩუნეთ იდეალური ენერგია და ტენიანობა მთელი დღის განმავლობაში. სამედიცინო ხარისხის 18/8 უჟანგავი ფოლადითა და ორმაგი ვაკუუმ-იზოლაციით დამზადებული ბოთლი ინარჩუნებს სიცივეს 24 საათით, ხოლო სითბოს 12 საათით. თავსახურზე მოთავსებული სენსორული LED ეკრანი გაჩვენებთ ტემპერატურას ერთი შეხებით.",
-    "stock": 10,
+    "stock": 8,
     "publishedAt": "2026-09-07T10:07:19.253Z",
     "features": [
       "❄️ 24h Cold / 12h Hot Insulation — Double-wall vacuum technology keeps drinks fresh",
@@ -167,7 +262,7 @@ export const initialProducts: Product[] = [
     "price": 50,
     "image": "/uploads/prod-prod-1788724519740-1788785766225-peerx.jpg",
     "category": "fitness",
-    "stock": 9,
+    "stock": 7,
     "description": "Stay perfectly refreshed wherever life takes you. Crafted from surgical-grade 18/8 stainless steel with advanced double-wall vacuum insulation, this smart bottle keeps your beverages ice-cold for 24 hours or piping hot for 12 hours. Featuring a leakproof lid and an integrated LED touch temperature display.",
     "rating": 5,
     "title": "Aquaminder Drink Reminder Smart Water Bottle Stainless Steel Double Wall,SS 304 Material 600 ml Thames (Blue)",
@@ -194,7 +289,7 @@ export const initialProducts: Product[] = [
     "image": "/uploads/prod-prod-1788724361112-1788785767406-0gxvt.jpg",
     "price": 79,
     "rating": 5,
-    "stock": 10,
+    "stock": 9,
     "descriptionKa": "დააფიქსირეთ გზის ყოველი დეტალი უმაღლესი სიცხადით. წინა და სალონის ორმაგი ლინზით, 170° ულტრა-ფართო ხედვითა და ინფრაწითელი ღამის ხედვის სისტემით აღჭურვილი ჭკვიანი ვიდეო-რეგისტრატორი თქვენი ავტომობილის 24/7 უსაფრთხოებას იცავს. ჩაშენებული WiFi და GPS გაძლევთ კადრების ტელეფონიდან მყისიერი ნახვისა და გადმოწერის შესაძლებლობას.",
     "id": "prod-1788724361112",
     "publishedAt": "2026-09-06T19:52:41.112Z",
@@ -223,7 +318,7 @@ export const initialProducts: Product[] = [
       "/uploads/prod-prod-1788723441741-3-1788785769252-gwwcl.jpg",
       "/uploads/prod-prod-1788723441741-4-1788785769478-4susg.jpg"
     ],
-    "stock": 10,
+    "stock": 9,
     "description": "Stay perfectly refreshed wherever life takes you. Crafted from surgical-grade 18/8 stainless steel with advanced double-wall vacuum insulation, this smart bottle keeps your beverages ice-cold for 24 hours or piping hot for 12 hours. Featuring a leakproof lid and an integrated LED touch temperature display.",
     "titleKa": "ჭკვიანი თერმო-ბოთლი ტემპერატურის LED ინდიკატორით",
     "publishedAt": "2026-09-06T19:37:21.741Z",
@@ -265,7 +360,7 @@ export const initialProducts: Product[] = [
     "id": "prod-1788723082932",
     "titleKa": "ავტომობილის Full HD ორმაგი ვიდეო-რეგისტრატორი GPS-ით და ღამის ხედვით",
     "isPublishedGlobally": true,
-    "stock": 10,
+    "stock": 7,
     "rating": 5
   },
   {
@@ -316,7 +411,7 @@ export const initialProducts: Product[] = [
     ],
     "titleKa": "ავტომობილის Full HD ორმაგი ვიდეო-რეგისტრატორი GPS-ით და ღამის ხედვით",
     "reviewsCount": 1,
-    "stock": 10,
+    "stock": 8,
     "images": [
       "/uploads/prod-prod-1788722697137-0-1788785772771-jf33p.jpg",
       "/uploads/prod-prod-1788722697137-1-1788785773011-7yvzp.jpg",

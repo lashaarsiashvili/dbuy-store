@@ -341,6 +341,15 @@ export const AuthModal: React.FC = () => {
     }
   }, [isAuthModalOpen]);
 
+  const handleRegStep1Submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setRegStep(2);
+  };
+  const handleRegStep2Submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleRegisterSubmit(e);
+  };
+
   const handleTabSwitch = (newTab: "login" | "register") => {
     setTab(newTab);
     setViewMode("auth");

@@ -46,7 +46,7 @@ const MainLayout: React.FC = () => {
   }, [currentPage]);
 
   return (
-    <div className="min-h-screen w-full max-w-full overflow-x-hidden flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-600 selection:text-white antialiased transition-colors duration-200">
+    <div className="min-h-screen w-full max-w-full overflow-x-clip flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-600 selection:text-white antialiased transition-colors duration-200">
       {/* Universal Header */}
       <Header />
 
