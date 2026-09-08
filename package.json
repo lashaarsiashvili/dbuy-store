@@ -26,9 +26,11 @@
     "nodemailer": "^9.1.0",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
-    "vite": "^6.2.3"
+    "vite": "^6.2.3",
+    "worker-mailer": "^1.2.1"
   },
   "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260908.1",
     "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "@types/nodemailer": "^8.0.1",

@@ -1,3 +1,2 @@
-# Netlify Redirects file for DBUY Store
-/api/*  https://ais-pre-urom3ip75pytiauvmfvpzc-860545615937.europe-west2.run.app/api/:splat  200
-/*      /index.html  200
+# Cloudflare Pages / SPA Redirects
+/*    /index.html   200

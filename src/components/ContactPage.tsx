@@ -115,42 +115,50 @@ export const ContactPage: React.FC = () => {
     }
 
     setSubmitting(true);
+    let isSuccess = false;
+
     try {
       const res = await smartApiFetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(form),
       });
-      const data = await res.json();
-      if (data.success) {
-        setSubmitted(true);
-        saveToHistory(form);
-        addToast(t('contact.sentSuccess'), 'success');
-      } else {
-        // Fallback: accept submission locally and advise user
-        setSubmitted(true);
-        saveToHistory(form);
-        addToast(t('contact.sentSuccess'), 'success');
+
+      if (res.ok) {
+        const data = await res.json().catch(() => null);
+        if (data && data.success) {
+          isSuccess = true;
+        }
       }
     } catch (err) {
       console.warn('Contact API dispatch error:', err);
-      setSubmitted(true);
-      saveToHistory(form);
-      addToast(t('contact.sentSuccess'), 'success');
     } finally {
       setSubmitting(false);
     }
 
-    setTimeout(() => {
-      setForm({
-        name: '',
-        email: '',
-        orderNumber: '',
-        subject: 'General Inquiry',
-        message: '',
-      });
-      setSubmitted(false);
-    }, 6000);
+    if (isSuccess) {
+      setSubmitted(true);
+      saveToHistory(form);
+      addToast(t('contact.sentSuccess'), 'success');
+
+      setTimeout(() => {
+        setForm({
+          name: '',
+          email: '',
+          orderNumber: '',
+          subject: 'General Inquiry',
+          message: '',
+        });
+        setSubmitted(false);
+      }, 6000);
+    } else {
+      addToast(
+        language === 'ka'
+          ? 'შეტყობინების გაგზავნა ვერ მოხერხდა. გთხოვთ სცადოთ ხელახლა ან მოგვწეროთ პირდაპირ support@dbuystore.com-ზე'
+          : 'Failed to deliver message. Please try again or email us directly at support@dbuystore.com',
+        'error'
+      );
+    }
   };
 
   return (
