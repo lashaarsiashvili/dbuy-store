@@ -869,7 +869,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Products - Durable persistence: relies on localStorage or falls back to initialProducts
-  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v20_exact_15_products_fixed_now';
+  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v22_15_products_distinct_images';
 
   const [products, setProducts] = useState<Product[]>(() => {
     try {
