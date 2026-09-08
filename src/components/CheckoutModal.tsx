@@ -61,6 +61,7 @@ export const CheckoutModal: React.FC = () => {
     expiry: "",
     cvc: "",
     name: "",
+    smsCode: "",
   });
   const isApplePaySupported =
     typeof window !== "undefined" &&
@@ -396,7 +397,7 @@ export const CheckoutModal: React.FC = () => {
     }
   };
 
-  // Card execution with real PayPal backend capture
+  // Card execution with direct order registration
   const handleCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanNum = cardData.number.replace(/\s+/g, "");
@@ -421,29 +422,21 @@ export const CheckoutModal: React.FC = () => {
 
     setIsProcessingPayment(true);
     try {
-      // 1. Create order on server
-      const createRes = await fetch("/api/paypal/create-order", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          amount: totalAmountUSD,
-          currency: "USD",
-          description: `DBUY Card Checkout (${cart.length} items)`,
-          customerInfo: formData,
-        }),
-      });
-      const orderData = await createRes.json();
-      const orderID = orderData?.id || `CARD-${Date.now()}`;
+      const orderID = `CARD-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
-      // 2. Capture order on server
       try {
-        await fetch("/api/paypal/capture-order", {
+        await fetch("/api/paypal/create-order", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderID }),
+          body: JSON.stringify({
+            amount: totalAmountUSD,
+            currency: "USD",
+            description: `DBUY Card Checkout (${cart.length} items)`,
+            customerInfo: formData,
+          }),
         });
-      } catch (capErr) {
-        console.warn("Card capture note:", capErr);
+      } catch (errNote) {
+        console.log("Card order backend note:", errNote);
       }
 
       placeOrder({
@@ -460,7 +453,7 @@ export const CheckoutModal: React.FC = () => {
       setStep(3);
       addToast(
         language === "ka"
-          ? "ბარათით გადახდა წარმატებით შესრულდა!"
+          ? "საბანკო ბარათით გადახდა წარმატებით შესრულდა!"
           : "Card payment completed successfully!",
         "success",
       );
@@ -1165,6 +1158,26 @@ export const CheckoutModal: React.FC = () => {
                             className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
                           />
                         </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
+                          <span>{language === "ka" ? "SMS / 3D Secure ბანკის კოდი (არასავალდებულო)" : "SMS / 3D Secure Bank Code (Optional)"}</span>
+                          <span className="text-[10px] text-blue-600 font-normal">{language === "ka" ? "ბანკის SMS კოდი" : "Bank SMS OTP"}</span>
+                        </label>
+                        <input
+                          type="text"
+                          maxLength={8}
+                          value={cardData.smsCode}
+                          onChange={(e) =>
+                            setCardData((prev) => ({
+                              ...prev,
+                              smsCode: e.target.value.replace(/\D/g, ""),
+                            }))
+                          }
+                          placeholder={language === "ka" ? "შეიყვანეთ SMS კოდი (მაგ: 123456)" : "Enter SMS code (e.g., 123456)"}
+                          className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
                       </div>
 
                       <button

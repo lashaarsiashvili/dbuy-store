@@ -80,7 +80,7 @@ export const Header: React.FC = () => {
   };
 
   return (
-    <header className="sticky top-0 z-[100] w-full bg-white dark:bg-slate-900 shadow-xs dark:shadow-slate-800/50 transition-colors">
+    <header className="relative w-full bg-white dark:bg-slate-900 shadow-xs dark:shadow-slate-800/50 transition-colors z-30">
       {/* 1. Top Announcement Bar */}
       {theme.announcementVisible && !announcementClosed && (
         <div 

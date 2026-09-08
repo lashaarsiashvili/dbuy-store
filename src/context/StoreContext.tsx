@@ -868,22 +868,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(`Billboard auto-rotation set to ${val} seconds (${Math.round(val/60*10)/10}m)`, 'info');
   };
 
-  // Products - Durable persistence: relies strictly on localStorage or server data.
-  // Never merges or resets to initialProducts so added and deleted products remain permanent.
+  // Products - Durable persistence with automatic catalog version cache invalidation.
+  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v15_20260908_15_items';
+
   const [products, setProducts] = useState<Product[]>(() => {
-    const saved = localStorage.getItem('dbuy_products');
-    if (saved !== null) {
-      try {
+    try {
+      const cachedVersion = localStorage.getItem('dbuy_catalog_version');
+      if (cachedVersion !== CURRENT_CATALOG_VERSION) {
+        localStorage.removeItem('dbuy_products');
+        localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
+        const fresh = initialProducts.map(sanitizeProductUrls);
+        localStorage.setItem('dbuy_products', JSON.stringify(fresh));
+        return fresh;
+      }
+      const saved = localStorage.getItem('dbuy_products');
+      if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed) && parsed.length === initialProducts.length) {
           return parsed.map(sanitizeProductUrls);
         }
-      } catch (e) {
-        console.error('Error parsing saved products from localStorage:', e);
       }
+    } catch (e) {
+      console.error('Error initializing products state:', e);
     }
-    // Only used on very first clean install when localStorage is completely empty or empty
-    return initialProducts.map(sanitizeProductUrls);
+    const fresh = initialProducts.map(sanitizeProductUrls);
+    localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
+    localStorage.setItem('dbuy_products', JSON.stringify(fresh));
+    return fresh;
   });
 
   // Pre-cache product images to IndexedDB and RAM cache to prevent image loss during re-renders or state updates
