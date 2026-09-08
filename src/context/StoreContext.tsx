@@ -868,23 +868,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(`Billboard auto-rotation set to ${val} seconds (${Math.round(val/60*10)/10}m)`, 'info');
   };
 
-  // Products - Durable persistence with automatic catalog version cache invalidation.
-  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v15_20260908_15_items';
+  // Products - Durable persistence: relies on localStorage or falls back to initialProducts
+  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v20_exact_15_products_fixed_now';
 
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const cachedVersion = localStorage.getItem('dbuy_catalog_version');
       if (cachedVersion !== CURRENT_CATALOG_VERSION) {
-        localStorage.removeItem('dbuy_products');
         localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
+        localStorage.removeItem('dbuy_products');
+        localStorage.removeItem('dbuy_products_last_updated');
         const fresh = initialProducts.map(sanitizeProductUrls);
         localStorage.setItem('dbuy_products', JSON.stringify(fresh));
         return fresh;
       }
+
       const saved = localStorage.getItem('dbuy_products');
       if (saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length === initialProducts.length) {
+        if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map(sanitizeProductUrls);
         }
       }
@@ -892,8 +894,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       console.error('Error initializing products state:', e);
     }
     const fresh = initialProducts.map(sanitizeProductUrls);
-    localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
-    localStorage.setItem('dbuy_products', JSON.stringify(fresh));
+    try {
+      localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
+      localStorage.removeItem('dbuy_products_last_updated');
+      localStorage.setItem('dbuy_products', JSON.stringify(fresh));
+    } catch (e) {}
     return fresh;
   });
 
@@ -1626,27 +1631,24 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
             // Last-Write-Wins (LWW) conflict resolution:
             // If local products have a newer timestamp than the server's last updated timestamp,
-            // and we are logged in as admin, we should preserve local products and push them to repair the server database.
+            // and we are logged in as admin and local has more products, preserve local user edits.
             const localLastUpdated = localStorage.getItem('dbuy_products_last_updated') || '0';
             const serverLastUpdated = d.lastUpdated || '0';
             const isLocalNewer = new Date(localLastUpdated).getTime() > new Date(serverLastUpdated).getTime();
             const isServerResetToDefault = d.products.length <= 4 && prevProducts.length > 4;
 
-            if ((isLocalNewer || isServerResetToDefault) && isAdmin && prevProducts.length > 0) {
-              console.log('[SYNC] Local products are newer or server was reset. Preserving and pushing to server.', {
-                localLastUpdated,
-                serverLastUpdated,
+            if (isServerResetToDefault && isAdmin && prevProducts.length > 0) {
+              console.log('[SYNC] Server was reset to default. Preserving and pushing to server.', {
                 localCount: prevProducts.length,
                 serverCount: d.products.length
               });
-              // Non-blocking background push to restore the server
               setTimeout(() => {
                 saveProducts(prevProducts);
               }, 1000);
               return prevProducts;
             }
 
-            // Otherwise, adopt the authoritative server products catalog
+            // Adopt authoritative server products catalog
             const sanitized = d.products.map(sanitizeProductUrls);
             try {
               localStorage.setItem('dbuy_products', JSON.stringify(sanitized));

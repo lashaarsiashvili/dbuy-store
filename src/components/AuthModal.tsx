@@ -34,11 +34,8 @@ import {
 import { smartApiFetch } from "../lib/api";
 import { ALL_COUNTRIES } from "../data/countries";
 
-import firebaseConfig from '../../firebase-applet-config.json';
-
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  firebaseConfig?.oAuthClientId ||
   "311692037075-dtpc8k6h5h6u01mthotlan7ba1fg1ni1.apps.googleusercontent.com";
 
 // Sub-component that actually uses the hook
