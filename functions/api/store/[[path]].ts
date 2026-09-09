@@ -1,0 +1,532 @@
+import { initialProducts } from '../../../src/data/initialProducts';
+import { initialBillboards } from '../../../src/data/initialBillboards';
+
+// Declare Cloudflare D1 local types for tsc compiler
+interface D1Database {
+  prepare(query: string): {
+    bind(...values: any[]): {
+      first<T = any>(colName?: string): Promise<T | null>;
+      run(): Promise<any>;
+    };
+  };
+  exec(query: string): Promise<any>;
+}
+
+type PagesFunction<Env = any, Params extends string = any> = (context: {
+  request: Request;
+  env: Env;
+  params: Record<Params, string>;
+}) => Promise<Response> | Response;
+
+interface Env {
+  DB?: D1Database;
+  STORE_KV?: any;
+  KV?: any;
+  ZOHO_USER?: string;
+  ZOHO_PASSWORD?: string;
+  ADMIN_EMAIL?: string;
+  SUPPORT_EMAIL?: string;
+}
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Slug, Authorization',
+  'Access-Control-Max-Age': '86400',
+};
+
+// Helper: Response formatting
+function jsonResponse(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...CORS_HEADERS,
+    },
+  });
+}
+
+// Helper SQL wrappers to simulate key-value Storage over Cloudflare D1 SQL database
+async function dbGet(db: D1Database, key: string): Promise<string | null> {
+  try {
+    const result = await db.prepare('SELECT value FROM store_kv WHERE key = ?').bind(key).first();
+    return result ? (result as any).value : null;
+  } catch (err) {
+    console.error('dbGet error:', err);
+    return null;
+  }
+}
+
+async function dbPut(db: D1Database, key: string, value: string): Promise<void> {
+  try {
+    await db.prepare('INSERT OR REPLACE INTO store_kv (key, value) VALUES (?, ?)')
+      .bind(key, value)
+      .run();
+  } catch (err) {
+    console.error('dbPut error:', err);
+  }
+}
+
+// Helper: Persist base64 data URIs to D1 SQL database
+async function persistBase64InD1(db: D1Database, dataUrl: string, prefix = 'prod'): Promise<string> {
+  if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
+  if (!dataUrl.startsWith('data:')) return dataUrl;
+
+  try {
+    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) return dataUrl;
+
+    const mimeType = matches[1];
+    let ext = 'jpg';
+    if (mimeType.includes('png')) ext = 'png';
+    else if (mimeType.includes('webp')) ext = 'webp';
+    else if (mimeType.includes('gif')) ext = 'gif';
+
+    const timestamp = Date.now();
+    const rand = Math.random().toString(36).substring(2, 7);
+    const filename = `${prefix}-${timestamp}-${rand}.${ext}`;
+
+    // Save image base64 data to D1 store_kv
+    await dbPut(db, `img-${filename}`, dataUrl);
+
+    return `/uploads/${filename}`;
+  } catch (err) {
+    console.error('Error saving base64 to D1:', err);
+    return dataUrl;
+  }
+}
+
+export const onRequest: PagesFunction<Env> = async (context) => {
+  const { request, env } = context;
+  const url = new URL(request.url);
+  const path = url.pathname;
+
+  if (request.method === 'OPTIONS') {
+    return new Response(null, { headers: CORS_HEADERS });
+  }
+
+  const db = env.DB;
+  if (!db) {
+    return jsonResponse({
+      success: false,
+      error: 'Cloudflare D1 Database binding "DB" is missing in Cloudflare Dashboard / wranger.toml.',
+    }, 500);
+  }
+
+  // --- INITIAL SQL TABLE SETUP & BOOTSTRAP ---
+  try {
+    await db.exec('CREATE TABLE IF NOT EXISTS store_kv (key TEXT PRIMARY KEY, value TEXT);');
+  } catch (bootstrapErr: any) {
+    return jsonResponse({
+      success: false,
+      error: 'Failed to initialize D1 database schema: ' + (bootstrapErr?.message || bootstrapErr),
+    }, 500);
+  }
+
+  // --- INITIAL SEEDING (Run only once if D1 is completely empty) ---
+  const productsExist = await dbGet(db, 'products');
+  if (!productsExist) {
+    console.log('[SEED] Initializing empty D1 SQL storage with default database assets...');
+    await dbPut(db, 'products', JSON.stringify(initialProducts));
+    await dbPut(db, 'billboards', JSON.stringify(initialBillboards));
+    await dbPut(db, 'billboardIntervalSeconds', '120');
+    await dbPut(db, 'adminSecretSlug', 'dashboard');
+    await dbPut(db, 'theme', JSON.stringify({
+      announcementText: 'Limited Time: Free Worldwide Express Shipping on Orders Over $50! ',
+      announcementVisible: true,
+      primaryColor: '#3665f3',
+      typographyTheme: 'modern',
+      heroTitle: 'Quality Products for Modern Living',
+      heroSubtitle: 'Discover premium lifestyle, fitness, and tech accessories curated for your everyday needs.',
+      eurRate: 0.92,
+      gelRate: 2.73,
+      logoStyle: 'bag-cart',
+    }));
+    await dbPut(db, 'orders', JSON.stringify([]));
+    await dbPut(db, 'registered_users', JSON.stringify({}));
+    await dbPut(db, 'last_updated', new Date().toISOString());
+  }
+
+  // --- ROUTER HANDLERS ---
+
+  // 1. GET: Sync or products data fetch
+  if (request.method === 'GET') {
+    if (path.endsWith('/sync')) {
+      const clientSince = url.searchParams.get('since');
+      const lastUpdated = await dbGet(db, 'last_updated') || '';
+
+      if (clientSince && clientSince === lastUpdated) {
+        return jsonResponse({
+          success: true,
+          notModified: true,
+          lastUpdated,
+        });
+      }
+
+      const products = JSON.parse(await dbGet(db, 'products') || '[]');
+      const theme = JSON.parse(await dbGet(db, 'theme') || '{}');
+      const billboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
+      const billboardIntervalSeconds = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
+      const adminSecretSlug = await dbGet(db, 'adminSecretSlug') || 'dashboard';
+
+      // Security authorization check for users and orders
+      const clientAdminSlug = request.headers.get('x-admin-slug');
+      const isAuthorizedAdmin = clientAdminSlug && clientAdminSlug === adminSecretSlug;
+
+      const registeredUsers = isAuthorizedAdmin ? JSON.parse(await dbGet(db, 'registered_users') || '{}') : {};
+      const orders = isAuthorizedAdmin ? JSON.parse(await dbGet(db, 'orders') || '[]') : [];
+
+      return jsonResponse({
+        success: true,
+        data: {
+          products,
+          theme,
+          billboards,
+          billboardIntervalSeconds,
+          lastUpdated,
+          registeredUsers,
+          orders,
+          adminSecretSlug: isAuthorizedAdmin ? adminSecretSlug : '',
+        },
+      });
+    }
+
+    if (path.endsWith('/products')) {
+      const products = JSON.parse(await dbGet(db, 'products') || '[]');
+      return jsonResponse({ success: true, products });
+    }
+  }
+
+  // 2. POST: Write operations
+  if (request.method === 'POST') {
+    const lastUpdatedNew = new Date().toISOString();
+
+    // Endpoints that do not require administrative header
+    if (path.endsWith('/order')) {
+      try {
+        const newOrder: any = await request.json();
+        if (!newOrder || !newOrder.id) {
+          return jsonResponse({ success: false, error: 'Valid order data required' }, 400);
+        }
+
+        const orders = JSON.parse(await dbGet(db, 'orders') || '[]');
+        const existingIndex = orders.findIndex((o: any) => o.id === newOrder.id);
+        if (existingIndex >= 0) {
+          orders[existingIndex] = newOrder;
+        } else {
+          orders.unshift(newOrder);
+        }
+
+        await dbPut(db, 'orders', JSON.stringify(orders));
+        await dbPut(db, 'last_updated', lastUpdatedNew);
+
+        return jsonResponse({ success: true, count: orders.length, lastUpdated: lastUpdatedNew });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to save order' }, 500);
+      }
+    }
+
+    if (path.endsWith('/register-user')) {
+      try {
+        const reqBody: any = await request.json();
+        const { name, email, country, city, zip, address, phone, passwordHash, passwordSalt, provider, picture } = reqBody;
+
+        if (!email || typeof email !== 'string' || !email.includes('@')) {
+          return jsonResponse({ success: false, error: 'Valid email is required' }, 400);
+        }
+
+        const cleanEmail = email.trim().toLowerCase();
+        const registeredUsers = JSON.parse(await dbGet(db, 'registered_users') || '{}');
+        const existing = registeredUsers[cleanEmail] || {};
+
+        const updatedUser = {
+          ...existing,
+          name: name?.trim() || existing.name || 'Customer',
+          email: cleanEmail,
+          country: country?.trim() || existing.country || 'Georgia',
+          city: city?.trim() || existing.city || 'Tbilisi',
+          zip: zip?.trim() || existing.zip || '',
+          address: address?.trim() || existing.address || '',
+          phone: phone?.trim() || existing.phone || '',
+          provider: provider || existing.provider || 'email',
+          picture: picture || existing.picture,
+          createdAt: existing.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          role: (cleanEmail === 'lashaarsiashvili@gmail.com' || existing.role === 'admin') ? 'admin' : 'customer',
+          passwordHash: passwordHash || existing.passwordHash || '',
+          passwordSalt: passwordSalt || existing.passwordSalt || '',
+        };
+
+        registeredUsers[cleanEmail] = updatedUser;
+        await dbPut(db, 'registered_users', JSON.stringify(registeredUsers));
+        await dbPut(db, 'last_updated', lastUpdatedNew);
+
+        // Map users list for client response (hide password fields)
+        const usersList = Object.values(registeredUsers).map((u: any) => ({
+          name: u.name,
+          email: u.email,
+          country: u.country,
+          city: u.city,
+          zip: u.zip,
+          address: u.address,
+          phone: u.phone,
+          provider: u.provider || 'email',
+          picture: u.picture,
+          createdAt: u.createdAt,
+          role: u.role,
+        }));
+
+        return jsonResponse({
+          success: true,
+          user: {
+            name: updatedUser.name,
+            email: updatedUser.email,
+            country: updatedUser.country,
+            city: updatedUser.city,
+            zip: updatedUser.zip,
+            address: updatedUser.address,
+            phone: updatedUser.phone,
+            provider: updatedUser.provider,
+            picture: updatedUser.picture,
+            createdAt: updatedUser.createdAt,
+            role: updatedUser.role,
+          },
+          registeredUsers: usersList,
+        });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to register user' }, 500);
+      }
+    }
+
+    if (path.endsWith('/delete-user')) {
+      try {
+        const { email }: any = await request.json();
+        if (!email) {
+          return jsonResponse({ success: false, error: 'Email is required' }, 400);
+        }
+        const cleanEmail = email.trim().toLowerCase();
+        if (cleanEmail === 'lashaarsiashvili@gmail.com') {
+          return jsonResponse({ success: false, error: 'Cannot delete primary admin account' }, 403);
+        }
+
+        const registeredUsers = JSON.parse(await dbGet(db, 'registered_users') || '{}');
+        if (registeredUsers[cleanEmail]) {
+          delete registeredUsers[cleanEmail];
+          await dbPut(db, 'registered_users', JSON.stringify(registeredUsers));
+          await dbPut(db, 'last_updated', lastUpdatedNew);
+        }
+
+        const usersList = Object.values(registeredUsers).map((u: any) => ({
+          name: u.name,
+          email: u.email,
+          country: u.country,
+          city: u.city,
+          zip: u.zip,
+          address: u.address,
+          phone: u.phone,
+          provider: u.provider || 'email',
+          picture: u.picture,
+          createdAt: u.createdAt,
+          role: u.role,
+        }));
+
+        return jsonResponse({ success: true, registeredUsers: usersList });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to delete user' }, 500);
+      }
+    }
+
+    // --- ADMINISTRATIVE AUTHENTICATION REQUIRED ---
+    const adminSecretSlug = await dbGet(db, 'adminSecretSlug') || 'dashboard';
+    const clientAdminSlug = request.headers.get('x-admin-slug');
+    if (!clientAdminSlug || clientAdminSlug !== adminSecretSlug) {
+      return jsonResponse({ success: false, error: 'Access Denied: Administrative authority required' }, 403);
+    }
+
+    if (path.endsWith('/products')) {
+      try {
+        const { products }: any = await request.json();
+        if (!Array.isArray(products)) {
+          return jsonResponse({ success: false, error: 'Products array is required' }, 400);
+        }
+
+        const sanitizedProducts = [];
+        for (const p of products) {
+          const cleanImage = p.image ? await persistBase64InD1(db, p.image, `prod-${p.id || Date.now()}`) : p.image;
+          const cleanImages = [];
+          if (Array.isArray(p.images)) {
+            for (let i = 0; i < p.images.length; i++) {
+              cleanImages.push(await persistBase64InD1(db, p.images[i], `prod-${p.id || Date.now()}-${i}`));
+            }
+          } else {
+            if (cleanImage) cleanImages.push(cleanImage);
+          }
+
+          sanitizedProducts.push({
+            ...p,
+            image: cleanImage,
+            images: cleanImages,
+          });
+        }
+
+        await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
+        await dbPut(db, 'last_updated', lastUpdatedNew);
+
+        return jsonResponse({ success: true, products: sanitizedProducts, lastUpdated: lastUpdatedNew });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to save products' }, 500);
+      }
+    }
+
+    if (path.endsWith('/theme')) {
+      try {
+        const { theme }: any = await request.json();
+        if (theme && typeof theme === 'object') {
+          const existingTheme = JSON.parse(await dbGet(db, 'theme') || '{}');
+          const updatedTheme = { ...existingTheme, ...theme };
+          await dbPut(db, 'theme', JSON.stringify(updatedTheme));
+          await dbPut(db, 'last_updated', lastUpdatedNew);
+          return jsonResponse({ success: true, theme: updatedTheme, lastUpdated: lastUpdatedNew });
+        }
+        return jsonResponse({ success: false, error: 'Invalid theme object' }, 400);
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to save theme' }, 500);
+      }
+    }
+
+    if (path.endsWith('/billboards')) {
+      try {
+        const { billboards, billboardIntervalSeconds }: any = await request.json();
+        const updatedBillboards = [];
+
+        if (Array.isArray(billboards)) {
+          for (const b of billboards) {
+            const image = b.image ? await persistBase64InD1(db, b.image, 'billboard') : b.image;
+            const bgImage = b.bgImage ? await persistBase64InD1(db, b.bgImage, 'billboard-bg') : b.bgImage;
+            updatedBillboards.push({ ...b, image, bgImage });
+          }
+          await dbPut(db, 'billboards', JSON.stringify(updatedBillboards));
+        }
+
+        if (typeof billboardIntervalSeconds === 'number') {
+          await dbPut(db, 'billboardIntervalSeconds', String(billboardIntervalSeconds));
+        }
+
+        await dbPut(db, 'last_updated', lastUpdatedNew);
+
+        const currentInterval = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
+        const savedBillboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
+
+        return jsonResponse({
+          success: true,
+          billboards: savedBillboards,
+          billboardIntervalSeconds: currentInterval,
+          lastUpdated: lastUpdatedNew,
+        });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to save billboards' }, 500);
+      }
+    }
+
+    if (path.endsWith('/orders')) {
+      try {
+        const { orders }: any = await request.json();
+        if (Array.isArray(orders)) {
+          await dbPut(db, 'orders', JSON.stringify(orders));
+          await dbPut(db, 'last_updated', lastUpdatedNew);
+          return jsonResponse({ success: true, count: orders.length, lastUpdated: lastUpdatedNew });
+        }
+        return jsonResponse({ success: false, error: 'Orders array is required' }, 400);
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to save orders' }, 500);
+      }
+    }
+
+    if (path.endsWith('/sync')) {
+      try {
+        const { products, registeredUsers, orders, theme, billboards, billboardIntervalSeconds, adminSecretSlug: newSlug } = await request.json() as any;
+
+        if (Array.isArray(products)) {
+          const sanitizedProducts = [];
+          for (const p of products) {
+            const cleanImage = p.image ? await persistBase64InD1(db, p.image, `prod-${p.id || Date.now()}`) : p.image;
+            const cleanImages = [];
+            if (Array.isArray(p.images)) {
+              for (let i = 0; i < p.images.length; i++) {
+                cleanImages.push(await persistBase64InD1(db, p.images[i], `prod-${p.id || Date.now()}-${i}`));
+              }
+            } else {
+              if (cleanImage) cleanImages.push(cleanImage);
+            }
+            sanitizedProducts.push({
+              ...p,
+              image: cleanImage,
+              images: cleanImages,
+            });
+          }
+          await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
+        }
+
+        if (registeredUsers && typeof registeredUsers === 'object') {
+          const currentUsers = JSON.parse(await dbGet(db, 'registered_users') || '{}');
+          await dbPut(db, 'registered_users', JSON.stringify({ ...currentUsers, ...registeredUsers }));
+        }
+
+        if (Array.isArray(orders)) {
+          await dbPut(db, 'orders', JSON.stringify(orders));
+        }
+
+        if (theme && typeof theme === 'object') {
+          const currentTheme = JSON.parse(await dbGet(db, 'theme') || '{}');
+          await dbPut(db, 'theme', JSON.stringify({ ...currentTheme, ...theme }));
+        }
+
+        if (Array.isArray(billboards)) {
+          const sanitizedBillboards = [];
+          for (const b of billboards) {
+            const image = b.image ? await persistBase64InD1(db, b.image, 'billboard') : b.image;
+            const bgImage = b.bgImage ? await persistBase64InD1(db, b.bgImage, 'billboard-bg') : b.bgImage;
+            sanitizedBillboards.push({ ...b, image, bgImage });
+          }
+          await dbPut(db, 'billboards', JSON.stringify(sanitizedBillboards));
+        }
+
+        if (typeof billboardIntervalSeconds === 'number') {
+          await dbPut(db, 'billboardIntervalSeconds', String(billboardIntervalSeconds));
+        }
+
+        if (typeof newSlug === 'string' && newSlug.trim()) {
+          await dbPut(db, 'adminSecretSlug', newSlug.trim());
+        }
+
+        await dbPut(db, 'last_updated', lastUpdatedNew);
+
+        const currentProducts = JSON.parse(await dbGet(db, 'products') || '[]');
+        const currentTheme = JSON.parse(await dbGet(db, 'theme') || '{}');
+        const currentBillboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
+        const currentInterval = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
+        const finalSlug = await dbGet(db, 'adminSecretSlug') || 'dashboard';
+        const currentUsers = JSON.parse(await dbGet(db, 'registered_users') || '{}');
+        const currentOrders = JSON.parse(await dbGet(db, 'orders') || '[]');
+
+        return jsonResponse({
+          success: true,
+          data: {
+            products: currentProducts,
+            registeredUsers: currentUsers,
+            orders: currentOrders,
+            theme: currentTheme,
+            billboards: currentBillboards,
+            billboardIntervalSeconds: currentInterval,
+            adminSecretSlug: finalSlug,
+            lastUpdated: lastUpdatedNew,
+          },
+        });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to sync store data' }, 500);
+      }
+    }
+  }
+
+  return jsonResponse({ success: false, error: 'Endpoint or method not supported' }, 404);
+};
