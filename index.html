@@ -3,8 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Google Favicon Standard -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icon.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <link rel="apple-touch-icon" href="/falcon-icon.svg" />
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0F172A" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -19,7 +23,30 @@
     <meta name="googlebot" content="index, follow" />
     <meta name="rating" content="general" />
     <meta name="revisit-after" content="1 days" />
+
+    <!-- Open Graph & Social Sharing -->
+    <meta property="og:site_name" content="DBUY Store" />
+    <meta property="og:title" content="DBUY Store — Quality Tech, Fitness & Everyday Essentials" />
+    <meta property="og:description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials." />
+    <meta property="og:image" content="https://www.dbuystore.com/icon.png" />
+    <meta property="og:url" content="https://www.dbuystore.com" />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="DBUY Store — Quality Tech, Fitness & Everyday Essentials" />
+    <meta name="twitter:description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials." />
+    <meta name="twitter:image" content="https://www.dbuystore.com/icon.png" />
     
+    <!-- Structured Data (JSON-LD Organization Schema for Googlebot) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "Organization",
+      "name": "DBUY Store",
+      "url": "https://www.dbuystore.com",
+      "logo": "https://www.dbuystore.com/icon.png"
+    }
+    </script>
+
     <!-- Business Legitimacy & Security Schema.org Markup (JSON-LD) -->
     <script type="application/ld+json">
     {
@@ -28,7 +55,7 @@
       "@id": "https://dbuystore.com/#store",
       "name": "DBUY Store",
       "url": "https://dbuystore.com",
-      "logo": "https://dbuystore.com/assets/logo.png",
+      "logo": "https://www.dbuystore.com/icon.png",
       "description": "DBUY Store is a fully certified, premium consumer electronics and lifestyle storefront. We partner directly with authorized brand distributors to deliver verified products with a 100% money-back delivery guarantee, active parcel tracking, and secure 256-bit encrypted payments.",
       "telephone": "+1-888-232-1541",
       "email": "support@dbuystore.com",
@@ -62,11 +89,7 @@
     }
     </script>
     <title>DBUY Store — Quality Tech, Fitness & Everyday Essentials</title>
-    <meta name="description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials with multi-currency, multi-language, cart, checkout, and admin dashboard." />
-    <meta property="og:title" content="DBUY Store — Quality Tech, Fitness & Everyday Essentials" />
-    <meta property="og:description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials with multi-currency, multi-language, cart, checkout, and admin dashboard." />
-    <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials." />
     <!-- Error resilience script for 3rd-party cross-origin SDKs -->
     <script>
       window.onerror = function(message, source, lineno, colno, error) {

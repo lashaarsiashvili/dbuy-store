@@ -1,17 +1,26 @@
 {
   "short_name": "DBUY Store",
-  "name": "DBUY Store - Premium Electronics & Digital Goods",
+  "name": "DBUY Store - Quality Tech, Fitness & Everyday Essentials",
   "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48 32x32 16x16",
+      "type": "image/x-icon"
+    },
+    {
+      "src": "/icon.png",
+      "type": "image/png",
+      "sizes": "512x512 192x192"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "type": "image/png",
+      "sizes": "180x180"
+    },
     {
       "src": "/favicon.svg",
       "type": "image/svg+xml",
       "sizes": "512x512 192x192 64x64 32x32 24x24 16x16"
-    },
-    {
-      "src": "/falcon-icon.svg",
-      "type": "image/svg+xml",
-      "sizes": "512x512",
-      "purpose": "any maskable"
     }
   ],
   "start_url": "/",

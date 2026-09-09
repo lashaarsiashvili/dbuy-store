@@ -1,6 +1,6 @@
 {
   "name": "DBUY Store",
-  "description": "Premium e-commerce storefront for tech, fitness, and everyday carry essentials with multi-currency, multi-language, cart, checkout, and admin dashboard.",
+  "description": "Premium e-commerce storefront for tech, fitness, and everyday carry essentials.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

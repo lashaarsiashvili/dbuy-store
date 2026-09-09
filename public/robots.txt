@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /favicon.ico
+Allow: /icon.png
+Allow: /apple-touch-icon.png
+Allow: /favicon.svg
+
+Sitemap: https://dbuystore.com/sitemap.xml
