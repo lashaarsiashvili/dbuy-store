@@ -1024,54 +1024,102 @@ export const AdminDashboard: React.FC = () => {
     let success = false;
 
     try {
-      if (editingProduct) {
-        success = await updateProduct({
-          ...editingProduct,
-          title: prodForm.title || prodForm.titleKa || 'Product',
-          titleKa: prodForm.titleKa,
-          customSlug: finalSlug,
-          category: prodForm.category,
-          price: numPrice,
-          origPrice: numOrigPrice,
-          stock: numStock,
-          badge: prodForm.badge || undefined,
-          image: finalPrimaryImage,
-          images: finalImages,
-          description: prodForm.description,
-          descriptionKa: prodForm.descriptionKa,
-          features: finalFeatures.slice(0, 4),
-          isPublishedGlobally: true,
-          publishedAt: new Date().toISOString(),
-        });
-      } else {
-        success = await addProduct({
-          title: prodForm.title || prodForm.titleKa || 'Product',
-          titleKa: prodForm.titleKa,
-          customSlug: finalSlug,
-          category: prodForm.category,
-          price: numPrice,
-          origPrice: numOrigPrice,
-          stock: numStock,
-          badge: prodForm.badge || undefined,
-          image: finalPrimaryImage,
-          images: finalImages,
-          description: prodForm.description,
-          descriptionKa: prodForm.descriptionKa,
-          rating: 5.0,
-          reviewsCount: 1,
-          features: finalFeatures.slice(0, 4),
-          isPublishedGlobally: true,
-          publishedAt: new Date().toISOString(),
-        });
+      const productPayload = {
+        id: editingProduct ? editingProduct.id : 'prod-' + Date.now(),
+        title: prodForm.title || prodForm.titleKa || 'Product',
+        titleKa: prodForm.titleKa,
+        customSlug: finalSlug,
+        category: prodForm.category,
+        price: numPrice,
+        origPrice: numOrigPrice,
+        stock: numStock,
+        badge: prodForm.badge || undefined,
+        image: finalPrimaryImage,
+        images: finalImages,
+        description: prodForm.description,
+        descriptionKa: prodForm.descriptionKa,
+        features: finalFeatures.slice(0, 4),
+        isPublishedGlobally: true,
+        publishedAt: new Date().toISOString(),
+        rating: editingProduct ? (editingProduct.rating || 5.0) : 5.0,
+        reviewsCount: editingProduct ? (editingProduct.reviewsCount || 1) : 1,
+      };
+
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(productPayload),
+      });
+
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || 'Server responded with status ' + res.status);
       }
-    } catch (err) {
+
+      const resData = await res.json();
+      if (resData && resData.success === false) {
+        throw new Error(resData.error || 'Response indicated failure');
+      }
+
+      if (editingProduct) {
+        success = await updateProduct(productPayload);
+      } else {
+        success = await addProduct(productPayload);
+      }
+    } catch (err: any) {
       console.error('Error in handleSaveProduct:', err);
+      alert('Save failed: ' + err.message);
     } finally {
       setIsSavingProduct(false);
     }
 
     if (success) {
       setIsProductModalOpen(false);
+    }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!confirm(isKa ? 'დარწმუნებული ხართ, რომ გსურთ პროდუქტის წაშლა?' : 'Are you sure you want to delete this product?')) {
+      return;
+    }
+    try {
+      const res = await fetch(`/api/products?id=${id}`, { method: 'DELETE' });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || 'Server responded with status ' + res.status);
+      }
+      const json = await res.json();
+      if (json && json.success === false) {
+        throw new Error(json.error || 'Response indicated failure');
+      }
+      deleteProduct(id);
+    } catch (err: any) {
+      alert('Delete failed: ' + err.message);
+    }
+  };
+
+  const handleDuplicateProduct = async (duplicated: any) => {
+    try {
+      const res = await fetch('/api/products', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(duplicated),
+      });
+      if (!res.ok) {
+        const errorText = await res.text();
+        throw new Error(errorText || 'Server responded with status ' + res.status);
+      }
+      const json = await res.json();
+      if (json && json.success === false) {
+        throw new Error(json.error || 'Response indicated failure');
+      }
+      await addProduct(duplicated);
+    } catch (err: any) {
+      alert('Duplicate failed: ' + err.message);
     }
   };
 
@@ -1893,7 +1941,7 @@ export const AdminDashboard: React.FC = () => {
                             >
                               <ExternalLink className="w-4 h-4" />
                             </button>
-                            <button
+                             <button
                               onClick={() => {
                                 const duplicated: Omit<Product, 'id'> = {
                                   ...prod,
@@ -1901,7 +1949,7 @@ export const AdminDashboard: React.FC = () => {
                                   titleKa: prod.titleKa ? `${prod.titleKa} (ასლი)` : undefined,
                                   customSlug: `${prod.customSlug || generateProductSlug(prod.title)}-copy-${Math.floor(100 + Math.random() * 900)}`,
                                 };
-                                addProduct(duplicated);
+                                handleDuplicateProduct(duplicated);
                               }}
                               className="p-1.5 rounded-lg text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
                               title={isKa ? 'პროდუქტის დუბლირება (ასლი)' : 'Duplicate Product'}
@@ -1916,7 +1964,7 @@ export const AdminDashboard: React.FC = () => {
                               <Edit3 className="w-4 h-4" />
                             </button>
                             <button
-                              onClick={() => deleteProduct(prod.id)}
+                              onClick={() => handleDeleteProduct(prod.id)}
                               className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
                               title={isKa ? 'წაშლა' : 'Delete Product'}
                             >

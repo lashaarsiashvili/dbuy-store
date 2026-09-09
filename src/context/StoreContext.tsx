@@ -891,6 +891,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return fresh;
   });
 
+  // Load products dynamically from the D1 relational database upon boot
+  useEffect(() => {
+    const loadProductsFromApi = async () => {
+      try {
+        const res = await fetch('/api/products');
+        if (res.ok) {
+          const apiProducts = await res.json();
+          if (Array.isArray(apiProducts) && apiProducts.length > 0) {
+            setProducts(apiProducts.map(sanitizeProductUrls));
+            localStorage.setItem('dbuy_products', JSON.stringify(apiProducts));
+          }
+        }
+      } catch (err) {
+        console.error('Failed to load products from /api/products:', err);
+      }
+    };
+    loadProductsFromApi();
+  }, []);
+
   // Pre-cache product images to IndexedDB and RAM cache to prevent image loss during re-renders or state updates
   useEffect(() => {
     if (Array.isArray(products) && products.length > 0) {
