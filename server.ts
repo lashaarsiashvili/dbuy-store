@@ -1320,6 +1320,34 @@ app.get('/api/store/products', (req, res) => {
   });
 });
 
+// POST: Save / update a single product (used by Admin Dashboard and D1 API compatibility)
+app.post('/api/products', (req, res) => {
+  try {
+    const body = req.body;
+    if (!body || !body.id) {
+      res.status(400).json({ success: false, error: 'Product ID is required' });
+      return;
+    }
+    const idx = storeDb.products.findIndex((p: any) => p.id === body.id);
+    if (idx >= 0) {
+      storeDb.products[idx] = { ...storeDb.products[idx], ...body };
+    } else {
+      storeDb.products.unshift(body);
+    }
+    storeDb.lastUpdated = new Date().toISOString();
+    saveStoreDatabase();
+    syncCatalogToInitialProducts(storeDb.products);
+    res.json({ success: true, product: body });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to save product' });
+  }
+});
+
+// GET: Fetch products (D1 API compatibility)
+app.get('/api/products', (req, res) => {
+  res.json({ success: true, products: storeDb.products });
+});
+
 // POST: Increment product view count
 app.post('/api/store/products/:id/view', (req, res) => {
   try {

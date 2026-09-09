@@ -127,6 +127,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   try {
     await db.exec('CREATE TABLE IF NOT EXISTS store_kv (key TEXT PRIMARY KEY, value TEXT);');
     await db.exec('CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, price REAL, original_price REAL, image TEXT, images TEXT, category TEXT, stock INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);');
+    try { await db.exec('ALTER TABLE products ADD COLUMN name_ka TEXT;'); } catch (e) {}
+    try { await db.exec('ALTER TABLE products ADD COLUMN description_en TEXT;'); } catch (e) {}
+    try { await db.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;'); } catch (e) {}
+    try { await db.exec('ALTER TABLE products ADD COLUMN features TEXT;'); } catch (e) {}
+    try { await db.exec('ALTER TABLE products ADD COLUMN features_en TEXT;'); } catch (e) {}
+    try { await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;'); } catch (e) {}
   } catch (bootstrapErr: any) {
     return jsonResponse({
       success: false,
@@ -388,8 +394,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
           // Write directly to the products relational table in D1 as requested
           try {
-            const name = p.title || p.name || '';
-            const description = p.description || '';
+            const name = p.title_en || p.title || p.name || '';
+            const nameKa = p.title_ka || p.titleKa || '';
+            const descEn = p.description_en || p.description || '';
+            const descKa = p.description_ka || p.descriptionKa || '';
+            const description = descEn || descKa;
+            const featuresStr = JSON.stringify(Array.isArray(p.features) ? p.features : []);
+            const featuresEnStr = JSON.stringify(Array.isArray(p.features_en) ? p.features_en : (Array.isArray(p.featuresEn) ? p.featuresEn : []));
+            const featuresKaStr = JSON.stringify(Array.isArray(p.features_ka) ? p.features_ka : (Array.isArray(p.featuresKa) ? p.featuresKa : []));
             const price = Number(p.price) || 0;
             const originalPrice = p.origPrice !== undefined && p.origPrice !== null && p.origPrice !== '' ? Number(p.origPrice) : (p.original_price !== undefined && p.original_price !== null && p.original_price !== '' ? Number(p.original_price) : null);
             const category = p.category || '';
@@ -397,15 +409,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
             // Try updating first
             const updateRes = await db.prepare(
-              'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, image = ?, images = ?, category = ?, stock = ? WHERE id = ?'
-            ).bind(name, description, price, originalPrice, primaryImage, imagesStr, category, stock, p.id).run();
+              'UPDATE products SET name = ?, name_ka = ?, description = ?, description_en = ?, description_ka = ?, features = ?, features_en = ?, features_ka = ?, price = ?, original_price = ?, image = ?, images = ?, category = ?, stock = ? WHERE id = ?'
+            ).bind(name, nameKa, description, descEn, descKa, featuresStr, featuresEnStr, featuresKaStr, price, originalPrice, primaryImage, imagesStr, category, stock, p.id).run();
 
             const changes = (updateRes as any)?.meta?.changes || 0;
             if (changes === 0) {
               // If product does not exist yet, insert it
               await db.prepare(
-                'INSERT INTO products (id, name, description, price, original_price, image, images, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-              ).bind(p.id, name, description, price, originalPrice, primaryImage, imagesStr, category, stock).run();
+                'INSERT INTO products (id, name, name_ka, description, description_en, description_ka, features, features_en, features_ka, price, original_price, image, images, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              ).bind(p.id, name, nameKa, description, descEn, descKa, featuresStr, featuresEnStr, featuresKaStr, price, originalPrice, primaryImage, imagesStr, category, stock).run();
             }
           } catch (relationalDbErr) {
             console.error('Relational DB product persistence error:', relationalDbErr);

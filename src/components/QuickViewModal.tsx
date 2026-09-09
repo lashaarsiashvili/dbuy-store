@@ -49,13 +49,13 @@ export const QuickViewModal: React.FC = () => {
 
   if (!quickViewProduct) return null;
 
-  const displayTitle = (language === 'ka' && quickViewProduct.titleKa)
-    ? quickViewProduct.titleKa
-    : quickViewProduct.title;
+  const displayTitle = language === 'en'
+    ? (quickViewProduct.title_en || quickViewProduct.title)
+    : (quickViewProduct.title_ka || quickViewProduct.titleKa || quickViewProduct.title);
 
-  const displayDesc = (language === 'ka' && quickViewProduct.descriptionKa)
-    ? quickViewProduct.descriptionKa
-    : quickViewProduct.description;
+  const displayDesc = language === 'en'
+    ? (quickViewProduct.description_en || quickViewProduct.description)
+    : (quickViewProduct.description_ka || quickViewProduct.descriptionKa || quickViewProduct.description);
 
   // Build full gallery of images for this product
   const galleryImages: string[] = (quickViewProduct.images && Array.isArray(quickViewProduct.images) && quickViewProduct.images.length > 0)

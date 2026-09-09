@@ -41,6 +41,14 @@ export const onRequest: PagesFunction<any> = async (context) => {
         );`
       );
 
+      // Add columns if they don't exist yet (for multilingual fields)
+      try { await db.exec('ALTER TABLE products ADD COLUMN name_ka TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN description_en TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN features TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN features_en TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;'); } catch (e) {}
+
       const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
 
       const products = results.map((row: any) => {
@@ -54,10 +62,37 @@ export const onRequest: PagesFunction<any> = async (context) => {
           imagesArr = row.image ? [row.image] : [];
         }
 
+        let featuresArr: string[] = [];
+        try {
+          featuresArr = row.features ? (typeof row.features === 'string' ? JSON.parse(row.features) : row.features) : [];
+        } catch (e) {
+          featuresArr = [];
+        }
+
+        let featuresEnArr: string[] = [];
+        try {
+          featuresEnArr = row.features_en ? (typeof row.features_en === 'string' ? JSON.parse(row.features_en) : row.features_en) : [];
+        } catch (e) {
+          featuresEnArr = [];
+        }
+
+        let featuresKaArr: string[] = [];
+        try {
+          featuresKaArr = row.features_ka ? (typeof row.features_ka === 'string' ? JSON.parse(row.features_ka) : row.features_ka) : [];
+        } catch (e) {
+          featuresKaArr = [];
+        }
+
         return {
           id: row.id,
           title: row.name,
+          titleKa: row.name_ka || '',
+          title_en: row.name,
+          title_ka: row.name_ka || '',
           description: row.description || '',
+          descriptionKa: row.description_ka || '',
+          description_en: row.description_en || row.description || '',
+          description_ka: row.description_ka || '',
           price: Number(row.price) || 0,
           origPrice: Number(row.original_price) || 0,
           image: imagesArr[0] || row.image || '',
@@ -66,7 +101,9 @@ export const onRequest: PagesFunction<any> = async (context) => {
           stock: Number(row.stock) || 0,
           rating: 5.0,
           reviewsCount: 1,
-          features: [],
+          features: featuresArr,
+          features_en: featuresEnArr,
+          features_ka: featuresKaArr,
           isPublishedGlobally: true,
         };
       });
@@ -115,12 +152,35 @@ export const onRequest: PagesFunction<any> = async (context) => {
       const primaryImage = rawImages[0] || '';
       const serializedImages = JSON.stringify(rawImages);
 
+      // Ensure columns exist
+      try { await db.exec('ALTER TABLE products ADD COLUMN name_ka TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN description_en TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN features TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN features_en TEXT;'); } catch (e) {}
+      try { await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;'); } catch (e) {}
+
+      const rawFeatures = Array.isArray(body.features) ? body.features : [];
+      const rawFeaturesEn = Array.isArray(body.features_en) ? body.features_en : (Array.isArray(body.featuresEn) ? body.featuresEn : []);
+      const rawFeaturesKa = Array.isArray(body.features_ka) ? body.features_ka : (Array.isArray(body.featuresKa) ? body.featuresKa : []);
+
+      const descEn = String(body.description_en || body.description || '');
+      const descKa = String(body.description_ka || body.descriptionKa || '');
+      const titleEn = String(body.title_en || body.title || body.name || '');
+      const titleKa = String(body.title_ka || body.titleKa || '');
+
       await db.prepare(`
-        INSERT INTO products (id, name, description, price, original_price, image, images, category, stock, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO products (id, name, name_ka, description, description_en, description_ka, features, features_en, features_ka, price, original_price, image, images, category, stock, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
           name = excluded.name,
+          name_ka = excluded.name_ka,
           description = excluded.description,
+          description_en = excluded.description_en,
+          description_ka = excluded.description_ka,
+          features = excluded.features,
+          features_en = excluded.features_en,
+          features_ka = excluded.features_ka,
           price = excluded.price,
           original_price = excluded.original_price,
           image = excluded.image,
@@ -130,8 +190,14 @@ export const onRequest: PagesFunction<any> = async (context) => {
           updated_at = CURRENT_TIMESTAMP
       `).bind(
         String(body.id),
-        String(body.title || body.name || ''),
-        String(body.description || ''),
+        titleEn,
+        titleKa,
+        descEn || descKa,
+        descEn,
+        descKa,
+        JSON.stringify(rawFeatures),
+        JSON.stringify(rawFeaturesEn),
+        JSON.stringify(rawFeaturesKa),
         Number(body.price) || 0,
         body.origPrice || body.original_price ? Number(body.origPrice || body.original_price) : null,
         primaryImage,

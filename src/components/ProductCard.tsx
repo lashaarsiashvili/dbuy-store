@@ -24,7 +24,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const [justAdded, setJustAdded] = useState(false);
 
   const isFavorite = isInWishlist(product.id);
-  const displayTitle = (language === 'ka' && product.titleKa) ? product.titleKa : product.title;
+  const displayTitle = language === 'en'
+    ? (product.title_en || product.title)
+    : (product.title_ka || product.titleKa || product.title);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();

@@ -67,15 +67,17 @@ export const ProductDetailPage: React.FC = () => {
     setActiveImageIndex(0);
     setQuantity(1);
     if (product) {
-      const displayTitle = (language === 'ka' && product.titleKa) ? product.titleKa : product.title;
-      recordVisit(`Product: ${displayTitle}`);
-      document.title = `${displayTitle} | DBUY Store`;
+      const activeTitle = language === 'en'
+        ? (product.title_en || product.title)
+        : (product.title_ka || product.titleKa || product.title);
+      recordVisit(`Product: ${activeTitle}`);
+      document.title = `${activeTitle} | DBUY Store`;
       incrementProductViews(product.id);
     }
     return () => {
       document.title = 'DBUY - Quality Products for Modern Living';
     };
-  }, [activeProductId, product?.id]);
+  }, [activeProductId, product?.id, language]);
 
   if (!product) {
     return (
@@ -103,8 +105,12 @@ export const ProductDetailPage: React.FC = () => {
   }
 
   const isFavorite = isInWishlist(product.id);
-  const displayTitle = (language === 'ka' && product.titleKa) ? product.titleKa : product.title;
-  const displayDesc = (language === 'ka' && product.descriptionKa) ? product.descriptionKa : product.description;
+  const displayTitle = language === 'en'
+    ? (product.title_en || product.title)
+    : (product.title_ka || product.titleKa || product.title);
+  const displayDesc = language === 'en'
+    ? (product.description_en || product.description)
+    : (product.description_ka || product.descriptionKa || product.description);
   const productUrl = getProductUrl(product.id);
 
   let parsedImages: string[] = [];

@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { smartApiFetch } from '../lib/api';
 import { Product, Order, BillboardSlide, LogoOptionId } from '../types';
-import { generateProductFeatures } from '../utils/productFeatures';
+import { generateProductFeatures, isGeorgianText } from '../utils/productFeatures';
 import { generateProductAdCopy } from '../utils/adCopyGenerator';
 import { handleImageError } from '../utils/imageFallback';
 import { saveImageBackupIDB } from '../utils/imageStorage';
@@ -418,6 +418,7 @@ export const AdminDashboard: React.FC = () => {
   const [newImageUrl, setNewImageUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const [featuresTab, setFeaturesTab] = useState<'en' | 'ka'>('en');
   const [prodForm, setProdForm] = useState({
     title: '',
     titleKa: '',
@@ -432,6 +433,8 @@ export const AdminDashboard: React.FC = () => {
     description: '',
     descriptionKa: '',
     features: ['', '', '', ''] as string[],
+    featuresEn: ['', '', '', ''] as string[],
+    featuresKa: ['', '', '', ''] as string[],
   });
 
   // Product catalog table search & filter
@@ -859,20 +862,24 @@ export const AdminDashboard: React.FC = () => {
         } else if (fieldTarget === 'descriptionKa') {
           if (result.descriptionKa) next.descriptionKa = result.descriptionKa;
         } else if (fieldTarget === 'features') {
-          if (isKa && result.featuresKa && result.featuresKa.length > 0) {
-            next.features = result.featuresKa.slice(0, 4);
-          } else if (result.featuresEn && result.featuresEn.length > 0) {
-            next.features = result.featuresEn.slice(0, 4);
+          if (result.featuresEn && result.featuresEn.length > 0) {
+            next.featuresEn = result.featuresEn.slice(0, 4);
           }
+          if (result.featuresKa && result.featuresKa.length > 0) {
+            next.featuresKa = result.featuresKa.slice(0, 4);
+          }
+          next.features = (isKa && next.featuresKa.length > 0) ? next.featuresKa : next.featuresEn;
         } else {
           // all
           if (result.descriptionEn) next.description = result.descriptionEn;
           if (result.descriptionKa) next.descriptionKa = result.descriptionKa;
-          if (isKa && result.featuresKa && result.featuresKa.length > 0) {
-            next.features = result.featuresKa.slice(0, 4);
-          } else if (result.featuresEn && result.featuresEn.length > 0) {
-            next.features = result.featuresEn.slice(0, 4);
+          if (result.featuresEn && result.featuresEn.length > 0) {
+            next.featuresEn = result.featuresEn.slice(0, 4);
           }
+          if (result.featuresKa && result.featuresKa.length > 0) {
+            next.featuresKa = result.featuresKa.slice(0, 4);
+          }
+          next.features = (isKa && next.featuresKa.length > 0) ? next.featuresKa : next.featuresEn;
           if (!prev.titleKa && result.titleKa) next.titleKa = result.titleKa;
           if (!prev.title && result.titleEn) next.title = result.titleEn;
           if (!prev.customSlug && result.customSlug) next.customSlug = result.customSlug;
@@ -898,28 +905,52 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const handleAutoGenerateFeatures = () => {
-    const generated = generateProductFeatures({
-      title: prodForm.title || (isKa ? 'ახალი პროდუქტი' : 'New Product'),
-      description: prodForm.description || '',
-      category: prodForm.category,
-      price: prodForm.price,
-    }, isKa ? 'ka' : 'en');
+  const handleAutoGenerateFeatures = (targetLang: 'en' | 'ka' = featuresTab) => {
+    if (targetLang === 'en') {
+      const generated = generateProductFeatures({
+        title: prodForm.title || (isKa ? 'ახალი პროდუქტი' : 'New Product'),
+        description: prodForm.description || '',
+        category: prodForm.category,
+        price: prodForm.price,
+      }, 'en');
 
-    setProdForm(prev => ({
-      ...prev,
-      features: generated.slice(0, 4),
-    }));
+      setProdForm(prev => ({
+        ...prev,
+        featuresEn: generated.slice(0, 4),
+        features: generated.slice(0, 4),
+      }));
 
-    addToast(isKa ? '4 ძირითადი მახასიათებელი დაგენერირდა!' : '4 Key Features auto-generated!', 'success');
+      addToast(isKa ? '4 ინგლისური მახასიათებელი დაგენერირდა!' : '4 English Key Features auto-generated!', 'success');
+    } else {
+      const generated = generateProductFeatures({
+        title: prodForm.titleKa || prodForm.title || (isKa ? 'ახალი პროდუქტი' : 'New Product'),
+        description: prodForm.descriptionKa || prodForm.description || '',
+        category: prodForm.category,
+        price: prodForm.price,
+      }, 'ka');
+
+      setProdForm(prev => ({
+        ...prev,
+        featuresKa: generated.slice(0, 4),
+      }));
+
+      addToast(isKa ? '4 ქართული მახასიათებელი დაგენერირდა!' : '4 Georgian Key Features auto-generated!', 'success');
+    }
   };
 
-  const handleFeatureChange = (index: number, value: string) => {
+  const handleFeatureChange = (index: number, value: string, lang: 'en' | 'ka' = featuresTab) => {
     setProdForm(prev => {
-      const newFeats = [...(prev.features || ['', '', '', ''])];
-      while (newFeats.length < 4) newFeats.push('');
-      newFeats[index] = value;
-      return { ...prev, features: newFeats };
+      if (lang === 'en') {
+        const newFeats = [...(prev.featuresEn || ['', '', '', ''])];
+        while (newFeats.length < 4) newFeats.push('');
+        newFeats[index] = value;
+        return { ...prev, featuresEn: newFeats, features: newFeats };
+      } else {
+        const newFeats = [...(prev.featuresKa || ['', '', '', ''])];
+        while (newFeats.length < 4) newFeats.push('');
+        newFeats[index] = value;
+        return { ...prev, featuresKa: newFeats };
+      }
     });
   };
 
@@ -971,7 +1002,10 @@ export const AdminDashboard: React.FC = () => {
       description: '',
       descriptionKa: '',
       features: ['', '', '', ''],
+      featuresEn: ['', '', '', ''],
+      featuresKa: ['', '', '', ''],
     });
+    setFeaturesTab(isKa ? 'ka' : 'en');
     setIsProductModalOpen(true);
   };
 
@@ -985,17 +1019,41 @@ export const AdminDashboard: React.FC = () => {
       ? prod.images
       : [prod.image];
 
-    const prodFeatures = (prod.features && prod.features.length >= 3)
-      ? prod.features.slice(0, 4)
-      : generateProductFeatures(prod, isKa ? 'ka' : 'en');
+    const prodFeaturesEn = (prod.features_en && prod.features_en.length >= 3)
+      ? [...prod.features_en.slice(0, 4)]
+      : (prod.features && prod.features.length >= 3 && !isGeorgianText(prod.features.join(' ')))
+      ? [...prod.features.slice(0, 4)]
+      : generateProductFeatures({
+          title: prod.title_en || prod.title,
+          description: prod.description_en || prod.description,
+          category: prod.category,
+          price: prod.price,
+        }, 'en');
 
-    while (prodFeatures.length < 4) {
-      prodFeatures.push('');
+    while (prodFeaturesEn.length < 4) {
+      prodFeaturesEn.push('');
     }
 
+    const prodFeaturesKa = (prod.features_ka && prod.features_ka.length >= 3)
+      ? [...prod.features_ka.slice(0, 4)]
+      : (prod.features && prod.features.length >= 3 && isGeorgianText(prod.features.join(' ')))
+      ? [...prod.features.slice(0, 4)]
+      : generateProductFeatures({
+          title: prod.title_ka || prod.titleKa || prod.title,
+          description: prod.description_ka || prod.descriptionKa || prod.description,
+          category: prod.category,
+          price: prod.price,
+        }, 'ka');
+
+    while (prodFeaturesKa.length < 4) {
+      prodFeaturesKa.push('');
+    }
+
+    setFeaturesTab(isKa ? 'ka' : 'en');
+
     setProdForm({
-      title: prod.title,
-      titleKa: prod.titleKa || '',
+      title: prod.title_en || prod.title,
+      titleKa: prod.title_ka || prod.titleKa || '',
       customSlug: prod.customSlug || generateProductSlug(prod.title),
       category: prod.category,
       price: prod.price,
@@ -1004,9 +1062,11 @@ export const AdminDashboard: React.FC = () => {
       badge: prod.badge || '',
       image: prodImages[0] || prod.image,
       images: prodImages,
-      description: prod.description,
-      descriptionKa: prod.descriptionKa || '',
-      features: prodFeatures,
+      description: prod.description_en || prod.description,
+      descriptionKa: prod.description_ka || prod.descriptionKa || '',
+      features: isKa ? prodFeaturesKa : prodFeaturesEn,
+      featuresEn: prodFeaturesEn,
+      featuresKa: prodFeaturesKa,
     });
     setIsProductModalOpen(true);
   };
@@ -1035,27 +1095,50 @@ export const AdminDashboard: React.FC = () => {
     
     const finalPrimaryImage = finalImages[0] || defaultStockCover;
 
-    // Prepare 4 Key Features (auto-generate only if blank and description exists)
-    let finalFeatures = (prodForm.features || [])
+    // Prepare 4 Key Features for English and Georgian
+    let finalFeaturesEn = (prodForm.featuresEn || [])
       .map(f => (f || '').trim())
       .filter(f => f.length > 0);
 
-    if (finalFeatures.length < 4 && prodForm.description) {
-      const generated = generateProductFeatures({
-        title: effectiveTitle,
+    let finalFeaturesKa = (prodForm.featuresKa || [])
+      .map(f => (f || '').trim())
+      .filter(f => f.length > 0);
+
+    // Auto-generate English features if insufficient
+    if (finalFeaturesEn.length < 4) {
+      const generatedEn = generateProductFeatures({
+        title: prodForm.title || effectiveTitle,
         description: prodForm.description,
         category: prodForm.category,
         price: Number(prodForm.price) || 0,
-      }, isKa ? 'ka' : 'en');
+      }, 'en');
 
-      // Fill in remaining slots
-      while (finalFeatures.length < 4 && generated.length > 0) {
-        const nextFeat = generated.shift();
-        if (nextFeat && !finalFeatures.includes(nextFeat)) {
-          finalFeatures.push(nextFeat);
+      while (finalFeaturesEn.length < 4 && generatedEn.length > 0) {
+        const nextFeat = generatedEn.shift();
+        if (nextFeat && !finalFeaturesEn.includes(nextFeat)) {
+          finalFeaturesEn.push(nextFeat);
         }
       }
     }
+
+    // Auto-generate Georgian features if insufficient
+    if (finalFeaturesKa.length < 4) {
+      const generatedKa = generateProductFeatures({
+        title: prodForm.titleKa || prodForm.title || effectiveTitle,
+        description: prodForm.descriptionKa || prodForm.description,
+        category: prodForm.category,
+        price: Number(prodForm.price) || 0,
+      }, 'ka');
+
+      while (finalFeaturesKa.length < 4 && generatedKa.length > 0) {
+        const nextFeat = generatedKa.shift();
+        if (nextFeat && !finalFeaturesKa.includes(nextFeat)) {
+          finalFeaturesKa.push(nextFeat);
+        }
+      }
+    }
+
+    const finalFeatures = (isKa && finalFeaturesKa.length > 0) ? finalFeaturesKa : (finalFeaturesEn.length > 0 ? finalFeaturesEn : finalFeaturesKa);
 
     const numPrice = Number(prodForm.price) || 0;
     const numOrigPrice = prodForm.origPrice !== '' && prodForm.origPrice !== undefined ? Number(prodForm.origPrice) : undefined;
@@ -1070,6 +1153,8 @@ export const AdminDashboard: React.FC = () => {
         id: editingProduct ? editingProduct.id : generatedNewId,
         title: prodForm.title || prodForm.titleKa || 'Product',
         titleKa: prodForm.titleKa,
+        title_en: prodForm.title || prodForm.titleKa || 'Product',
+        title_ka: prodForm.titleKa,
         customSlug: finalSlug,
         category: prodForm.category,
         price: numPrice,
@@ -1078,9 +1163,13 @@ export const AdminDashboard: React.FC = () => {
         badge: prodForm.badge || undefined,
         image: finalImages[0] || '',
         images: finalImages,
-        description: prodForm.description,
+        description: prodForm.description || prodForm.descriptionKa,
         descriptionKa: prodForm.descriptionKa,
+        description_en: prodForm.description,
+        description_ka: prodForm.descriptionKa,
         features: finalFeatures.slice(0, 4),
+        features_en: finalFeaturesEn.slice(0, 4),
+        features_ka: finalFeaturesKa.slice(0, 4),
         isPublishedGlobally: true,
         publishedAt: new Date().toISOString(),
         rating: editingProduct ? (editingProduct.rating || 5.0) : 5.0,
@@ -1146,6 +1235,8 @@ export const AdminDashboard: React.FC = () => {
         description: '',
         descriptionKa: '',
         features: ['', '', '', ''],
+        featuresEn: ['', '', '', ''],
+        featuresKa: ['', '', '', ''],
       });
     }
   };
@@ -4868,7 +4959,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* 4 Key Features Section: Auto-Generation & Manual Editing */}
+              {/* 4 Key Features Section: Dual-Language (EN & KA) Auto-Generation & Manual Editing */}
               <div className="bg-blue-50/50 p-4 rounded-3xl border border-blue-100 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
@@ -4878,8 +4969,8 @@ export const AdminDashboard: React.FC = () => {
                     </label>
                     <p className="text-[11px] text-slate-500 mt-0.5">
                       {isKa 
-                        ? 'მყიდველისთვის მიმზიდველი 4 მთავარი პუნქტი (აისახება პროდუქტის გვერდზე)' 
-                        : 'Attractive highlights displayed on product detail & quick view'}
+                        ? 'მყიდველისთვის მიმზიდველი 4 მთავარი პუნქტი (ინგლისურ და ქართულ ენებზე)' 
+                        : 'Attractive highlights displayed on product detail & quick view in both languages'}
                     </p>
                   </div>
 
@@ -4888,28 +4979,75 @@ export const AdminDashboard: React.FC = () => {
                     disabled={isGeneratingCopy}
                     onClick={() => handleGenerateAdCopy('features')}
                     className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer shrink-0 disabled:opacity-50"
-                    title={isKa ? 'ავტომატური გენერაცია სათაურისა და აღწერის მიხედვით' : 'Auto-generate 4 features from title & description'}
+                    title={isKa ? 'ავტომატური გენერაცია ორივე ენისთვის' : 'Auto-generate 4 features for both languages'}
                   >
                     <Wand2 className="w-3.5 h-3.5 text-amber-300" />
                     <span>{isKa ? '🪄 AI 4 მახასიათებელი' : '🪄 AI 4 Features'}</span>
                   </button>
                 </div>
 
+                {/* Language Switch Tabs for Features */}
+                <div className="flex items-center justify-between pt-1 border-t border-blue-100/60">
+                  <div className="flex items-center space-x-1 p-1 bg-blue-100/70 rounded-xl">
+                    <button
+                      type="button"
+                      onClick={() => setFeaturesTab('en')}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        featuresTab === 'en'
+                          ? 'bg-white text-blue-600 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      🇺🇸 English ({(prodForm.featuresEn || []).filter(f => (f || '').trim()).length}/4)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFeaturesTab('ka')}
+                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
+                        featuresTab === 'ka'
+                          ? 'bg-white text-blue-600 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      🇬🇪 ქართული ({(prodForm.featuresKa || []).filter(f => (f || '').trim()).length}/4)
+                    </button>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleAutoGenerateFeatures(featuresTab)}
+                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 cursor-pointer"
+                    title={featuresTab === 'en' ? 'Auto-generate 4 English features' : 'ავტომატური ქართული მახასიათებლები'}
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>{featuresTab === 'ka' ? 'ქართული პუნქტების განახლება' : 'Regenerate English points'}</span>
+                  </button>
+                </div>
+
                 <div className="space-y-2">
-                  {[0, 1, 2, 3].map((featIdx) => (
-                    <div key={featIdx} className="flex items-center space-x-2 bg-white p-1.5 pl-2.5 rounded-xl border border-slate-200 shadow-2xs">
-                      <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold text-[10px] shrink-0">
-                        {featIdx + 1}
+                  {[0, 1, 2, 3].map((featIdx) => {
+                    const currentVal = featuresTab === 'en'
+                      ? (prodForm.featuresEn?.[featIdx] ?? '')
+                      : (prodForm.featuresKa?.[featIdx] ?? '');
+                    return (
+                      <div key={featIdx} className="flex items-center space-x-2 bg-white p-1.5 pl-2.5 rounded-xl border border-slate-200 shadow-2xs">
+                        <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold text-[10px] shrink-0">
+                          {featIdx + 1}
+                        </div>
+                        <input
+                          type="text"
+                          value={currentVal}
+                          onChange={e => handleFeatureChange(featIdx, e.target.value, featuresTab)}
+                          placeholder={
+                            featuresTab === 'en'
+                              ? `Key feature #${featIdx + 1} (English selling point)`
+                              : `მახასიათებელი #${featIdx + 1} (ქართულად)`
+                          }
+                          className="flex-1 text-xs text-slate-800 focus:outline-hidden"
+                        />
                       </div>
-                      <input
-                        type="text"
-                        value={prodForm.features?.[featIdx] ?? ''}
-                        onChange={e => handleFeatureChange(featIdx, e.target.value)}
-                        placeholder=""
-                        className="flex-1 text-xs text-slate-800 focus:outline-hidden"
-                      />
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 

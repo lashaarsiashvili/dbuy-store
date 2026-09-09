@@ -10,6 +10,8 @@ export interface Product {
   id: string;
   title: string;
   titleKa?: string;
+  title_en?: string;
+  title_ka?: string;
   customSlug?: string;
   category: 'tech' | 'fitness' | 'everyday' | 'accessories';
   price: number;
@@ -20,9 +22,13 @@ export interface Product {
   images?: string[];
   description: string;
   descriptionKa?: string;
+  description_en?: string;
+  description_ka?: string;
   rating: number;
   reviewsCount: number;
   features?: string[];
+  features_en?: string[];
+  features_ka?: string[];
   isDeal?: boolean;
   isPublishedGlobally?: boolean;
   publishedAt?: string;

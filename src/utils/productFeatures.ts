@@ -1,5 +1,9 @@
 import { Product } from '../types';
 
+export function isGeorgianText(text: string): boolean {
+  return /[\u10A0-\u10FF]/.test(text);
+}
+
 /**
  * Generates 4 compelling, domain-specific Key Features for a product based on its title, description, and category.
  */
@@ -12,13 +16,18 @@ export function generateProductFeatures(
   const combined = `${title} ${desc}`.toLowerCase();
   const isKa = lang === 'ka';
 
-  // 1. Try to extract explicit bullet points from description
+  // 1. Try to extract explicit bullet points from description that match the requested language
   const bulletCandidates: string[] = [];
   if (desc) {
     const lines = desc.split(/[\n\r]+/);
     for (const line of lines) {
       const cleaned = line.replace(/^[\s*•\-–—►✔✓\d.)]+/, '').trim();
       if (cleaned.length >= 10 && cleaned.length <= 90 && !cleaned.toLowerCase().startsWith('http')) {
+        const hasKa = isGeorgianText(cleaned);
+        // If English is requested, do not extract Georgian bullets
+        if (!isKa && hasKa) continue;
+        // If Georgian is requested, do not extract bullets with exclusively English letters
+        if (isKa && !hasKa && cleaned.length > 20) continue;
         bulletCandidates.push(cleaned);
       }
     }
@@ -263,12 +272,51 @@ export function generateProductFeatures(
 }
 
 /**
- * Returns either existing features or automatically generated 4 Key Features for any product.
+ * Returns either existing localized features or automatically generated 4 Key Features for any product.
  */
 export function getProductFeatures(product: Product, lang: string = 'en'): string[] {
-  if (product.features && product.features.length >= 3) {
-    return product.features.slice(0, 4);
+  const isKa = lang === 'ka';
+
+  if (isKa) {
+    // 1. Explicit Georgian features array
+    if (product.features_ka && Array.isArray(product.features_ka) && product.features_ka.length > 0) {
+      const valid = product.features_ka.filter(f => typeof f === 'string' && f.trim().length > 0);
+      if (valid.length > 0) return valid.slice(0, 4);
+    }
+    // 2. Generic features array if it contains Georgian text
+    if (product.features && Array.isArray(product.features) && product.features.length > 0) {
+      const valid = product.features.filter(f => typeof f === 'string' && f.trim().length > 0);
+      if (valid.length > 0 && valid.some(f => isGeorgianText(f))) {
+        return valid.slice(0, 4);
+      }
+    }
+    // 3. Fallback: auto-generate Georgian features
+    return generateProductFeatures({
+      title: product.titleKa || product.title_ka || product.title,
+      description: product.descriptionKa || product.description_ka || product.description,
+      category: product.category,
+      price: product.price,
+    }, 'ka');
   }
 
-  return generateProductFeatures(product, lang);
+  // English (or other international languages)
+  // 1. Explicit English features array
+  if (product.features_en && Array.isArray(product.features_en) && product.features_en.length > 0) {
+    const valid = product.features_en.filter(f => typeof f === 'string' && f.trim().length > 0);
+    if (valid.length > 0) return valid.slice(0, 4);
+  }
+  // 2. Generic features array if it contains English text (no Georgian characters)
+  if (product.features && Array.isArray(product.features) && product.features.length > 0) {
+    const valid = product.features.filter(f => typeof f === 'string' && f.trim().length > 0);
+    if (valid.length > 0 && !valid.some(f => isGeorgianText(f))) {
+      return valid.slice(0, 4);
+    }
+  }
+  // 3. Fallback: auto-generate English features
+  return generateProductFeatures({
+    title: product.title_en || product.title,
+    description: product.description_en || product.description,
+    category: product.category,
+    price: product.price,
+  }, 'en');
 }
