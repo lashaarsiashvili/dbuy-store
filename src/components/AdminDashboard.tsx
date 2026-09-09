@@ -1045,14 +1045,21 @@ export const AdminDashboard: React.FC = () => {
         reviewsCount: editingProduct ? (editingProduct.reviewsCount || 1) : 1,
       };
 
-      const adminSlug = adminSecretSlug || sessionStorage.getItem('admin_slug') || localStorage.getItem('admin_slug') || 'admin';
+      const adminSlug = adminSecretSlug || 
+        localStorage.getItem('dbuy_admin_secret_slug') || 
+        localStorage.getItem('admin_token') || 
+        sessionStorage.getItem('admin_token') || 
+        sessionStorage.getItem('admin_slug') || 
+        localStorage.getItem('admin_slug') || 
+        'dashboard';
 
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Slug': adminSlug,
-          'Authorization': `Bearer ${adminSlug}`
+          'Authorization': `Bearer ${adminSlug}`,
+          'x-admin-key': adminSlug
         },
         body: JSON.stringify(productPayload),
       });
@@ -1089,12 +1096,20 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      const adminSlug = adminSecretSlug || sessionStorage.getItem('admin_slug') || localStorage.getItem('admin_slug') || 'admin';
+      const adminSlug = adminSecretSlug || 
+        localStorage.getItem('dbuy_admin_secret_slug') || 
+        localStorage.getItem('admin_token') || 
+        sessionStorage.getItem('admin_token') || 
+        sessionStorage.getItem('admin_slug') || 
+        localStorage.getItem('admin_slug') || 
+        'dashboard';
+
       const res = await fetch(`/api/products?id=${id}`, {
         method: 'DELETE',
         headers: {
           'X-Admin-Slug': adminSlug,
-          'Authorization': `Bearer ${adminSlug}`
+          'Authorization': `Bearer ${adminSlug}`,
+          'x-admin-key': adminSlug
         }
       });
       if (!res.ok) {
@@ -1113,13 +1128,21 @@ export const AdminDashboard: React.FC = () => {
 
   const handleDuplicateProduct = async (duplicated: any) => {
     try {
-      const adminSlug = adminSecretSlug || sessionStorage.getItem('admin_slug') || localStorage.getItem('admin_slug') || 'admin';
+      const adminSlug = adminSecretSlug || 
+        localStorage.getItem('dbuy_admin_secret_slug') || 
+        localStorage.getItem('admin_token') || 
+        sessionStorage.getItem('admin_token') || 
+        sessionStorage.getItem('admin_slug') || 
+        localStorage.getItem('admin_slug') || 
+        'dashboard';
+
       const res = await fetch('/api/products', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'X-Admin-Slug': adminSlug,
-          'Authorization': `Bearer ${adminSlug}`
+          'Authorization': `Bearer ${adminSlug}`,
+          'x-admin-key': adminSlug
         },
         body: JSON.stringify(duplicated),
       });

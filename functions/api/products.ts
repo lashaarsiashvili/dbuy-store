@@ -95,7 +95,9 @@ export const onRequest: PagesFunction<any> = async (context) => {
         // Fallback
       }
 
-      const clientAdminSlug = request.headers.get('x-admin-slug') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+      const clientAdminSlug = request.headers.get('x-admin-slug') || 
+        request.headers.get('x-admin-key') || 
+        request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
       if (!clientAdminSlug || clientAdminSlug.trim() !== adminSecretSlug.trim()) {
         return Response.json({ success: false, error: 'Access Denied: Administrative authority required' }, { status: 403 });
       }
@@ -154,7 +156,9 @@ export const onRequest: PagesFunction<any> = async (context) => {
         // Fallback
       }
 
-      const clientAdminSlug = request.headers.get('x-admin-slug') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+      const clientAdminSlug = request.headers.get('x-admin-slug') || 
+        request.headers.get('x-admin-key') || 
+        request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
       if (!clientAdminSlug || clientAdminSlug.trim() !== adminSecretSlug.trim()) {
         return Response.json({ success: false, error: 'Access Denied: Administrative authority required' }, { status: 403 });
       }

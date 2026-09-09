@@ -942,9 +942,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // 1. Authoritative server backend persistence (immediate disk, memory & source backup)
     // The server converts raw base64 images into physical persistent file URLs (e.g. /uploads/prod-XYZ.jpg)
     try {
+      const adminSlug = adminSecretSlug || localStorage.getItem('dbuy_admin_secret_slug') || 'dashboard';
       const res = await fetch('/api/store/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSlug,
+          'Authorization': `Bearer ${adminSlug}`,
+          'x-admin-key': adminSlug
+        },
         body: JSON.stringify({ products: sanitizedProducts }),
       });
       if (res.ok) {
