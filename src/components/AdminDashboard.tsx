@@ -615,12 +615,12 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      const compressedBase64 = await compressImageFile(file);
-      setBillboardForm(prev => ({ ...prev, image: compressedBase64 }));
+      const base64Data = await readImageAsBase64(file);
+      setBillboardForm(prev => ({ ...prev, image: base64Data }));
       addToast(isKa ? 'ბილბორდის სურათი დაემატა!' : 'Billboard image added!', 'success');
     } catch (err) {
-      console.error('Error compressing billboard image:', err);
-      addToast(isKa ? 'შეცდომა სურათის დამუშავებისას' : 'Error compressing image file', 'error');
+      console.error('Error reading billboard image:', err);
+      addToast(isKa ? 'შეცდომა სურათის წაკითხვისას' : 'Error reading image file', 'error');
     }
   };
 

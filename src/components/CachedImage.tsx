@@ -20,11 +20,18 @@ export const CachedImage: React.FC<CachedImageProps> = ({
   className,
   ...props
 }) => {
-  const resolvedSrc = useCachedImage(src, fallbackSrc);
+  // Check if src is a legacy broken entry starting with /uploads/
+  const isLegacyBroken = typeof src === 'string' && src.startsWith('/uploads/');
 
-  // Validate that the image source is a valid string before rendering
-  const isValidSrc = typeof resolvedSrc === 'string' && resolvedSrc.trim().length > 0;
-  const finalSrc = isValidSrc ? resolvedSrc : fallbackSrc;
+  // Determine final image source to render
+  let finalSrc = fallbackSrc;
+  if (!isLegacyBroken && typeof src === 'string' && src.trim().length > 0) {
+    if (src.startsWith('data:image/') || src.startsWith('http://') || src.startsWith('https://')) {
+      finalSrc = src;
+    } else {
+      finalSrc = useCachedImage(src, fallbackSrc);
+    }
+  }
 
   return (
     <img

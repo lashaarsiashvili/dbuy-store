@@ -67,33 +67,9 @@ async function dbPut(db: D1Database, key: string, value: string): Promise<void> 
   }
 }
 
-// Helper: Persist base64 data URIs to D1 SQL database key-value table
+// Helper: Persist base64 data URIs - modified to just return the raw dataUrl
 async function persistBase64InD1(db: D1Database, dataUrl: string, prefix = 'prod'): Promise<string> {
-  if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
-  if (!dataUrl.startsWith('data:')) return dataUrl;
-
-  try {
-    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-    if (!matches || matches.length !== 3) return dataUrl;
-
-    const mimeType = matches[1];
-    let ext = 'jpg';
-    if (mimeType.includes('png')) ext = 'png';
-    else if (mimeType.includes('webp')) ext = 'webp';
-    else if (mimeType.includes('gif')) ext = 'gif';
-
-    const timestamp = Date.now();
-    const rand = Math.random().toString(36).substring(2, 7);
-    const filename = `${prefix}-${timestamp}-${rand}.${ext}`;
-
-    // Save image base64 data to D1 store_kv as img-${filename} key
-    await dbPut(db, `img-${filename}`, dataUrl);
-
-    return `/uploads/${filename}`;
-  } catch (err) {
-    console.error('Error saving base64 to D1:', err);
-    return dataUrl;
-  }
+  return dataUrl;
 }
 
 // Helper: Parse images serialized field and fallback gracefully to legacy single image if needed
@@ -144,6 +120,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // --- INITIAL SQL TABLE SETUP & BOOTSTRAP ---
   try {
     await db.exec('CREATE TABLE IF NOT EXISTS store_kv (key TEXT PRIMARY KEY, value TEXT);');
+    await db.exec('CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, price REAL, original_price REAL, image TEXT, images TEXT, category TEXT, stock INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);');
   } catch (bootstrapErr: any) {
     return jsonResponse({
       success: false,
