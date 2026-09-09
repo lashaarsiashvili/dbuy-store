@@ -7,7 +7,9 @@ interface D1Database {
     bind(...values: any[]): {
       first<T = any>(colName?: string): Promise<T | null>;
       run(): Promise<any>;
+      all<T = any>(): Promise<{ results: T[] }>;
     };
+    all<T = any>(): Promise<{ results: T[] }>;
   };
   exec(query: string): Promise<any>;
 }
@@ -100,6 +102,54 @@ function parseAndFallbackProducts(products: any[]): any[] {
   });
 }
 
+async function loadFullProducts(db: D1Database, rawProducts: any[]): Promise<any[]> {
+  try {
+    await db.exec(
+      `CREATE TABLE IF NOT EXISTS product_images (
+        id TEXT PRIMARY KEY,
+        product_id TEXT,
+        image_data TEXT,
+        sort_order INTEGER,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );`
+    );
+    const { results: imagesResults } = await db.prepare('SELECT * FROM product_images ORDER BY sort_order ASC').all();
+    const imagesByProduct = new Map<string, string[]>();
+    for (const imgRow of (imagesResults || []) as any[]) {
+      const pid = imgRow.product_id;
+      if (!imagesByProduct.has(pid)) {
+        imagesByProduct.set(pid, []);
+      }
+      imagesByProduct.get(pid)!.push(imgRow.image_data);
+    }
+
+    return rawProducts.map((p: any) => {
+      let imagesArr = imagesByProduct.get(p.id) || [];
+      if (imagesArr.length === 0) {
+        if (p.images) {
+          if (typeof p.images === 'string') {
+            try { imagesArr = JSON.parse(p.images); } catch (e) { imagesArr = []; }
+          } else if (Array.isArray(p.images)) {
+            imagesArr = p.images;
+          }
+        }
+      }
+      if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
+        imagesArr = p.image ? [p.image] : [];
+      }
+
+      return {
+        ...p,
+        image: imagesArr[0] || p.image || '',
+        images: imagesArr,
+      };
+    });
+  } catch (err) {
+    console.error('loadFullProducts error:', err);
+    return parseAndFallbackProducts(rawProducts);
+  }
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -169,7 +219,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       }
 
       const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
-      const products = parseAndFallbackProducts(rawProducts);
+      const products = await loadFullProducts(db, rawProducts);
       const theme = JSON.parse(await dbGet(db, 'theme') || '{}');
       const billboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
       const billboardIntervalSeconds = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
@@ -201,7 +251,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     if (path.endsWith('/products')) {
       const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
-      const products = parseAndFallbackProducts(rawProducts);
+      const products = await loadFullProducts(db, rawProducts);
       return jsonResponse({ success: true, products });
     }
   }
@@ -362,6 +412,17 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           return jsonResponse({ success: false, error: 'Products array is required' }, 400);
         }
 
+        // Auto-create product_images table if not present
+        await db.exec(
+          `CREATE TABLE IF NOT EXISTS product_images (
+            id TEXT PRIMARY KEY,
+            product_id TEXT,
+            image_data TEXT,
+            sort_order INTEGER,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );`
+        );
+
         const sanitizedProducts = [];
         for (const p of products) {
           let imagesArray: string[] = [];
@@ -371,14 +432,28 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             imagesArray = [p.image];
           }
 
-          // Serialize the images array (JSON.stringify(images)) and write it to the images field/column
-          const imagesStr = JSON.stringify(imagesArray);
           const primaryImage = imagesArray[0] || p.image || '';
+
+          // Write each image as an individual row in product_images table to bypass 1MB single-row limit
+          try {
+            await db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(String(p.id)).run();
+            for (let i = 0; i < imagesArray.length; i++) {
+              const imageId = `${p.id}-img-${i}-${Math.random().toString(36).substring(2, 6)}`;
+              await db.prepare(
+                'INSERT INTO product_images (id, product_id, image_data, sort_order) VALUES (?, ?, ?, ?)'
+              ).bind(imageId, String(p.id), imagesArray[i], i).run();
+            }
+          } catch (imgDbErr) {
+            console.error('Error saving image rows:', imgDbErr);
+          }
+
+          // Stripped representation for store_kv and products table images column to conserve space
+          const imagesStr = JSON.stringify([]);
 
           sanitizedProducts.push({
             ...p,
             image: primaryImage,
-            images: imagesStr,
+            images: [], // Keep KV memory light
           });
 
           // Write directly to the products relational table in D1 as requested
@@ -410,8 +485,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
         await dbPut(db, 'last_updated', lastUpdatedNew);
 
-        // Parse back to array for response
-        const returnedProducts = parseAndFallbackProducts(sanitizedProducts);
+        // Load full products with images joined back for response
+        const returnedProducts = await loadFullProducts(db, sanitizedProducts);
         return jsonResponse({ success: true, products: returnedProducts, lastUpdated: lastUpdatedNew });
       } catch (err: any) {
         return jsonResponse({ success: false, error: err?.message || 'Failed to save products' }, 500);
