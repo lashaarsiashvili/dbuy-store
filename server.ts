@@ -1262,8 +1262,8 @@ app.post('/api/generate-product-copy', async (req, res) => {
           }
         }
 
-        const promptText = `You are an elite, award-winning e-commerce product copywriter and creative brand strategist for DBUY Store (Smart Commerce).
-Your task is to craft an irresistibly magnetic, persuasive, high-converting product description, key features, and titles directly based on the uploaded product photos, image titles/filenames, and the product title.
+        const promptText = `You are an elite, award-winning e-commerce product copywriter for DBUY Store (Smart Commerce).
+Your task is to craft an irresistibly magnetic, highly persuasive, and extremely concise product description, key features, and titles directly based on the uploaded product photos, image titles/filenames, and the product title.
 
 Input Details:
 - Image Titles / File Names: "${Array.isArray(imageTitles) && imageTitles.length > 0 ? imageTitles.join(', ') : 'None'}"
@@ -1271,36 +1271,36 @@ Input Details:
 - Georgian Title: "${titleKa || ''}"
 - Category: "${category || 'tech'}"
 - Price: "$${price || ''}"
-- Tone: "${tone || 'high-converting-ad'}"
+- Tone: "${tone || 'high-converting'}"
 
-Creative Directives:
-1. Visual Synthesis & Product Authenticity:
-   - Identify the exact product from the photos or filenames (e.g. smart watch, wireless earbuds, magnetic car mount, insulated flask, mechanical keyboard, dash cam).
-   - Celebrate its unique physical features, ergonomic form, and aesthetic appeal.
-2. "descriptionEn": A magnetic, storytelling 2-4 sentence product description in English.
-   - Start with an attention-commanding hook.
-   - Highlight how it simplifies, elevates, or brings joy to the customer's daily life.
-   - Focus on tangible everyday benefits, premium craftsmanship, and emotional satisfaction.
-3. "descriptionKa": A beautifully written, grammatically flawless, highly attractive Georgian product description (ცოცხალი, ემოციური და მიმზიდველი ქართული სარეკლამო აღწერა).
-   - გამოიყენე შთამბეჭდავი, ბუნებრივი და დამარწმუნებელი ქართული ენა.
-   - ხაზი გაუსვი კომფორტს, ხარისხს, თანამედროვე სტილსა და პრაქტიკულ სარგებელს ყოველდღიურობაში.
-4. "featuresEn": Exactly 4 punchy, benefit-first selling points in English with appropriate emojis (e.g. "⚡ Ultra-Fast Wireless Sync — Powers up in minutes without tangled cables").
-5. "featuresKa": Exactly 4 punchy, benefit-first selling points in Georgian with emojis, perfectly matching the physical product.
-6. "titleEn": A sleek, premium English title.
-7. "titleKa": An accurate, natural Georgian product title.
-8. "customSlug": A clean, SEO-optimized URL slug (e.g. "ultra-fast-wireless-charger").
-9. "badge": A catchy badge (e.g. "Best Seller", "Hot Deal", "Premium Choice", or "Trending").
+CRITICAL OUTPUT REQUIREMENTS:
+1. CONCISE & PUNCHY:
+   - "descriptionEn": Exactly 2 to 3 short, engaging, high-impact sentences (max 45 words). Absolutely no verbose marketing filler, no fluff, and no generic promotional sentences. Keep it extremely crisp and focused.
+   - "descriptionKa": Exactly 2 to 3 short, natural, and highly attractive sentences in Georgian (ქართული სარეკლამო აღწერა). It must be native, persuasive, and grammatically flawless.
+2. CONTEXT-AWARE SPECIFICS:
+   - Extract and highlight concrete physical or functional features visible in the image or strongly implied by the title/category (e.g., specific materials like matte-finish aluminum, silicone, braided cable, or key technical specifications like ANC, MagSafe, dual-lens, G-sensor).
+3. INDIVIDUALIZED TONE & VARIETY:
+   - NEVER use repetitive templates or start with clichéd entry hooks (do NOT repeat "Introducing...", "Upgrade your lifestyle with...", "Meet the...", "Step up your...", etc.).
+   - Vary your sentence structures, hooks, and vocabulary dynamically based on the specific product. Every product description should feel uniquely custom-tailored.
+4. SALES APPEAL:
+   - Highlight the primary practical benefit or distinguishing detail immediately in the very first sentence.
+5. FEATURES:
+   - "featuresEn": Exactly 4 extremely punchy, benefit-first bullet points in English (each under 10 words) with a single relevant emoji.
+   - "featuresKa": Exactly 4 matching punchy bullet points in Georgian with emojis.
+6. SLUG & BADGE:
+   - "customSlug": A clean, SEO-friendly URL slug.
+   - "badge": A short, catchy badge (e.g., "Best Seller", "Hot Deal", "Premium", "Trending", "New").
 
-Return ONLY a valid JSON object matching this schema without markdown formatting:
+Return ONLY a valid JSON object matching this schema without markdown code blocks, backticks, or wrapping formatting:
 {
-  "titleEn": string,
-  "titleKa": string,
-  "descriptionEn": string,
-  "descriptionKa": string,
-  "featuresEn": string[],
-  "featuresKa": string[],
-  "customSlug": string,
-  "badge": string
+  "titleEn": "sleek English title",
+  "titleKa": "sleek Georgian title",
+  "descriptionEn": "2-3 punchy sentences",
+  "descriptionKa": "2-3 punchy Georgian sentences",
+  "featuresEn": ["bullet 1", "bullet 2", "bullet 3", "bullet 4"],
+  "featuresKa": ["bullet 1", "bullet 2", "bullet 3", "bullet 4"],
+  "customSlug": "clean-slug",
+  "badge": "Short Badge"
 }`;
 
         contents.push({ text: promptText });
@@ -1308,21 +1308,15 @@ Return ONLY a valid JSON object matching this schema without markdown formatting
         let response: any = null;
         try {
           response = await ai.models.generateContent({
-            model: 'gemini-3.6-flash',
-            contents,
-            config: {
-              responseMimeType: 'application/json',
-            },
-          });
-        } catch (modelErr: any) {
-          console.warn('[GEMINI] Note on gemini-3.6-flash, trying gemini-3.8-flash:', modelErr?.message || modelErr);
-          response = await ai.models.generateContent({
             model: 'gemini-3.8-flash',
             contents,
             config: {
               responseMimeType: 'application/json',
             },
           });
+        } catch (modelErr: any) {
+          console.warn('[GEMINI] Note on gemini-3.8-flash error:', modelErr?.message || modelErr);
+          throw modelErr;
         }
 
         if (response && response.text) {
