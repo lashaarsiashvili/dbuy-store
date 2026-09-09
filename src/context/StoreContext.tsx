@@ -73,9 +73,9 @@ interface StoreContextType {
   setSearchQuery: (query: string) => void;
   sortOption: string;
   setSortOption: (option: string) => void;
-  addProduct: (product: Omit<Product, 'id'>) => void;
+  addProduct: (product: Omit<Product, 'id'>) => Promise<boolean>;
   bulkImportProducts: (newProducts: Product[], replaceExisting?: boolean) => void;
-  updateProduct: (product: Product) => void;
+  updateProduct: (product: Product) => Promise<boolean>;
   publishProductGlobally: (id: string) => Promise<boolean>;
   deleteProduct: (id: string) => void;
   clearAllProducts: () => void;
@@ -901,7 +901,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Ref to track locally initiated update timestamp
   const lastLocalProductUpdateRef = useRef<number>(0);
 
-  const saveProducts = async (newProducts: Product[]) => {
+  const saveProducts = async (newProducts: Product[]): Promise<boolean> => {
     // Sanitize image URLs in all products: ensure persistent absolute paths and no data: strings
     const sanitizedProducts: Product[] = newProducts.map(p => {
       const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
@@ -918,6 +918,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let finalProducts = sanitizedProducts;
     const nowIso = new Date().toISOString();
     lastLocalProductUpdateRef.current = Date.now();
+    let apiSuccess = false;
 
     // 1. Authoritative server backend persistence (immediate disk, memory & source backup)
     // The server converts raw base64 images into physical persistent file URLs (e.g. /uploads/prod-XYZ.jpg)
@@ -935,6 +936,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (json && Array.isArray(json.products) && json.products.length > 0) {
           finalProducts = json.products;
         }
+        apiSuccess = true;
       }
     } catch (err) {
       console.error('Error syncing products to server:', err);
@@ -982,27 +984,39 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (e) {
       console.error('Error synchronizing to products collection:', e);
     }
+
+    return apiSuccess;
   };
 
-  const addProduct = (prodData: Omit<Product, 'id'>) => {
+  const addProduct = async (prodData: Omit<Product, 'id'>): Promise<boolean> => {
     const newProd: Product = {
       ...prodData,
       id: 'prod-' + Date.now(),
       rating: prodData.rating || 5.0,
       reviewsCount: prodData.reviewsCount || 1,
     };
-    setProducts(prev => {
-      const updated = [newProd, ...prev.filter(p => p.id !== newProd.id)];
-      saveProducts(updated);
-      return updated;
-    });
-    addToast(
-      language === 'ka' 
-        ? `პროდუქტი „${newProd.title}“ წარმატებით დაემატა!` 
-        : `Added "${newProd.title}" to catalog!`, 
-      'success'
-    );
-    return newProd;
+
+    // We fetch current products from the state directly
+    const updated = [newProd, ...products.filter(p => p.id !== newProd.id)];
+    const apiSuccess = await saveProducts(updated);
+
+    if (apiSuccess) {
+      addToast(
+        language === 'ka' 
+          ? `პროდუქტი „${newProd.title}“ წარმატებით დაემატა!` 
+          : `Added "${newProd.title}" to catalog!`, 
+        'success'
+      );
+      return true;
+    } else {
+      addToast(
+        language === 'ka' 
+          ? 'ვერ მოხერხდა პროდუქტის დამატება სერვერზე.' 
+          : 'Failed to add product on the server.', 
+        'error'
+      );
+      return false;
+    }
   };
 
   const bulkImportProducts = (newProducts: Product[], replaceExisting: boolean = false) => {
@@ -1029,18 +1043,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
   };
 
-  const updateProduct = (updated: Product) => {
-    setProducts(prev => {
-      const newProducts = prev.map(p => (p.id === updated.id ? updated : p));
-      saveProducts(newProducts);
-      return newProducts;
-    });
-    addToast(
-      language === 'ka' 
-        ? `პროდუქტი „${updated.title}“ განახლდა!` 
-        : `Updated product "${updated.title}"`, 
-      'success'
-    );
+  const updateProduct = async (updated: Product): Promise<boolean> => {
+    const newProducts = products.map(p => (p.id === updated.id ? updated : p));
+    const apiSuccess = await saveProducts(newProducts);
+
+    if (apiSuccess) {
+      addToast(
+        language === 'ka' 
+          ? `პროდუქტი „${updated.title}“ განახლდა!` 
+          : `Updated product "${updated.title}"`, 
+        'success'
+      );
+      return true;
+    } else {
+      addToast(
+        language === 'ka' 
+          ? 'ვერ მოხერხდა ცვლილებების შენახვა სერვერზე.' 
+          : 'Failed to save changes on the server.', 
+        'error'
+      );
+      return false;
+    }
   };
 
   const publishProductGlobally = async (id: string): Promise<boolean> => {

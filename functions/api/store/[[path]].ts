@@ -67,6 +67,35 @@ async function dbPut(db: D1Database, key: string, value: string): Promise<void> 
   }
 }
 
+// Helper: Persist base64 data URIs to D1 SQL database key-value table
+async function persistBase64InD1(db: D1Database, dataUrl: string, prefix = 'prod'): Promise<string> {
+  if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
+  if (!dataUrl.startsWith('data:')) return dataUrl;
+
+  try {
+    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    if (!matches || matches.length !== 3) return dataUrl;
+
+    const mimeType = matches[1];
+    let ext = 'jpg';
+    if (mimeType.includes('png')) ext = 'png';
+    else if (mimeType.includes('webp')) ext = 'webp';
+    else if (mimeType.includes('gif')) ext = 'gif';
+
+    const timestamp = Date.now();
+    const rand = Math.random().toString(36).substring(2, 7);
+    const filename = `${prefix}-${timestamp}-${rand}.${ext}`;
+
+    // Save image base64 data to D1 store_kv as img-${filename} key
+    await dbPut(db, `img-${filename}`, dataUrl);
+
+    return `/uploads/${filename}`;
+  } catch (err) {
+    console.error('Error saving base64 to D1:', err);
+    return dataUrl;
+  }
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -321,10 +350,28 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           return jsonResponse({ success: false, error: 'Products array is required' }, 400);
         }
 
-        await dbPut(db, 'products', JSON.stringify(products));
+        const sanitizedProducts = [];
+        for (const p of products) {
+          const cleanImage = p.image ? await persistBase64InD1(db, p.image, `prod-${p.id || Date.now()}`) : p.image;
+          const cleanImages = [];
+          if (Array.isArray(p.images)) {
+            for (let i = 0; i < p.images.length; i++) {
+              cleanImages.push(await persistBase64InD1(db, p.images[i], `prod-${p.id || Date.now()}-${i}`));
+            }
+          } else {
+            if (cleanImage) cleanImages.push(cleanImage);
+          }
+          sanitizedProducts.push({
+            ...p,
+            image: cleanImage,
+            images: cleanImages,
+          });
+        }
+
+        await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
         await dbPut(db, 'last_updated', lastUpdatedNew);
 
-        return jsonResponse({ success: true, products, lastUpdated: lastUpdatedNew });
+        return jsonResponse({ success: true, products: sanitizedProducts, lastUpdated: lastUpdatedNew });
       } catch (err: any) {
         return jsonResponse({ success: false, error: err?.message || 'Failed to save products' }, 500);
       }
@@ -350,8 +397,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       try {
         const { billboards, billboardIntervalSeconds }: any = await request.json();
 
+        const sanitizedBillboards = [];
         if (Array.isArray(billboards)) {
-          await dbPut(db, 'billboards', JSON.stringify(billboards));
+          for (const b of billboards) {
+            const image = b.image ? await persistBase64InD1(db, b.image, 'billboard') : b.image;
+            const bgImage = b.bgImage ? await persistBase64InD1(db, b.bgImage, 'billboard-bg') : b.bgImage;
+            sanitizedBillboards.push({ ...b, image, bgImage });
+          }
+          await dbPut(db, 'billboards', JSON.stringify(sanitizedBillboards));
         }
 
         if (typeof billboardIntervalSeconds === 'number') {
@@ -393,7 +446,24 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const { products, registeredUsers, orders, theme, billboards, billboardIntervalSeconds, adminSecretSlug: newSlug } = await request.json() as any;
 
         if (Array.isArray(products)) {
-          await dbPut(db, 'products', JSON.stringify(products));
+          const sanitizedProducts = [];
+          for (const p of products) {
+            const cleanImage = p.image ? await persistBase64InD1(db, p.image, `prod-${p.id || Date.now()}`) : p.image;
+            const cleanImages = [];
+            if (Array.isArray(p.images)) {
+              for (let i = 0; i < p.images.length; i++) {
+                cleanImages.push(await persistBase64InD1(db, p.images[i], `prod-${p.id || Date.now()}-${i}`));
+              }
+            } else {
+              if (cleanImage) cleanImages.push(cleanImage);
+            }
+            sanitizedProducts.push({
+              ...p,
+              image: cleanImage,
+              images: cleanImages,
+            });
+          }
+          await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
         }
 
         if (registeredUsers && typeof registeredUsers === 'object') {
@@ -411,7 +481,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
 
         if (Array.isArray(billboards)) {
-          await dbPut(db, 'billboards', JSON.stringify(billboards));
+          const sanitizedBillboards = [];
+          for (const b of billboards) {
+            const image = b.image ? await persistBase64InD1(db, b.image, 'billboard') : b.image;
+            const bgImage = b.bgImage ? await persistBase64InD1(db, b.bgImage, 'billboard-bg') : b.bgImage;
+            sanitizedBillboards.push({ ...b, image, bgImage });
+          }
+          await dbPut(db, 'billboards', JSON.stringify(sanitizedBillboards));
         }
 
         if (typeof billboardIntervalSeconds === 'number') {

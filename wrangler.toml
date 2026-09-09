@@ -6,4 +6,4 @@ compatibility_flags = ["nodejs_compat"]
 [[d1_databases]]
 binding = "DB"
 database_name = "dbuystore-db"
-database_id = "0ccd6b48-b6d5-4cbe-95eb-71a9a32ee1b8"
+database_id = "<0ccd6b48-b6d5-4cbe-95eb-71a9a32ee1b8>"

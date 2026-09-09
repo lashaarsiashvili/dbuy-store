@@ -413,6 +413,7 @@ export const AdminDashboard: React.FC = () => {
 
   const [imageInputMode, setImageInputMode] = useState<'upload' | 'url'>('upload');
   const [isDragging, setIsDragging] = useState(false);
+  const [isSavingProduct, setIsSavingProduct] = useState(false);
   const [uploadedFileInfo, setUploadedFileInfo] = useState<{ name: string; size: string } | null>(null);
   const [newImageUrl, setNewImageUrl] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -954,7 +955,7 @@ export const AdminDashboard: React.FC = () => {
     setIsProductModalOpen(true);
   };
 
-  const handleSaveProduct = (e: React.FormEvent) => {
+  const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
     const effectiveTitle = (prodForm.title || prodForm.titleKa || '').trim();
     if (!effectiveTitle) {
@@ -1004,49 +1005,59 @@ export const AdminDashboard: React.FC = () => {
     const numOrigPrice = prodForm.origPrice !== '' && prodForm.origPrice !== undefined ? Number(prodForm.origPrice) : undefined;
     const numStock = prodForm.stock !== '' && prodForm.stock !== undefined ? Number(prodForm.stock) : 0;
 
-    if (editingProduct) {
-      updateProduct({
-        ...editingProduct,
-        title: prodForm.title || prodForm.titleKa || 'Product',
-        titleKa: prodForm.titleKa,
-        customSlug: finalSlug,
-        category: prodForm.category,
-        price: numPrice,
-        origPrice: numOrigPrice,
-        stock: numStock,
-        badge: prodForm.badge || undefined,
-        image: finalPrimaryImage,
-        images: finalImages,
-        description: prodForm.description,
-        descriptionKa: prodForm.descriptionKa,
-        features: finalFeatures.slice(0, 4),
-        isPublishedGlobally: true,
-        publishedAt: new Date().toISOString(),
-      });
-      addToast(isKa ? '🌐 პროდუქტი განახლდა და გამოქვეყნდა გლობალურად ყველა მოწყობილობისთვის!' : '🌐 Product updated and published globally across all devices!', 'success');
-    } else {
-      addProduct({
-        title: prodForm.title || prodForm.titleKa || 'Product',
-        titleKa: prodForm.titleKa,
-        customSlug: finalSlug,
-        category: prodForm.category,
-        price: numPrice,
-        origPrice: numOrigPrice,
-        stock: numStock,
-        badge: prodForm.badge || undefined,
-        image: finalPrimaryImage,
-        images: finalImages,
-        description: prodForm.description,
-        descriptionKa: prodForm.descriptionKa,
-        rating: 5.0,
-        reviewsCount: 1,
-        features: finalFeatures.slice(0, 4),
-        isPublishedGlobally: true,
-        publishedAt: new Date().toISOString(),
-      });
-      addToast(isKa ? '🌐 ახალი პროდუქტი შეიქმნა და გამოქვეყნდა გლობალურად ყველა მოწყობილობისთვის!' : '🌐 New product created and published globally across all devices!', 'success');
+    setIsSavingProduct(true);
+    let success = false;
+
+    try {
+      if (editingProduct) {
+        success = await updateProduct({
+          ...editingProduct,
+          title: prodForm.title || prodForm.titleKa || 'Product',
+          titleKa: prodForm.titleKa,
+          customSlug: finalSlug,
+          category: prodForm.category,
+          price: numPrice,
+          origPrice: numOrigPrice,
+          stock: numStock,
+          badge: prodForm.badge || undefined,
+          image: finalPrimaryImage,
+          images: finalImages,
+          description: prodForm.description,
+          descriptionKa: prodForm.descriptionKa,
+          features: finalFeatures.slice(0, 4),
+          isPublishedGlobally: true,
+          publishedAt: new Date().toISOString(),
+        });
+      } else {
+        success = await addProduct({
+          title: prodForm.title || prodForm.titleKa || 'Product',
+          titleKa: prodForm.titleKa,
+          customSlug: finalSlug,
+          category: prodForm.category,
+          price: numPrice,
+          origPrice: numOrigPrice,
+          stock: numStock,
+          badge: prodForm.badge || undefined,
+          image: finalPrimaryImage,
+          images: finalImages,
+          description: prodForm.description,
+          descriptionKa: prodForm.descriptionKa,
+          rating: 5.0,
+          reviewsCount: 1,
+          features: finalFeatures.slice(0, 4),
+          isPublishedGlobally: true,
+          publishedAt: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.error('Error in handleSaveProduct:', err);
+    } finally {
+      setIsSavingProduct(false);
     }
-    setIsProductModalOpen(false);
+
+    if (success) {
+      setIsProductModalOpen(false);
+    }
   };
 
   const handleSaveTheme = async () => {
@@ -4750,9 +4761,19 @@ export const AdminDashboard: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                  disabled={isSavingProduct}
+                  className={`px-5 py-2.5 rounded-xl text-white font-bold text-xs shadow-md transition-all cursor-pointer flex items-center space-x-2 ${
+                    isSavingProduct ? 'bg-slate-400 cursor-not-allowed opacity-80' : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
-                  {isKa ? 'შენახვა' : 'Save Product'}
+                  {isSavingProduct ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                      <span>{isKa ? 'ინახება...' : 'Saving...'}</span>
+                    </>
+                  ) : (
+                    <span>{isKa ? 'შენახვა' : 'Save Product'}</span>
+                  )}
                 </button>
               </div>
             </form>
