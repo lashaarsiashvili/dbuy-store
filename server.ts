@@ -7,8 +7,6 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
-import { initializeApp, getApps } from 'firebase/app';
-import { getFirestore, setLogLevel, doc, getDoc, setDoc, collection, getDocs } from 'firebase/firestore';
 import { initialProducts } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 import { buildCustomerOrderEmail, buildAdminOrderAlertEmail } from './src/utils/orderEmailTemplates';
@@ -511,273 +509,7 @@ if (rawRedisUrl && rawRedisToken && (rawRedisUrl.startsWith('https://') || rawRe
   );
 }
 
-// Firebase Firestore Integration
-let firebaseDb: any = null;
-try {
-  let firebaseConfig: any = {};
-  const firebaseConfigPath = path.join(process.cwd(), 'firebase-applet-config.json');
-  if (fs.existsSync(firebaseConfigPath)) {
-    try {
-      firebaseConfig = JSON.parse(fs.readFileSync(firebaseConfigPath, 'utf-8'));
-    } catch (parseErr) {
-      console.warn('[FIREBASE] Error parsing firebase-applet-config.json:', parseErr);
-    }
-  }
-
-  // Inject environment variable overrides from production deployment environment
-  const envApiKey = process.env.API_KEY || process.env.FIREBASE_API_KEY;
-  const envProjectId = process.env.PROJECT_ID || process.env.FIREBASE_PROJECT_ID;
-  const envAppId = process.env.FIREBASE_APP_ID;
-  const envAuthDomain = process.env.FIREBASE_AUTH_DOMAIN;
-  const envStorageBucket = process.env.FIREBASE_STORAGE_BUCKET;
-  const envMessagingSenderId = process.env.FIREBASE_MESSAGING_SENDER_ID;
-
-  if (envApiKey) firebaseConfig.apiKey = envApiKey;
-  if (envProjectId) {
-    firebaseConfig.projectId = envProjectId;
-    if (!firebaseConfig.authDomain) {
-      firebaseConfig.authDomain = `${envProjectId}.firebaseapp.com`;
-    }
-    if (!firebaseConfig.storageBucket) {
-      firebaseConfig.storageBucket = `${envProjectId}.firebasestorage.app`;
-    }
-  }
-  if (envAppId) firebaseConfig.appId = envAppId;
-  if (envAuthDomain) firebaseConfig.authDomain = envAuthDomain;
-  if (envStorageBucket) firebaseConfig.storageBucket = envStorageBucket;
-  if (envMessagingSenderId) firebaseConfig.messagingSenderId = envMessagingSenderId;
-
-  const ENABLE_FIREBASE = false; // Set to true to enable Firebase, false to use pure local JSON file storage with zero external dependencies
-
-  if (ENABLE_FIREBASE && firebaseConfig.apiKey && firebaseConfig.projectId) {
-    const fbApp = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0];
-    try {
-      setLogLevel('silent');
-    } catch {}
-    firebaseDb = getFirestore(fbApp, firebaseConfig.firestoreDatabaseId || undefined);
-    console.log('[FIREBASE] Connected to Firebase Firestore successfully (utilizing configuration from file/environment variables)!');
-  } else {
-    console.warn('[FIREBASE] Skipping initialization: missing required configuration fields (apiKey, projectId).');
-  }
-} catch (fbErr) {
-  console.warn('[FIREBASE] Could not initialize Firebase client:', fbErr instanceof Error ? fbErr.message : fbErr);
-}
-
 let storeDb: StoreDatabase = initStoreDatabase();
-
-// Sync from Firebase Firestore on startup if available
-async function syncFromFirebaseOnStartup(): Promise<void> {
-  if (!firebaseDb) return;
-  try {
-    const docRef = doc(firebaseDb, 'store', 'database');
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      const parsed = docSnap.data() as any;
-      if (parsed) {
-        // Helper to get product timestamp for conflict resolution
-        const getProductTimestamp = (p: any): number => {
-          if (p.publishedAt) return new Date(p.publishedAt).getTime();
-          if (p.createdAt) return new Date(p.createdAt).getTime();
-          if (typeof p.id === 'string' && p.id.startsWith('prod-')) {
-            const ts = parseInt(p.id.replace('prod-', ''), 10);
-            if (!isNaN(ts)) return ts;
-          }
-          return 0;
-        };
-
-        // Helper to merge local/compiled products with remote/Firebase products
-        const mergeProductsLists = (localList: any[], remoteList: any[]): any[] => {
-          const map = new Map<string, any>();
-          
-          // First, add all products currently in memory (initially from codebase/files)
-          for (const p of localList) {
-            if (p && p.id) {
-              map.set(p.id, p);
-            }
-          }
-          
-          // Then, merge remote products
-          for (const p of remoteList) {
-            if (p && p.id) {
-              const existing = map.get(p.id);
-              if (!existing) {
-                map.set(p.id, p);
-              } else {
-                // If both exist, keep the newer one based on timestamp
-                const localTs = getProductTimestamp(existing);
-                const remoteTs = getProductTimestamp(p);
-                if (remoteTs >= localTs) {
-                  map.set(p.id, p);
-                }
-              }
-            }
-          }
-          
-          // Sort results to be consistent (newest first)
-          return Array.from(map.values()).sort((a, b) => getProductTimestamp(b) - getProductTimestamp(a));
-        };
-
-        if (Array.isArray(parsed.products) && parsed.products.length > 0) {
-          console.log(`[FIREBASE] Merging ${parsed.products.length} products from Firebase Firestore main document...`);
-          storeDb.products = mergeProductsLists(storeDb.products, parsed.products);
-        }
-
-        // Load from dedicated 'products' collection to bypass 1MB document size limits and support unlimited products
-        try {
-          const productsSnap = await getDocs(collection(firebaseDb, 'products'));
-          if (!productsSnap.empty) {
-            const fbProducts: any[] = [];
-            productsSnap.forEach((doc) => {
-              const p = doc.data();
-              if (p && p.id) {
-                fbProducts.push(p);
-              }
-            });
-            if (fbProducts.length > 0) {
-              console.log(`[FIREBASE] Merging ${fbProducts.length} products from dedicated products collection...`);
-              storeDb.products = mergeProductsLists(storeDb.products, fbProducts);
-            }
-          }
-        } catch (prodErr) {
-          console.warn('[FIREBASE] Failed to load from products collection during startup sync:', prodErr);
-        }
-
-        if (parsed.registeredUsers && Object.keys(parsed.registeredUsers).length > 0) {
-          storeDb.registeredUsers = { ...storeDb.registeredUsers, ...parsed.registeredUsers };
-        }
-        if (Array.isArray(parsed.orders) && parsed.orders.length > 0) {
-          storeDb.orders = parsed.orders;
-        }
-        if (parsed.theme) {
-          storeDb.theme = parsed.theme;
-        }
-        if (Array.isArray(parsed.billboards) && parsed.billboards.length > 0) {
-          storeDb.billboards = parsed.billboards;
-        }
-        if (parsed.smtpConfig) {
-          (storeDb as any).smtpConfig = parsed.smtpConfig;
-        }
-        if (Array.isArray(parsed.contactMessages) && parsed.contactMessages.length > 0) {
-          (storeDb as any).contactMessages = parsed.contactMessages;
-        }
-        storeDb.lastUpdated = parsed.lastUpdated || new Date().toISOString();
-
-        try {
-          if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
-          fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
-          fs.writeFileSync(CODE_BACKUP_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
-        } catch {}
-      }
-    }
-
-    // Restore uploaded image files from store_uploads collection if available
-    try {
-      const uploadsSnap = await getDocs(collection(firebaseDb, 'store_uploads'));
-      if (!uploadsSnap.empty) {
-        let restoredCount = 0;
-        uploadsSnap.forEach(uDoc => {
-          const uData = uDoc.data();
-          if (uData?.filename && uData?.dataUrl && typeof uData.dataUrl === 'string') {
-            uploadsMap[uData.filename] = uData.dataUrl;
-            
-            // Re-create physical file on disk immediately
-            const cleanFilename = path.basename(uData.filename);
-            if (cleanFilename && cleanFilename !== '.' && cleanFilename !== '/') {
-              const filePath = path.join(UPLOADS_DIR, cleanFilename);
-              if (!fs.existsSync(filePath) && uData.dataUrl.startsWith('data:')) {
-                try {
-                  const matches = uData.dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-                  if (matches && matches[2]) {
-                    fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
-                  }
-                } catch (fErr) {}
-              }
-            }
-            restoredCount++;
-          }
-        });
-        if (restoredCount > 0) {
-          console.log(`[FIREBASE] Restored ${restoredCount} uploaded images to disk & memory from Firebase store_uploads!`);
-          saveUploadsMap();
-          storeDb.uploadsMap = uploadsMap;
-        }
-      }
-    } catch (uErr) {
-      // Ignore if collection does not exist yet
-    }
-  } catch (err: any) {
-    if (err?.code === 'not-found' || err?.message?.includes('NOT_FOUND') || err?.message?.includes('offline')) {
-      console.log('[FIREBASE] Firestore database is pending provision on Cloud project. Continuing with local disk & backup persistence.');
-      firebaseDb = null;
-    } else {
-      console.warn('[FIREBASE] Firebase sync notice:', err?.message || err);
-    }
-  }
-}
-
-// Sync existing local uploaded image files from disk to Firebase Firestore store_uploads
-async function syncLocalUploadsToFirestore(): Promise<void> {
-  if (!firebaseDb) return;
-  console.log('[FIREBASE-UPLOADS-SYNC] Running local uploads synchronization with Firestore...');
-  try {
-    if (!fs.existsSync(UPLOADS_DIR)) {
-      console.log('[FIREBASE-UPLOADS-SYNC] Uploads directory does not exist yet.');
-      return;
-    }
-    const files = fs.readdirSync(UPLOADS_DIR);
-    console.log(`[FIREBASE-UPLOADS-SYNC] Found ${files.length} physical files in uploads directory.`);
-
-    // Fetch existing keys in Firestore store_uploads to avoid duplicate uploads
-    const existingUploadKeys = new Set<string>();
-    try {
-      const snap = await getDocs(collection(firebaseDb, 'store_uploads'));
-      if (snap && !snap.empty) {
-        snap.forEach(doc => {
-          existingUploadKeys.add(doc.id);
-        });
-      }
-    } catch (e) {
-      console.warn('[FIREBASE-UPLOADS-SYNC] Could not fetch existing store_uploads list. Proceeding anyway:', e);
-    }
-
-    let uploadCount = 0;
-    for (const filename of files) {
-      const filePath = path.join(UPLOADS_DIR, filename);
-      const stat = fs.statSync(filePath);
-      if (!stat.isFile()) continue;
-
-      if (existingUploadKeys.has(filename)) {
-        continue;
-      }
-
-      // Convert file to Base64 data URL
-      const ext = path.extname(filename).substring(1).toLowerCase();
-      let mime = 'image/jpeg';
-      if (ext === 'png') mime = 'image/png';
-      else if (ext === 'svg') mime = 'image/svg+xml';
-      else if (ext === 'gif') mime = 'image/gif';
-      else if (ext === 'webp') mime = 'image/webp';
-
-      try {
-        const buffer = fs.readFileSync(filePath);
-        const dataUrl = `data:${mime};base64,${buffer.toString('base64')}`;
-
-        await setDoc(doc(firebaseDb, 'store_uploads', filename), {
-          filename,
-          dataUrl,
-          uploadedAt: new Date().toISOString()
-        }, { merge: true });
-        uploadCount++;
-        console.log(`[FIREBASE-UPLOADS-SYNC] Uploaded ${filename} (${buffer.length} bytes) to Firestore.`);
-      } catch (uploadErr) {
-        console.error(`[FIREBASE-UPLOADS-SYNC] Failed to upload ${filename} to Firestore:`, uploadErr);
-      }
-    }
-    console.log(`[FIREBASE-UPLOADS-SYNC] Upload synchronization complete. Uploaded ${uploadCount} new files.`);
-  } catch (err) {
-    console.error('[FIREBASE-UPLOADS-SYNC] Error during synchronization:', err);
-  }
-}
 
 function cleanAllStoreProductImageUrls(): void {
   let modified = false;
@@ -853,7 +585,7 @@ async function syncFromRedisOnStartup(): Promise<void> {
       }
     }
   } catch (err: any) {
-    console.log('[REDIS/KV] Vercel KV / Upstash Redis is offline or not configured. Continuing with local disk & Firebase persistence.');
+    console.log('[REDIS/KV] Vercel KV / Upstash Redis is offline or not configured. Continuing with local disk persistence.');
     redisClient = null;
   }
 }
@@ -861,16 +593,6 @@ async function syncFromRedisOnStartup(): Promise<void> {
 // Initial sync calls tracked inside dbInitPromise to block cold-start requests until fully synchronized
 dbInitPromise = (async () => {
   console.log('[STARTUP-SYNC] Starting database synchronization...');
-  try {
-    await syncFromFirebaseOnStartup();
-  } catch (err) {
-    console.error('[STARTUP-SYNC] Error syncing from Firebase on startup:', err);
-  }
-  try {
-    await syncLocalUploadsToFirestore();
-  } catch (err) {
-    console.error('[STARTUP-SYNC] Error uploading local files to Firestore on startup:', err);
-  }
   try {
     cleanAllStoreProductImageUrls();
   } catch (err) {
@@ -883,8 +605,6 @@ dbInitPromise = (async () => {
   }
   console.log('[STARTUP-SYNC] Database synchronization complete.');
 })();
-
-let firestoreQuotaExceededUntil = 0;
 
 function saveStoreDatabase(): void {
   storeDb.lastUpdated = new Date().toISOString();
@@ -906,74 +626,6 @@ function saveStoreDatabase(): void {
     console.log('[DISK] Database saved successfully to local file storage.');
   } catch (fsErr: any) {
     console.warn('[DISK] Local filesystem is read-only or unavailable (e.g. Vercel Serverless). Skipping disk save.', fsErr?.message || fsErr);
-  }
-
-  // 2. Automatically persist to Firebase Firestore - this MUST always execute even if disk writes are read-only!
-  if (firebaseDb) {
-    try {
-      // In products array, if image or images contain raw inline base64 data URLs, persist them to disk FIRST
-      if (Array.isArray(storeDb.products)) {
-        storeDb.products = storeDb.products.map((p: any) => {
-          if (!p) return p;
-          const cleanP = { ...p };
-          if (typeof cleanP.image === 'string') {
-            if (cleanP.image.startsWith('data:')) {
-              cleanP.image = persistBase64Image(cleanP.image, `prod-${cleanP.id || Date.now()}`);
-            } else if (cleanP.image.includes('/uploads/')) {
-              cleanP.image = '/uploads/' + cleanP.image.split('/uploads/').pop();
-            }
-          }
-          if (Array.isArray(cleanP.images)) {
-            cleanP.images = cleanP.images.map((img: any, i: number) => {
-              if (typeof img === 'string') {
-                if (img.startsWith('data:')) {
-                  return persistBase64Image(img, `prod-${cleanP.id || Date.now()}-${i}`);
-                } else if (img.includes('/uploads/')) {
-                  return '/uploads/' + img.split('/uploads/').pop();
-                }
-              }
-              return img;
-            });
-          }
-          return cleanP;
-        });
-      }
-
-      // Create a clean payload WITHOUT giant base64 image maps or products array to keep document size < 1MB and allow unlimited products
-      const sanitizedStoreDb: Record<string, any> = { ...storeDb };
-      delete sanitizedStoreDb.uploadsMap; // Remove base64 image map from main document
-      delete sanitizedStoreDb.products; // Remove products array from monolithic document to support unlimited products!
-
-      // Ensure verified Zoho SMTP configuration is preserved in storeDb & Firestore
-      if (!sanitizedStoreDb.smtpConfig || !sanitizedStoreDb.smtpConfig.pass) {
-        sanitizedStoreDb.smtpConfig = {
-          host: 'smtp.zoho.eu',
-          port: 465,
-          user: 'support@dbuystore.com',
-          pass: 'cjmwVviQbiaq',
-          verified: true,
-          lastVerifiedAt: new Date().toISOString(),
-        };
-        (storeDb as any).smtpConfig = sanitizedStoreDb.smtpConfig;
-      }
-
-      if (Date.now() > firestoreQuotaExceededUntil) {
-        const firestorePromise = setDoc(doc(firebaseDb, 'store', 'database'), sanitizedStoreDb, { merge: true })
-          .then(() => console.log('[FIREBASE] Saved sanitized database to Firebase Firestore successfully'))
-          .catch(err => {
-            if (err?.code === 'resource-exhausted' || err?.message?.includes('RESOURCE_EXHAUSTED') || err?.message?.includes('Quota limit exceeded')) {
-              firestoreQuotaExceededUntil = Date.now() + 30 * 60 * 1000;
-              console.warn('[FIREBASE] Quota limit reached for today. Server disk & memory persistence seamlessly active.');
-            } else {
-              console.warn('[FIREBASE] Notice saving to Firebase:', err?.message || err);
-            }
-          });
-        pendingPromises.add(firestorePromise);
-        firestorePromise.finally(() => pendingPromises.delete(firestorePromise));
-      }
-    } catch (fbErr: any) {
-      console.error('[FIREBASE] Failed to save database to Firestore:', fbErr?.message || fbErr);
-    }
   }
 
   // 3. Automatically persist to Vercel KV / Upstash Redis if available
@@ -1458,19 +1110,6 @@ app.post('/api/upload-image', (req, res) => {
     uploadsMap[safeName] = dataUrl;
     saveUploadsMap();
 
-    // Back up the uploaded image persistently in Firebase Firestore to survive container restarts
-    if (firebaseDb) {
-      const firestoreUploadPromise = setDoc(doc(firebaseDb, 'store_uploads', safeName), {
-        filename: safeName,
-        dataUrl: dataUrl,
-        uploadedAt: new Date().toISOString()
-      }, { merge: true })
-        .then(() => console.log(`[FIREBASE] Saved uploaded image backup for ${safeName} to Firestore successfully`))
-        .catch(err => console.error(`[FIREBASE] Failed to save uploaded image backup for ${safeName} to Firestore:`, err));
-      pendingPromises.add(firestoreUploadPromise);
-      firestoreUploadPromise.finally(() => pendingPromises.delete(firestoreUploadPromise));
-    }
-
     const publicUrl = `/uploads/${safeName}`;
     res.json({ success: true, url: publicUrl });
   } catch (err: any) {
@@ -1506,18 +1145,6 @@ app.post('/api/store/restore-images', (req, res) => {
             fs.writeFileSync(filePath, Buffer.from(matches[2], 'base64'));
             uploadsMap[filename] = dataUrl;
             restoredCount++;
-
-            // Save the restored file to Firestore persistently as well
-            if (firebaseDb) {
-              const firestoreUploadPromise = setDoc(doc(firebaseDb, 'store_uploads', filename), {
-                filename: filename,
-                dataUrl: dataUrl,
-                uploadedAt: new Date().toISOString()
-              }, { merge: true })
-                .catch(err => console.error(`[FIREBASE] Restore setDoc fail for ${filename}:`, err));
-              pendingPromises.add(firestoreUploadPromise);
-              firestoreUploadPromise.finally(() => pendingPromises.delete(firestoreUploadPromise));
-            }
           }
         } catch (writeErr) {
           console.error(`Failed to restore file ${filename}:`, writeErr);
@@ -1618,25 +1245,27 @@ function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
     uploadsMap[safeName] = dataUrl;
     saveUploadsMap();
 
-    // Back up the auto-converted image persistently in Firebase Firestore to survive container restarts
-    if (firebaseDb) {
-      const firestoreUploadPromise = setDoc(doc(firebaseDb, 'store_uploads', safeName), {
-        filename: safeName,
-        dataUrl: dataUrl,
-        uploadedAt: new Date().toISOString()
-      }, { merge: true })
-        .then(() => console.log(`[FIREBASE] Saved auto image backup for ${safeName} to Firestore successfully`))
-        .catch(err => console.error(`[FIREBASE] Failed to save auto image backup for ${safeName} to Firestore:`, err));
-      pendingPromises.add(firestoreUploadPromise);
-      firestoreUploadPromise.finally(() => pendingPromises.delete(firestoreUploadPromise));
-    }
-
     return `/uploads/${safeName}`;
   } catch (e) {
     console.error('Error saving base64 image to disk:', e);
     return dataUrl;
   }
 }
+
+// POST: Upload an image and persist to local storage/disk
+app.post('/api/store/upload', (req, res) => {
+  try {
+    const { image, prefix } = req.body;
+    if (!image) {
+      res.status(400).json({ success: false, error: 'Image data is required' });
+      return;
+    }
+    const url = persistBase64Image(image, prefix || 'prod');
+    res.json({ success: true, url });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Upload failed' });
+  }
+});
 
 // POST: Save products catalog explicitly (called from saveProducts in StoreContext)
 app.post('/api/store/products', (req, res) => {
@@ -1704,13 +1333,6 @@ app.post('/api/store/products/:id/view', (req, res) => {
     product.views = (product.views || 0) + 1;
     saveStoreDatabase();
     syncCatalogToInitialProducts(storeDb.products);
-
-    // Save the individual product directly to Firestore if connected
-    if (firebaseDb) {
-      setDoc(doc(firebaseDb, 'products', product.id), product, { merge: true })
-        .then(() => console.log(`[FIREBASE] Incremented views for product ${product.id} successfully`))
-        .catch((err: any) => console.error(`[FIREBASE] Error saving view increment for ${product.id}:`, err));
-    }
 
     console.log(`[PRODUCT-VIEW] Product "${product.title}" view count incremented to ${product.views}`);
 

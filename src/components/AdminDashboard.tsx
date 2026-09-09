@@ -12,7 +12,7 @@ import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
 
-import { uploadImageToFirebase, ensurePersistentAbsoluteUrl } from '../utils/firebaseStorage';
+import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -608,54 +608,19 @@ export const AdminDashboard: React.FC = () => {
     setIsBillboardModalOpen(false);
   };
 
-  const processBillboardImageFile = (file: File) => {
+  const processBillboardImageFile = async (file: File) => {
     if (!file.type.startsWith('image/')) {
       addToast(isKa ? 'გთხოვთ ატვირთოთ ვალიდური სურათის ფაილი' : 'Please upload a valid image file', 'error');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const result = e.target?.result as string;
-      if (!result) return;
-      const img = new Image();
-      img.onload = async () => {
-        const canvas = document.createElement('canvas');
-        let width = img.width;
-        let height = img.height;
-        const maxDim = 1400;
-        if (width > maxDim || height > maxDim) {
-          if (width > height) {
-            height = Math.round((height * maxDim) / width);
-            width = maxDim;
-          } else {
-            width = Math.round((width * maxDim) / height);
-            height = maxDim;
-          }
-        }
-        canvas.width = width;
-        canvas.height = height;
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.drawImage(img, 0, 0, width, height);
-          const raw = canvas.toDataURL('image/jpeg', 0.90);
-          
-          // Display billboard preview immediately!
-          setBillboardForm(prev => ({ ...prev, image: raw }));
-          addToast(isKa ? 'ბილბორდის სურათი დაემატა!' : 'Billboard image added!', 'success');
-
-          // Persist to permanent storage in background
-          uploadImageToFirebase(raw, 'billboards')
-            .then(uploadedUrl => {
-              if (uploadedUrl && (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://') || uploadedUrl.startsWith('/uploads/'))) {
-                setBillboardForm(prev => ({ ...prev, image: uploadedUrl }));
-              }
-            })
-            .catch(console.warn);
-        }
-      };
-      img.src = result;
-    };
-    reader.readAsDataURL(file);
+    try {
+      const compressedBase64 = await compressImageFile(file);
+      setBillboardForm(prev => ({ ...prev, image: compressedBase64 }));
+      addToast(isKa ? 'ბილბორდის სურათი დაემატა!' : 'Billboard image added!', 'success');
+    } catch (err) {
+      console.error('Error compressing billboard image:', err);
+      addToast(isKa ? 'შეცდომა სურათის დამუშავებისას' : 'Error compressing image file', 'error');
+    }
   };
 
   // Calculate Metrics
@@ -703,65 +668,15 @@ export const AdminDashboard: React.FC = () => {
 
     const filesToProcess = fileArray.slice(0, availableSlots);
 
-    filesToProcess.forEach((file) => {
+    filesToProcess.forEach(async (file) => {
       if (!file.type.startsWith('image/')) return;
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        if (!result) return;
-
-        const img = new Image();
-        img.onload = async () => {
-          let width = img.width;
-          let height = img.height;
-          const maxDim = 1000;
-
-          if (width > maxDim || height > maxDim) {
-            if (width > height) {
-              height = Math.round((height * maxDim) / width);
-              width = maxDim;
-            } else {
-              width = Math.round((width * maxDim) / height);
-              height = maxDim;
-            }
-          }
-
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          let rawUrl = result;
-          if (ctx) {
-            ctx.drawImage(img, 0, 0, width, height);
-            rawUrl = canvas.toDataURL('image/jpeg', 0.82);
-          }
-
-          // 1. Instantly display preview in gallery grid (0ms delay for user!)
-          appendProdImage(rawUrl, file.name);
-
-          // 2. Persist to permanent storage (~20ms from server disk API)
-          uploadImageToFirebase(rawUrl, 'products')
-            .then(uploadedUrl => {
-              if (uploadedUrl && (uploadedUrl.startsWith('http://') || uploadedUrl.startsWith('https://') || uploadedUrl.startsWith('/uploads/'))) {
-                saveImageBackupIDB(uploadedUrl, rawUrl);
-                // Seamlessly swap temporary rawUrl with permanent URL
-                setProdForm(prev => ({
-                  ...prev,
-                  images: prev.images.map(img => img === rawUrl ? uploadedUrl : img),
-                  image: prev.image === rawUrl ? uploadedUrl : prev.image,
-                }));
-              }
-            })
-            .catch(err => {
-              console.warn('Image upload background notice:', err);
-            });
-        };
-        img.onerror = () => {
-          addToast(isKa ? 'სურათის დამუშავება ვერ მოხერხდა' : 'Failed to process image file', 'error');
-        };
-        img.src = result;
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressedBase64 = await compressImageFile(file);
+        appendProdImage(compressedBase64, file.name);
+      } catch (err) {
+        console.error('Error compressing product image file:', err);
+        addToast(isKa ? 'შეცდომა სურათის დამუშავებისას' : 'Error compressing image file', 'error');
+      }
     });
   };
 
@@ -792,25 +707,6 @@ export const AdminDashboard: React.FC = () => {
         isKa ? `სურათი „${name}“ დაემატა!` : `Image "${name}" added!`,
         'success'
       );
-    }
-
-    // Backup background upload if still base64
-    if (url.startsWith('data:')) {
-      uploadImageToFirebase(url, 'products')
-        .then(uploadedUrl => {
-          if (uploadedUrl) {
-            saveImageBackupIDB(uploadedUrl, url);
-            setProdForm(prev => {
-              const updated = prev.images.map(img => img === url ? uploadedUrl : img);
-              return {
-                ...prev,
-                images: updated,
-                image: prev.image === url ? uploadedUrl : prev.image,
-              };
-            });
-          }
-        })
-        .catch(err => console.warn('Could not store image to server disk, keeping in memory:', err));
     }
   };
 
@@ -1078,7 +974,7 @@ export const AdminDashboard: React.FC = () => {
 
     const finalImages = validImages.length > 0
       ? validImages
-      : [ensurePersistentAbsoluteUrl(prodForm.image, defaultStockCover)];
+      : [ensurePersistentAbsoluteUrl(prodForm.image || '', defaultStockCover)];
     
     const finalPrimaryImage = finalImages[0] || defaultStockCover;
 

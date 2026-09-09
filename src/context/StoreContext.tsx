@@ -32,7 +32,7 @@ import {
   filterOutAdminLogs
 } from '../utils/analytics';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
-import { ensurePersistentAbsoluteUrl } from '../utils/firebaseStorage';
+import { ensurePersistentAbsoluteUrl } from '../utils/imageUtils';
 
 // Firebase decoupled - pure offline-first mode mocks
 const db = {};

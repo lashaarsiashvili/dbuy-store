@@ -22,13 +22,19 @@ export const CachedImage: React.FC<CachedImageProps> = ({
 }) => {
   const resolvedSrc = useCachedImage(src, fallbackSrc);
 
+  // Validate that the image source is a valid string before rendering
+  const isValidSrc = typeof resolvedSrc === 'string' && resolvedSrc.trim().length > 0;
+  const finalSrc = isValidSrc ? resolvedSrc : fallbackSrc;
+
   return (
     <img
       {...props}
-      src={resolvedSrc}
+      src={finalSrc}
       alt={alt}
       className={className}
       onError={(e) => {
+        // Log the exact failing URL in the console for diagnostic/debugging purposes
+        console.warn(`[IMAGE-LOAD-FAILED] Failed to load image from source: "${finalSrc}". Falling back safely to placeholder.`);
         handleImageError(e, fallbackSrc);
         if (onError) onError(e);
       }}
