@@ -368,12 +368,38 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
           // Serialize the images array (JSON.stringify(images)) and write it to the images field/column
           const imagesStr = JSON.stringify(imagesArray);
+          const primaryImage = imagesArray[0] || p.image || '';
 
           sanitizedProducts.push({
             ...p,
-            image: imagesArray[0] || p.image || '',
+            image: primaryImage,
             images: imagesStr,
           });
+
+          // Write directly to the products relational table in D1 as requested
+          try {
+            const name = p.title || '';
+            const description = p.description || '';
+            const price = Number(p.price) || 0;
+            const originalPrice = Number(p.origPrice) || Number(p.original_price) || 0;
+            const category = p.category || '';
+            const stock = Number(p.stock) || 0;
+
+            // Try updating first
+            const updateRes = await db.prepare(
+              'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, image = ?, images = ?, category = ?, stock = ? WHERE id = ?'
+            ).bind(name, description, price, originalPrice, primaryImage, imagesStr, category, stock, p.id).run();
+
+            const changes = (updateRes as any)?.meta?.changes || 0;
+            if (changes === 0) {
+              // If product does not exist yet, insert it
+              await db.prepare(
+                'INSERT INTO products (id, name, description, price, original_price, image, images, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              ).bind(p.id, name, description, price, originalPrice, primaryImage, imagesStr, category, stock).run();
+            }
+          } catch (relationalDbErr) {
+            console.error('Relational DB product persistence error:', relationalDbErr);
+          }
         }
 
         await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
@@ -467,12 +493,38 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
             // Serialize the images array (JSON.stringify(images)) and write it to the images field/column
             const imagesStr = JSON.stringify(imagesArray);
+            const primaryImage = imagesArray[0] || p.image || '';
 
             sanitizedProducts.push({
               ...p,
-              image: imagesArray[0] || p.image || '',
+              image: primaryImage,
               images: imagesStr,
             });
+
+            // Write directly to the products relational table in D1 as requested
+            try {
+              const name = p.title || '';
+              const description = p.description || '';
+              const price = Number(p.price) || 0;
+              const originalPrice = Number(p.origPrice) || Number(p.original_price) || 0;
+              const category = p.category || '';
+              const stock = Number(p.stock) || 0;
+
+              // Try updating first
+              const updateRes = await db.prepare(
+                'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, image = ?, images = ?, category = ?, stock = ? WHERE id = ?'
+              ).bind(name, description, price, originalPrice, primaryImage, imagesStr, category, stock, p.id).run();
+
+              const changes = (updateRes as any)?.meta?.changes || 0;
+              if (changes === 0) {
+                // If product does not exist yet, insert it
+                await db.prepare(
+                  'INSERT INTO products (id, name, description, price, original_price, image, images, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
+                ).bind(p.id, name, description, price, originalPrice, primaryImage, imagesStr, category, stock).run();
+              }
+            } catch (relationalDbErr) {
+              console.error('Relational DB product persistence error during sync:', relationalDbErr);
+            }
           }
           await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
         }
