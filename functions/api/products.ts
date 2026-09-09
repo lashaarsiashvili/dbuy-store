@@ -84,6 +84,22 @@ export const onRequest: PagesFunction<any> = async (context) => {
   // --- SAVE / UPDATE PRODUCT ---
   if (request.method === 'POST') {
     try {
+      // Look up adminSecretSlug from store_kv table
+      let adminSecretSlug = 'dashboard';
+      try {
+        const result = await db.prepare('SELECT value FROM store_kv WHERE key = ?').bind('adminSecretSlug').first();
+        if (result && (result as any).value) {
+          adminSecretSlug = (result as any).value;
+        }
+      } catch (e) {
+        // Fallback
+      }
+
+      const clientAdminSlug = request.headers.get('x-admin-slug') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+      if (!clientAdminSlug || clientAdminSlug.trim() !== adminSecretSlug.trim()) {
+        return Response.json({ success: false, error: 'Access Denied: Administrative authority required' }, { status: 403 });
+      }
+
       const body = await request.json() as any;
       if (!body || !body.id) {
         return Response.json({ success: false, error: 'Product ID is required' }, { status: 400 });
@@ -127,6 +143,22 @@ export const onRequest: PagesFunction<any> = async (context) => {
   // --- DELETE PRODUCT ---
   if (request.method === 'DELETE') {
     try {
+      // Look up adminSecretSlug from store_kv table
+      let adminSecretSlug = 'dashboard';
+      try {
+        const result = await db.prepare('SELECT value FROM store_kv WHERE key = ?').bind('adminSecretSlug').first();
+        if (result && (result as any).value) {
+          adminSecretSlug = (result as any).value;
+        }
+      } catch (e) {
+        // Fallback
+      }
+
+      const clientAdminSlug = request.headers.get('x-admin-slug') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+      if (!clientAdminSlug || clientAdminSlug.trim() !== adminSecretSlug.trim()) {
+        return Response.json({ success: false, error: 'Access Denied: Administrative authority required' }, { status: 403 });
+      }
+
       const url = new URL(request.url);
       const id = url.searchParams.get('id');
       if (!id) {

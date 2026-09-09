@@ -176,8 +176,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       const adminSecretSlug = await dbGet(db, 'adminSecretSlug') || 'dashboard';
 
       // Security authorization check for users and orders
-      const clientAdminSlug = request.headers.get('x-admin-slug');
-      const isAuthorizedAdmin = clientAdminSlug && clientAdminSlug === adminSecretSlug;
+      const clientAdminSlug = request.headers.get('x-admin-slug') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+      const isAuthorizedAdmin = clientAdminSlug && clientAdminSlug.trim() === adminSecretSlug.trim();
 
       const registeredUsers = isAuthorizedAdmin ? JSON.parse(await dbGet(db, 'registered_users') || '{}') : {};
       const orders = isAuthorizedAdmin ? JSON.parse(await dbGet(db, 'orders') || '[]') : [];
@@ -345,8 +345,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     // --- ADMINISTRATIVE AUTHENTICATION REQUIRED ---
     const adminSecretSlug = await dbGet(db, 'adminSecretSlug') || 'dashboard';
-    const clientAdminSlug = request.headers.get('x-admin-slug');
-    if (!clientAdminSlug || clientAdminSlug !== adminSecretSlug) {
+    const clientAdminSlug = request.headers.get('x-admin-slug') || request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
+    if (!clientAdminSlug || clientAdminSlug.trim() !== adminSecretSlug.trim()) {
       return jsonResponse({ success: false, error: 'Access Denied: Administrative authority required' }, 403);
     }
 
