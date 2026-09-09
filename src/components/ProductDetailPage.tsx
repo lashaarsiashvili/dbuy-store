@@ -107,9 +107,9 @@ export const ProductDetailPage: React.FC = () => {
   const displayDesc = (language === 'ka' && product.descriptionKa) ? product.descriptionKa : product.description;
   const productUrl = getProductUrl(product.id);
 
-  const galleryImages: string[] = (product.images && product.images.length > 0)
+  const galleryImages: string[] = (product.images && Array.isArray(product.images) && product.images.length > 0)
     ? product.images
-    : [product.image];
+    : (product.image ? [product.image] : []);
 
   const currentImage = galleryImages[activeImageIndex] || product.image;
 

@@ -58,9 +58,9 @@ export const QuickViewModal: React.FC = () => {
     : quickViewProduct.description;
 
   // Build full gallery of images for this product
-  const galleryImages: string[] = (quickViewProduct.images && quickViewProduct.images.length > 0)
+  const galleryImages: string[] = (quickViewProduct.images && Array.isArray(quickViewProduct.images) && quickViewProduct.images.length > 0)
     ? quickViewProduct.images
-    : [quickViewProduct.image];
+    : (quickViewProduct.image ? [quickViewProduct.image] : []);
 
   const currentImage = galleryImages[activeImageIndex] || quickViewProduct.image;
 

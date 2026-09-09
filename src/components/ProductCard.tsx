@@ -116,7 +116,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       {/* Product Image Container */}
       <div className="relative w-full pt-[85%] bg-slate-100 overflow-hidden">
         <CachedImage
-          src={(product.images && product.images.length > 0) ? product.images[0] : product.image}
+          src={(product.images && Array.isArray(product.images) && product.images.length > 0) ? product.images[0] : (product.image || '')}
           alt={displayTitle}
           className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
           loading="lazy"
