@@ -21,10 +21,10 @@ export const onRequest: PagesFunction<any> = async (context) => {
     }, { status: 500 });
   }
 
-  // --- GET ALL PRODUCTS WITH IMAGES DYNAMICALLY MERGED ---
+  // --- GET ALL PRODUCTS ---
   if (request.method === 'GET') {
     try {
-      // Auto-initialize tables if not present
+      // Auto-initialize products table if not present
       await db.exec(
         `CREATE TABLE IF NOT EXISTS products (
           id TEXT PRIMARY KEY,
@@ -41,36 +41,14 @@ export const onRequest: PagesFunction<any> = async (context) => {
         );`
       );
 
-      await db.exec(
-        `CREATE TABLE IF NOT EXISTS product_images (
-          id TEXT PRIMARY KEY,
-          product_id TEXT,
-          image_data TEXT,
-          sort_order INTEGER,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );`
-      );
-
       const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
-      const { results: imagesResults } = await db.prepare('SELECT * FROM product_images ORDER BY sort_order ASC').all();
-
-      const imagesByProduct = new Map<string, string[]>();
-      for (const imgRow of (imagesResults || []) as any[]) {
-        const pid = imgRow.product_id;
-        if (!imagesByProduct.has(pid)) {
-          imagesByProduct.set(pid, []);
-        }
-        imagesByProduct.get(pid)!.push(imgRow.image_data);
-      }
 
       const products = results.map((row: any) => {
-        let imagesArr = imagesByProduct.get(row.id) || [];
-        if (imagesArr.length === 0) {
-          try {
-            imagesArr = row.images ? JSON.parse(row.images as string) : [];
-          } catch (e) {
-            imagesArr = row.image ? [row.image] : [];
-          }
+        let imagesArr: string[] = [];
+        try {
+          imagesArr = row.images ? JSON.parse(row.images as string) : [];
+        } catch (e) {
+          imagesArr = row.image ? [row.image] : [];
         }
         if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
           imagesArr = row.image ? [row.image] : [];
@@ -104,7 +82,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
     }
   }
 
-  // --- SAVE / UPDATE PRODUCT WITH IMAGES SPLIT TO WORKAROUND 1MB D1 LIMITS ---
+  // --- SAVE / UPDATE PRODUCT WITH IMAGES STORED DIRECTLY IN PRODUCTS TABLE ---
   if (request.method === 'POST') {
     try {
       // Look up adminSecretSlug from store_kv table
@@ -135,31 +113,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
         ? body.images
         : (body.image ? [body.image] : []);
       const primaryImage = rawImages[0] || '';
-
-      // Create product_images table if not present
-      await db.exec(
-        `CREATE TABLE IF NOT EXISTS product_images (
-          id TEXT PRIMARY KEY,
-          product_id TEXT,
-          image_data TEXT,
-          sort_order INTEGER,
-          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        );`
-      );
-
-      // Clean up previous image associations in product_images for this product
-      await db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(String(body.id)).run();
-
-      // Write each image as an individual row in product_images table to bypass 1MB single-row limit
-      for (let i = 0; i < rawImages.length; i++) {
-        const imageId = `${body.id}-img-${i}-${Math.random().toString(36).substring(2, 6)}`;
-        await db.prepare(
-          'INSERT INTO product_images (id, product_id, image_data, sort_order) VALUES (?, ?, ?, ?)'
-        ).bind(imageId, String(body.id), rawImages[i], i).run();
-      }
-
-      // Keep only metadata in products table, we serialize empty array [] to save space
-      const serializedImages = JSON.stringify([]);
+      const serializedImages = JSON.stringify(rawImages);
 
       await db.prepare(`
         INSERT INTO products (id, name, description, price, original_price, image, images, category, stock, updated_at)
@@ -194,7 +148,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
     }
   }
 
-  // --- DELETE PRODUCT AND ITS RELATIONAL IMAGES ---
+  // --- DELETE PRODUCT ---
   if (request.method === 'DELETE') {
     try {
       // Look up adminSecretSlug from store_kv table
@@ -220,13 +174,6 @@ export const onRequest: PagesFunction<any> = async (context) => {
       const id = url.searchParams.get('id');
       if (!id) {
         return Response.json({ success: false, error: 'Product ID is required' }, { status: 400 });
-      }
-
-      // Delete image rows first to preserve integrity
-      try {
-        await db.prepare('DELETE FROM product_images WHERE product_id = ?').bind(id).run();
-      } catch (imgErr) {
-        console.error('Failed to clean up product_images:', imgErr);
       }
 
       await db.prepare('DELETE FROM products WHERE id = ?').bind(id).run();

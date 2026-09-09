@@ -332,9 +332,21 @@ export const preloadProductImages = async (
         // Give mobile CPU thread breathing room between product records
         await new Promise((resolve) => setTimeout(resolve, 50));
 
-        if (Array.isArray(product.images) && product.images.length > 0) {
-          for (let idx = 0; idx < product.images.length; idx++) {
-            const img = product.images[idx];
+        let parsedImages: string[] = [];
+        const rawImages: any = product.images;
+        if (Array.isArray(rawImages)) {
+          parsedImages = rawImages;
+        } else if (typeof rawImages === 'string' && rawImages.trim().length > 0) {
+          try {
+            parsedImages = JSON.parse(rawImages);
+          } catch (e) {
+            parsedImages = [];
+          }
+        }
+
+        if (parsedImages.length > 0) {
+          for (let idx = 0; idx < parsedImages.length; idx++) {
+            const img = parsedImages[idx];
             if (!img) continue;
             if (img.startsWith('data:')) {
               const idKey = `prod-${product.id}-img-${idx}`;

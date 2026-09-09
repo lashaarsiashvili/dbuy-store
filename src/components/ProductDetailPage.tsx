@@ -107,11 +107,23 @@ export const ProductDetailPage: React.FC = () => {
   const displayDesc = (language === 'ka' && product.descriptionKa) ? product.descriptionKa : product.description;
   const productUrl = getProductUrl(product.id);
 
-  const galleryImages: string[] = (product.images && Array.isArray(product.images) && product.images.length > 0)
-    ? product.images
+  let parsedImages: string[] = [];
+  const rawImages: any = product.images;
+  if (Array.isArray(rawImages)) {
+    parsedImages = rawImages;
+  } else if (typeof rawImages === 'string' && rawImages.trim().length > 0) {
+    try {
+      parsedImages = JSON.parse(rawImages);
+    } catch (e) {
+      parsedImages = [];
+    }
+  }
+
+  const galleryImages: string[] = parsedImages.length > 0
+    ? parsedImages
     : (product.image ? [product.image] : []);
 
-  const currentImage = galleryImages[activeImageIndex] || product.image;
+  const currentImage = galleryImages[activeImageIndex] || product.image || '';
 
   const handleNextImage = () => {
     setActiveImageIndex((prev) => (prev + 1) % galleryImages.length);

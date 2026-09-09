@@ -116,7 +116,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
       {/* Product Image Container */}
       <div className="relative w-full pt-[85%] bg-slate-100 overflow-hidden">
         {(() => {
-          const imageSrc = product.image || (Array.isArray(product.images) && product.images[0]) || '';
+          let parsedImages: string[] = [];
+          if (Array.isArray(product.images)) {
+            parsedImages = product.images;
+          } else if (typeof product.images === 'string') {
+            try {
+              parsedImages = JSON.parse(product.images);
+            } catch (e) {
+              parsedImages = [];
+            }
+          }
+          const imageSrc = product.image || parsedImages[0] || '';
           if (imageSrc.startsWith('data:image/')) {
             return (
               <img

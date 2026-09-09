@@ -144,12 +144,24 @@ export const CartDrawer: React.FC = () => {
                   ? item.product.titleKa
                   : item.product.title;
 
+                let parsedImages: string[] = [];
+                if (Array.isArray(item.product.images)) {
+                  parsedImages = item.product.images;
+                } else if (typeof item.product.images === 'string' && item.product.images.trim().length > 0) {
+                  try {
+                    parsedImages = JSON.parse(item.product.images);
+                  } catch (e) {
+                    parsedImages = [];
+                  }
+                }
+                const imageSrc = item.product.image || parsedImages[0] || '';
+
                 return (
                   <div key={item.product.id} className="py-4 flex space-x-3 items-center">
                     {/* Thumbnail */}
                     <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
                       <CachedImage
-                        src={item.product.image}
+                        src={imageSrc}
                         alt={title}
                         className="w-full h-full object-cover"
                       />

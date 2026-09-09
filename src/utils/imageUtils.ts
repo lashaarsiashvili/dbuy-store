@@ -22,8 +22,8 @@ export const ensurePersistentAbsoluteUrl = (url: string, fallback = ''): string 
 };
 
 /**
- * Reads an image File from the client and returns it as a raw Base64 Data URL
- * without any compression or resizing to preserve original quality and resolution.
+ * Reads an image File from the client, scales its maximum dimension to 1200px (preserving aspect ratio),
+ * and compresses it using WebP (0.82 quality) with JPEG (0.85 quality) fallback.
  */
 export const compressImageFile = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
@@ -33,16 +33,55 @@ export const compressImageFile = (file: File): Promise<string> => {
     }
 
     const reader = new FileReader();
-    reader.onload = (e) => {
-      if (typeof e.target?.result === 'string') {
-        resolve(e.target.result);
-      } else {
+    reader.onload = (event) => {
+      if (typeof event.target?.result !== 'string') {
         reject(new Error('Failed to read file as Data URL'));
+        return;
       }
+
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+          const maxDimension = 1200;
+
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            reject(new Error('Failed to get 2D context from canvas'));
+            return;
+          }
+
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // Try converting to WebP first, fallback to JPEG if WebP is unsupported
+          let dataUrl = canvas.toDataURL('image/webp', 0.82);
+          if (!dataUrl.startsWith('data:image/webp')) {
+            dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+          }
+          resolve(dataUrl);
+        } catch (err) {
+          reject(err);
+        }
+      };
+      img.onerror = (err) => reject(err);
+      img.src = event.target.result;
     };
-    reader.onerror = (err) => {
-      reject(err);
-    };
+    reader.onerror = (err) => reject(err);
     reader.readAsDataURL(file);
   });
 };

@@ -106,6 +106,18 @@ export const WishlistDrawer: React.FC = () => {
               wishlistProducts.map(product => {
                 const title = language === 'ka' && product.titleKa ? product.titleKa : product.title;
 
+                let parsedImages: string[] = [];
+                if (Array.isArray(product.images)) {
+                  parsedImages = product.images;
+                } else if (typeof product.images === 'string' && product.images.trim().length > 0) {
+                  try {
+                    parsedImages = JSON.parse(product.images);
+                  } catch (e) {
+                    parsedImages = [];
+                  }
+                }
+                const imageSrc = product.image || parsedImages[0] || '';
+
                 return (
                   <div
                     key={product.id}
@@ -119,7 +131,7 @@ export const WishlistDrawer: React.FC = () => {
                       className="w-18 h-18 bg-slate-100 dark:bg-slate-900 rounded-xl overflow-hidden shrink-0 cursor-pointer relative"
                     >
                       <CachedImage
-                        src={product.image}
+                        src={imageSrc}
                         alt={title}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         referrerPolicy="no-referrer"
