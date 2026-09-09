@@ -96,6 +96,34 @@ async function persistBase64InD1(db: D1Database, dataUrl: string, prefix = 'prod
   }
 }
 
+// Helper: Parse images serialized field and fallback gracefully to legacy single image if needed
+function parseAndFallbackProducts(products: any[]): any[] {
+  return products.map(p => {
+    let images: string[] = [];
+    if (p.images) {
+      if (typeof p.images === 'string') {
+        try {
+          images = JSON.parse(p.images);
+        } catch (e) {
+          images = [];
+        }
+      } else if (Array.isArray(p.images)) {
+        images = p.images;
+      }
+    }
+    
+    // Legacy backwards compatibility fallback
+    if (!Array.isArray(images) || images.length === 0) {
+      images = p.image ? [p.image] : [];
+    }
+    
+    return {
+      ...p,
+      images,
+    };
+  });
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -163,7 +191,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         });
       }
 
-      const products = JSON.parse(await dbGet(db, 'products') || '[]');
+      const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
+      const products = parseAndFallbackProducts(rawProducts);
       const theme = JSON.parse(await dbGet(db, 'theme') || '{}');
       const billboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
       const billboardIntervalSeconds = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
@@ -192,7 +221,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     if (path.endsWith('/products')) {
-      const products = JSON.parse(await dbGet(db, 'products') || '[]');
+      const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
+      const products = parseAndFallbackProducts(rawProducts);
       return jsonResponse({ success: true, products });
     }
   }
@@ -352,26 +382,29 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
         const sanitizedProducts = [];
         for (const p of products) {
-          const cleanImage = p.image ? await persistBase64InD1(db, p.image, `prod-${p.id || Date.now()}`) : p.image;
-          const cleanImages = [];
+          let imagesArray: string[] = [];
           if (Array.isArray(p.images)) {
-            for (let i = 0; i < p.images.length; i++) {
-              cleanImages.push(await persistBase64InD1(db, p.images[i], `prod-${p.id || Date.now()}-${i}`));
-            }
-          } else {
-            if (cleanImage) cleanImages.push(cleanImage);
+            imagesArray = p.images;
+          } else if (p.image) {
+            imagesArray = [p.image];
           }
+
+          // Serialize the images array (JSON.stringify(images)) and write it to the images field/column
+          const imagesStr = JSON.stringify(imagesArray);
+
           sanitizedProducts.push({
             ...p,
-            image: cleanImage,
-            images: cleanImages,
+            image: imagesArray[0] || p.image || '',
+            images: imagesStr,
           });
         }
 
         await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
         await dbPut(db, 'last_updated', lastUpdatedNew);
 
-        return jsonResponse({ success: true, products: sanitizedProducts, lastUpdated: lastUpdatedNew });
+        // Parse back to array for response
+        const returnedProducts = parseAndFallbackProducts(sanitizedProducts);
+        return jsonResponse({ success: true, products: returnedProducts, lastUpdated: lastUpdatedNew });
       } catch (err: any) {
         return jsonResponse({ success: false, error: err?.message || 'Failed to save products' }, 500);
       }
@@ -448,19 +481,20 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         if (Array.isArray(products)) {
           const sanitizedProducts = [];
           for (const p of products) {
-            const cleanImage = p.image ? await persistBase64InD1(db, p.image, `prod-${p.id || Date.now()}`) : p.image;
-            const cleanImages = [];
+            let imagesArray: string[] = [];
             if (Array.isArray(p.images)) {
-              for (let i = 0; i < p.images.length; i++) {
-                cleanImages.push(await persistBase64InD1(db, p.images[i], `prod-${p.id || Date.now()}-${i}`));
-              }
-            } else {
-              if (cleanImage) cleanImages.push(cleanImage);
+              imagesArray = p.images;
+            } else if (p.image) {
+              imagesArray = [p.image];
             }
+
+            // Serialize the images array (JSON.stringify(images)) and write it to the images field/column
+            const imagesStr = JSON.stringify(imagesArray);
+
             sanitizedProducts.push({
               ...p,
-              image: cleanImage,
-              images: cleanImages,
+              image: imagesArray[0] || p.image || '',
+              images: imagesStr,
             });
           }
           await dbPut(db, 'products', JSON.stringify(sanitizedProducts));

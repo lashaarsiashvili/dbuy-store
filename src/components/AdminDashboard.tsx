@@ -656,14 +656,29 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  const readImageAsBase64 = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        if (typeof reader.result === 'string') {
+          resolve(reader.result);
+        } else {
+          reject(new Error('Failed to read file as base64 string'));
+        }
+      };
+      reader.onerror = (error) => reject(error);
+      reader.readAsDataURL(file);
+    });
+  };
+
   const processImageFiles = (files: FileList | File[]) => {
     const fileArray = Array.from(files);
     if (fileArray.length === 0) return;
 
     const currentCount = prodForm.images.length;
-    const availableSlots = 10 - currentCount;
+    const availableSlots = 5 - currentCount;
     if (availableSlots <= 0) {
-      addToast(isKa ? 'მაქსიმუმ 10 სურათია დაშვებული' : 'Maximum 10 images allowed per product', 'warning');
+      addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed per product', 'warning');
       return;
     }
 
@@ -672,11 +687,11 @@ export const AdminDashboard: React.FC = () => {
     filesToProcess.forEach(async (file) => {
       if (!file.type.startsWith('image/')) return;
       try {
-        const compressedBase64 = await compressImageFile(file);
-        appendProdImage(compressedBase64, file.name);
+        const base64Data = await readImageAsBase64(file);
+        appendProdImage(base64Data, file.name);
       } catch (err) {
-        console.error('Error compressing product image file:', err);
-        addToast(isKa ? 'შეცდომა სურათის დამუშავებისას' : 'Error compressing image file', 'error');
+        console.error('Error reading product image file:', err);
+        addToast(isKa ? 'შეცდომა სურათის წაკითხვისას' : 'Error reading image file', 'error');
       }
     });
   };
@@ -684,8 +699,8 @@ export const AdminDashboard: React.FC = () => {
   const appendProdImage = (url: string, name?: string) => {
     setProdForm(prev => {
       const currentList = prev.images.length > 0 ? [...prev.images] : (prev.image ? [prev.image] : []);
-      if (currentList.length >= 10) {
-        addToast(isKa ? 'მაქსიმუმ 10 სურათია დაშვებული' : 'Maximum 10 images allowed', 'warning');
+      if (currentList.length >= 5) {
+        addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed', 'warning');
         return prev;
       }
       if (currentList.includes(url)) return prev;
@@ -967,11 +982,11 @@ export const AdminDashboard: React.FC = () => {
 
     const defaultStockCover = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
 
-    // Prepare valid images array (up to 10 images) ensuring persistent URLs
+    // Prepare valid images array (up to 5 images) ensuring persistent URLs
     const validImages = (prodForm.images || [])
       .map(img => ensurePersistentAbsoluteUrl(img, ''))
       .filter(img => img.length > 0)
-      .slice(0, 10);
+      .slice(0, 5);
 
     const finalImages = validImages.length > 0
       ? validImages
@@ -4399,8 +4414,8 @@ export const AdminDashboard: React.FC = () => {
                       onDragLeave={handleDragLeave}
                       onDrop={handleDrop}
                       onClick={() => {
-                        if (prodForm.images.length >= 10) {
-                          addToast(isKa ? 'მაქსიმუმ 10 სურათია დაშვებული' : 'Maximum 10 images allowed', 'warning');
+                        if (prodForm.images.length >= 5) {
+                          addToast(isKa ? 'მაქსიმუმ 5 სურათია დაშვებული' : 'Maximum 5 images allowed', 'warning');
                         } else {
                           fileInputRef.current?.click();
                         }
@@ -4408,7 +4423,7 @@ export const AdminDashboard: React.FC = () => {
                       className={`border-2 border-dashed rounded-2xl p-4 text-center cursor-pointer transition-all ${
                         isDragging
                           ? 'border-blue-500 bg-blue-50/80 scale-[1.01]'
-                          : prodForm.images.length >= 10
+                          : prodForm.images.length >= 5
                           ? 'border-slate-200 bg-slate-100 opacity-80 cursor-not-allowed'
                           : 'border-slate-300 bg-white hover:border-blue-500 hover:bg-blue-50/30'
                       }`}
@@ -4418,9 +4433,9 @@ export const AdminDashboard: React.FC = () => {
                           <UploadCloud className="w-4 h-4" />
                         </div>
                         <p className="text-xs font-bold text-slate-800">
-                          {prodForm.images.length >= 10
-                            ? (isKa ? 'მიღწეულია 10 სურათის ლიმიტი' : '10 images limit reached')
-                            : (isKa ? 'დააჭირეთ ან გადმოათრიეთ სურათები (1-10 ფაილი)' : 'Click to select or drag & drop images (1-10 files)')}
+                          {prodForm.images.length >= 5
+                            ? (isKa ? 'მიღწეულია 5 სურათის ლიმიტი' : '5 images limit reached')
+                            : (isKa ? 'დააჭირეთ ან გადმოათრიეთ სურათები (1-5 ფაილი)' : 'Click to select or drag & drop images (1-5 files)')}
                         </p>
                         <p className="text-[10px] text-slate-400">
                           PNG, JPG, WEBP, GIF
@@ -4442,13 +4457,13 @@ export const AdminDashboard: React.FC = () => {
                           }
                         }}
                         placeholder=""
-                        disabled={prodForm.images.length >= 10}
+                        disabled={prodForm.images.length >= 5}
                         className="flex-1 px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-hidden disabled:bg-slate-100"
                       />
                       <button
                         type="button"
                         onClick={handleAddImageUrl}
-                        disabled={prodForm.images.length >= 10 || !newImageUrl.trim()}
+                        disabled={prodForm.images.length >= 5 || !newImageUrl.trim()}
                         className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold text-xs flex items-center space-x-1 transition-all cursor-pointer shrink-0"
                       >
                         <Plus className="w-3.5 h-3.5" />
@@ -4467,7 +4482,7 @@ export const AdminDashboard: React.FC = () => {
                             key={idx}
                             type="button"
                             onClick={() => appendProdImage(preset.url, preset.label)}
-                            disabled={prodForm.images.length >= 10}
+                            disabled={prodForm.images.length >= 5}
                             className="shrink-0 p-1 rounded-xl border border-slate-200 bg-white hover:border-blue-500 transition-all disabled:opacity-40 cursor-pointer"
                             title={preset.label}
                           >
@@ -4483,12 +4498,12 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                 )}
 
-                {/* 10-Images Gallery Grid Preview */}
+                {/* 5-Images Gallery Grid Preview */}
                 {prodForm.images.length > 0 && (
                   <div className="pt-2 border-t border-slate-200/60 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
                       <span className="text-[11px] font-bold text-slate-700 block">
-                        {isKa ? `დამატებული სურათები (${prodForm.images.length}/10):` : `Added Gallery Images (${prodForm.images.length}/10):`}
+                        {isKa ? `დამატებული სურათები (${prodForm.images.length}/5):` : `Added Gallery Images (${prodForm.images.length}/5):`}
                       </span>
                     </div>
 
