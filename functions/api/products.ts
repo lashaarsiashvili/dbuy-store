@@ -108,31 +108,35 @@ export const onRequest: PagesFunction<any> = async (context) => {
         return Response.json({ success: false, error: 'Product ID is required' }, { status: 400 });
       }
 
-      const imagesJson = Array.isArray(body.images) ? JSON.stringify(body.images) : JSON.stringify([body.image || '']);
-      
-      await db.prepare(
-        `INSERT INTO products (id, name, description, price, original_price, image, images, category, stock, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-         ON CONFLICT(id) DO UPDATE SET
-           name=excluded.name,
-           description=excluded.description,
-           price=excluded.price,
-           original_price=excluded.original_price,
-           image=excluded.image,
-           images=excluded.images,
-           category=excluded.category,
-           stock=excluded.stock,
-           updated_at=CURRENT_TIMESTAMP`
-      ).bind(
-        body.id,
-        body.title || body.name || '',
-        body.description || '',
-        body.price || 0,
-        body.origPrice || body.original_price || null,
-        body.image || '',
-        imagesJson,
-        body.category || 'tech',
-        body.stock || 0
+      const rawImages = Array.isArray(body.images) && body.images.length > 0
+        ? body.images
+        : (body.image ? [body.image] : []);
+      const primaryImage = rawImages[0] || '';
+      const serializedImages = JSON.stringify(rawImages);
+
+      await db.prepare(`
+        INSERT INTO products (id, name, description, price, original_price, image, images, category, stock, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          description = excluded.description,
+          price = excluded.price,
+          original_price = excluded.original_price,
+          image = excluded.image,
+          images = excluded.images,
+          category = excluded.category,
+          stock = excluded.stock,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(
+        String(body.id),
+        String(body.title || body.name || ''),
+        String(body.description || ''),
+        Number(body.price) || 0,
+        body.origPrice || body.original_price ? Number(body.origPrice || body.original_price) : null,
+        primaryImage,
+        serializedImages,
+        String(body.category || ''),
+        Number(body.stock) || 0
       ).run();
 
       return Response.json({ success: true }, {

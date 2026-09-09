@@ -383,10 +383,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
           // Write directly to the products relational table in D1 as requested
           try {
-            const name = p.title || '';
+            const name = p.title || p.name || '';
             const description = p.description || '';
             const price = Number(p.price) || 0;
-            const originalPrice = Number(p.origPrice) || Number(p.original_price) || 0;
+            const originalPrice = p.origPrice !== undefined && p.origPrice !== null && p.origPrice !== '' ? Number(p.origPrice) : (p.original_price !== undefined && p.original_price !== null && p.original_price !== '' ? Number(p.original_price) : null);
             const category = p.category || '';
             const stock = Number(p.stock) || 0;
 

@@ -706,9 +706,9 @@ export const AdminDashboard: React.FC = () => {
       if (currentList.includes(url)) return prev;
 
       // If the list only contains a default Unsplash stock photo, replace it with the new custom image.
-      // Otherwise, prepend the new image so it immediately becomes the primary cover image.
+      // Otherwise, append the new image to the end of the list.
       const hasOnlyUnsplash = currentList.length === 1 && currentList[0].includes('unsplash.com');
-      const updated = hasOnlyUnsplash ? [url] : [url, ...currentList];
+      const updated = hasOnlyUnsplash ? [url] : [...currentList, url];
 
       return {
         ...prev,
@@ -1024,8 +1024,9 @@ export const AdminDashboard: React.FC = () => {
     let success = false;
 
     try {
+      const generatedNewId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const productPayload = {
-        id: editingProduct ? editingProduct.id : 'prod-' + Date.now(),
+        id: editingProduct ? editingProduct.id : generatedNewId,
         title: prodForm.title || prodForm.titleKa || 'Product',
         titleKa: prodForm.titleKa,
         customSlug: finalSlug,
@@ -1034,7 +1035,7 @@ export const AdminDashboard: React.FC = () => {
         origPrice: numOrigPrice,
         stock: numStock,
         badge: prodForm.badge || undefined,
-        image: finalPrimaryImage,
+        image: finalImages[0] || '',
         images: finalImages,
         description: prodForm.description,
         descriptionKa: prodForm.descriptionKa,
@@ -1088,6 +1089,23 @@ export const AdminDashboard: React.FC = () => {
 
     if (success) {
       setIsProductModalOpen(false);
+      setEditingProduct(null);
+      setUploadedFileInfo(null);
+      setProdForm({
+        title: '',
+        titleKa: '',
+        customSlug: '',
+        category: 'tech',
+        price: '' as unknown as number,
+        origPrice: '' as unknown as number | undefined,
+        stock: '' as unknown as number,
+        badge: '',
+        image: '',
+        images: [],
+        description: '',
+        descriptionKa: '',
+        features: ['', '', '', ''],
+      });
     }
   };
 
@@ -1128,6 +1146,9 @@ export const AdminDashboard: React.FC = () => {
 
   const handleDuplicateProduct = async (duplicated: any) => {
     try {
+      const uniqueId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+      const payload = { ...duplicated, id: uniqueId };
+
       const adminSlug = adminSecretSlug || 
         localStorage.getItem('dbuy_admin_secret_slug') || 
         localStorage.getItem('admin_token') || 
@@ -1144,7 +1165,7 @@ export const AdminDashboard: React.FC = () => {
           'Authorization': `Bearer ${adminSlug}`,
           'x-admin-key': adminSlug
         },
-        body: JSON.stringify(duplicated),
+        body: JSON.stringify(payload),
       });
       if (!res.ok) {
         const errorText = await res.text();
@@ -1154,7 +1175,7 @@ export const AdminDashboard: React.FC = () => {
       if (json && json.success === false) {
         throw new Error(json.error || 'Response indicated failure');
       }
-      await addProduct(duplicated);
+      await addProduct(payload);
     } catch (err: any) {
       alert('Duplicate failed: ' + err.message);
     }

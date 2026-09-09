@@ -115,13 +115,30 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
       {/* Product Image Container */}
       <div className="relative w-full pt-[85%] bg-slate-100 overflow-hidden">
-        <CachedImage
-          src={(product.images && Array.isArray(product.images) && product.images.length > 0) ? product.images[0] : (product.image || '')}
-          alt={displayTitle}
-          className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
-          loading="lazy"
-          referrerPolicy="no-referrer"
-        />
+        {(() => {
+          const imageSrc = product.image || (Array.isArray(product.images) && product.images[0]) || '';
+          if (imageSrc.startsWith('data:image/')) {
+            return (
+              <img
+                src={imageSrc}
+                alt={displayTitle}
+                className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
+                loading="lazy"
+                referrerPolicy="no-referrer"
+                onError={(e) => handleImageError(e)}
+              />
+            );
+          }
+          return (
+            <CachedImage
+              src={imageSrc}
+              alt={displayTitle}
+              className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
+              loading="lazy"
+              referrerPolicy="no-referrer"
+            />
+          );
+        })()}
 
         {/* Quick View Hover Overlay Button */}
         <div className="absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center space-x-2">
