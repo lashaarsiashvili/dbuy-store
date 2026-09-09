@@ -64,7 +64,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   return (
     <div 
-      className="group relative flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer"
+      className="group relative flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer transform-gpu"
+      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 380px' }}
       onClick={handleCardClick}
     >
       {/* Badge */}
@@ -132,8 +133,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               <img
                 src={imageSrc}
                 alt={displayTitle}
-                className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
+                className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500 transform-gpu will-change-transform"
                 loading="lazy"
+                decoding="async"
                 referrerPolicy="no-referrer"
                 onError={(e) => handleImageError(e)}
               />
@@ -143,8 +145,9 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             <CachedImage
               src={imageSrc}
               alt={displayTitle}
-              className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500"
+              className="absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500 transform-gpu will-change-transform"
               loading="lazy"
+              decoding="async"
               referrerPolicy="no-referrer"
             />
           );
