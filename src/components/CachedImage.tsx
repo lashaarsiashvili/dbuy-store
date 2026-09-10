@@ -36,6 +36,7 @@ export const CachedImage: React.FC<CachedImageProps> = ({
   return (
     <img
       decoding="async"
+      loading={props.loading || 'lazy'}
       {...props}
       src={finalSrc}
       alt={alt}

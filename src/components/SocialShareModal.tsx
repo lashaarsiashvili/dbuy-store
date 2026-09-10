@@ -19,7 +19,11 @@ import {
   RotateCcw,
   Smartphone,
   CheckCircle2,
-  Megaphone
+  Megaphone,
+  Image as ImageIcon,
+  FileText,
+  Info,
+  Layers
 } from 'lucide-react';
 
 interface SocialShareModalProps {
@@ -42,6 +46,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   const [caption, setCaption] = useState<string>('');
   const [copiedType, setCopiedType] = useState<'text' | 'link' | 'fb' | 'ig' | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
+  const [showFbGuidance, setShowFbGuidance] = useState<boolean>(false);
 
   // Update caption when language or style changes
   useEffect(() => {
@@ -127,6 +132,22 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     document.body.removeChild(textArea);
   };
 
+  // Helper to get image as File object (for Web Share API with files)
+  const getProductImageFile = async (): Promise<File | null> => {
+    const imageUrl = product.image || (product.images && product.images[0]) || '';
+    if (!imageUrl) return null;
+    try {
+      const res = await fetch(imageUrl);
+      const blob = await res.blob();
+      const safeTitle = (product.title || 'product').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
+      const ext = blob.type.includes('png') ? 'png' : 'jpg';
+      const filename = `dbuy-${safeTitle}.${ext}`;
+      return new File([blob], filename, { type: blob.type || 'image/jpeg' });
+    } catch {
+      return null;
+    }
+  };
+
   // Download product image
   const handleDownloadImage = async () => {
     const imageUrl = product.image || (product.images && product.images[0]) || '';
@@ -157,15 +178,65 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     }
   };
 
-  // 1. Share to Facebook
-  const handleShareFacebook = async () => {
-    // Copy text first so merchant can simply Ctrl+V / Paste into post box
+  // 1. Share full post to Facebook (Image Download + Text Copy + Open Facebook Composer)
+  const handleShareFacebookFullPost = async () => {
+    // 1. Copy generated ad copy to clipboard first
     try {
       await navigator.clipboard.writeText(caption);
     } catch {
       fallbackCopyText(caption);
     }
 
+    // 2. Check if mobile Web Share API with files is supported
+    const imageFile = await getProductImageFile();
+    if (imageFile && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
+      try {
+        await navigator.share({
+          files: [imageFile],
+          title: displayTitle,
+          text: caption,
+          url: shareUrl,
+        });
+        showToast(
+          language === 'ka'
+            ? 'სურათი და ტექსტი წარმატებით გადაეგზავნა გაზიარების მენიუს!'
+            : 'Image and ad copy sent to share menu!',
+          'fb'
+        );
+        return;
+      } catch (err: any) {
+        if (err?.name === 'AbortError') return;
+      }
+    }
+
+    // 3. Automatically download product image so merchant has the picture on device
+    await handleDownloadImage();
+
+    // 4. Show instructional guidance banner
+    setShowFbGuidance(true);
+    showToast(
+      language === 'ka'
+        ? '📸 სურათი ჩამოიტვირთა! 📝 ტექსტი დაკოპირდა!'
+        : '📸 Image downloaded! 📝 Text copied!',
+      'fb'
+    );
+
+    // 5. Open Facebook post composer / feed in a new window
+    window.open('https://www.facebook.com/', '_blank');
+  };
+
+  // 2. Share via Facebook Link Sharer Dialog
+  const handleShareFacebookLink = async () => {
+    try {
+      await navigator.clipboard.writeText(caption);
+    } catch {
+      fallbackCopyText(caption);
+    }
+
+    // Also download image as backup
+    await handleDownloadImage();
+
+    setShowFbGuidance(true);
     showToast(
       language === 'ka'
         ? 'ტექსტი დაკოპირდა! Facebook-ის ფანჯარაში უბრალოდ ჩააკარით (Paste / Ctrl+V).'
@@ -174,9 +245,12 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     );
 
     // Open Facebook Sharer Dialog
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(caption)}`;
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
     window.open(fbUrl, '_blank', 'width=650,height=600,scrollbars=yes,resizable=yes');
   };
+
+  // Backwards compatibility alias
+  const handleShareFacebook = handleShareFacebookFullPost;
 
   // 2. Share to Instagram (Copy formatted text + Download high-res ad image + Open Instagram)
   const handleShareInstagram = async () => {
@@ -442,49 +516,116 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
           {/* Direct Sharing Action Buttons */}
           <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-              {language === 'ka' ? 'გაშვება სოციალურ ქსელებში:' : 'One-Click Publish & Share:'}
-            </h4>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {/* Facebook Button */}
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                {language === 'ka' ? 'გაშვება სოციალურ ქსელებში:' : 'One-Click Publish & Share:'}
+              </h4>
               <button
                 type="button"
-                onClick={handleShareFacebook}
-                className="p-3 rounded-2xl bg-[#1877F2] hover:bg-[#166fe5] active:scale-[0.99] text-white font-bold text-xs flex items-center justify-between shadow-md shadow-blue-500/20 transition-all cursor-pointer group"
+                onClick={() => setShowFbGuidance(!showFbGuidance)}
+                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center space-x-1 cursor-pointer"
               >
-                <div className="flex items-center space-x-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                    <Facebook className="w-4 h-4 text-white fill-white" />
+                <Info className="w-3.5 h-3.5" />
+                <span>{language === 'ka' ? (showFbGuidance ? 'ინსტრუქციის დამალვა' : 'როგორ მუშაობს?') : (showFbGuidance ? 'Hide Guide' : 'How it works?')}</span>
+              </button>
+            </div>
+
+            {/* Instructional Guidance Card */}
+            {showFbGuidance && (
+              <div className="p-3.5 rounded-2xl bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/50 dark:to-indigo-950/50 border border-blue-200 dark:border-blue-800 text-blue-950 dark:text-blue-100 space-y-2.5 animate-in fade-in slide-in-from-top-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2 font-black text-xs text-blue-800 dark:text-blue-300">
+                    <span className="flex h-2 w-2 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-blue-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2 w-2 bg-blue-600"></span>
+                    </span>
+                    <span>{language === 'ka' ? 'როგორ გამოვაქვეყნოთ სურათი და სარეკლამო ტექსტი Facebook-ზე:' : 'How to publish photo & ad copy to Facebook:'}</span>
                   </div>
-                  <div className="text-left">
-                    <div className="font-black text-xs leading-none">
-                      {language === 'ka' ? 'Facebook-ზე გაზიარება' : 'Share to Facebook'}
+                  <button
+                    type="button"
+                    onClick={() => setShowFbGuidance(false)}
+                    className="text-blue-500 hover:text-blue-700 text-xs font-bold cursor-pointer px-1"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                  <div className="flex items-start space-x-2.5 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/40 shadow-xs">
+                    <span className="text-lg shrink-0">📸</span>
+                    <div>
+                      <span className="font-black block text-slate-900 dark:text-white">1. სურათი ჩამოტვირთულია</span>
+                      <span className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight block mt-0.5">
+                        {language === 'ka' 
+                          ? 'Facebook-ის ფანჯარაში დააჭირეთ „ფოტოს/ვიდეოს დამატება“-ს და აირჩიეთ გადმოწერილი ფაილი.' 
+                          : 'In Facebook composer, click "Add Photo/Video" and select the downloaded file.'}
+                      </span>
                     </div>
-                    <div className="text-[10px] text-white/80 mt-1">
-                      {language === 'ka' ? 'ტექსტი კოპირდება + ბმული იხსნება' : 'Auto-copies text & opens sharer'}
+                  </div>
+                  <div className="flex items-start space-x-2.5 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/40 shadow-xs">
+                    <span className="text-lg shrink-0">📝</span>
+                    <div>
+                      <span className="font-black block text-slate-900 dark:text-white">2. ტექსტი დაკოპირებულია</span>
+                      <span className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight block mt-0.5">
+                        {language === 'ka' 
+                          ? 'პოსტის ტექსტის ველში გააკეთეთ ჩასმა (Paste / Ctrl+V ან ტელეფონზე ეკრანზე თითის დაჭერით „ჩასმა“).' 
+                          : 'In the post text box, paste (Ctrl+V / Long press -> Paste).'}
+                      </span>
                     </div>
                   </div>
                 </div>
-                <ExternalLink className="w-4 h-4 text-white/70 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
+              </div>
+            )}
+
+            {/* Social Share Primary Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {/* Facebook Full Post Button (Photo + Text) - RECOMMENDED */}
+              <button
+                type="button"
+                onClick={handleShareFacebookFullPost}
+                className="p-3.5 rounded-2xl bg-[#1877F2] hover:bg-[#166fe5] active:scale-[0.99] text-white font-bold text-xs flex items-center justify-between shadow-md shadow-blue-500/25 transition-all cursor-pointer group relative overflow-hidden"
+              >
+                <div className="flex items-center space-x-2.5">
+                  <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    <Facebook className="w-5 h-5 text-white fill-white" />
+                  </div>
+                  <div className="text-left">
+                    <div className="flex items-center space-x-1.5">
+                      <span className="font-black text-xs leading-none">
+                        {language === 'ka' ? 'Facebook სრული პოსტი' : 'Facebook Full Post'}
+                      </span>
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-400 text-slate-900 tracking-wide">
+                        {language === 'ka' ? 'ფოტო + ტექსტი' : 'Photo + Text'}
+                      </span>
+                    </div>
+                    <div className="text-[10px] text-white/90 mt-1">
+                      {language === 'ka' ? 'ავტომატურად იწერს სურათს და აკოპირებს ტექსტს' : 'Auto-downloads image & copies ad text'}
+                    </div>
+                  </div>
+                </div>
+                <ExternalLink className="w-4 h-4 text-white/80 group-hover:text-white group-hover:translate-x-0.5 transition-all shrink-0" />
               </button>
 
-              {/* Instagram Button */}
+              {/* Instagram Button (Photo + Text) */}
               <button
                 type="button"
                 onClick={handleShareInstagram}
-                className="p-3 rounded-2xl bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#F77737] hover:opacity-95 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-between shadow-md shadow-pink-500/20 transition-all cursor-pointer group"
+                className="p-3.5 rounded-2xl bg-gradient-to-r from-[#833AB4] via-[#FD1D1D] to-[#F77737] hover:opacity-95 active:scale-[0.99] text-white font-bold text-xs flex items-center justify-between shadow-md shadow-pink-500/25 transition-all cursor-pointer group"
               >
                 <div className="flex items-center space-x-2.5">
-                  <div className="w-8 h-8 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
-                    <Instagram className="w-4 h-4 text-white" />
+                  <div className="w-9 h-9 rounded-xl bg-white/20 flex items-center justify-center shrink-0">
+                    <Instagram className="w-5 h-5 text-white" />
                   </div>
                   <div className="text-left">
-                    <div className="font-black text-xs leading-none">
-                      {language === 'ka' ? 'Instagram-ისთვის გამზადება' : 'Ready for Instagram'}
+                    <div className="flex items-center space-x-1.5">
+                      <span className="font-black text-xs leading-none">
+                        {language === 'ka' ? 'Instagram-ზე გაზიარება' : 'Share to Instagram'}
+                      </span>
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-white/25 text-white tracking-wide">
+                        {language === 'ka' ? 'ფოტო + ტექსტი' : 'Photo + Text'}
+                      </span>
                     </div>
-                    <div className="text-[10px] text-white/80 mt-1">
-                      {language === 'ka' ? 'ტექსტის კოპირება + სურათის გადმოწერა' : 'Copies caption + downloads image'}
+                    <div className="text-[10px] text-white/90 mt-1">
+                      {language === 'ka' ? 'სურათის გადმოწერა + ტექსტის კოპირება' : 'Copies caption + downloads image'}
                     </div>
                   </div>
                 </div>
@@ -492,8 +633,27 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
               </button>
             </div>
 
-            {/* Auxiliary Tools: Copy Ad Copy, Copy Link, Native Mobile Share */}
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
+            {/* Secondary Option: Facebook Sharer Link Card */}
+            <div className="pt-0.5">
+              <button
+                type="button"
+                onClick={handleShareFacebookLink}
+                className="w-full p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/40 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-900 dark:text-blue-200 border border-blue-200/80 dark:border-blue-800/80 text-xs font-bold flex items-center justify-between transition-colors cursor-pointer"
+              >
+                <div className="flex items-center space-x-2">
+                  <ExternalLink className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0" />
+                  <span>
+                    {language === 'ka' ? 'ან გააზიარეთ Facebook-ის ბმულის ბარათით (Sharer)' : 'Or share via Facebook Interactive Link Card'}
+                  </span>
+                </div>
+                <span className="text-[10px] font-normal text-blue-700 dark:text-blue-300">
+                  {language === 'ka' ? 'ბმული + ტექსტი' : 'Link + Caption'}
+                </span>
+              </button>
+            </div>
+
+            {/* Auxiliary Tools: Copy Ad Copy, Copy Link, Download Image, Native Mobile Share */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
               <button
                 type="button"
                 onClick={handleCopyText}
@@ -512,6 +672,15 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                     <span>{language === 'ka' ? 'ტექსტის კოპირება' : 'Copy Text'}</span>
                   </>
                 )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleDownloadImage}
+                className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+              >
+                <Download className="w-3.5 h-3.5 text-indigo-500" />
+                <span>{language === 'ka' ? 'სურათის ჩამოტვირთვა' : 'Save Photo'}</span>
               </button>
 
               <button
@@ -537,7 +706,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
               <button
                 type="button"
                 onClick={hasNativeShare ? handleNativeShare : handleDownloadImage}
-                className="col-span-2 sm:col-span-1 p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
+                className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold flex items-center justify-center space-x-1.5 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
               >
                 {hasNativeShare ? (
                   <>
@@ -546,8 +715,8 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                   </>
                 ) : (
                   <>
-                    <Download className="w-3.5 h-3.5 text-blue-500" />
-                    <span>{language === 'ka' ? 'სურათის გადმოწერა' : 'Download Photo'}</span>
+                    <ImageIcon className="w-3.5 h-3.5 text-blue-500" />
+                    <span>{language === 'ka' ? 'ფოტოს გახსნა' : 'View Image'}</span>
                   </>
                 )}
               </button>

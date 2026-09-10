@@ -16,7 +16,18 @@ export interface SocialAdOptions {
  * Builds the canonical public URL for a product
  */
 export function getProductShareUrl(product: Product, customBaseUrl?: string): string {
-  const origin = customBaseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://dbuystore.com');
+  let origin = 'https://dbuystore.com';
+  if (customBaseUrl) {
+    origin = customBaseUrl;
+  } else if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    // When running on custom live domain (e.g. dbuystore.com), use window.location.origin.
+    // When running on dev/preview container (run.app, localhost), fallback to public domain https://dbuystore.com
+    // so Facebook, Instagram, Telegram and other external crawlers can access the public Open Graph tags and images!
+    if (host && !host.includes('localhost') && !host.includes('run.app') && !host.includes('127.0.0.1')) {
+      origin = window.location.origin;
+    }
+  }
   const slug = product.customSlug?.trim() || generateProductSlug(product.title);
   const path = product.customSlug
     ? `/b/${encodeURIComponent(slug)}`

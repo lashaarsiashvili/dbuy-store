@@ -150,3 +150,235 @@ apple-pay-button {
     border-radius: 12px;
   }
 }
+
+/* ==========================================================================
+   MOBILE E-COMMERCE PRODUCT CATALOG (AMAZON / EBAY MOBILE 2-COLUMN DISPLAY)
+   Strictly isolated to mobile screens under @media (max-width: 768px).
+   Desktop & tablet layouts (>= 769px) remain completely untouched.
+   ========================================================================== */
+@media (max-width: 768px) {
+  /* 1. Mobile Section Spacing & Edge Padding */
+  #products {
+    padding-top: 1rem !important;
+    padding-bottom: 2rem !important;
+  }
+
+  #products > div {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
+
+  /* 2. Amazon/eBay Mobile Grid Layout (Strict 2-Column with 8px gap) */
+  #product-grid-container,
+  .product-catalog-grid {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 8px !important;
+    padding-top: 10px !important;
+  }
+
+  /* 3. Compact Card Container & Structure (Minimal 6px-8px card padding) */
+  .product-card-root {
+    display: flex !important;
+    flex-direction: column !important;
+    height: 100% !important;
+    border-radius: 12px !important;
+    border-width: 1px !important;
+    border-color: #e2e8f0 !important;
+    background-color: #ffffff !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+    padding: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .dark .product-card-root {
+    border-color: #1e293b !important;
+    background-color: #0f172a !important;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
+  }
+
+  /* 4. Compact Mobile Badges & Controls */
+  .product-card-badge-container {
+    top: 6px !important;
+    left: 6px !important;
+  }
+
+  .product-card-badge {
+    font-size: 9px !important;
+    padding: 2px 5px !important;
+    border-radius: 4px !important;
+    letter-spacing: 0.02em !important;
+  }
+
+  .product-card-controls {
+    top: 6px !important;
+    right: 6px !important;
+    gap: 4px !important;
+  }
+
+  .product-card-discount {
+    font-size: 9px !important;
+    padding: 1px 5px !important;
+  }
+
+  .product-card-copy-btn {
+    display: none !important; /* Hide secondary link copy on mobile card to keep clean */
+  }
+
+  .product-card-wishlist-btn {
+    padding: 5px !important;
+    width: 28px !important;
+    height: 28px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
+
+  .product-card-wishlist-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+
+  /* 5. Compact Mobile Product Images (Square ratio 1:1, max-height 140px, object-fit: contain, subtle neutral background #f8f8f8) */
+  .product-card-image-wrapper {
+    position: relative !important;
+    width: 100% !important;
+    aspect-ratio: 1 / 1 !important;
+    padding-top: 0 !important;
+    height: auto !important;
+    max-height: 140px !important;
+    background-color: #f8f8f8 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+  }
+
+  .dark .product-card-image-wrapper {
+    background-color: #0b0f19 !important;
+  }
+
+  .product-card-img {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 140px !important;
+    object-fit: contain !important;
+    background-color: #f8f8f8 !important;
+    padding: 6px !important;
+    transform: none !important;
+    transition: none !important;
+  }
+
+  .dark .product-card-img {
+    background-color: #0b0f19 !important;
+  }
+
+  /* Disable desktop-only quickview hover overlay on touch mobile */
+  .product-card-quickview-overlay {
+    display: none !important;
+  }
+
+  /* 6. E-Commerce Card Body with minimal padding (6px–8px) */
+  .product-card-body {
+    padding: 8px 8px 8px 8px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 1 auto !important;
+    gap: 4px !important;
+  }
+
+  .product-card-meta {
+    margin-bottom: 2px !important;
+  }
+
+  .product-card-category {
+    font-size: 9px !important;
+  }
+
+  .product-card-rating {
+    font-size: 10.5px !important;
+  }
+
+  .product-card-rating svg {
+    width: 11px !important;
+    height: 11px !important;
+  }
+
+  /* 7. Product Titles clamped to 2 lines with compact typography (12px–13px) */
+  .product-card-title {
+    font-size: 12.5px !important;
+    line-height: 1.35 !important;
+    font-weight: 600 !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    min-height: 34px !important;
+    max-height: 34px !important;
+    margin: 0 !important;
+  }
+
+  /* 8. Price tags clean, bold, and docked at bottom (margin-top: auto) */
+  .product-card-footer {
+    margin-top: auto !important;
+    padding-top: 6px !important;
+    border-top: 1px solid #f1f5f9 !important;
+  }
+
+  .dark .product-card-footer {
+    border-top-color: #1e293b !important;
+  }
+
+  .product-card-price-row {
+    margin-bottom: 6px !important;
+    display: flex !important;
+    align-items: baseline !important;
+    justify-content: space-between !important;
+  }
+
+  .product-card-price {
+    font-size: 14px !important;
+    font-weight: 900 !important;
+    letter-spacing: -0.01em !important;
+    color: #0f172a !important;
+  }
+
+  .dark .product-card-price {
+    color: #f8fafc !important;
+  }
+
+  .product-card-orig-price {
+    font-size: 10.5px !important;
+    color: #94a3b8 !important;
+    text-decoration: line-through !important;
+  }
+
+  .product-card-stock {
+    font-size: 9px !important;
+    padding: 1px 5px !important;
+    border-radius: 9999px !important;
+  }
+
+  /* 9. Compact Add to Cart Button */
+  .product-card-btn {
+    width: 100% !important;
+    height: 32px !important;
+    padding: 0 8px !important;
+    font-size: 11px !important;
+    font-weight: 700 !important;
+    border-radius: 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+
+  .product-card-btn svg {
+    width: 13px !important;
+    height: 13px !important;
+  }
+}
+
