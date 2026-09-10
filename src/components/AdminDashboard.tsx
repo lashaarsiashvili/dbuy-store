@@ -66,8 +66,11 @@ import {
   Send,
   Inbox,
   MessageSquare,
-  Server
+  Server,
+  Share2,
+  Megaphone
 } from 'lucide-react';
+import { SocialShareModal } from './SocialShareModal';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -379,6 +382,15 @@ export const AdminDashboard: React.FC = () => {
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isImportModalOpen, setIsImportModalOpen] = useState(false);
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+
+  // Social Media Ad Share Modal (Facebook & Instagram)
+  const [socialShareProduct, setSocialShareProduct] = useState<Product | null>(null);
+  const [isSocialShareOpen, setIsSocialShareOpen] = useState(false);
+
+  const handleOpenSocialShare = (prod: Product) => {
+    setSocialShareProduct(prod);
+    setIsSocialShareOpen(true);
+  };
 
   // Tracking Number Management Modal
   const [trackingModalOrder, setTrackingModalOrder] = useState<Order | null>(null);
@@ -2146,13 +2158,20 @@ export const AdminDashboard: React.FC = () => {
                             >
                               <Copy className="w-4 h-4" />
                             </button>
-                            <button
-                              onClick={() => handleOpenEditProduct(prod)}
-                              className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
-                              title={isKa ? 'რედაქტირება' : 'Edit Product Details & Images'}
-                            >
-                              <Edit3 className="w-4 h-4" />
-                            </button>
+                              <button
+                                onClick={() => handleOpenSocialShare(prod)}
+                                className="p-1.5 rounded-lg text-pink-600 dark:text-pink-400 bg-pink-50 dark:bg-pink-950/40 hover:bg-pink-100 dark:hover:bg-pink-900/60 transition-colors cursor-pointer"
+                                title={isKa ? 'სარეკლამო პოსტი & გაზიარება (Facebook & Instagram)' : 'Social Ad Post & Share (FB & IG)'}
+                              >
+                                <Share2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenEditProduct(prod)}
+                                className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+                                title={isKa ? 'რედაქტირება' : 'Edit Product Details & Images'}
+                              >
+                                <Edit3 className="w-4 h-4" />
+                              </button>
                             <button
                               onClick={() => handleDeleteProduct(prod.id)}
                               className="p-1.5 rounded-lg text-red-500 hover:bg-red-50 transition-colors cursor-pointer"
@@ -4433,11 +4452,25 @@ export const AdminDashboard: React.FC = () => {
               <X className="w-5 h-5" />
             </button>
 
-            <h3 className="text-lg font-bold text-slate-900 mb-4">
-              {editingProduct
-                ? (isKa ? 'პროდუქტის რედაქტირება' : 'Edit Product')
-                : (isKa ? 'ახალი პროდუქტის დამატება' : 'Add New Product')}
-            </h3>
+            <div className="flex items-center justify-between mb-4 pr-10">
+              <h3 className="text-lg font-bold text-slate-900">
+                {editingProduct
+                  ? (isKa ? 'პროდუქტის რედაქტირება' : 'Edit Product')
+                  : (isKa ? 'ახალი პროდუქტის დამატება' : 'Add New Product')}
+              </h3>
+
+              {editingProduct && (
+                <button
+                  type="button"
+                  onClick={() => handleOpenSocialShare(editingProduct)}
+                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
+                  title={isKa ? 'სარეკლამო პოსტი (Facebook & Instagram)' : 'Social Ad Post (FB & IG)'}
+                >
+                  <Megaphone className="w-3.5 h-3.5 text-amber-300" />
+                  <span>{isKa ? 'სარეკლამო პოსტი (FB/IG)' : 'Social Ad Post'}</span>
+                </button>
+              )}
+            </div>
 
             <form onSubmit={handleSaveProduct} className="space-y-4">
               <div>
@@ -5339,6 +5372,17 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* Social Media Ad Sharing Modal (Facebook & Instagram) */}
+      <SocialShareModal
+        isOpen={isSocialShareOpen}
+        product={socialShareProduct}
+        onClose={() => {
+          setIsSocialShareOpen(false);
+          setSocialShareProduct(null);
+        }}
+        isKa={isKa}
+      />
 
     </div>
   );
