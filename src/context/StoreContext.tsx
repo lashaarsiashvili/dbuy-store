@@ -646,12 +646,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   useEffect(() => {
+    const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
       document.documentElement.style.colorScheme = 'dark';
+      if (metaThemeColor) metaThemeColor.setAttribute('content', '#020617');
     } else {
       document.documentElement.classList.remove('dark');
       document.documentElement.style.colorScheme = 'light';
+      if (metaThemeColor) metaThemeColor.setAttribute('content', '#ffffff');
     }
   }, [isDarkMode]);
 
