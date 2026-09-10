@@ -24,17 +24,142 @@
     <meta name="rating" content="general" />
     <meta name="revisit-after" content="1 days" />
 
-    <!-- Open Graph & Social Sharing -->
+    <!-- Open Graph & Dynamic Social Sharing (Facebook, Instagram, WhatsApp, Telegram) -->
     <meta property="og:site_name" content="DBUY Store" />
-    <meta property="og:title" content="DBUY Store — Quality Tech, Fitness & Everyday Essentials" />
-    <meta property="og:description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials." />
-    <meta property="og:image" content="https://www.dbuystore.com/icon.png" />
-    <meta property="og:url" content="https://www.dbuystore.com" />
-    <meta property="og:type" content="website" />
+    <meta property="og:type" content="product" id="og-type" />
+    <meta property="og:title" content="DBUY Store — Quality Tech, Fitness & Everyday Essentials" id="og-title" />
+    <meta property="og:description" content="🔥 აღმოაჩინეთ საუკეთესო შეთავაზებები DBUY-ში! 🚚 სწრაფი მიწოდება მთელი საქართველოს მასშტაბით • 💳 უსაფრთხო გადახდა • 🛡️ ოფიციალური გარანტია" id="og-description" />
+    <meta property="og:image" content="https://dbuystore.com/icon.png" id="og-image" />
+    <meta property="og:image:secure_url" content="https://dbuystore.com/icon.png" id="og-image-secure" />
+    <meta property="og:image:alt" content="DBUY Store Featured Product" id="og-image-alt" />
+    <meta property="og:image:width" content="1200" id="og-image-width" />
+    <meta property="og:image:height" content="630" id="og-image-height" />
+    <meta property="og:url" content="https://dbuystore.com" id="og-url" />
+    <meta property="product:price:currency" content="GEL" id="og-price-currency" />
+    <meta property="product:price:amount" content="" id="og-price-amount" />
+
+    <!-- Twitter Card Meta Tags -->
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="DBUY Store — Quality Tech, Fitness & Everyday Essentials" />
-    <meta name="twitter:description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials." />
-    <meta name="twitter:image" content="https://www.dbuystore.com/icon.png" />
+    <meta name="twitter:title" content="DBUY Store — Quality Tech, Fitness & Everyday Essentials" id="twitter-title" />
+    <meta name="twitter:description" content="🔥 აღმოაჩინეთ საუკეთესო შეთავაზებები DBUY-ში! 🚚 სწრაფი მიწოდება მთელი საქართველოს მასშტაბით • 💳 უსაფრთხო გადახდა • 🛡️ ოფიციალური გარანტია" id="twitter-description" />
+    <meta name="twitter:image" content="https://dbuystore.com/icon.png" id="twitter-image" />
+    <meta name="twitter:image:alt" content="DBUY Store Featured Product" id="twitter-image-alt" />
+
+    <!-- Dynamic Open Graph & Meta Tags Head Initializer -->
+    <script>
+      (function() {
+        try {
+          var origin = window.location.origin || 'https://dbuystore.com';
+          var path = window.location.pathname || '';
+          var params = new URLSearchParams(window.location.search || '');
+          var targetSlugOrId = '';
+
+          // 1. Detect target product identifier from URL
+          var segments = path.replace(/^\/+|\/+$/g, '').split('/');
+          if (segments[0] === 'b' && segments[1]) {
+            targetSlugOrId = decodeURIComponent(segments[1]);
+          } else if (segments[0] === 'product' && segments[1]) {
+            targetSlugOrId = decodeURIComponent(segments[2] || segments[1]);
+          } else if (params.get('product')) {
+            targetSlugOrId = decodeURIComponent(params.get('product'));
+          } else if (params.get('b')) {
+            targetSlugOrId = decodeURIComponent(params.get('b'));
+          }
+
+          function slugify(text) {
+            return String(text || '')
+              .toLowerCase()
+              .trim()
+              .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
+              .replace(/\s+/g, '-')
+              .replace(/-+/g, '-');
+          }
+
+          // Function to apply meta tags dynamically
+          window.__updateOpenGraphTags = function(data) {
+            if (!data) return;
+            if (data.title) {
+              document.title = data.title;
+              var ogTitle = document.getElementById('og-title') || document.querySelector('meta[property="og:title"]');
+              if (ogTitle) ogTitle.setAttribute('content', data.title);
+              var twTitle = document.getElementById('twitter-title') || document.querySelector('meta[name="twitter:title"]');
+              if (twTitle) twTitle.setAttribute('content', data.title);
+            }
+            if (data.description) {
+              var metaDesc = document.querySelector('meta[name="description"]');
+              if (metaDesc) metaDesc.setAttribute('content', data.description);
+              var ogDesc = document.getElementById('og-description') || document.querySelector('meta[property="og:description"]');
+              if (ogDesc) ogDesc.setAttribute('content', data.description);
+              var twDesc = document.getElementById('twitter-description') || document.querySelector('meta[name="twitter:description"]');
+              if (twDesc) twDesc.setAttribute('content', data.description);
+            }
+            if (data.image) {
+              var fullImg = data.image.indexOf('http') === 0 ? data.image : (origin + (data.image.charAt(0) === '/' ? '' : '/') + data.image);
+              var ogImg = document.getElementById('og-image') || document.querySelector('meta[property="og:image"]');
+              if (ogImg) ogImg.setAttribute('content', fullImg);
+              var ogImgSecure = document.getElementById('og-image-secure') || document.querySelector('meta[property="og:image:secure_url"]');
+              if (ogImgSecure) ogImgSecure.setAttribute('content', fullImg);
+              var twImg = document.getElementById('twitter-image') || document.querySelector('meta[name="twitter:image"]');
+              if (twImg) twImg.setAttribute('content', fullImg);
+            }
+            if (data.url) {
+              var ogUrl = document.getElementById('og-url') || document.querySelector('meta[property="og:url"]');
+              if (ogUrl) ogUrl.setAttribute('content', data.url);
+            }
+            if (data.price) {
+              var ogPrice = document.getElementById('og-price-amount') || document.querySelector('meta[property="product:price:amount"]');
+              if (ogPrice) ogPrice.setAttribute('content', String(data.price));
+            }
+            if (data.currency) {
+              var ogCurr = document.getElementById('og-price-currency') || document.querySelector('meta[property="product:price:currency"]');
+              if (ogCurr) ogCurr.setAttribute('content', data.currency);
+            }
+          };
+
+          // If a product route was requested, attempt instant dynamic hydration
+          if (targetSlugOrId) {
+            var rawStore = localStorage.getItem('dbuy_custom_products') || localStorage.getItem('products') || '[]';
+            var prods = JSON.parse(rawStore);
+            var normalizedTarget = targetSlugOrId.toLowerCase().trim();
+            var matched = null;
+
+            for (var i = 0; i < prods.length; i++) {
+              var p = prods[i];
+              if (!p) continue;
+              if (String(p.id).toLowerCase() === normalizedTarget ||
+                  (p.customSlug && p.customSlug.toLowerCase() === normalizedTarget) ||
+                  (p.title && slugify(p.title) === normalizedTarget)) {
+                matched = p;
+                break;
+              }
+            }
+
+            if (matched) {
+              var title = matched.titleKa || matched.title_ka || matched.title;
+              var price = matched.price || 0;
+              var origPrice = matched.origPrice && matched.origPrice > price ? matched.origPrice : null;
+              var savings = origPrice ? Math.round(origPrice - price) : 0;
+              var headline = '🔥 ' + title + ' — სპეციალური შეთავაზება DBUY-ში!';
+              var desc = '💰 ფასი: მხოლოდ ' + price + ' ₾' + (origPrice ? ' (ძველი ფასი: ' + origPrice + ' ₾ — დაზოგეთ ' + savings + ' ₾! 🎉)' : '') + ' | 🚚 სწრაფი მიწოდება მთელ საქართველოში | 🛡️ ოფიციალური გარანტია | შეუკვეთეთ ონლაინ DBUY Store-ში';
+              var img = matched.image || (matched.images && matched.images[0]) || '/icon.png';
+              var slug = matched.customSlug || slugify(matched.title);
+              var canonicalUrl = origin + (matched.customSlug ? ('/b/' + encodeURIComponent(slug)) : ('/product/' + matched.id + '/' + encodeURIComponent(slug)));
+
+              window.__updateOpenGraphTags({
+                title: headline,
+                description: desc,
+                image: img,
+                url: canonicalUrl,
+                price: price,
+                currency: 'GEL'
+              });
+            }
+          }
+        } catch (e) {
+          // Graceful fallback to default head tags
+        }
+      })();
+    </script>
     
     <!-- Structured Data (JSON-LD Organization Schema for Googlebot) -->
     <script type="application/ld+json">

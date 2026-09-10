@@ -5,6 +5,7 @@ import { getProductFeatures } from '../utils/productFeatures';
 import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
+import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
 import { 
   Star, 
   ShoppingCart, 
@@ -71,11 +72,15 @@ export const ProductDetailPage: React.FC = () => {
         ? (product.title_en || product.title)
         : (product.title_ka || product.titleKa || product.title);
       recordVisit(`Product: ${activeTitle}`);
-      document.title = `${activeTitle} | DBUY Store`;
+      
+      // Update dynamic Open Graph meta tags matching generated marketing copy
+      const ogPayload = getProductOpenGraphPayload(product, language === 'ka' ? 'ka' : 'en');
+      updateOpenGraphMetaTags(ogPayload);
+      
       incrementProductViews(product.id);
     }
     return () => {
-      document.title = 'DBUY - Quality Products for Modern Living';
+      resetStoreMetaTags();
     };
   }, [activeProductId, product?.id, language]);
 

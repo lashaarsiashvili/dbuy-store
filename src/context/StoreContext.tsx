@@ -523,11 +523,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const shareProduct = (product: Product) => {
     const url = getProductUrl(product.id);
-    const title = (language === 'ka' && product.titleKa) ? product.titleKa : product.title;
+    const isKa = language === 'ka';
+    const rawTitle = (isKa && product.titleKa) ? product.titleKa : product.title;
+    const headline = isKa ? `🔥 ${rawTitle} — სპეციალური შეთავაზება DBUY-ში!` : `🔥 ${rawTitle} — Special Offer at DBUY Store!`;
+    const price = product.price || 0;
+    const origPrice = product.origPrice && product.origPrice > price ? product.origPrice : null;
+    const currencySymbol = isKa ? '₾' : '$';
+    const text = isKa 
+      ? `💰 მხოლოდ ${price} ${currencySymbol}${origPrice ? ` (ძველი: ${origPrice} ${currencySymbol})` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში | 🛡️ ოფიციალური გარანტია`
+      : `💰 Only ${currencySymbol}${price}${origPrice ? ` (Was: ${currencySymbol}${origPrice})` : ''} | 🚚 Fast Delivery | 🛡️ Warranty`;
+
     if (typeof navigator !== 'undefined' && navigator.share) {
       navigator.share({
-        title: `${title} | DBUY Store`,
-        text: `${title} - Check out this product on DBUY!`,
+        title: headline,
+        text: `${headline}\n${text}`,
         url: url,
       }).catch(() => {
         copyProductUrl(product.id);

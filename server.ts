@@ -3594,17 +3594,25 @@ async function setupFrontend() {
         }
 
         if (matchedProduct) {
+          const rawTitle = matchedProduct.titleKa || matchedProduct.title_ka || matchedProduct.title;
+          const price = matchedProduct.price || 0;
+          const origPrice = matchedProduct.origPrice && matchedProduct.origPrice > price ? matchedProduct.origPrice : null;
+          const savings = origPrice ? Math.round(origPrice - price) : 0;
+
+          // Match marketing copy generated for Facebook & Instagram social ads
+          seoTitle = `🔥 ${rawTitle} — სპეციალური შეთავაზება DBUY-ში!`;
+          seoDesc = `💰 ფასი: მხოლოდ ${price} ₾${origPrice ? ` (ძველი ფასი: ${origPrice} ₾ — დაზოგეთ ${savings} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში | 🛡️ ოფიციალური გარანტია | შეუკვეთეთ ონლაინ DBUY Store-ში`;
+
+          if (matchedProduct.image) {
+            seoImage = matchedProduct.image.startsWith('http') 
+              ? matchedProduct.image 
+              : `https://dbuystore.com${matchedProduct.image.startsWith('/') ? '' : '/'}${matchedProduct.image}`;
+          }
+
           const descClean = (matchedProduct.shortDescription || matchedProduct.description || '')
             .replace(/<[^>]*>/g, '')
             .substring(0, 160)
             .trim();
-          seoTitle = `${matchedProduct.title} — DBUY Store`;
-          seoDesc = descClean || seoDesc;
-          if (matchedProduct.image) {
-            seoImage = matchedProduct.image.startsWith('http') 
-              ? matchedProduct.image 
-              : `https://dbuystore.com${matchedProduct.image}`;
-          }
 
           const ratingValue = matchedProduct.rating || 4.8;
           const reviewCount = matchedProduct.reviewsCount || 12;
@@ -3632,7 +3640,7 @@ async function setupFrontend() {
       "offers": {
         "@type": "Offer",
         "url": "${seoUrl}",
-        "priceCurrency": "USD",
+        "priceCurrency": "GEL",
         "price": "${matchedProduct.price}",
         "itemCondition": "https://schema.org/NewCondition",
         "availability": "${offersStock}"
@@ -3642,13 +3650,25 @@ async function setupFrontend() {
           `;
         }
 
-        // Intercept and inject dynamic meta tags
+        // Intercept and inject dynamic meta tags matching generated marketing copy
         let modifiedHtml = htmlContent
           .replace(/<title>[^<]*<\/title>/, `<title>${seoTitle}</title>`)
-          .replace(/<meta name="description" content="[^"]*"\s*\/?>/, `<meta name="description" content="${seoDesc}" />`)
-          .replace(/<meta property="og:title" content="[^"]*"\s*\/?>/, `<meta property="og:title" content="${seoTitle}" />`)
-          .replace(/<meta property="og:description" content="[^"]*"\s*\/?>/, `<meta property="og:description" content="${seoDesc}" />`)
-          .replace(/<meta property="og:image" content="[^"]*"\s*\/?>/g, `<meta property="og:image" content="${seoImage}" />`);
+          .replace(/<meta name="description" [^>]*>/, `<meta name="description" content="${seoDesc}" />`)
+          .replace(/<meta property="og:title" [^>]*>/, `<meta property="og:title" content="${seoTitle}" id="og-title" />`)
+          .replace(/<meta property="og:description" [^>]*>/, `<meta property="og:description" content="${seoDesc}" id="og-description" />`)
+          .replace(/<meta property="og:image" [^>]*>/g, `<meta property="og:image" content="${seoImage}" id="og-image" />`)
+          .replace(/<meta property="og:image:secure_url" [^>]*>/g, `<meta property="og:image:secure_url" content="${seoImage}" id="og-image-secure" />`)
+          .replace(/<meta property="og:url" [^>]*>/g, `<meta property="og:url" content="${seoUrl}" id="og-url" />`)
+          .replace(/<meta name="twitter:title" [^>]*>/, `<meta name="twitter:title" content="${seoTitle}" id="twitter-title" />`)
+          .replace(/<meta name="twitter:description" [^>]*>/, `<meta name="twitter:description" content="${seoDesc}" id="twitter-description" />`)
+          .replace(/<meta name="twitter:image" [^>]*>/g, `<meta name="twitter:image" content="${seoImage}" id="twitter-image" />`);
+
+        if (matchedProduct && matchedProduct.price) {
+          modifiedHtml = modifiedHtml.replace(
+            /<meta property="product:price:amount" [^>]*>/,
+            `<meta property="product:price:amount" content="${matchedProduct.price}" id="og-price-amount" />`
+          );
+        }
 
         if (!modifiedHtml.includes('property="og:image"')) {
           modifiedHtml = modifiedHtml.replace('</head>', `  <meta property="og:image" content="${seoImage}" />\n  </head>`);
