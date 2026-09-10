@@ -233,14 +233,19 @@ function saveUploadsMap(): void {
 
 // Serve uploaded product photos directly
 app.use('/uploads', express.static(UPLOADS_DIR));
+app.use('/uploads', express.static(PUBLIC_UPLOADS_DIR));
 
-// Fallback for /uploads/:filename to restore from memory/map or serve clean SVG
+// Fallback for /uploads/:filename to restore from memory/map or disk
 app.get('/uploads/:filename', (req, res) => {
   const { filename } = req.params;
   const filePath = path.join(UPLOADS_DIR, filename);
+  const publicFilePath = path.join(PUBLIC_UPLOADS_DIR, filename);
 
   if (fs.existsSync(filePath)) {
     return res.sendFile(filePath);
+  }
+  if (fs.existsSync(publicFilePath)) {
+    return res.sendFile(publicFilePath);
   }
 
   // Check if we have base64 in backup map
