@@ -68,9 +68,12 @@ import {
   MessageSquare,
   Server,
   Share2,
-  Megaphone
+  Megaphone,
+  Instagram
 } from 'lucide-react';
 import { SocialShareModal } from './SocialShareModal';
+import { formatInstagramUrl, getInstagramHandle } from '../utils/instagram';
+import { InstagramOriginalLogo } from './InstagramLogo';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -470,6 +473,8 @@ export const AdminDashboard: React.FC = () => {
     eurRate: number;
     gelRate: number;
     logoStyle: LogoOptionId;
+    instagramUrl: string;
+    instagramVisible: boolean;
   }>({
     announcementText: theme?.announcementText || '',
     announcementVisible: theme?.announcementVisible ?? true,
@@ -480,6 +485,8 @@ export const AdminDashboard: React.FC = () => {
     eurRate: theme?.eurRate ?? 0.92,
     gelRate: theme?.gelRate ?? 2.78,
     logoStyle: (theme?.logoStyle as LogoOptionId) || 'bag-cart',
+    instagramUrl: theme?.instagramUrl || 'https://www.instagram.com/dbuystore',
+    instagramVisible: theme?.instagramVisible ?? true,
   });
 
   useEffect(() => {
@@ -494,6 +501,8 @@ export const AdminDashboard: React.FC = () => {
         eurRate: theme.eurRate ?? 0.92,
         gelRate: theme.gelRate ?? 2.78,
         logoStyle: (theme.logoStyle as LogoOptionId) || 'bag-cart',
+        instagramUrl: theme.instagramUrl || 'https://www.instagram.com/dbuystore',
+        instagramVisible: theme.instagramVisible ?? true,
       });
     }
   }, [theme]);
@@ -2696,6 +2705,102 @@ export const AdminDashboard: React.FC = () => {
                       onChange={e => setThemeForm({ ...themeForm, gelRate: e.target.value === '' ? 0 : Number(e.target.value) })}
                       className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                     />
+                  </div>
+                </div>
+              </div>
+
+              {/* Instagram Profile & Logo Integration */}
+              <div className="p-5 bg-gradient-to-br from-pink-50/70 via-rose-50/40 to-purple-50/70 rounded-2xl border border-pink-200/80 shadow-xs space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-pink-200/60 pb-3">
+                  <div className="flex items-center space-x-3">
+                    <InstagramOriginalLogo size="md" />
+                    <div>
+                      <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                        <span>{isKa ? 'Instagram გვერდის დაკავშირება' : 'Instagram Profile Integration'}</span>
+                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-pink-700">
+                          {isKa ? 'ოფიციალური ლოგო' : 'Official Logo'}
+                        </span>
+                      </h4>
+                      <p className="text-[11px] text-slate-600">
+                        {isKa
+                          ? 'საიტის ჰედერში, ფუტერში და კონტაქტის გვერდზე დასმული Instagram ლოგო პირდაპირ გადაიყვანს მომხმარებელს თქვენს Instagram-ზე.'
+                          : 'Connect your Instagram profile so visitors clicking the Instagram logo anywhere on your store open your profile directly.'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer self-start sm:self-center shrink-0 bg-white/90 px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs">
+                    <input
+                      type="checkbox"
+                      checked={themeForm.instagramVisible}
+                      onChange={e => setThemeForm(prev => ({ ...prev, instagramVisible: e.target.checked }))}
+                      className="rounded text-pink-600 focus:ring-pink-500 w-4 h-4 cursor-pointer"
+                    />
+                    <span>{isKa ? 'ლოგო ჩართულია საიტზე' : 'Show Logo on Site'}</span>
+                  </label>
+                </div>
+
+                <div className="space-y-3">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      {isKa ? 'Instagram პროფილის ბმული ან Username' : 'Instagram Profile URL or Username'}
+                    </label>
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                      <div className="relative flex-1">
+                        <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+                          <Instagram className="w-4 h-4 text-pink-500" />
+                        </div>
+                        <input
+                          type="text"
+                          value={themeForm.instagramUrl ?? ''}
+                          onChange={e => setThemeForm(prev => ({ ...prev, instagramUrl: e.target.value }))}
+                          placeholder={isKa ? "მაგ: https://www.instagram.com/თქვენი_გვერდი ან @თქვენი_გვერდი" : "e.g. https://www.instagram.com/yourprofile or @yourprofile"}
+                          className="w-full pl-10 pr-3.5 py-2.5 text-xs bg-white border border-pink-200 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 focus:outline-hidden text-slate-800 font-mono shadow-2xs"
+                        />
+                      </div>
+
+                      {/* Test link button */}
+                      <a
+                        href={formatInstagramUrl(themeForm.instagramUrl)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-4 py-2.5 rounded-xl bg-white hover:bg-pink-50 text-pink-700 font-bold text-xs border border-pink-200 transition-colors flex items-center justify-center space-x-1.5 shrink-0 shadow-2xs cursor-pointer"
+                        title={isKa ? 'გახსნა და შემოწმება' : 'Test Instagram Link'}
+                      >
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        <span>{isKa ? 'ბმულის შემოწმება' : 'Test Link'}</span>
+                      </a>
+                    </div>
+                  </div>
+
+                  {/* Real-time formatted preview info & quick save */}
+                  <div className="p-3 bg-white/90 rounded-xl border border-pink-200/60 flex flex-col sm:flex-row sm:items-center justify-between text-[11px] gap-2">
+                    <div className="flex items-center space-x-2 text-slate-600 overflow-hidden">
+                      <span className="font-semibold text-slate-500 shrink-0">{isKa ? 'საბოლოო ბმული:' : 'Resolved URL:'}</span>
+                      <code className="text-pink-700 font-mono bg-pink-50 px-2 py-0.5 rounded-md border border-pink-100 text-[11px] truncate">
+                        {formatInstagramUrl(themeForm.instagramUrl)}
+                      </code>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await updateTheme({
+                          instagramUrl: themeForm.instagramUrl,
+                          instagramVisible: themeForm.instagramVisible,
+                        });
+                        addToast(
+                          isKa
+                            ? 'Instagram-ის ბმული წარმატებით განახლდა და დაკავშირდა საიტის ლოგოსთან!'
+                            : 'Instagram link connected successfully!',
+                          'success'
+                        );
+                      }}
+                      className="px-3.5 py-1.5 bg-gradient-to-r from-[#f09433] via-[#dc2743] to-[#bc1888] hover:opacity-90 text-white font-bold rounded-lg shadow-xs flex items-center justify-center space-x-1.5 cursor-pointer shrink-0"
+                    >
+                      <Save className="w-3.5 h-3.5 text-white" />
+                      <span>{isKa ? 'Instagram-ის შენახვა' : 'Save Instagram'}</span>
+                    </button>
                   </div>
                 </div>
               </div>

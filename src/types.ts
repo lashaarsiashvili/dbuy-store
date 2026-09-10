@@ -93,6 +93,8 @@ export interface ThemeSettings {
   eurRate: number;
   gelRate: number;
   logoStyle?: LogoOptionId;
+  instagramUrl?: string;
+  instagramVisible?: boolean;
 }
 
 export interface BillboardSlide {

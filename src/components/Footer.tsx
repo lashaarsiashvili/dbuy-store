@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { BrandLogo } from './BrandLogo';
-import { ShieldCheck, Mail, ArrowRight, Lock, CheckCircle2 } from 'lucide-react';
+import { ShieldCheck, Mail, ArrowRight, Lock, CheckCircle2, Instagram } from 'lucide-react';
 import { GooglePayMark } from './PaymentLogos';
+import { formatInstagramUrl, getInstagramHandle } from '../utils/instagram';
+import { InstagramOriginalLogo } from './InstagramLogo';
 
 export const Footer: React.FC = () => {
   const { t, setCurrentPage, setSelectedCategory, addToast, theme, isAdmin } = useStore();
@@ -76,6 +78,33 @@ export const Footer: React.FC = () => {
           <p className="text-xs text-slate-400 leading-relaxed pr-2">
             {t('footer.tagline')}
           </p>
+
+          {theme?.instagramVisible !== false && (
+            <div className="pt-2 space-y-2">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                {useStore().language === 'ka' ? 'გამოგვყევით Instagram-ზე' : 'Follow on Instagram'}
+              </span>
+              <a
+                href={formatInstagramUrl(theme?.instagramUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center space-x-3 p-2.5 pr-4 rounded-2xl bg-slate-900/90 hover:bg-slate-900 border border-slate-800 hover:border-pink-500/50 shadow-md transition-all group cursor-pointer"
+                title="Follow DBUY on Instagram"
+                aria-label="Instagram Profile"
+              >
+                <InstagramOriginalLogo size="md" />
+                <div className="flex flex-col text-left">
+                  <span className="text-xs font-bold text-white group-hover:text-pink-400 transition-colors flex items-center space-x-1">
+                    <span>Instagram</span>
+                    <span className="text-[10px] text-pink-400 font-normal group-hover:translate-x-0.5 transition-transform">↗</span>
+                  </span>
+                  <span className="text-[11px] text-slate-400 font-mono">
+                    {getInstagramHandle(theme?.instagramUrl)}
+                  </span>
+                </div>
+              </a>
+            </div>
+          )}
         </div>
 
         {/* Quick Links */}
@@ -250,6 +279,20 @@ export const Footer: React.FC = () => {
                 <span>support@dbuystore.com</span>
               </a>
             </li>
+            {theme?.instagramVisible !== false && (
+              <li>
+                <a
+                  href={formatInstagramUrl(theme?.instagramUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-pink-400 transition-colors flex items-center space-x-2 text-slate-300 group pt-0.5"
+                  title="Official Instagram"
+                >
+                  <InstagramOriginalLogo size="xs" showHoverEffect={false} />
+                  <span>Instagram</span>
+                </a>
+              </li>
+            )}
           </ul>
         </div>
       </div>
@@ -333,6 +376,23 @@ export const Footer: React.FC = () => {
             >
               <GooglePayMark className="h-4 w-auto" badgeClassName="border-0 shadow-none px-0 py-0" />
             </div>
+
+            {/* Official Instagram Badge */}
+            {theme?.instagramVisible !== false && (
+              <a
+                href={formatInstagramUrl(theme?.instagramUrl)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="h-8 px-2.5 bg-slate-900 hover:bg-slate-850 rounded-lg flex items-center justify-center space-x-1.5 border border-slate-800 hover:border-pink-500/50 shadow-xs transition-all group cursor-pointer"
+                title={`Follow on Instagram ${theme?.instagramUrl ? getInstagramHandle(theme?.instagramUrl) : ''}`}
+                aria-label="Instagram Profile"
+              >
+                <InstagramOriginalLogo size="xs" />
+                <span className="text-[11px] font-bold text-slate-200 group-hover:text-pink-400 transition-colors">
+                  Instagram
+                </span>
+              </a>
+            )}
           </div>
         </div>
       </div>

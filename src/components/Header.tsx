@@ -19,8 +19,11 @@ import {
   Heart,
   Sun,
   Moon,
-  KeyRound
+  KeyRound,
+  Instagram
 } from 'lucide-react';
+import { formatInstagramUrl } from '../utils/instagram';
+import { InstagramOriginalLogo } from './InstagramLogo';
 
 export const Header: React.FC = () => {
   const {
@@ -123,6 +126,24 @@ export const Header: React.FC = () => {
               <HelpCircle className="w-3.5 h-3.5" />
               <span className="hidden sm:inline">{t('top.help')}</span>
             </button>
+            {theme?.instagramVisible !== false && (
+              <>
+                <span className="text-slate-300 dark:text-slate-700">|</span>
+                <a
+                  href={formatInstagramUrl(theme?.instagramUrl)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center space-x-1.5 font-semibold text-slate-700 dark:text-slate-200 hover:text-pink-600 dark:hover:text-pink-400 transition-all group"
+                  title="Instagram | DBUY Store"
+                  aria-label="Instagram"
+                >
+                  <InstagramOriginalLogo size="xs" />
+                  <span className="font-medium text-[11px] group-hover:text-pink-600 dark:group-hover:text-pink-400 transition-colors">
+                    Instagram
+                  </span>
+                </a>
+              </>
+            )}
           </div>
 
           {/* Right: Currency & Language Selectors & Theme Toggle & Admin Portal */}
@@ -539,6 +560,20 @@ export const Header: React.FC = () => {
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
             <span>{language === 'ka' ? 'ვერიფიცირებული მიწოდება' : 'Verified Deliveries'}</span>
           </button>
+
+          {theme?.instagramVisible !== false && (
+            <a
+              href={formatInstagramUrl(theme?.instagramUrl)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-auto px-2.5 py-1 rounded-xl shrink-0 transition-all flex items-center space-x-1.5 text-xs font-semibold text-slate-800 dark:text-slate-200 hover:text-pink-600 dark:hover:text-pink-400 bg-slate-100 dark:bg-slate-800/80 hover:bg-pink-50 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 shadow-2xs hover:scale-105"
+              title="Instagram | DBUY Store"
+              aria-label="Instagram Page"
+            >
+              <InstagramOriginalLogo size="xs" />
+              <span>Instagram</span>
+            </a>
+          )}
         </div>
       </nav>
 
