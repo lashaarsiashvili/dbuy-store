@@ -129,7 +129,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               parsedImages = [];
             }
           }
-          const imageSrc = product.image || parsedImages[0] || '';
+          const imageSrc = (product as any).imageUrl || product.image || parsedImages[0] || '';
           if (imageSrc.startsWith('data:image/')) {
             return (
               <img
@@ -151,6 +151,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
+              onError={(e) => handleImageError(e)}
             />
           );
         })()}

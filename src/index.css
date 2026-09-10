@@ -197,56 +197,75 @@ apple-pay-button {
     box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.3) !important;
   }
 
-  /* 4. Compact Mobile Badges & Controls */
+  /* 4. Compact Mobile Badges & Floating Actions (Scaled down so they never cover product photography) */
   .product-card-badge-container {
-    top: 6px !important;
-    left: 6px !important;
+    top: 5px !important;
+    left: 5px !important;
+    z-index: 10 !important;
   }
 
   .product-card-badge {
-    font-size: 9px !important;
+    font-size: 8.5px !important;
+    font-weight: 800 !important;
     padding: 2px 5px !important;
     border-radius: 4px !important;
-    letter-spacing: 0.02em !important;
+    letter-spacing: 0.01em !important;
+    max-width: 80px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.1) !important;
   }
 
   .product-card-controls {
-    top: 6px !important;
-    right: 6px !important;
-    gap: 4px !important;
+    top: 5px !important;
+    right: 5px !important;
+    gap: 3px !important;
+    z-index: 10 !important;
   }
 
   .product-card-discount {
-    font-size: 9px !important;
-    padding: 1px 5px !important;
+    font-size: 8.5px !important;
+    font-weight: 800 !important;
+    padding: 1px 4.5px !important;
+    border-radius: 9999px !important;
   }
 
-  .product-card-copy-btn {
-    display: none !important; /* Hide secondary link copy on mobile card to keep clean */
-  }
-
+  .product-card-copy-btn,
   .product-card-wishlist-btn {
-    padding: 5px !important;
-    width: 28px !important;
-    height: 28px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
+    width: 24px !important;
+    height: 24px !important;
+    padding: 0 !important;
+    border-radius: 9999px !important;
+    background-color: rgba(255, 255, 255, 0.9) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12) !important;
+    backdrop-filter: blur(4px) !important;
   }
 
+  .dark .product-card-copy-btn,
+  .dark .product-card-wishlist-btn {
+    background-color: rgba(15, 23, 42, 0.9) !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
+  }
+
+  .product-card-copy-btn svg,
   .product-card-wishlist-btn svg {
-    width: 13px !important;
-    height: 13px !important;
+    width: 11px !important;
+    height: 11px !important;
   }
 
-  /* 5. Compact Mobile Product Images (Square ratio 1:1, max-height 140px, object-fit: contain, subtle neutral background #f8f8f8) */
+  /* 5. Compact Mobile Product Images (Square ratio 1:1, max-height 130px-150px, object-fit: contain, subtle neutral background #f8f8f8, non-collapsing dimensions) */
   .product-card-image-wrapper {
     position: relative !important;
     width: 100% !important;
     aspect-ratio: 1 / 1 !important;
     padding-top: 0 !important;
-    height: auto !important;
-    max-height: 140px !important;
+    height: 140px !important;
+    min-height: 130px !important;
+    max-height: 145px !important;
     background-color: #f8f8f8 !important;
     display: flex !important;
     align-items: center !important;
@@ -263,10 +282,12 @@ apple-pay-button {
     inset: auto !important;
     width: 100% !important;
     height: 100% !important;
+    min-height: 130px !important;
     max-height: 140px !important;
     object-fit: contain !important;
     background-color: #f8f8f8 !important;
     padding: 6px !important;
+    display: block !important;
     transform: none !important;
     transition: none !important;
   }
