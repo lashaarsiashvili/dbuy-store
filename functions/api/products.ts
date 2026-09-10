@@ -1,3 +1,80 @@
+import { initialProducts } from '../../src/data/initialProducts';
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Content-Type': 'application/json',
+};
+
+// Format & parse products safely from D1 row records
+function formatProducts(results: any[]) {
+  return results.map((row: any) => {
+    let imagesArr: string[] = [];
+    if (row.images) {
+      if (typeof row.images === 'string') {
+        try {
+          imagesArr = JSON.parse(row.images);
+        } catch (e) {
+          imagesArr = [];
+        }
+      } else if (Array.isArray(row.images)) {
+        imagesArr = row.images;
+      }
+    }
+    if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
+      imagesArr = row.image && row.image !== 'null' ? [row.image] : [];
+    }
+
+    let featuresArr: string[] = [];
+    try {
+      featuresArr = row.features ? (typeof row.features === 'string' ? JSON.parse(row.features) : row.features) : [];
+    } catch (e) {
+      featuresArr = [];
+    }
+
+    let featuresEnArr: string[] = [];
+    try {
+      featuresEnArr = row.features_en ? (typeof row.features_en === 'string' ? JSON.parse(row.features_en) : row.features_en) : [];
+    } catch (e) {
+      featuresEnArr = [];
+    }
+
+    let featuresKaArr: string[] = [];
+    try {
+      featuresKaArr = row.features_ka ? (typeof row.features_ka === 'string' ? JSON.parse(row.features_ka) : row.features_ka) : [];
+    } catch (e) {
+      featuresKaArr = [];
+    }
+
+    const primaryImg = imagesArr[0] || (row.image && row.image !== 'null' ? row.image : '');
+
+    return {
+      id: row.id,
+      title: row.name,
+      titleKa: row.name_ka || '',
+      title_en: row.name,
+      title_ka: row.name_ka || '',
+      description: row.description || '',
+      descriptionKa: row.description_ka || '',
+      description_en: row.description_en || row.description || '',
+      description_ka: row.description_ka || '',
+      price: Number(row.price) || 0,
+      origPrice: Number(row.original_price) || 0,
+      image: primaryImg,
+      images: imagesArr.length > 0 ? imagesArr : (primaryImg ? [primaryImg] : []),
+      category: row.category || 'tech',
+      stock: Number(row.stock) || 0,
+      rating: 5.0,
+      reviewsCount: 1,
+      features: featuresArr,
+      features_en: featuresEnArr,
+      features_ka: featuresKaArr,
+      isPublishedGlobally: true,
+    };
+  });
+}
+
 export const onRequest: PagesFunction<any> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -5,11 +82,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
   // Handle CORS Preflight
   if (request.method === 'OPTIONS') {
     return new Response(null, {
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-      },
+      headers: CORS_HEADERS,
     });
   }
 
@@ -18,10 +91,10 @@ export const onRequest: PagesFunction<any> = async (context) => {
     return Response.json({
       success: false,
       error: 'Cloudflare D1 Database binding "DB" is missing in wrangler.toml.',
-    }, { status: 500 });
+    }, { status: 500, headers: CORS_HEADERS });
   }
 
-  // --- GET ALL PRODUCTS ---
+  // --- GET ALL PRODUCTS WITH SELF-HEALING AUTO-SEED ---
   if (request.method === 'GET') {
     try {
       // Auto-initialize products table if not present
@@ -49,73 +122,69 @@ export const onRequest: PagesFunction<any> = async (context) => {
       try { await db.exec('ALTER TABLE products ADD COLUMN features_en TEXT;'); } catch (e) {}
       try { await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;'); } catch (e) {}
 
+      // Self-healing check: Fetch existing products from D1
       const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
 
-      const products = results.map((row: any) => {
-        let imagesArr: string[] = [];
-        try {
-          imagesArr = row.images ? JSON.parse(row.images as string) : [];
-        } catch (e) {
-          imagesArr = row.image ? [row.image] : [];
-        }
-        if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
-          imagesArr = row.image ? [row.image] : [];
+      const needsRepair = results.length === 0 ||
+        results.length < initialProducts.length ||
+        results.some((p: any) => !p.image || p.image === '' || p.image === 'null' || !p.images || p.images === '[]' || p.images === 'null');
+
+      if (needsRepair) {
+        for (const item of initialProducts) {
+          const primaryImage = item.image || (item.images && item.images[0]) || '';
+          const imagesJson = JSON.stringify(item.images || (primaryImage ? [primaryImage] : []));
+          const name = (item as any).name || item.title || '';
+          const nameKa = item.titleKa || (item as any).name_ka || '';
+          const description = item.description || '';
+          const descriptionKa = item.descriptionKa || (item as any).description_ka || '';
+          const price = item.price || 0;
+          const originalPrice = item.origPrice !== undefined && item.origPrice !== null ? Number(item.origPrice) : ((item as any).original_price !== undefined && (item as any).original_price !== null ? Number((item as any).original_price) : null);
+          const category = item.category || '';
+          const stock = item.stock || 0;
+
+          await db.prepare(`
+            INSERT INTO products (id, name, description, price, original_price, image, images, category, stock, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+              image = CASE WHEN products.image IS NULL OR products.image = '' OR products.image = 'null' THEN excluded.image ELSE products.image END,
+              images = CASE WHEN products.images IS NULL OR products.images = '' OR products.images = '[]' OR products.images = 'null' THEN excluded.images ELSE products.images END,
+              name = COALESCE(products.name, excluded.name),
+              price = COALESCE(products.price, excluded.price),
+              updated_at = CURRENT_TIMESTAMP
+          `).bind(
+            item.id,
+            name,
+            description,
+            price,
+            originalPrice,
+            primaryImage,
+            imagesJson,
+            category,
+            stock
+          ).run();
+
+          try {
+            await db.prepare(`
+              UPDATE products SET
+                name_ka = CASE WHEN name_ka IS NULL OR name_ka = '' THEN ? ELSE name_ka END,
+                description_ka = CASE WHEN description_ka IS NULL OR description_ka = '' THEN ? ELSE description_ka END
+              WHERE id = ?
+            `).bind(nameKa, descriptionKa, item.id).run();
+          } catch (e) {}
         }
 
-        let featuresArr: string[] = [];
-        try {
-          featuresArr = row.features ? (typeof row.features === 'string' ? JSON.parse(row.features) : row.features) : [];
-        } catch (e) {
-          featuresArr = [];
-        }
+        // Re-fetch the newly repaired records
+        const updated = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+        return Response.json(formatProducts(updated.results), {
+          headers: CORS_HEADERS,
+        });
+      }
 
-        let featuresEnArr: string[] = [];
-        try {
-          featuresEnArr = row.features_en ? (typeof row.features_en === 'string' ? JSON.parse(row.features_en) : row.features_en) : [];
-        } catch (e) {
-          featuresEnArr = [];
-        }
-
-        let featuresKaArr: string[] = [];
-        try {
-          featuresKaArr = row.features_ka ? (typeof row.features_ka === 'string' ? JSON.parse(row.features_ka) : row.features_ka) : [];
-        } catch (e) {
-          featuresKaArr = [];
-        }
-
-        return {
-          id: row.id,
-          title: row.name,
-          titleKa: row.name_ka || '',
-          title_en: row.name,
-          title_ka: row.name_ka || '',
-          description: row.description || '',
-          descriptionKa: row.description_ka || '',
-          description_en: row.description_en || row.description || '',
-          description_ka: row.description_ka || '',
-          price: Number(row.price) || 0,
-          origPrice: Number(row.original_price) || 0,
-          image: imagesArr[0] || row.image || '',
-          images: imagesArr,
-          category: row.category || 'tech',
-          stock: Number(row.stock) || 0,
-          rating: 5.0,
-          reviewsCount: 1,
-          features: featuresArr,
-          features_en: featuresEnArr,
-          features_ka: featuresKaArr,
-          isPublishedGlobally: true,
-        };
-      });
-
-      return Response.json(products, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Content-Type': 'application/json',
-        },
+      return Response.json(formatProducts(results), {
+        headers: CORS_HEADERS,
       });
     } catch (err: any) {
-      return Response.json({ success: false, error: err?.message || 'Failed to fetch products' }, { status: 500 });
+      return Response.json({ success: false, error: err?.message || 'Failed to fetch products' }, { status: 500, headers: CORS_HEADERS });
     }
   }
 

@@ -106,6 +106,66 @@ async function loadFullProducts(db: D1Database, rawProducts: any[]): Promise<any
   return parseAndFallbackProducts(rawProducts);
 }
 
+// Self-healing automatic database auto-seed & image restoration in D1
+async function ensureD1ProductsSeeded(db: D1Database): Promise<void> {
+  try {
+    const { results } = await db.prepare('SELECT * FROM products').all();
+    const needsRepair = results.length === 0 ||
+      results.length < initialProducts.length ||
+      results.some((p: any) => !p.image || p.image === '' || p.image === 'null' || !p.images || p.images === '[]' || p.images === 'null');
+
+    if (needsRepair) {
+      for (const item of initialProducts) {
+        const primaryImage = item.image || (item.images && item.images[0]) || '';
+        const imagesJson = JSON.stringify(item.images || (primaryImage ? [primaryImage] : []));
+        const name = (item as any).name || item.title || '';
+        const nameKa = item.titleKa || (item as any).name_ka || '';
+        const description = item.description || '';
+        const descriptionKa = item.descriptionKa || (item as any).description_ka || '';
+        const price = item.price || 0;
+        const originalPrice = item.origPrice !== undefined && item.origPrice !== null ? Number(item.origPrice) : ((item as any).original_price !== undefined && (item as any).original_price !== null ? Number((item as any).original_price) : null);
+        const category = item.category || '';
+        const stock = item.stock || 0;
+
+        await db.prepare(`
+          INSERT INTO products (id, name, description, price, original_price, image, images, category, stock, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+          ON CONFLICT(id) DO UPDATE SET
+            image = CASE WHEN products.image IS NULL OR products.image = '' OR products.image = 'null' THEN excluded.image ELSE products.image END,
+            images = CASE WHEN products.images IS NULL OR products.images = '' OR products.images = '[]' OR products.images = 'null' THEN excluded.images ELSE products.images END,
+            name = COALESCE(products.name, excluded.name),
+            price = COALESCE(products.price, excluded.price),
+            updated_at = CURRENT_TIMESTAMP
+        `).bind(
+          item.id,
+          name,
+          description,
+          price,
+          originalPrice,
+          primaryImage,
+          imagesJson,
+          category,
+          stock
+        ).run();
+
+        try {
+          await db.prepare(`
+            UPDATE products SET
+              name_ka = CASE WHEN name_ka IS NULL OR name_ka = '' THEN ? ELSE name_ka END,
+              description_ka = CASE WHEN description_ka IS NULL OR description_ka = '' THEN ? ELSE description_ka END
+            WHERE id = ?
+          `).bind(nameKa, descriptionKa, item.id).run();
+        } catch (e) {}
+      }
+
+      // Also ensure store_kv 'products' has valid images
+      await dbPut(db, 'products', JSON.stringify(initialProducts));
+    }
+  } catch (err) {
+    console.error('ensureD1ProductsSeeded error:', err);
+  }
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -169,6 +229,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   // 1. GET: Sync or products data fetch
   if (request.method === 'GET') {
     if (path.endsWith('/sync')) {
+      await ensureD1ProductsSeeded(db);
+
       const clientSince = url.searchParams.get('since');
       const lastUpdated = await dbGet(db, 'last_updated') || '';
 
@@ -212,6 +274,41 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     if (path.endsWith('/products')) {
+      await ensureD1ProductsSeeded(db);
+
+      try {
+        const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+        if (results && results.length > 0) {
+          const formatted = results.map((row: any) => {
+            let imagesArr: string[] = [];
+            if (row.images) {
+              try { imagesArr = JSON.parse(row.images); } catch (e) { imagesArr = []; }
+            }
+            if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
+              imagesArr = row.image && row.image !== 'null' ? [row.image] : [];
+            }
+            return {
+              id: row.id,
+              title: row.name,
+              titleKa: row.name_ka || '',
+              title_en: row.name,
+              title_ka: row.name_ka || '',
+              description: row.description || '',
+              descriptionKa: row.description_ka || '',
+              description_en: row.description_en || row.description || '',
+              description_ka: row.description_ka || '',
+              price: Number(row.price) || 0,
+              origPrice: Number(row.original_price) || 0,
+              image: imagesArr[0] || row.image || '',
+              images: imagesArr,
+              category: row.category || 'tech',
+              stock: Number(row.stock) || 0,
+            };
+          });
+          return jsonResponse({ success: true, products: formatted });
+        }
+      } catch (err) {}
+
       const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
       const products = await loadFullProducts(db, rawProducts);
       return jsonResponse({ success: true, products });

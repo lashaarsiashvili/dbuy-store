@@ -912,9 +912,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const res = await fetch('/api/products');
         if (res.ok) {
           const apiProducts = await res.json();
-          if (Array.isArray(apiProducts) && apiProducts.length > 0) {
-            setProducts(apiProducts.map(sanitizeProductUrls));
-            localStorage.setItem('dbuy_products', JSON.stringify(apiProducts));
+          const list = Array.isArray(apiProducts) 
+            ? apiProducts 
+            : (apiProducts && Array.isArray(apiProducts.products) ? apiProducts.products : null);
+          if (list && list.length > 0) {
+            setProducts(list.map(sanitizeProductUrls));
+            localStorage.setItem('dbuy_products', JSON.stringify(list));
           }
         }
       } catch (err) {
