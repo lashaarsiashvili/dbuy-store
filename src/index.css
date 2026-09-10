@@ -3,13 +3,16 @@
 @variant dark (&:where(.dark, .dark *));
 
 @layer base {
+  /* 1. Root HTML: viewport context, safe native overscroll, and canvas color propagation */
   html {
     width: 100%;
+    min-height: 100%;
     margin: 0;
     padding: 0;
     background-color: #ffffff;
     color: #0f172a;
     -webkit-text-size-adjust: 100%;
+    /* Keep overscroll-behavior-y auto to preserve native pull-to-refresh & momentum bounce */
     overscroll-behavior-y: auto;
     font-family: var(--theme-font, 'Noto Sans Georgian', 'Plus Jakarta Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif);
   }
@@ -19,20 +22,25 @@
     color: #f8fafc;
   }
 
+  /* 2. Root Body: must NOT have overflow-x: hidden (which triggers overflow-y: auto and breaks root window scrolling) */
   body {
     width: 100%;
     margin: 0;
     padding: 0;
-    min-height: 100%;
-    overflow-x: hidden;
+    min-height: 100dvh;
+    min-height: 100vh; /* fallback */
+    min-height: 100dvh;
     background-color: inherit;
     color: inherit;
     overscroll-behavior-y: auto;
+    /* Native smooth scrolling thread */
+    -webkit-overflow-scrolling: touch;
   }
 
+  /* 3. Application container: handles horizontal clipping without forming a secondary scroll viewport */
   #root {
     width: 100%;
-    min-height: 100vh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow-x: clip;
