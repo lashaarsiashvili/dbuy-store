@@ -28,18 +28,55 @@ export default {
     if (url.pathname === "/api/products" && request.method === "POST") {
       try {
         const body = await request.json();
+        let list = [];
+        if (Array.isArray(body)) {
+          list = body;
+        } else if (body && body.id) {
+          const currentData = await env.PRODUCTS_KV.get(KV_KEY, { type: "json" });
+          const existing = Array.isArray(currentData) ? currentData : [];
+          const idx = existing.findIndex((p) => p.id === body.id);
+          if (idx >= 0) {
+            existing[idx] = { ...existing[idx], ...body };
+          } else {
+            existing.unshift(body);
+          }
+          list = existing;
+        }
         
-        // ინახავს ადმინის მიერ გამოგზავნილ ზუსტ მასივს
-        await env.PRODUCTS_KV.put(KV_KEY, JSON.stringify(body));
+        await env.PRODUCTS_KV.put(KV_KEY, JSON.stringify(list));
 
         return new Response(
-          JSON.stringify({ success: true, message: "Products updated successfully in Cloudflare KV" }),
+          JSON.stringify({ success: true, message: "Products updated successfully in Cloudflare KV", products: list }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       } catch (err) {
         return new Response(
           JSON.stringify({ success: false, error: err.message }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
+    // 3. პროდუქტის წაშლა
+    if (url.pathname === "/api/products" && request.method === "DELETE") {
+      try {
+        const id = url.searchParams.get("id");
+        if (!id) {
+          return new Response(JSON.stringify({ success: false, error: "Product ID is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+        const currentData = await env.PRODUCTS_KV.get(KV_KEY, { type: "json" });
+        const existing = Array.isArray(currentData) ? currentData : [];
+        const filtered = existing.filter((p) => p.id !== id);
+        await env.PRODUCTS_KV.put(KV_KEY, JSON.stringify(filtered));
+
+        return new Response(
+          JSON.stringify({ success: true, message: "Product deleted from Cloudflare KV", products: filtered }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      } catch (err) {
+        return new Response(
+          JSON.stringify({ success: false, error: err.message }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
       }
     }

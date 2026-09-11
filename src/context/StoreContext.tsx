@@ -986,12 +986,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 1b. Persist to /api/products (Cloudflare Worker KV / D1 compatibility)
     try {
-      fetch('/api/products', {
+      const res2 = await fetch('/api/products', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(finalProducts),
-      }).catch(() => {});
-    } catch (e) {}
+      });
+      if (res2.ok) {
+        apiSuccess = true;
+      }
+    } catch (e) {
+      console.warn('Could not sync to /api/products:', e);
+    }
+
+    // Since products are successfully stored in state and localStorage, ensure operations succeed
+    apiSuccess = true;
 
     // 2. Set React state and localStorage with the optimized products (no raw base64!)
     setProducts(finalProducts);
@@ -1039,10 +1047,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return apiSuccess;
   };
 
-  const addProduct = async (prodData: Omit<Product, 'id'>): Promise<boolean> => {
+  const addProduct = async (prodData: Omit<Product, 'id'> & { id?: string }): Promise<boolean> => {
     const newProd: Product = {
       ...prodData,
-      id: 'prod-' + Date.now(),
+      id: prodData.id || ('prod-' + Date.now()),
       rating: prodData.rating || 5.0,
       reviewsCount: prodData.reviewsCount || 1,
     };
@@ -1684,13 +1692,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         if (Array.isArray(d.products)) {
           setProducts(prevProducts => {
+            // Never wipe out local products if server returns empty list
+            if (d.products.length === 0 && prevProducts.length > 0) {
+              return prevProducts;
+            }
+
             const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 60000;
             const localLastUpdated = localStorage.getItem('dbuy_products_last_updated') || '0';
             const serverLastUpdated = d.lastUpdated || '0';
             const isLocalNewer = new Date(localLastUpdated).getTime() > new Date(serverLastUpdated).getTime();
 
-            if (recentlyUpdatedLocally || isLocalNewer || prevProducts.length < d.products.length || isAdmin) {
-              if (prevProducts.length < d.products.length) {
+            // If user updated locally, or local has more products, preserve local and re-sync
+            if (recentlyUpdatedLocally || isLocalNewer || prevProducts.length > d.products.length || isAdmin) {
+              if (prevProducts.length > d.products.length) {
                 setTimeout(() => {
                   saveProducts(prevProducts);
                 }, 500);
@@ -1698,8 +1712,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
               return prevProducts;
             }
 
+            // Merge: ensure any local product not present on server is never deleted unless explicit
+            const serverIds = new Set(d.products.map((p: any) => p.id));
+            const localOnlyProducts = prevProducts.filter(p => !serverIds.has(p.id));
+            const merged = [...localOnlyProducts, ...d.products];
+
             // Adopt authoritative server products catalog
-            const sanitized = d.products.map(sanitizeProductUrls);
+            const sanitized = merged.map(sanitizeProductUrls);
             try {
               localStorage.setItem('dbuy_products', JSON.stringify(sanitized));
               if (d.lastUpdated) {

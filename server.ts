@@ -1361,6 +1361,24 @@ app.get('/api/products', (req, res) => {
   res.json({ success: true, products: storeDb.products });
 });
 
+// DELETE: Delete product (D1 API compatibility)
+app.delete('/api/products', (req, res) => {
+  try {
+    const id = req.query.id as string || (req.body && req.body.id);
+    if (!id) {
+      res.status(400).json({ success: false, error: 'Product ID is required' });
+      return;
+    }
+    storeDb.products = storeDb.products.filter(p => p.id !== id);
+    storeDb.lastUpdated = new Date().toISOString();
+    saveStoreDatabase();
+    syncCatalogToInitialProducts(storeDb.products);
+    res.json({ success: true, message: 'Product deleted' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to delete product' });
+  }
+});
+
 // POST: Increment product view count
 app.post('/api/store/products/:id/view', (req, res) => {
   try {

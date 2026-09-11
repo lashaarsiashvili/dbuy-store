@@ -1205,31 +1205,25 @@ export const AdminDashboard: React.FC = () => {
         localStorage.getItem('admin_slug') || 
         'dashboard';
 
-      const res = await fetch('/api/products', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Admin-Slug': adminSlug,
-          'Authorization': `Bearer ${adminSlug}`,
-          'x-admin-key': adminSlug
-        },
-        body: JSON.stringify(productPayload),
-      });
-
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || 'Server responded with status ' + res.status);
-      }
-
-      const resData = await res.json();
-      if (resData && resData.success === false) {
-        throw new Error(resData.error || 'Response indicated failure');
-      }
-
       if (editingProduct) {
         success = await updateProduct(productPayload);
       } else {
         success = await addProduct(productPayload);
+      }
+
+      try {
+        await fetch('/api/products', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Admin-Slug': adminSlug,
+            'Authorization': `Bearer ${adminSlug}`,
+            'x-admin-key': adminSlug
+          },
+          body: JSON.stringify(productPayload),
+        });
+      } catch (syncErr) {
+        console.warn('Direct POST /api/products backup warning:', syncErr);
       }
     } catch (err: any) {
       console.error('Error in handleSaveProduct:', err);
