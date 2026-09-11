@@ -2,15 +2,15 @@
  * Utilities for formatting and resolving Instagram URLs and handles
  */
 
-export const DEFAULT_INSTAGRAM_URL = 'https://www.instagram.com/';
+export const DEFAULT_INSTAGRAM_URL = 'https://www.instagram.com/dbuy.store/';
 
 /**
  * Ensures an Instagram URL is a valid, clean web URL.
  * Handles inputs like:
- * - "dbuystore" -> "https://www.instagram.com/dbuystore"
- * - "@dbuystore" -> "https://www.instagram.com/dbuystore"
- * - "instagram.com/dbuystore" -> "https://www.instagram.com/dbuystore"
- * - "https://instagram.com/dbuystore" -> "https://www.instagram.com/dbuystore"
+ * - "dbuy.store" -> "https://www.instagram.com/dbuy.store/"
+ * - "@dbuy.store" -> "https://www.instagram.com/dbuy.store/"
+ * - "instagram.com/dbuy.store" -> "https://www.instagram.com/dbuy.store/"
+ * - "https://instagram.com/dbuy.store" -> "https://www.instagram.com/dbuy.store/"
  */
 export function formatInstagramUrl(input?: string): string {
   if (!input || !input.trim()) {
@@ -33,11 +33,11 @@ export function formatInstagramUrl(input?: string): string {
 }
 
 /**
- * Extracts a readable handle like "@dbuystore" for badge/card display
+ * Extracts a readable handle like "@dbuy.store" for badge/card display
  */
 export function getInstagramHandle(input?: string): string {
-  if (!input || !input.trim() || input.trim() === 'https://www.instagram.com/' || input.trim() === 'https://instagram.com/') {
-    return '@dbuystore';
+  if (!input || !input.trim() || input.trim() === 'https://www.instagram.com/' || input.trim() === 'https://instagram.com/' || input.trim() === 'https://www.instagram.com/dbuy.store/' || input.trim() === 'https://instagram.com/dbuy.store') {
+    return '@dbuy.store';
   }
   const clean = input.trim();
   const match = clean.match(/(?:instagram\.com\/|@)?([a-zA-Z0-9._]+)\/?$/);

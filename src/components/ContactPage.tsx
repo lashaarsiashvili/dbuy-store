@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Mail, Clock, Lightbulb, Send, CheckCircle2, MapPin, History, Trash2, ChevronDown, ChevronUp, Copy, Check, Loader2, Instagram } from 'lucide-react';
+import { Mail, Clock, Lightbulb, Send, CheckCircle2, MapPin, History, Trash2, ChevronDown, ChevronUp, Copy, Check, Loader2 } from 'lucide-react';
 import { smartApiFetch } from '../lib/api';
 import { ContactFaq } from './ContactFaq';
-import { formatInstagramUrl, getInstagramHandle } from '../utils/instagram';
-import { InstagramOriginalLogo } from './InstagramLogo';
 
 interface SavedMessage {
   id: string;
@@ -430,34 +428,6 @@ export const ContactPage: React.FC = () => {
                 </p>
               </div>
             </div>
-
-            {/* Official Instagram Card */}
-            {theme?.instagramVisible !== false && (
-              <a
-                href={formatInstagramUrl(theme?.instagramUrl)}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-start space-x-4 hover:border-pink-300 dark:hover:border-pink-800/60 transition-all group cursor-pointer"
-                title="Instagram Direct"
-              >
-                <InstagramOriginalLogo size="lg" />
-                <div className="space-y-1">
-                  <div className="flex items-center space-x-2">
-                    <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Instagram</h3>
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-50 dark:bg-pink-950/60 text-pink-600 dark:text-pink-300 border border-pink-200/60 dark:border-pink-800/40">
-                      Official Page
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-300">
-                    {language === 'ka' ? 'მოგვწერეთ Instagram Direct-ში ან თვალი ადევნეთ სიახლეებს' : 'Send us a direct message or follow our latest updates'}
-                  </p>
-                  <p className="text-xs font-bold text-pink-600 dark:text-pink-400 group-hover:underline flex items-center space-x-1 pt-0.5">
-                    <span>{getInstagramHandle(theme?.instagramUrl)}</span>
-                    <span className="group-hover:translate-x-0.5 transition-transform">→</span>
-                  </p>
-                </div>
-              </a>
-            )}
 
             {/* Business Hours Card */}
             <div className="p-6 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-start space-x-4">

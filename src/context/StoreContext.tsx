@@ -230,7 +230,7 @@ const defaultTheme: ThemeSettings = {
   eurRate: 0.92,
   gelRate: 2.73,
   logoStyle: 'bag-cart',
-  instagramUrl: 'https://www.instagram.com/dbuystore',
+  instagramUrl: 'https://www.instagram.com/dbuy.store/',
   instagramVisible: true,
 };
 

@@ -485,7 +485,7 @@ export const AdminDashboard: React.FC = () => {
     eurRate: theme?.eurRate ?? 0.92,
     gelRate: theme?.gelRate ?? 2.78,
     logoStyle: (theme?.logoStyle as LogoOptionId) || 'bag-cart',
-    instagramUrl: theme?.instagramUrl || 'https://www.instagram.com/dbuystore',
+    instagramUrl: theme?.instagramUrl || 'https://www.instagram.com/dbuy.store/',
     instagramVisible: theme?.instagramVisible ?? true,
   });
 
@@ -501,7 +501,7 @@ export const AdminDashboard: React.FC = () => {
         eurRate: theme.eurRate ?? 0.92,
         gelRate: theme.gelRate ?? 2.78,
         logoStyle: (theme.logoStyle as LogoOptionId) || 'bag-cart',
-        instagramUrl: theme.instagramUrl || 'https://www.instagram.com/dbuystore',
+        instagramUrl: theme.instagramUrl || 'https://www.instagram.com/dbuy.store/',
         instagramVisible: theme.instagramVisible ?? true,
       });
     }
@@ -2717,8 +2717,8 @@ export const AdminDashboard: React.FC = () => {
                       </h4>
                       <p className="text-[11px] text-slate-600">
                         {isKa
-                          ? 'საიტის ჰედერში, ფუტერში და კონტაქტის გვერდზე დასმული Instagram ლოგო პირდაპირ გადაიყვანს მომხმარებელს თქვენს Instagram-ზე.'
-                          : 'Connect your Instagram profile so visitors clicking the Instagram logo anywhere on your store open your profile directly.'}
+                          ? 'საიტის ქვედა მარჯვენა კუთხეში (ფუტერში) დასმული Instagram ლოგო პირდაპირ გადაიყვანს მომხმარებელს თქვენს Instagram გვერდზე.'
+                          : 'Connect your Instagram profile so visitors clicking the Instagram logo at the bottom-right corner of the store open your profile directly.'}
                       </p>
                     </div>
                   </div>
