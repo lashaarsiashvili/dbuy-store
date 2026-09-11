@@ -1325,12 +1325,20 @@ app.get('/api/store/products', (req, res) => {
   });
 });
 
-// POST: Save / update a single product (used by Admin Dashboard and D1 API compatibility)
+// POST: Save / update products (used by Admin Dashboard, Worker, and D1 API compatibility)
 app.post('/api/products', (req, res) => {
   try {
     const body = req.body;
+    if (Array.isArray(body)) {
+      storeDb.products = body;
+      storeDb.lastUpdated = new Date().toISOString();
+      saveStoreDatabase();
+      syncCatalogToInitialProducts(storeDb.products);
+      res.json({ success: true, message: 'Products updated successfully in server store', products: body });
+      return;
+    }
     if (!body || !body.id) {
-      res.status(400).json({ success: false, error: 'Product ID is required' });
+      res.status(400).json({ success: false, error: 'Product ID or array of products is required' });
       return;
     }
     const idx = storeDb.products.findIndex((p: any) => p.id === body.id);

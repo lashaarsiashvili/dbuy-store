@@ -915,7 +915,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const list = Array.isArray(apiProducts) 
             ? apiProducts 
             : (apiProducts && Array.isArray(apiProducts.products) ? apiProducts.products : null);
-          if (list && list.length > 0) {
+          if (Array.isArray(list)) {
             setProducts(list.map(sanitizeProductUrls));
             localStorage.setItem('dbuy_products', JSON.stringify(list));
           }
@@ -983,6 +983,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (err) {
       console.error('Error syncing products to server:', err);
     }
+
+    // 1b. Persist to /api/products (Cloudflare Worker KV / D1 compatibility)
+    try {
+      fetch('/api/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(finalProducts),
+      }).catch(() => {});
+    } catch (e) {}
 
     // 2. Set React state and localStorage with the optimized products (no raw base64!)
     setProducts(finalProducts);

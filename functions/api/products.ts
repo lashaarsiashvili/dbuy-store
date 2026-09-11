@@ -86,11 +86,50 @@ export const onRequest: PagesFunction<any> = async (context) => {
     });
   }
 
+  const kv = env.PRODUCTS_KV || env.KV || env.STORE_KV;
+  const KV_KEY = 'SITE_PRODUCTS_LIST';
+
+  // 1. If PRODUCTS_KV is bound, prioritize direct KV storage (as in cloudflare-worker.js)
+  if (kv) {
+    if (request.method === 'GET') {
+      try {
+        const data = await kv.get(KV_KEY, { type: 'json' });
+        // Returns empty array if empty, does not overwrite with default products
+        const products = data || [];
+        return new Response(JSON.stringify(products), {
+          headers: CORS_HEADERS,
+        });
+      } catch (err: any) {
+        return new Response(
+          JSON.stringify({ success: false, error: err?.message || 'Failed to get products from KV' }),
+          { status: 500, headers: CORS_HEADERS }
+        );
+      }
+    }
+
+    if (request.method === 'POST') {
+      try {
+        const body = await request.json();
+        await kv.put(KV_KEY, JSON.stringify(body));
+
+        return new Response(
+          JSON.stringify({ success: true, message: 'Products updated successfully in Cloudflare KV' }),
+          { headers: CORS_HEADERS }
+        );
+      } catch (err: any) {
+        return new Response(
+          JSON.stringify({ success: false, error: err?.message || 'Failed to save to KV' }),
+          { status: 400, headers: CORS_HEADERS }
+        );
+      }
+    }
+  }
+
   const db = env.DB;
   if (!db) {
     return Response.json({
       success: false,
-      error: 'Cloudflare D1 Database binding "DB" is missing in wrangler.toml.',
+      error: 'Cloudflare D1 Database binding "DB" or "PRODUCTS_KV" is missing in Cloudflare settings.',
     }, { status: 500, headers: CORS_HEADERS });
   }
 
@@ -211,8 +250,59 @@ export const onRequest: PagesFunction<any> = async (context) => {
       }
 
       const body = await request.json() as any;
+
+      if (Array.isArray(body)) {
+        // Batch update of full products array
+        for (const item of body) {
+          if (!item || !item.id) continue;
+          const rawImages = Array.isArray(item.images) && item.images.length > 0
+            ? item.images
+            : (item.image ? [item.image] : []);
+          const primaryImage = rawImages[0] || '';
+          const serializedImages = JSON.stringify(rawImages);
+
+          const descEn = String(item.description_en || item.description || '');
+          const descKa = String(item.description_ka || item.descriptionKa || '');
+          const titleEn = String(item.title_en || item.title || item.name || '');
+          const titleKa = String(item.title_ka || item.titleKa || '');
+
+          await db.prepare(`
+            INSERT INTO products (id, name, description, price, original_price, image, images, category, stock, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              description = excluded.description,
+              price = excluded.price,
+              original_price = excluded.original_price,
+              image = excluded.image,
+              images = excluded.images,
+              category = excluded.category,
+              stock = excluded.stock,
+              updated_at = CURRENT_TIMESTAMP
+          `).bind(
+            item.id,
+            titleEn,
+            descEn,
+            Number(item.price) || 0,
+            item.origPrice !== undefined && item.origPrice !== null ? Number(item.origPrice) : (item.original_price !== undefined ? Number(item.original_price) : null),
+            primaryImage,
+            serializedImages,
+            item.category || 'tech',
+            Number(item.stock) || 0
+          ).run();
+
+          try {
+            await db.prepare(`
+              UPDATE products SET name_ka = ?, description_ka = ? WHERE id = ?
+            `).bind(titleKa, descKa, item.id).run();
+          } catch (e) {}
+        }
+
+        return Response.json({ success: true, message: 'Products batch updated successfully in D1' }, { headers: CORS_HEADERS });
+      }
+
       if (!body || !body.id) {
-        return Response.json({ success: false, error: 'Product ID is required' }, { status: 400 });
+        return Response.json({ success: false, error: 'Product ID or array of products is required' }, { status: 400 });
       }
 
       const rawImages = Array.isArray(body.images) && body.images.length > 0
