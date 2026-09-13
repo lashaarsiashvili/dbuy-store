@@ -20,12 +20,24 @@ import { ProductDetailPage } from './components/ProductDetailPage';
 import { VerifiedDeliveriesPage } from './components/VerifiedDeliveriesPage';
 import { ToastContainer } from './components/ToastContainer';
 import { getPayPalV6Instance } from './utils/paypalV6';
+import { analytics } from './components/AdminAnalyticsDashboard';
 
 const LIVE_PAYPAL_CLIENT_ID = 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
 const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || LIVE_PAYPAL_CLIENT_ID;
 
 const MainLayout: React.FC = () => {
-  const { currentPage, recordVisit } = useStore();
+  const { currentPage, recordVisit, user, isAdmin } = useStore();
+
+  // Site Visit Analytics Tracking (excluding admin users)
+  useEffect(() => {
+    const isCurrentAdmin = Boolean(
+      isAdmin ||
+      user?.role === 'admin' ||
+      user?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+      user?.email?.toLowerCase().trim() === 'admin@dbuy.com'
+    );
+    analytics.trackVisit(isCurrentAdmin);
+  }, [user, isAdmin]);
 
   // Scroll to top on page change and log view
   useEffect(() => {

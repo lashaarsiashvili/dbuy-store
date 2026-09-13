@@ -8,6 +8,7 @@ import { handleImageError } from '../utils/imageFallback';
 import { saveImageBackupIDB } from '../utils/imageStorage';
 import { CachedImage } from './CachedImage';
 import { AdminAnalytics } from './AdminAnalytics';
+import { AdminReviewModeration, reviewService } from './ProductReviewsSection';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
@@ -163,7 +164,7 @@ export const AdminDashboard: React.FC = () => {
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security' | 'messages'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security' | 'messages' | 'reviews'>('analytics');
 
   // Contact Messages & SMTP State
   const [contactMessages, setContactMessages] = useState<Array<{
@@ -1812,6 +1813,23 @@ export const AdminDashboard: React.FC = () => {
                 {contactMessages.filter(m => m.status === 'unread').length}
               </span>
             )}
+          </button>
+
+          <button
+            onClick={() => setActiveTab('reviews')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
+              activeTab === 'reviews'
+                ? 'bg-white text-amber-700 shadow-sm border border-slate-200/80'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+            }`}
+          >
+            <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
+            <span>{isKa ? 'შეფასებები' : 'Reviews'}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeTab === 'reviews' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'
+            }`}>
+              {reviewService.getAllReviews().length}
+            </span>
           </button>
         </div>
 
@@ -4145,6 +4163,13 @@ export const AdminDashboard: React.FC = () => {
               </div>
             )}
 
+          </div>
+        )}
+
+        {/* TAB 7: REVIEWS MODERATION */}
+        {activeTab === 'reviews' && (
+          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+            <AdminReviewModeration products={products} />
           </div>
         )}
 

@@ -20,6 +20,7 @@ import {
   Sparkles,
   Filter
 } from 'lucide-react';
+import { AdminAnalyticsDashboard } from './AdminAnalyticsDashboard';
 
 export const AdminAnalytics: React.FC = () => {
   const { 
@@ -29,7 +30,8 @@ export const AdminAnalytics: React.FC = () => {
     language, 
     excludeAdminVisits, 
     setExcludeAdminVisits, 
-    purgeAdminLogs 
+    purgeAdminLogs,
+    products
   } = useStore();
   const [timeFilter, setTimeFilter] = useState<'today' | 'all'>('today');
   const isKa = language === 'ka';
@@ -97,6 +99,9 @@ export const AdminAnalytics: React.FC = () => {
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       
+      {/* Overview Analytics Dashboard */}
+      <AdminAnalyticsDashboard products={products} />
+
       {/* Top Banner & Action Controls */}
       <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
         <div>

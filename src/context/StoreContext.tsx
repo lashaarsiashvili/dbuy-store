@@ -31,6 +31,7 @@ import {
   setAdminDeviceExclusion,
   filterOutAdminLogs
 } from '../utils/analytics';
+import { analytics } from '../components/AdminAnalyticsDashboard';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
 import { ensurePersistentAbsoluteUrl } from '../utils/imageUtils';
 
@@ -1255,6 +1256,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [promoDiscountPercent, setPromoDiscountPercent] = useState(0);
 
   const addToCart = (product: Product, quantity = 1) => {
+    // Analytics tracking (excluding admin traffic)
+    const isCurrentAdmin = Boolean(
+      isAdmin ||
+      user?.role === 'admin' ||
+      user?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+      user?.email?.toLowerCase().trim() === 'admin@dbuy.com' ||
+      isExcludedAdminDevice()
+    );
+    analytics.trackAddToCart(product?.id, isCurrentAdmin);
+
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id);
       if (existing) {
@@ -2477,6 +2488,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         // Skip recording for admin / owner visits
         return;
       }
+
+      analytics.trackVisit(false);
 
       const newLog = logNewVisitor(currentGeo, pageName);
       if (newLog) {

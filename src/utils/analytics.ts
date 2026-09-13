@@ -378,3 +378,6 @@ export function computeAnalytics(logs: VisitorLog[]) {
     recentLogs: logs.slice(0, 50),
   };
 }
+
+export { analytics } from '../components/AdminAnalyticsDashboard';
+export type { AnalyticsStorage, AnalyticsSummary } from '../components/AdminAnalyticsDashboard';

@@ -29,6 +29,7 @@ import {
   MastercardLogo,
   AmexLogo,
 } from "./PaymentLogos";
+import { analytics } from "./AdminAnalyticsDashboard";
 
 export const CheckoutModal: React.FC = () => {
   const {
@@ -45,6 +46,7 @@ export const CheckoutModal: React.FC = () => {
     lastPlacedOrder,
     setCurrentPage,
     user,
+    isAdmin,
     addToast,
   } = useStore();
 
@@ -121,6 +123,14 @@ export const CheckoutModal: React.FC = () => {
       addToast(t("checkout.fillRequired"), "warning");
       return;
     }
+
+    const isCurrentAdmin = Boolean(
+      isAdmin ||
+      user?.role === "admin" ||
+      user?.email?.toLowerCase().trim() === "lashaarsiashvili@gmail.com" ||
+      user?.email?.toLowerCase().trim() === "admin@dbuy.com"
+    );
+    analytics.trackCheckoutAttempt(isCurrentAdmin);
     setStep(2);
   };
 

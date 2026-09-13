@@ -4,6 +4,7 @@ import { getProductFeatures } from '../utils/productFeatures';
 import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
+import { analytics } from './AdminAnalyticsDashboard';
 import { 
   X, 
   Star, 
@@ -31,7 +32,9 @@ export const QuickViewModal: React.FC = () => {
     isInWishlist,
     toggleWishlist,
     setIsCheckoutOpen,
-    incrementProductViews
+    incrementProductViews,
+    user,
+    isAdmin,
   } = useStore();
 
   const [quantity, setQuantity] = useState(1);
@@ -82,6 +85,13 @@ export const QuickViewModal: React.FC = () => {
   };
 
   const handleBuyNow = () => {
+    const isCurrentAdmin = Boolean(
+      isAdmin ||
+      user?.role === 'admin' ||
+      user?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+      user?.email?.toLowerCase().trim() === 'admin@dbuy.com'
+    );
+    analytics.trackCheckoutAttempt(isCurrentAdmin);
     addToCart(quickViewProduct, quantity);
     setQuickViewProduct(null);
     setIsCheckoutOpen(true);

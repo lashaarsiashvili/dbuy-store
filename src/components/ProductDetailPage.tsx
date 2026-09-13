@@ -6,6 +6,8 @@ import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
+import { analytics } from './AdminAnalyticsDashboard';
+import { ProductReviewsSection } from './ProductReviewsSection';
 import { 
   Star, 
   ShoppingCart, 
@@ -46,7 +48,9 @@ export const ProductDetailPage: React.FC = () => {
     copyProductUrl,
     shareProduct,
     recordVisit,
-    incrementProductViews
+    incrementProductViews,
+    user,
+    isAdmin,
   } = useStore();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -151,6 +155,13 @@ export const ProductDetailPage: React.FC = () => {
   };
 
   const handleBuyNow = () => {
+    const isCurrentAdmin = Boolean(
+      isAdmin ||
+      user?.role === 'admin' ||
+      user?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+      user?.email?.toLowerCase().trim() === 'admin@dbuy.com'
+    );
+    analytics.trackCheckoutAttempt(isCurrentAdmin);
     addToCart(product, quantity);
     setIsCheckoutOpen(true);
   };
@@ -533,82 +544,10 @@ export const ProductDetailPage: React.FC = () => {
       </div>
 
       {/* Customer Reviews Section */}
-      <div className="pt-8 border-t border-slate-200/90 dark:border-slate-800 space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h3 className="text-xl font-black text-slate-900 dark:text-slate-100">
-              {language === 'ka' ? 'მომხმარებელთა შეფასებები' : 'Customer Reviews & Feedback'}
-            </h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-              {language === 'ka' 
-                ? `დადასტურებული მყიდველების რეალური გამოხმაურებები (${product.reviewsCount})` 
-                : `Verified buyer reviews and ratings (${product.reviewsCount})`}
-            </p>
-          </div>
-
-          <div className="flex items-center space-x-2 bg-amber-50 dark:bg-amber-950/60 px-4 py-2 rounded-2xl border border-amber-200 dark:border-amber-900/60">
-            <Star className="w-5 h-5 fill-amber-400 text-amber-400" />
-            <span className="text-base font-black text-slate-900 dark:text-slate-100">{product.rating.toFixed(1)}</span>
-            <span className="text-xs text-slate-500 dark:text-slate-400">/ 5.0</span>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-xs text-slate-900 dark:text-slate-100">George K.</span>
-              <div className="flex items-center text-amber-400 text-xs">
-                {'★'.repeat(5)}
-              </div>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              {language === 'ka'
-                ? 'შესანიშნავი ხარისხია! მიწოდება მოხდა ძალიან სწრაფად, შეფუთვა იყო იდეალური.'
-                : 'Excellent quality! Arrived within 3 days in pristine packaging. Exceeded my expectations.'}
-            </p>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center space-x-1">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>{language === 'ka' ? 'დადასტურებული მყიდველი' : 'Verified Purchase'}</span>
-            </span>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-xs text-slate-900 dark:text-slate-100">Sarah M.</span>
-              <div className="flex items-center text-amber-400 text-xs">
-                {'★'.repeat(5)}
-              </div>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              {language === 'ka'
-                ? 'ზუსტად ისეთია, როგორც აღწერაშია. დიზაინი და მასალა ძალიან მაღალი დონისაა.'
-                : 'Exactly as described. Design and materials feel premium and durable. Highly recommend!'}
-            </p>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center space-x-1">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>{language === 'ka' ? 'დადასტურებული მყიდველი' : 'Verified Purchase'}</span>
-            </span>
-          </div>
-
-          <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 space-y-2">
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-xs text-slate-900 dark:text-slate-100">Luka B.</span>
-              <div className="flex items-center text-amber-400 text-xs">
-                {'★'.repeat(5)}
-              </div>
-            </div>
-            <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">
-              {language === 'ka'
-                ? 'ფასისა და ხარისხის საუკეთესო თანაფარდობა. აუცილებლად შევუკვეთავ კიდევ.'
-                : 'Great value for money. Modern styling and reliable functionality. 10/10.'}
-            </p>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center space-x-1">
-              <CheckCircle2 className="w-3 h-3" />
-              <span>{language === 'ka' ? 'დადასტურებული მყიდველი' : 'Verified Purchase'}</span>
-            </span>
-          </div>
-        </div>
-      </div>
+      <ProductReviewsSection 
+        product={product} 
+        currentUser={user} 
+      />
 
       {/* Related Products with Deep Links */}
       {relatedProducts.length > 0 && (

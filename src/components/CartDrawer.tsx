@@ -12,6 +12,7 @@ import {
   Check, 
   Truck 
 } from 'lucide-react';
+import { analytics } from './AdminAnalyticsDashboard';
 
 export const CartDrawer: React.FC = () => {
   const {
@@ -30,6 +31,8 @@ export const CartDrawer: React.FC = () => {
     clearPromoCode,
     formatPrice,
     setIsCheckoutOpen,
+    user,
+    isAdmin,
   } = useStore();
 
   const [inputCode, setInputCode] = useState('');
@@ -54,6 +57,13 @@ export const CartDrawer: React.FC = () => {
   };
 
   const handleProceedCheckout = () => {
+    const isCurrentAdmin = Boolean(
+      isAdmin ||
+      user?.role === 'admin' ||
+      user?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+      user?.email?.toLowerCase().trim() === 'admin@dbuy.com'
+    );
+    analytics.trackCheckoutAttempt(isCurrentAdmin);
     setIsCartOpen(false);
     setIsCheckoutOpen(true);
   };
