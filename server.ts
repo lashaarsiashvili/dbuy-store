@@ -851,6 +851,38 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Analytics tracking endpoints for store performance
+const serverAnalytics = {
+  visits: 0,
+  checkouts: 0,
+  cart_data: {} as Record<string, number>
+};
+
+app.post('/api/track', (req, res) => {
+  try {
+    const { type, productId } = req.body || {};
+    if (type === 'visit') {
+      serverAnalytics.visits += 1;
+    } else if (type === 'checkout') {
+      serverAnalytics.checkouts += 1;
+    } else if (type === 'cart' && productId) {
+      const id = String(productId);
+      serverAnalytics.cart_data[id] = (serverAnalytics.cart_data[id] || 0) + 1;
+    }
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, error: 'Tracking failed' });
+  }
+});
+
+app.get('/api/analytics', (req, res) => {
+  res.json({
+    visits: serverAnalytics.visits,
+    checkouts: serverAnalytics.checkouts,
+    cart_data: serverAnalytics.cart_data
+  });
+});
+
 // ==========================================
 // AI PRODUCT AD COPYWRITER & DESCRIPTION API
 // ==========================================

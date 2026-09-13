@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
+import { analytics } from './AdminAnalyticsDashboard';
 
-// ==========================================
-// 1. REVIEWS STORAGE SERVICE & TYPES
-// ==========================================
+// ============================================================================
+// 0. CONFIGURATION & TYPES
+// ============================================================================
 export const REVIEWS_STORAGE_KEY = 'store_product_reviews';
 
 export interface Review {
@@ -28,10 +29,10 @@ export interface AddReviewPayload {
   comment: string;
 }
 
-// Initial realistic seed reviews for top products so moderation and pages are never empty
+// Initial seed reviews so catalog products have authentic initial feedback
 const INITIAL_SEED_REVIEWS: Review[] = [
   {
-    id: 'rev_init_1',
+    id: 'rev_seed_1',
     productId: '1',
     productName: 'iPhone 16 Pro Max 256GB Desert Titanium',
     userId: 'user_george_k',
@@ -41,7 +42,7 @@ const INITIAL_SEED_REVIEWS: Review[] = [
     createdAt: new Date(Date.now() - 86400000 * 2).toISOString()
   },
   {
-    id: 'rev_init_2',
+    id: 'rev_seed_2',
     productId: '2',
     productName: 'Apple Watch Ultra 2 Titanium Case with Trail Loop',
     userId: 'user_sarah_m',
@@ -51,7 +52,7 @@ const INITIAL_SEED_REVIEWS: Review[] = [
     createdAt: new Date(Date.now() - 86400000 * 5).toISOString()
   },
   {
-    id: 'rev_init_3',
+    id: 'rev_seed_3',
     productId: '3',
     productName: 'AirPods Pro (2nd Generation) with MagSafe Case (USB-C)',
     userId: 'user_luka_b',
@@ -62,8 +63,10 @@ const INITIAL_SEED_REVIEWS: Review[] = [
   }
 ];
 
+// ============================================================================
+// 2. REVIEWS SERVICE (Local & Isolated)
+// ============================================================================
 export const reviewService = {
-  // Get all reviews
   getAllReviews: (): Review[] => {
     try {
       const stored = localStorage.getItem(REVIEWS_STORAGE_KEY);
@@ -73,56 +76,50 @@ export const reviewService = {
       }
       return JSON.parse(stored);
     } catch (err) {
-      console.error('Failed to load reviews:', err);
+      console.error('Reviews: Failed to parse reviews:', err);
       return [];
     }
   },
 
-  // Get reviews filtered by a specific product ID
   getProductReviews: (productId: string | number): Review[] => {
-    const all = reviewService.getAllReviews();
-    return all.filter((r) => String(r.productId) === String(productId));
+    const list = reviewService.getAllReviews();
+    return list.filter((r) => String(r.productId) === String(productId));
   },
 
-  // Save a new review
   addReview: ({ productId, productName, user, rating, comment }: AddReviewPayload): Review => {
-    const all = reviewService.getAllReviews();
-    const newReview: Review = {
+    const list = reviewService.getAllReviews();
+    const newEntry: Review = {
       id: 'rev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6),
       productId: String(productId),
-      productName: productName || 'Unknown Product',
-      userId: String(user.id || user.email || 'guest'),
-      userName: user.name || user.email || 'Anonymous',
+      productName: productName || 'Product',
+      userId: String(user.id || user.email || 'customer'),
+      userName: user.name || user.email || 'Customer',
       rating: Number(rating),
       comment: comment.trim(),
       createdAt: new Date().toISOString()
     };
-
-    all.unshift(newReview);
-    localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(all));
-    return newReview;
+    list.unshift(newEntry);
+    localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(list));
+    return newEntry;
   },
 
-  // Delete a review (for admin usage)
   deleteReview: (reviewId: string): Review[] => {
-    const all = reviewService.getAllReviews();
-    const updated = all.filter((r) => r.id !== reviewId);
+    const list = reviewService.getAllReviews();
+    const updated = list.filter((r) => r.id !== reviewId);
     localStorage.setItem(REVIEWS_STORAGE_KEY, JSON.stringify(updated));
     return updated;
   }
 };
 
-// ==========================================
-// 2. PRODUCT PAGE REVIEWS COMPONENT
-// ==========================================
+// ============================================================================
+// 3. PRODUCT REVIEWS SECTION COMPONENT
+// ============================================================================
+// Place this strictly BELOW your product images and description
 export interface ProductReviewsSectionProps {
   product: {
     id: string | number;
     name?: string;
     title?: string;
-    titleKa?: string;
-    rating?: number;
-    reviewsCount?: number;
     [key: string]: any;
   };
   currentUser?: {
@@ -142,24 +139,23 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
   const [comment, setComment] = useState('');
   const [hoveredStar, setHoveredStar] = useState(0);
 
-  const loadReviews = () => {
+  const fetchProductReviews = () => {
     if (product?.id) {
       setReviews(reviewService.getProductReviews(product.id));
     }
   };
 
   useEffect(() => {
-    loadReviews();
+    fetchProductReviews();
   }, [product?.id]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleReviewSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentUser) return;
-    if (!comment.trim()) return;
+    if (!currentUser || !comment.trim()) return;
 
     reviewService.addReview({
       productId: product.id,
-      productName: product.name || product.title || 'Product',
+      productName: product.name || product.title,
       user: currentUser,
       rating,
       comment
@@ -167,16 +163,15 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
 
     setComment('');
     setRating(5);
-    loadReviews();
+    fetchProductReviews();
   };
 
-  // Calculate average rating
   const avgRating = reviews.length
-    ? (reviews.reduce((acc, r) => acc + r.rating, 0) / reviews.length).toFixed(1)
+    ? (reviews.reduce((acc, cur) => acc + cur.rating, 0) / reviews.length).toFixed(1)
     : null;
 
   return (
-    <div style={{ marginTop: '40px', borderTop: '1px solid #e2e8f0', paddingTop: '32px', fontFamily: 'sans-serif' }}>
+    <div style={{ marginTop: '48px', borderTop: '1px solid #e2e8f0', paddingTop: '32px', fontFamily: 'sans-serif' }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: '#0f172a' }}>
@@ -190,15 +185,13 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
         </div>
       </div>
 
-      {/* Review Submission Form */}
       {currentUser ? (
-        <form onSubmit={handleSubmit} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '32px' }}>
+        <form onSubmit={handleReviewSubmit} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '32px' }}>
           <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#0f172a' }}>
-            Leave a Review as <strong>{currentUser.name || currentUser.email}</strong>
+            Write a Review as <strong>{currentUser.name || currentUser.email}</strong>
           </h4>
           
-          {/* Interactive Star Rating */}
-          <div style={{ marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
             <span style={{ fontSize: '14px', color: '#475569' }}>Rating:</span>
             {[1, 2, 3, 4, 5].map((star) => (
               <span
@@ -221,7 +214,7 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
           <textarea
             value={comment}
             onChange={(e) => setComment(e.target.value)}
-            placeholder="Write your honest review here..."
+            placeholder="Share details of your experience..."
             rows={3}
             required
             style={{
@@ -248,46 +241,46 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
               fontSize: '14px'
             }}
           >
-            Submit Review
+            Post Review
           </button>
         </form>
       ) : (
         <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '32px', color: '#64748b', fontSize: '14px' }}>
-          Only registered and logged-in customers can leave a review.
+          Only registered and signed-in customers can leave a review.
         </div>
       )}
 
-      {/* Reviews List */}
+      {/* Reviews Render */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
         {reviews.length > 0 ? (
-          reviews.map((r) => (
-            <div key={r.id} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #f1f5f9', background: '#ffffff' }}>
+          reviews.map((rev) => (
+            <div key={rev.id} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #f1f5f9', background: '#ffffff' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b' }}>{r.userName}</span>
+                <span style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b' }}>{rev.userName}</span>
                 <span style={{ fontSize: '12px', color: '#94a3b8' }}>
-                  {new Date(r.createdAt).toLocaleDateString()}
+                  {new Date(rev.createdAt).toLocaleDateString()}
                 </span>
               </div>
               <div style={{ color: '#f59e0b', fontSize: '14px', marginBottom: '6px' }}>
-                {'★'.repeat(r.rating)}{'☆'.repeat(5 - r.rating)}
+                {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
               </div>
               <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: 1.5 }}>
-                {r.comment}
+                {rev.comment}
               </p>
             </div>
           ))
         ) : (
-          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>No reviews yet for this product. Be the first to review!</p>
+          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>No customer reviews yet.</p>
         )}
       </div>
     </div>
   );
 };
 
-// ==========================================
-// 3. ADMIN REVIEWS MODERATION COMPONENT
-// ==========================================
-export interface AdminReviewModerationProps {
+// ============================================================================
+// 4. ADMIN DASHBOARD (Analytics + Reviews Moderation)
+// ============================================================================
+export interface UnifiedAdminPanelProps {
   products?: Array<{
     id: string | number;
     name?: string;
@@ -296,26 +289,32 @@ export interface AdminReviewModerationProps {
   }>;
 }
 
-export const AdminReviewModeration: React.FC<AdminReviewModerationProps> = ({ products = [] }) => {
+export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products = [] }) => {
+  const [stats, setStats] = useState({ todayVisits: 0, checkoutAttempts: 0, cartAdditions: {} as Record<string, number> });
   const [reviews, setReviews] = useState<Review[]>([]);
   const [selectedProduct, setSelectedProduct] = useState('ALL');
+  const [loadingStats, setLoadingStats] = useState(true);
 
-  const loadAll = () => {
+  const refreshAll = async () => {
+    setLoadingStats(true);
+    const data = await analytics.getStats();
+    setStats(data);
+    setLoadingStats(false);
     setReviews(reviewService.getAllReviews());
   };
 
   useEffect(() => {
-    loadAll();
+    refreshAll();
   }, []);
 
-  const handleDelete = (reviewId: string) => {
+  const handleDeleteReview = (reviewId: string) => {
     const isConfirmed = typeof window !== 'undefined' && window.confirm 
-      ? window.confirm('Are you sure you want to permanently delete this review?')
+      ? window.confirm('Delete this review permanently?') 
       : true;
 
     if (isConfirmed) {
       reviewService.deleteReview(reviewId);
-      loadAll();
+      setReviews(reviewService.getAllReviews());
     }
   };
 
@@ -324,67 +323,124 @@ export const AdminReviewModeration: React.FC<AdminReviewModerationProps> = ({ pr
     : reviews.filter((r) => String(r.productId) === String(selectedProduct));
 
   return (
-    <div style={{ padding: '24px', fontFamily: 'sans-serif', color: '#1e293b' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', flexWrap: 'wrap', gap: '12px' }}>
+    <div style={{ padding: '24px', fontFamily: 'sans-serif', color: '#0f172a' }}>
+      {/* Header */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700 }}>Review Moderation</h2>
+          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Store Performance & Moderation</h2>
           <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>
-            Manage and remove customer ratings and comments
+            Daily visitor metrics from Cloudflare & Customer Feedback Control
           </p>
         </div>
+        <button
+          onClick={refreshAll}
+          style={{
+            padding: '8px 16px',
+            backgroundColor: '#0f172a',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '6px',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 600
+          }}
+        >
+          {loadingStats ? 'Refreshing...' : 'Refresh'}
+        </button>
+      </div>
 
-        {/* Filter by Product */}
-        <div>
-          <select
-            value={selectedProduct}
-            onChange={(e) => setSelectedProduct(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
-          >
-            <option value="ALL">All Products ({reviews.length})</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name || p.title}
-              </option>
-            ))}
-          </select>
+      {/* KPI Cards */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '32px' }}>
+        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+            Today's Visits (All Devices)
+          </span>
+          <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.todayVisits}</div>
+        </div>
+
+        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+            Checkout Attempts
+          </span>
+          <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.checkoutAttempts}</div>
+        </div>
+
+        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+            Cart Additions Total
+          </span>
+          <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>
+            {Object.values(stats.cartAdditions).reduce((a: number, b: number) => a + (Number(b) || 0), 0)}
+          </div>
         </div>
       </div>
 
-      {/* Reviews Table */}
-      <div style={{ background: '#ffffff', borderRadius: '8px', border: '1px solid #e2e8f0', overflowX: 'auto' }}>
+      {/* Product Cart Stats Table (Safe Read-Only) */}
+      <h3 style={{ fontSize: '16px', marginBottom: '12px', fontWeight: 700 }}>Cart Additions by Product</h3>
+      <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', marginBottom: '40px' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-          <thead>
-            <tr style={{ background: '#f8fafc', color: '#475569', borderBottom: '1px solid #e2e8f0' }}>
-              <th style={{ padding: '12px 16px' }}>Date</th>
-              <th style={{ padding: '12px 16px' }}>Product</th>
-              <th style={{ padding: '12px 16px' }}>Author</th>
-              <th style={{ padding: '12px 16px' }}>Rating</th>
-              <th style={{ padding: '12px 16px' }}>Comment</th>
-              <th style={{ padding: '12px 16px', textAlign: 'right' }}>Action</th>
+          <thead style={{ background: '#f8fafc' }}>
+            <tr>
+              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Product Name</th>
+              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', textAlign: 'right' }}>Times Added</th>
+            </tr>
+          </thead>
+          <tbody>
+            {products.map((p) => (
+              <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                <td style={{ padding: '12px 16px' }}>{p.name || p.title}</td>
+                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>
+                  {stats.cartAdditions[String(p.id)] || 0}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Reviews Moderation Section */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>Moderate Customer Reviews</h3>
+        <select
+          value={selectedProduct}
+          onChange={(e) => setSelectedProduct(e.target.value)}
+          style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+        >
+          <option value="ALL">All Products ({reviews.length})</option>
+          {products.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name || p.title}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflowX: 'auto' }}>
+        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
+          <thead style={{ background: '#f8fafc' }}>
+            <tr>
+              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Date</th>
+              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Product</th>
+              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Author</th>
+              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Rating</th>
+              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Comment</th>
+              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', textAlign: 'right' }}>Action</th>
             </tr>
           </thead>
           <tbody>
             {filteredReviews.length > 0 ? (
               filteredReviews.map((r) => (
                 <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '12px 16px', color: '#64748b', whiteSpace: 'nowrap' }}>
-                    {new Date(r.createdAt).toLocaleDateString()}
-                  </td>
-                  <td style={{ padding: '12px 16px', fontWeight: 500 }}>
-                    {r.productName}
-                  </td>
+                  <td style={{ padding: '12px 16px', color: '#64748b', whiteSpace: 'nowrap' }}>{new Date(r.createdAt).toLocaleDateString()}</td>
+                  <td style={{ padding: '12px 16px', fontWeight: 500 }}>{r.productName}</td>
                   <td style={{ padding: '12px 16px' }}>{r.userName}</td>
-                  <td style={{ padding: '12px 16px', color: '#f59e0b', whiteSpace: 'nowrap' }}>
-                    {'★'.repeat(r.rating)} ({r.rating}/5)
-                  </td>
-                  <td style={{ padding: '12px 16px', color: '#475569', maxWidth: '300px' }}>
-                    {r.comment}
-                  </td>
+                  <td style={{ padding: '12px 16px', color: '#f59e0b', whiteSpace: 'nowrap' }}>{'★'.repeat(r.rating)}</td>
+                  <td style={{ padding: '12px 16px', color: '#475569', maxWidth: '300px' }}>{r.comment}</td>
                   <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                     <button
-                      onClick={() => handleDelete(r.id)}
+                      onClick={() => handleDeleteReview(r.id)}
                       style={{
-                        padding: '6px 12px',
+                        padding: '4px 10px',
                         backgroundColor: '#fee2e2',
                         color: '#dc2626',
                         border: '1px solid #fecaca',
@@ -402,7 +458,7 @@ export const AdminReviewModeration: React.FC<AdminReviewModerationProps> = ({ pr
             ) : (
               <tr>
                 <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
-                  No reviews found.
+                  No reviews to display.
                 </td>
               </tr>
             )}
@@ -412,3 +468,6 @@ export const AdminReviewModeration: React.FC<AdminReviewModerationProps> = ({ pr
     </div>
   );
 };
+
+// Backwards compatibility alias
+export const AdminReviewModeration = UnifiedAdminPanel;

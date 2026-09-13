@@ -8,7 +8,7 @@ import { handleImageError } from '../utils/imageFallback';
 import { saveImageBackupIDB } from '../utils/imageStorage';
 import { CachedImage } from './CachedImage';
 import { AdminAnalytics } from './AdminAnalytics';
-import { AdminReviewModeration, reviewService } from './ProductReviewsSection';
+import { UnifiedAdminPanel, reviewService } from './ProductReviewsSection';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
@@ -4166,10 +4166,10 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
-        {/* TAB 7: REVIEWS MODERATION */}
+        {/* TAB 7: REVIEWS MODERATION & STORE PERFORMANCE */}
         {activeTab === 'reviews' && (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-            <AdminReviewModeration products={products} />
+            <UnifiedAdminPanel products={products} />
           </div>
         )}
 
