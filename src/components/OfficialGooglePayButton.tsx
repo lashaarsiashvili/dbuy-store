@@ -152,7 +152,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
   const handlePaymentClick = async () => {
     if (disabled || loading || !paymentsClientRef.current) return;
 
-    const paymentDataRequest = Object.assign({}, baseRequest);
+    const paymentDataRequest: any = Object.assign({}, baseRequest);
     
     paymentDataRequest.allowedPaymentMethods = [cardPaymentMethod];
 
