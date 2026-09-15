@@ -616,23 +616,17 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       {/* Header with Amount & Live PayPal Security Badge */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-4 border-b border-slate-200">
         <div>
-          <div className="flex items-center space-x-2">
-            <Zap className="w-5 h-5 text-amber-500 fill-amber-500 shrink-0" />
-            <h3 className="text-sm sm:text-base font-black text-slate-900 uppercase tracking-wider">
-              {isKa ? "მყისიერი ექსპრეს გადახდა" : "DIRECT EXPRESS CHECKOUT"}
+          <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+              {isKa ? "გადახდა" : "Payment"}
             </h3>
-          </div>
           <p className="text-xs text-slate-600 font-medium mt-0.5">
             {isKa
-              ? `სულ გადასახდელი: ${formatPrice(totalAmountUSD)} (${quantity} ცალი) • ყველა მეთოდით თანხა ირიცხება PayPal ანგარიშზე`
-              : `Total: ${formatPrice(totalAmountUSD)} (${quantity} item${quantity > 1 ? "s" : ""}) • Processed directly to merchant PayPal account`}
+              ? `სულ გადასახდელი: ${formatPrice(totalAmountUSD)} (${quantity} ცალი)`
+              : `Total: ${formatPrice(totalAmountUSD)} (${quantity} item${quantity > 1 ? "s" : ""})`}
           </p>
         </div>
 
-        <div className="flex items-center space-x-1.5 self-start sm:self-center px-3 py-1.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs font-bold shadow-2xs">
-          <Lock className="w-3.5 h-3.5 text-emerald-600" />
-          <span>256-Bit SSL Live Gateway</span>
-        </div>
+        
       </div>
 
       {/* 4 COMFORTABLE, LARGE, DIRECTLY CLICKABLE PAYMENT METHOD BUTTONS */}
@@ -641,9 +635,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           <label className="block text-xs sm:text-sm font-bold text-slate-800">
             {isKa ? "აირჩიეთ გადახდის მეთოდი:" : "Select Payment Method:"}
           </label>
-          <span className="text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-            {isKa ? "ყველა მეთოდი მიბმულია PayPal-ზე" : "All routed to PayPal"}
-          </span>
+          
         </div>
 
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
@@ -679,7 +671,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             </span>
           </button>
 
-          {/* Button 2: Apple Pay */}
+          {/* Button 2: Apple Pay - Temporarily Disabled */}
+          {false && 
           <button
             type="button"
             id="payment-method-applepay"
@@ -710,6 +703,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               Apple Pay
             </span>
           </button>
+          }
 
           {/* Button 3: Google Pay (Google Brand Guidelines compliant) */}
           <button
@@ -743,7 +737,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             </span>
           </button>
 
-          {/* Button 4: Debit / Credit Card */}
+          {/* Button 4: Debit / Credit Card - Temporarily Disabled */}
+          {false && 
           <button
             type="button"
             id="payment-method-card"
@@ -772,6 +767,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               {isKa ? "საბანკო ბარათი" : "Credit Card"}
             </span>
           </button>
+          }
         </div>
       </div>
 
@@ -1165,7 +1161,25 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
 
             {/* Official Google Pay Action Button */}
             <OfficialGooglePayButton
-              onClick={handleGooglePaySubmit}
+              amount={totalAmountUSD}
+              currencyCode="GEL"
+              onSuccess={(paymentData) => {
+                const orderID = "GPAY-" + Date.now();
+                setIsProcessing(false);
+                setGatewayMessage("");
+                handleCompleteOrder("googlepay", orderID, {
+                  name: walletCustomerName,
+                  email: walletCustomerEmail,
+                  address: walletAddress,
+                  city: walletCity,
+                  zip: walletZip,
+                  country: walletCountry
+                });
+              }}
+              onError={(err) => {
+                setIsProcessing(false);
+                addToast(isKa ? "Google Pay-ით გადახდა ვერ მოხერხდა" : "Google Pay failed", "error");
+              }}
               disabled={isProcessing}
               loading={isProcessing}
               buttonColor="black"

@@ -733,7 +733,8 @@ export const CheckoutModal: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-4 gap-2.5">
-                  {/* Apple Pay Tab */}
+                  {/* Apple Pay Tab - Temporarily Disabled */}
+                  {false && (
                   <button
                     type="button"
                     onClick={() => setActivePaymentMethod("applepay")}
@@ -751,6 +752,7 @@ export const CheckoutModal: React.FC = () => {
                     </div>
                     <span className="text-[10px] font-bold tracking-tight">Apple Pay</span>
                   </button>
+                  )}
 
                   {/* Google Pay Tab (Google Brand compliant white capsule) */}
                   <button
@@ -918,7 +920,33 @@ export const CheckoutModal: React.FC = () => {
                   </div>
 
                   <OfficialGooglePayButton
-                    onClick={handleGooglePaySubmit}
+                    amount={totalAmountUSD}
+                    currencyCode="GEL"
+                    onSuccess={(paymentData) => {
+                      const orderID = "GPAY-" + Date.now();
+                      setIsProcessingPayment(false);
+                      placeOrder({
+                        customerName: formData.name.trim(),
+                        email: formData.email.trim(),
+                        address: formData.address.trim(),
+                        city: formData.city.trim(),
+                        zip: formData.zip.trim(),
+                        country: formData.country.trim(),
+                        paymentMethod: "googlepay",
+                        googlePayTransactionId: orderID,
+                      });
+                      setStep(3);
+                      addToast(
+                        language === "ka"
+                          ? "Google Pay გადახდა წარმატებით შესრულდა!"
+                          : "Google Pay processed successfully!",
+                        "success"
+                      );
+                    }}
+                    onError={(err) => {
+                      setIsProcessingPayment(false);
+                      addToast(language === "ka" ? "Google Pay გადახდა ვერ მოხერხდა" : "Google Pay failed", "error");
+                    }}
                     disabled={isProcessingPayment}
                     loading={isProcessingPayment}
                     buttonColor="black"

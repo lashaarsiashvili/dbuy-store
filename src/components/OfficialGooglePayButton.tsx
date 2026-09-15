@@ -1,9 +1,14 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { GooglePayVector } from './PaymentLogos';
+import { getPayPalV6Instance } from '../utils/paypalV6';
 
 interface OfficialGooglePayButtonProps {
-  onClick: () => void;
+  onSuccess: (paymentData: any) => void;
+  onError?: (error: any) => void;
+  onCancel?: () => void;
+  amount: number;
+  currencyCode?: string;
   disabled?: boolean;
   loading?: boolean;
   buttonColor?: 'default' | 'black' | 'white';
@@ -15,7 +20,11 @@ interface OfficialGooglePayButtonProps {
 }
 
 export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = ({
-  onClick,
+  onSuccess,
+  onError,
+  onCancel,
+  amount,
+  currencyCode = 'USD',
   disabled = false,
   loading = false,
   buttonColor = 'black',
@@ -27,85 +36,81 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
 }) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [googleClientReady, setGoogleClientReady] = useState(false);
+  const googlePaySessionRef = useRef<any>(null);
+  const paymentsClientRef = useRef<any>(null);
+  const googlePayConfigRef = useRef<any>(null);
 
   useEffect(() => {
     let isMounted = true;
     let checkInterval: any = null;
 
-    function initGooglePayButton() {
+    async function initPayPalGooglePay() {
       if (typeof window === 'undefined') return;
       const google = (window as any).google;
+      if (!google?.payments?.api?.PaymentsClient || !containerRef.current) return;
+      
+      try {
+        const sdkInstance = await getPayPalV6Instance();
+        if (!sdkInstance || typeof sdkInstance.createGooglePayOneTimePaymentSession !== 'function') {
+           throw new Error('PayPal Google Pay component missing');
+        }
 
-      if (google?.payments?.api?.PaymentsClient && containerRef.current) {
-        if (checkInterval) clearInterval(checkInterval);
-        try {
-          // Use PRODUCTION environment for live Google Pay payments
-          const paymentsClient = new google.payments.api.PaymentsClient({
-            environment: 'PRODUCTION',
+        const session = await sdkInstance.createGooglePayOneTimePaymentSession();
+        googlePaySessionRef.current = session;
+        const config = await session.getGooglePayConfig();
+        googlePayConfigRef.current = config;
+
+        paymentsClientRef.current = new google.payments.api.PaymentsClient({
+          environment: 'PRODUCTION', // Set to 'PRODUCTION' for live
+          paymentDataCallbacks: {
+            onPaymentAuthorized: (paymentData: any) => {
+              return handlePaymentAuthorized(paymentData);
+            },
+          },
+        });
+
+        const isReadyToPayRequest = {
+          apiVersion: config.apiVersion,
+          apiVersionMinor: config.apiVersionMinor,
+          allowedPaymentMethods: config.allowedPaymentMethods,
+        };
+
+        const isReadyToPay = await paymentsClientRef.current.isReadyToPay(isReadyToPayRequest);
+        if (isReadyToPay.result && isMounted && containerRef.current) {
+          containerRef.current.innerHTML = '';
+          const button = paymentsClientRef.current.createButton({
+            onClick: handlePaymentClick,
+            buttonColor: buttonColor === 'white' ? 'white' : 'black',
+            buttonType: buttonType === 'pay' ? 'pay' : 'buy',
+            buttonSizeMode: buttonSizeMode,
+            buttonLocale: 'en',
           });
-
-          // Check if ready to pay with cards
-          paymentsClient
-            .isReadyToPay({
-              apiVersion: 2,
-              apiVersionMinor: 0,
-              allowedPaymentMethods: [
-                {
-                  type: 'CARD',
-                  parameters: {
-                    allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
-                    allowedCardNetworks: ['AMEX', 'DISCOVER', 'JCB', 'MASTERCARD', 'VISA'],
-                  },
-                },
-              ],
-            })
-            .then((response: any) => {
-              if (!isMounted) return;
-              if (response && containerRef.current) {
-                // Clear any previous child
-                containerRef.current.innerHTML = '';
-                const button = paymentsClient.createButton({
-                  onClick: (e: any) => {
-                    if (e && e.preventDefault) e.preventDefault();
-                    if (!disabled && !loading) {
-                      onClick();
-                    }
-                  },
-                  buttonColor: buttonColor === 'white' ? 'white' : 'black',
-                  buttonType: buttonType === 'pay' ? 'pay' : 'buy',
-                  buttonSizeMode: buttonSizeMode,
-                  buttonLocale: 'en',
-                });
-
-                button.style.width = '100%';
-                button.style.height = `${height}px`;
-                button.style.borderRadius = '12px';
-                button.style.cursor = 'pointer';
-
-                containerRef.current.appendChild(button);
-                setGoogleClientReady(true);
-              }
-            })
-            .catch(() => {
-              // Fallback to official brand SVG button
-              if (isMounted) setGoogleClientReady(false);
-            });
-        } catch {
+          button.style.width = '100%';
+          button.style.height = `${height}px`;
+          button.style.borderRadius = '12px';
+          button.style.cursor = 'pointer';
+          containerRef.current.appendChild(button);
+          setGoogleClientReady(true);
+        } else {
           if (isMounted) setGoogleClientReady(false);
         }
+      } catch (err) {
+        console.error('PayPal Google Pay SDK Init Error:', err);
+        if (isMounted) setGoogleClientReady(false);
       }
     }
 
-    initGooglePayButton();
-    // If not ready immediately, check periodically for up to 3 seconds
-    if (!(window as any).google?.payments) {
+    if ((window as any).google?.payments) {
+       initPayPalGooglePay();
+    } else {
       let attempts = 0;
       checkInterval = setInterval(() => {
         attempts++;
         if (attempts > 30) {
           clearInterval(checkInterval);
-        } else {
-          initGooglePayButton();
+        } else if ((window as any).google?.payments) {
+          clearInterval(checkInterval);
+          initPayPalGooglePay();
         }
       }, 100);
     }
@@ -114,7 +119,62 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
       isMounted = false;
       if (checkInterval) clearInterval(checkInterval);
     };
-  }, [buttonColor, buttonType, buttonSizeMode, height, disabled, loading, onClick]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [buttonColor, buttonType, buttonSizeMode, height]); 
+
+  const handlePaymentClick = async (e: any) => {
+    if (e && e.preventDefault) e.preventDefault();
+    if (disabled || loading || !paymentsClientRef.current || !googlePayConfigRef.current) return;
+
+    const config = googlePayConfigRef.current;
+    const paymentDataRequest = {
+      apiVersion: config.apiVersion,
+      apiVersionMinor: config.apiVersionMinor,
+      allowedPaymentMethods: config.allowedPaymentMethods,
+      transactionInfo: {
+        totalPriceStatus: 'FINAL',
+        totalPrice: Number(amount).toFixed(2),
+        currencyCode: currencyCode,
+      },
+      merchantInfo: config.merchantInfo,
+      callbackIntents: ['PAYMENT_AUTHORIZATION'],
+    };
+
+    try {
+      await paymentsClientRef.current.loadPaymentData(paymentDataRequest);
+      // PaymentData is processed by onPaymentAuthorized callback
+    } catch (err: any) {
+      if (err.statusCode === 'CANCELED') {
+        console.log('User canceled Google Pay.');
+        if (onCancel) onCancel();
+      } else {
+        console.error('Google Pay checkout error:', err);
+        if (onError) onError(err);
+      }
+    }
+  };
+
+  const handlePaymentAuthorized = async (paymentData: any) => {
+    try {
+      const result = await googlePaySessionRef.current.confirmOrder({
+        paymentData: paymentData,
+        amount: Number(amount).toFixed(2),
+        currencyCode: currencyCode,
+      });
+      
+      if (result.status === 'SUCCESS' || result.status === 'APPROVED' || result.status === 'COMPLETED') {
+        onSuccess(paymentData);
+        return { transactionState: 'SUCCESS' };
+      } else {
+        if (onError) onError(new Error("PayPal transaction failed"));
+        return { transactionState: 'ERROR' };
+      }
+    } catch (err) {
+       console.error("Payment Confirmation Error", err);
+       if (onError) onError(err);
+       return { transactionState: 'ERROR' };
+    }
+  };
 
   const styleClasses = {
     black: 'bg-black text-white hover:bg-neutral-900 active:bg-neutral-800 border-black',
@@ -132,23 +192,17 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
 
   return (
     <div className={`relative w-full ${className}`}>
-      {/* Official Google Pay Button Container rendered directly by Google SDK */}
       <div
         ref={containerRef}
         className={googleClientReady && !loading ? 'w-full block' : 'hidden'}
         style={{ minHeight: `${height}px` }}
       />
-
-      {/* Fallback button adhering to Official Google Pay Brand Guidelines */}
       {(!googleClientReady || loading) && (
         <button
           type="button"
-          id="official-google-pay-button"
           onClick={(e) => {
             e.preventDefault();
-            if (!disabled && !loading) {
-              onClick();
-            }
+            handlePaymentClick(e);
           }}
           disabled={disabled || loading}
           style={{
@@ -157,7 +211,6 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
             borderRadius: '12px',
           }}
           className={`w-full relative px-5 flex items-center justify-center transition-all duration-150 border select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md active:scale-[0.99] ${styleClasses}`}
-          aria-label={`Pay with Google Pay ${formatAmount ? `total ${formatAmount}` : ''}`}
         >
           {loading ? (
             <div className="flex items-center space-x-2.5">
@@ -180,16 +233,12 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
                   {prefixText}
                 </span>
               )}
-
-              {/* Official Google Pay Vector Lockup (Brand Guidelines compliant) */}
               <div className="flex items-center shrink-0">
                 <GooglePayVector
                   className="h-6 w-auto"
                   isDark={buttonColor !== 'white'}
                 />
               </div>
-
-              {/* Optional Amount Display */}
               {formatAmount && (
                 <span className="text-neutral-400 font-mono text-xs sm:text-sm pl-1 font-normal opacity-90">
                   • {formatAmount}

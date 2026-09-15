@@ -136,7 +136,8 @@ export const initialProducts: Product[] = [
     "descriptionKa": "მაღალი ხარისხის PRO X SUPERLIGHT 2, შექმნილი საუკეთესო პროდუქტიულობისთვის და ყოველდღიური გამოყენებისთვის.",
     "rating": 5,
     "reviewsCount": 1,
-    "isDeal": true
+    "isDeal": true,
+    "views": 2
   },
   {
     "id": "prod-1788777272471",
