@@ -4,28 +4,19 @@ let v6InstancePromise: Promise<any> | null = null;
 let applePayPaymentSessionPromise: Promise<any> | null = null;
 let googlePayPaymentSessionPromise: Promise<any> | null = null;
 
-/**
- * Initializes and returns the official PayPal Web SDK v6 instance
- * configured with ['paypal-payments', 'applepay-payments', 'googlepay-payments'] and pageType: 'checkout'.
- */
 export async function getPayPalV6Instance(
   clientId: string = (typeof window !== 'undefined' && (window as any).VITE_PAYPAL_CLIENT_ID) || LIVE_PAYPAL_CLIENT_ID
 ): Promise<any> {
-  if (v6InstancePromise) {
-    return v6InstancePromise;
-  }
+  if (v6InstancePromise) return v6InstancePromise;
 
   v6InstancePromise = (async () => {
     if (typeof window === 'undefined') return null;
 
-    // Ensure PayPal Web SDK v6 script is present
     if (!(window as any).paypal?.createInstance) {
       await new Promise<void>((resolve) => {
         const existingScript = document.querySelector('script[src*="web-sdk/v6/core"]');
         if (existingScript) {
-          if ((window as any).paypal?.createInstance) {
-            return resolve();
-          }
+          if ((window as any).paypal?.createInstance) return resolve();
           existingScript.addEventListener('load', () => resolve());
           existingScript.addEventListener('error', () => resolve());
           setTimeout(resolve, 2000);
@@ -48,34 +39,38 @@ export async function getPayPalV6Instance(
           components: ['paypal-payments', 'applepay-payments', 'googlepay-payments', 'card-fields'],
           pageType: 'checkout',
         });
-        console.log('[PAYPAL-v6] Official PayPal Web SDK v6 instance active with Card Fields, Google Pay & Apple Pay:', sdkInstance);
         return sdkInstance;
       } catch (err) {
-        console.warn('[PAYPAL-v6] Full components notice, retrying with available components:', err);
         try {
-          const fallbackInstance = await (window as any).paypal.createInstance({
+          const fallbackInstance1 = await (window as any).paypal.createInstance({
             clientId,
-            components: ['paypal-payments', 'card-fields'],
+            components: ['paypal-payments', 'googlepay-payments', 'card-fields'],
             pageType: 'checkout',
           });
-          return fallbackInstance;
-        } catch (fbErr) {
+          return fallbackInstance1;
+        } catch (fbErr1) {
           try {
-            const minInstance = await (window as any).paypal.createInstance({
+            const fallbackInstance2 = await (window as any).paypal.createInstance({
               clientId,
-              components: ['paypal-payments'],
+              components: ['paypal-payments', 'card-fields'],
               pageType: 'checkout',
             });
-            return minInstance;
-          } catch (mErr) {
-            console.error('[PAYPAL-v6] createInstance fallback failed:', mErr);
+            return fallbackInstance2;
+          } catch (fbErr2) {
+            try {
+              const minInstance = await (window as any).paypal.createInstance({
+                clientId,
+                components: ['paypal-payments'],
+                pageType: 'checkout',
+              });
+              return minInstance;
+            } catch (mErr) {
+              console.error('[PAYPAL-v6] createInstance fallback failed:', mErr);
+            }
           }
         }
       }
-    } else {
-      console.warn('[PAYPAL-v6] window.paypal.createInstance not found on global scope');
     }
-
     return null;
   })();
 

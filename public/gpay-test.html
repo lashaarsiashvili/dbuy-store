@@ -1,0 +1,486 @@
+<!DOCTYPE html>
+<html lang="ka">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dbuy Store - Google Pay Checkout (TEST Mode)</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    body {
+      background-color: #f6f8fa;
+      color: #1a1a1a;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+
+    .store-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .store-badge {
+      display: inline-block;
+      background: #e9ecef;
+      color: #495057;
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 20px;
+      margin-bottom: 8px;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .store-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: #111;
+    }
+
+    .product-card {
+      background: #ffffff;
+      border-radius: 16px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.06);
+      width: 100%;
+      max-width: 820px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid #eaeaea;
+    }
+
+    @media (min-width: 768px) {
+      .product-card {
+        flex-direction: row;
+      }
+    }
+
+    .product-visual {
+      background: linear-gradient(135deg, #f0f3f6 0%, #e5e9f0 100%);
+      flex: 1;
+      min-height: 320px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 30px;
+      position: relative;
+    }
+
+    .product-icon {
+      font-size: 84px;
+      filter: drop-shadow(0 12px 16px rgba(0,0,0,0.12));
+      margin-bottom: 16px;
+    }
+
+    .product-tag {
+      background: #ffffff;
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 600;
+      color: #2b6cb0;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    .product-info {
+      flex: 1.1;
+      padding: 36px 32px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .brand-name {
+      font-size: 13px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #718096;
+      letter-spacing: 0.8px;
+      margin-bottom: 6px;
+    }
+
+    .item-title {
+      font-size: 24px;
+      font-weight: 700;
+      color: #1a202c;
+      margin-bottom: 12px;
+      line-height: 1.3;
+    }
+
+    .price-row {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin-bottom: 24px;
+      padding-bottom: 18px;
+      border-bottom: 1px solid #edf2f7;
+    }
+
+    .current-price {
+      font-size: 28px;
+      font-weight: 800;
+      color: #0f172a;
+    }
+
+    .currency {
+      font-size: 18px;
+      font-weight: 600;
+      color: #64748b;
+    }
+
+    .stock-status {
+      font-size: 13px;
+      font-weight: 600;
+      color: #16a34a;
+      background: #dcfce7;
+      padding: 3px 8px;
+      border-radius: 6px;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 13px;
+      font-weight: 600;
+      color: #4a5568;
+      margin-bottom: 8px;
+    }
+
+    .size-select {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1.5px solid #cbd5e1;
+      border-radius: 10px;
+      font-size: 15px;
+      background-color: #f8fafc;
+      color: #1e293b;
+      cursor: pointer;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .size-select:focus {
+      border-color: #0f172a;
+      background-color: #fff;
+    }
+
+    .actions-group {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 10px;
+    }
+
+    .btn-cart {
+      width: 100%;
+      background-color: #0f172a;
+      color: #ffffff;
+      border: none;
+      padding: 14px;
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 10px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+    }
+
+    .btn-cart:hover {
+      background-color: #1e293b;
+      transform: translateY(-1px);
+    }
+
+    .btn-cart:active {
+      transform: translateY(0);
+    }
+
+    .divider {
+      display: flex;
+      align-items: center;
+      text-align: center;
+      margin: 4px 0;
+    }
+
+    .divider::before,
+    .divider::after {
+      content: '';
+      flex: 1;
+      border-bottom: 1px solid #e2e8f0;
+    }
+
+    .divider span {
+      padding: 0 10px;
+      color: #94a3b8;
+      font-size: 12px;
+      font-weight: 500;
+      text-transform: uppercase;
+    }
+
+    #gpay-container {
+      width: 100%;
+      min-height: 48px;
+      display: flex;
+      justify-content: center;
+    }
+
+    .gpay-loading {
+      width: 100%;
+      height: 48px;
+      background: #000;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 500;
+    }
+
+    .security-note {
+      margin-top: 18px;
+      font-size: 12px;
+      color: #64748b;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .status-box {
+      margin-top: 20px;
+      padding: 12px 16px;
+      background: #f1f5f9;
+      border-radius: 8px;
+      font-size: 13px;
+      color: #334155;
+      line-height: 1.5;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="store-header">
+    <div class="store-badge">Google Pay Console Review Verification</div>
+    <h1 class="store-title">Dbuy Store</h1>
+  </div>
+
+  <div class="product-card">
+    <div class="product-visual">
+      <div class="product-icon">👞</div>
+      <div class="product-tag">Premium Collection</div>
+    </div>
+
+    <div class="product-info">
+      <div>
+        <div class="brand-name">Dbuy Signature</div>
+        <h2 class="item-title">Classic Leather Oxford Shoes</h2>
+        
+        <div class="price-row">
+          <span class="current-price">199.00</span>
+          <span class="currency">GEL</span>
+          <span class="stock-status">მარაგშია</span>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="shoe-size">ზომა (Size)</label>
+          <select id="shoe-size" class="size-select">
+            <option value="41">EU 41 (US 8)</option>
+            <option value="42" selected>EU 42 (US 9)</option>
+            <option value="43">EU 43 (US 10)</option>
+            <option value="44">EU 44 (US 11)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="actions-group">
+        <button class="btn-cart" onclick="handleAddToCart()">
+          <span>🛒</span> კალათაში დამატება
+        </button>
+
+        <div class="divider">
+          <span>ან სწრაფი გადახდა</span>
+        </div>
+
+        <div id="gpay-container">
+          <div class="gpay-loading">Google Pay იტვირთება...</div>
+        </div>
+      </div>
+
+      <div class="security-note">
+        🔒 უსაფრთხო და დაშიფრული გადახდა Google Pay-ით
+      </div>
+
+      <div id="status-box" class="status-box"></div>
+    </div>
+  </div>
+
+  <!-- Google Pay API ოფიციალური სკრიპტი -->
+  <script async src="https://pay.google.com/gp/p/js/pay.js" onload="initGooglePay()"></script>
+
+  <script>
+    // 1. Google Pay საბაზისო კონფიგურაცია
+    const baseRequest = {
+      apiVersion: 2,
+      apiVersionMinor: 0
+    };
+
+    // 2. მხარდაჭერილი ბარათების ქსელები და ავტორიზაციის მეთოდები
+    const allowedCardNetworks = ["AMEX", "DISCOVER", "JCB", "MASTERCARD", "VISA"];
+    const allowedCardAuthMethods = ["PAN_ONLY", "CRYPTOGRAM_3DS"];
+
+    // 3. ტესტური Gateway ტოკენიზაციის კონფიგურაცია (Google Pay-ს სავალდებულო პარამეტრი TEST რეჟიმში)
+    const tokenizationSpecification = {
+      type: 'PAYMENT_GATEWAY',
+      parameters: {
+        'gateway': 'example',
+        'gatewayMerchantId': 'exampleGatewayMerchantId'
+      }
+    };
+
+    // 4. ბარათით გადახდის მეთოდი მისამართის მოთხოვნით
+    const baseCardPaymentMethod = {
+      type: 'CARD',
+      parameters: {
+        allowedAuthMethods: allowedCardAuthMethods,
+        allowedCardNetworks: allowedCardNetworks,
+        billingAddressRequired: true,
+        billingAddressParameters: {
+          format: 'FULL',
+          phoneNumberRequired: true
+        }
+      }
+    };
+
+    const cardPaymentMethod = Object.assign(
+      { tokenizationSpecification: tokenizationSpecification },
+      baseCardPaymentMethod
+    );
+
+    let paymentsClient = null;
+
+    // Google PaymentsClient-ის ინიციალიზაცია TEST გარემოში
+    function getGooglePaymentsClient() {
+      if (paymentsClient === null) {
+        paymentsClient = new google.payments.api.PaymentsClient({
+          environment: 'TEST' // Google Pay Console სქრინშოტებისთვის გამოიყენება TEST რეჟიმი
+        });
+      }
+      return paymentsClient;
+    }
+
+    // Google Pay სკრიპტის ჩატვირთვის შემდგომი ინიციალიზაცია
+    function initGooglePay() {
+      const client = getGooglePaymentsClient();
+      
+      const isReadyToPayRequest = Object.assign({}, baseRequest);
+      isReadyToPayRequest.allowedPaymentMethods = [baseCardPaymentMethod];
+
+      client.isReadyToPay(isReadyToPayRequest)
+        .then(function(response) {
+          if (response.result) {
+            renderGooglePayButton();
+          } else {
+            showStatus('Google Pay არ არის ხელმისაწვდომი ამ მოწყობილობაზე/ბრაუზერში.');
+          }
+        })
+        .catch(function(err) {
+          console.error('isReadyToPay შეცდომა:', err);
+          showStatus('ინიციალიზაციის შეცდომა: ' + (err.statusCode || err.message || JSON.stringify(err)));
+        });
+    }
+
+    // ოფიციალური Google Pay ღილაკის შექმნა
+    function renderGooglePayButton() {
+      const client = getGooglePaymentsClient();
+      const container = document.getElementById('gpay-container');
+      container.innerHTML = '';
+
+      const button = client.createButton({
+        buttonColor: 'black',
+        buttonType: 'buy', // 'buy' ტიპი აჩვენებს "Buy with G Pay" ღილაკს
+        buttonSizeMode: 'fill',
+        buttonLocale: 'en',
+        onClick: onGooglePaymentButtonClicked
+      });
+
+      button.style.width = '100%';
+      button.style.height = '48px';
+      button.style.borderRadius = '10px';
+      container.appendChild(button);
+    }
+
+    // Google Pay ღილაკზე დაჭერის ჰენდლერი
+    function onGooglePaymentButtonClicked() {
+      const selectedSize = document.getElementById('shoe-size').value;
+
+      const paymentDataRequest = Object.assign({}, baseRequest);
+      paymentDataRequest.allowedPaymentMethods = [cardPaymentMethod];
+
+      // ქართული ბაზრის პარამეტრები (GEL და GE)
+      paymentDataRequest.transactionInfo = {
+        totalPriceStatus: 'FINAL',
+        totalPrice: '199.00',
+        currencyCode: 'GEL',
+        countryCode: 'GE'
+      };
+
+      // მერჩანტის ინფორმაცია (TEST გარემოში merchantId არ გადაიცემა OR_BIBED_06 შეცდომის თავიდან ასაცილებლად)
+      paymentDataRequest.merchantInfo = {
+        merchantName: 'Dbuy Store'
+      };
+
+      // მომხმარებლის მეილისა და მისამართის მოთხოვნა (სრულყოფილი Payment Sheet-ის გამოსატანად)
+      paymentDataRequest.emailRequired = true;
+      paymentDataRequest.shippingAddressRequired = true;
+      paymentDataRequest.shippingAddressParameters = {
+        phoneNumberRequired: true
+      };
+
+      const client = getGooglePaymentsClient();
+      client.loadPaymentData(paymentDataRequest)
+        .then(function(paymentData) {
+          console.log('Payment Data მიღებულია წარმატებით:', paymentData);
+          showStatus('✅ ტესტური გადახდა წარმატებით განხორციელდა! ტოკენი მიღებულია Google Pay-სგან.');
+        })
+        .catch(function(err) {
+          if (err.statusCode === 'CANCELED') {
+            console.log('მომხმარებელმა დახურა გადახდის ფანჯარა.');
+          } else {
+            console.error('Google Pay გადახდის შეცდომა:', err);
+            showStatus('შეცდომა: ' + (err.statusCode || err.message || JSON.stringify(err)));
+          }
+        });
+    }
+
+    function handleAddToCart() {
+      const size = document.getElementById('shoe-size').value;
+      alert('პროდუქტი (ზომა EU ' + size + ') დაემატა კალათაში!');
+    }
+
+    function showStatus(text) {
+      const box = document.getElementById('status-box');
+      box.style.display = 'block';
+      box.innerText = text;
+    }
+  </script>
+</body>
+</html>
