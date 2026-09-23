@@ -93,11 +93,29 @@ export const GooglePayVector: React.FC<{
 };
 
 /**
- * Official Web Google Pay Mark (Approved Acceptance Badge)
+ * Official Web Google Pay Mark (Approved Rounded Capsule Badge)
  * Used in payment method lists, checkout selectors, and footers.
- * Enclosed in an approved white card container with #DADCE0 border
- * and guaranteed 0.5x G-height clear space.
+ * Enclosed in an approved white pill container with #DADCE0 border,
+ * 9999px pill radius, and guaranteed 0.5x G-height clear space.
  */
+export const GooglePayCapsuleBadge: React.FC<{
+  className?: string;
+  vectorClassName?: string;
+}> = ({ className = '', vectorClassName = 'h-4 w-auto' }) => {
+  const vectorClass = vectorClassName.includes('h-') ? vectorClassName : `h-4 w-auto ${vectorClassName}`.trim();
+  return (
+    <div
+      className={`gpay-capsule-badge inline-flex items-center justify-center bg-white px-2.5 py-1 rounded-full border border-[#DADCE0] shadow-2xs shrink-0 select-none ${className}`.trim()}
+      data-gpay-badge="capsule"
+      role="img"
+      aria-label="Google Pay"
+      title="Google Pay"
+    >
+      <GooglePayVector className={vectorClass} isDark={false} />
+    </div>
+  );
+};
+
 export const GooglePayMark: React.FC<{
   className?: string;
   badgeClassName?: string;
@@ -105,7 +123,10 @@ export const GooglePayMark: React.FC<{
   const vectorClass = className.includes('h-') ? className : `h-4 w-auto ${className}`.trim();
   return (
     <div
-      className={`inline-flex items-center justify-center bg-white px-2 py-1 rounded-[6px] border border-[#DADCE0] shadow-2xs shrink-0 ${badgeClassName}`.trim()}
+      className={`gpay-capsule-badge inline-flex items-center justify-center bg-white px-2.5 py-1 rounded-full border border-[#DADCE0] shadow-2xs shrink-0 select-none ${badgeClassName}`.trim()}
+      data-gpay-badge="capsule"
+      role="img"
+      aria-label="Google Pay"
       title="Google Pay"
     >
       <GooglePayVector className={vectorClass} isDark={false} />
@@ -122,7 +143,10 @@ export const GooglePayLogo: React.FC<{
     const vectorClass = className.includes('h-') ? className : `h-4 w-auto ${className}`.trim();
     return (
       <div
-        className="inline-flex items-center justify-center bg-white px-2.5 py-1 rounded-full border border-[#DADCE0] shadow-2xs shrink-0"
+        className="gpay-capsule-badge inline-flex items-center justify-center bg-white px-2.5 py-1 rounded-full border border-[#DADCE0] shadow-2xs shrink-0 select-none"
+        data-gpay-badge="capsule"
+        role="img"
+        aria-label="Google Pay"
       >
         <GooglePayVector className={vectorClass} isDark={false} />
       </div>

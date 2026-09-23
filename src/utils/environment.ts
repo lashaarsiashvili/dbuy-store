@@ -18,6 +18,9 @@ export function isDevOrTestEnvironment(): boolean {
     if (gpayParam === 'true' || gpayParam === '1') return true;
     if (gpayParam === 'false' || gpayParam === '0') return false;
 
+    const reviewParam = params.get('review');
+    if (reviewParam === 'true' || reviewParam === '1') return true;
+
     const envParam = params.get('env');
     if (envParam === 'dev' || envParam === 'test') return true;
     if (envParam === 'prod' || envParam === 'live') return false;

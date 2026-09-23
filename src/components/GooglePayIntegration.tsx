@@ -129,16 +129,19 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
 
       buttonContainerRef.current.innerHTML = '';
       const button = paymentsClientRef.current.createButton({
-        buttonColor: 'black',
-        buttonType: 'buy', // "Buy with GPay" style button
+        buttonColor: 'default',
+        buttonType: 'buy',
+        buttonRadius: 24, // Pill-shaped rounded capsule radius
+        buttonBorderType: 'default_border',
         buttonSizeMode: 'fill',
         buttonLocale: 'en',
         onClick: handleGooglePayClick,
+        allowedPaymentMethods: [cardPaymentMethod],
       });
 
       button.style.width = '100%';
       button.style.height = '48px';
-      button.style.borderRadius = '10px';
+      button.style.borderRadius = '9999px';
       buttonContainerRef.current.appendChild(button);
     };
 
@@ -294,15 +297,17 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
               <div className="flex-grow border-t border-slate-200"></div>
             </div>
 
-            {/* Google Pay Button Container */}
-            <div className="w-full min-h-[48px] relative">
+            {/* Google Pay Button Container & Capsule Wrapper */}
+            <div className="gpay-capsule-wrapper w-full min-h-[48px] relative flex justify-center">
               <div
                 ref={buttonContainerRef}
-                className={isGPayReady ? 'w-full block' : 'hidden'}
+                data-gpay-wrapper="capsule-badge"
+                className={`gpay-button-wrapper gpay-capsule-badge w-full ${isGPayReady ? 'block' : 'hidden'}`}
+                style={{ borderRadius: '9999px' }}
               />
               {(!isGPayReady || isLoading) && (
-                <div className="w-full h-[48px] bg-slate-100 border border-slate-200 rounded-xl flex items-center justify-center text-slate-500 text-xs font-medium gap-2">
-                  <Loader2 className="w-4 h-4 animate-spin text-slate-400" />
+                <div className="gpay-capsule-badge w-full h-[48px] bg-white border border-[#DADCE0] rounded-full flex items-center justify-center text-slate-700 text-xs font-medium gap-2 shadow-2xs">
+                  <Loader2 className="w-4 h-4 animate-spin text-slate-500" />
                   <span>Loading Google Pay...</span>
                 </div>
               )}

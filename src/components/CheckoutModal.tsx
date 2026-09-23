@@ -25,6 +25,8 @@ import {
   ApplePayLogo,
   GooglePayLogo,
   GooglePayMark,
+  GooglePayCapsuleBadge,
+  GooglePayVector,
   PayPalLogo,
   VisaLogo,
   MastercardLogo,
@@ -49,6 +51,8 @@ export const CheckoutModal: React.FC = () => {
     user,
     isAdmin,
     addToast,
+    currency,
+    convertPrice,
   } = useStore();
 
   const isGPayAvailable = isGooglePayAvailable();
@@ -728,104 +732,61 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Payment Gateway Method Tabs */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    {language === "ka"
-                      ? "აირჩიეთ გადახდის მეთოდი"
-                      : "Select Payment Method"}
-                  </span>
-                  <div className="flex items-center space-x-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>256-bit SSL</span>
+              {/* Payment Gateway Method Tabs - Only shown when multiple methods are active (e.g. Google Pay review/test mode) */}
+              {isGPayAvailable && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between px-1">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      {language === "ka"
+                        ? "აირჩიეთ გადახდის მეთოდი"
+                        : "Select Payment Method"}
+                    </span>
+                    <div className="flex items-center space-x-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                      <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                      <span>256-bit SSL</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {/* Google Pay Tab (Google Brand compliant rounded capsule badge) */}
+                    <button
+                      type="button"
+                      onClick={() => setActivePaymentMethod("googlepay")}
+                      className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
+                        activePaymentMethod === "googlepay"
+                          ? "border-blue-600 bg-blue-50/40 dark:bg-blue-950/30 text-blue-900 dark:text-blue-200 shadow-sm ring-2 ring-blue-500/20"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
+                      }`}
+                    >
+                      <div className="h-5 flex items-center justify-center">
+                        <div className="gpay-capsule-badge inline-flex items-center justify-center bg-white px-2 py-0.5 rounded-full border border-[#DADCE0] shadow-2xs">
+                          <GooglePayVector className="h-3.5 w-auto" isDark={false} />
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold tracking-tight">Google Pay</span>
+                    </button>
+
+                    {/* PayPal Tab */}
+                    <button
+                      type="button"
+                      onClick={() => setActivePaymentMethod("paypal")}
+                      className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
+                        activePaymentMethod === "paypal"
+                          ? "border-[#003087] bg-[#003087] text-white shadow-md ring-2 ring-[#003087]/25"
+                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
+                      }`}
+                    >
+                      <div className="h-5 flex items-center justify-center">
+                        <PayPalLogo
+                          className="h-4 w-auto"
+                          isWhite={activePaymentMethod === "paypal"}
+                        />
+                      </div>
+                      <span className="text-[10px] font-bold tracking-tight">PayPal</span>
+                    </button>
                   </div>
                 </div>
-
-                <div className={`grid ${isGPayAvailable ? "grid-cols-2" : "grid-cols-1"} gap-2.5`}>
-                  {/* Apple Pay Tab - Temporarily Disabled */}
-                  {false && (
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("applepay")}
-                    className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
-                      activePaymentMethod === "applepay"
-                        ? "border-black bg-black text-white shadow-md ring-2 ring-black/25 dark:border-white dark:bg-white dark:text-black"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
-                    }`}
-                  >
-                    <div className="h-5 flex items-center justify-center">
-                      <ApplePayLogo
-                        className="h-4.5 w-auto"
-                        fill={activePaymentMethod === "applepay" ? "#FFFFFF" : "#000000"}
-                      />
-                    </div>
-                    <span className="text-[10px] font-bold tracking-tight">Apple Pay</span>
-                  </button>
-                  )}
-
-                  {/* Google Pay Tab (Google Brand compliant white capsule, Dev/Test Only) */}
-                  {isGPayAvailable && (
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("googlepay")}
-                    className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
-                      activePaymentMethod === "googlepay"
-                        ? "border-black bg-black text-white shadow-md ring-2 ring-black/20 dark:border-white dark:bg-white dark:text-black"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
-                    }`}
-                  >
-                    <div className="h-5 flex items-center justify-center">
-                      <GooglePayLogo
-                        className="h-4.5 w-auto"
-                        isDark={activePaymentMethod === "googlepay"}
-                      />
-                    </div>
-                    <span className="text-[10px] font-bold tracking-tight">Google Pay</span>
-                  </button>
-                  )}
-
-                  {/* PayPal Tab */}
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("paypal")}
-                    className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
-                      activePaymentMethod === "paypal"
-                        ? "border-[#003087] bg-[#003087] text-white shadow-md ring-2 ring-[#003087]/25"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
-                    }`}
-                  >
-                    <div className="h-5 flex items-center justify-center">
-                      <PayPalLogo
-                        className="h-4 w-auto"
-                        isWhite={activePaymentMethod === "paypal"}
-                      />
-                    </div>
-                    <span className="text-[10px] font-bold tracking-tight">PayPal</span>
-                  </button>
-
-                  {/* Card Tab - Temporarily Disabled */}
-                  {false && (
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("card")}
-                    className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center space-y-1.5 cursor-pointer select-none ${
-                      activePaymentMethod === "card"
-                        ? "border-blue-600 bg-blue-600 text-white shadow-md ring-2 ring-blue-600/25"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-600 shadow-xs"
-                    }`}
-                  >
-                    <div className="h-5 flex items-center justify-center space-x-1">
-                      <VisaLogo className="h-3.5 w-auto" />
-                      <MastercardLogo className="h-3.5 w-auto" />
-                    </div>
-                    <span className="text-[10px] font-bold tracking-tight">
-                      {language === "ka" ? "საბანკო ბარათი" : "Card"}
-                    </span>
-                  </button>
-                  )}
-                </div>
-              </div>
+              )}
 
               {/* Processing State Indicator */}
               {isProcessingPayment && (
@@ -933,41 +894,44 @@ export const CheckoutModal: React.FC = () => {
                     </div>
                   </div>
 
-                  <OfficialGooglePayButton
-                    amount={totalAmountUSD}
-                    currencyCode="GEL"
-                    onSuccess={(paymentData) => {
-                      const orderID = "GPAY-" + Date.now();
-                      setIsProcessingPayment(false);
-                      placeOrder({
-                        customerName: formData.name.trim(),
-                        email: formData.email.trim(),
-                        address: formData.address.trim(),
-                        city: formData.city.trim(),
-                        zip: formData.zip.trim(),
-                        country: formData.country.trim(),
-                        paymentMethod: "googlepay",
-                        googlePayTransactionId: orderID,
-                      });
-                      setStep(3);
-                      addToast(
-                        language === "ka"
-                          ? "Google Pay გადახდა წარმატებით შესრულდა!"
-                          : "Google Pay processed successfully!",
-                        "success"
-                      );
-                    }}
-                    onError={(err) => {
-                      setIsProcessingPayment(false);
-                      addToast(language === "ka" ? "Google Pay გადახდა ვერ მოხერხდა" : "Google Pay failed", "error");
-                    }}
-                    disabled={isProcessingPayment}
-                    loading={isProcessingPayment}
-                    buttonColor="black"
-                    buttonType="pay"
-                    formatAmount={formatPrice(totalAmountUSD)}
-                    height={50}
-                  />
+                  {/* Official Google Pay Button Container with Brand Guidelines Clear Space & Capsule Wrapper */}
+                  <div className="gpay-capsule-wrapper py-1.5 w-full">
+                    <OfficialGooglePayButton
+                      amount={currency === 'USD' ? totalAmountUSD : convertPrice(totalAmountUSD)}
+                      currencyCode={currency}
+                      onSuccess={(paymentData) => {
+                        const orderID = "GPAY-" + Date.now();
+                        setIsProcessingPayment(false);
+                        placeOrder({
+                          customerName: paymentData?.shippingAddress?.name || formData.name.trim() || "Google Pay Customer",
+                          email: paymentData?.email || formData.email.trim() || "customer@dbuystore.com",
+                          address: paymentData?.shippingAddress?.address1 || formData.address.trim() || "Shipping Address",
+                          city: paymentData?.shippingAddress?.locality || formData.city.trim() || "Tbilisi",
+                          zip: paymentData?.shippingAddress?.postalCode || formData.zip.trim() || "0108",
+                          country: paymentData?.shippingAddress?.countryCode || formData.country.trim() || "GE",
+                          paymentMethod: "googlepay",
+                          googlePayTransactionId: orderID,
+                        });
+                        setStep(3);
+                        addToast(
+                          language === "ka"
+                            ? "Google Pay ტესტური გადახდა წარმატებით შესრულდა!"
+                            : "Google Pay test order completed successfully!",
+                          "success"
+                        );
+                      }}
+                      onError={(err) => {
+                        setIsProcessingPayment(false);
+                        addToast(language === "ka" ? "Google Pay გადახდა ვერ მოხერხდა" : "Google Pay failed", "error");
+                      }}
+                      disabled={isProcessingPayment}
+                      loading={isProcessingPayment}
+                      buttonColor="default"
+                      buttonType="buy"
+                      formatAmount={formatPrice(totalAmountUSD)}
+                      height={50}
+                    />
+                  </div>
 
                   {/* Google Pay Verification / Screenshot Helper for Google Pay Console Approval */}
                   

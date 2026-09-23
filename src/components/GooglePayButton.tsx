@@ -103,12 +103,17 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
     containerRef.current.innerHTML = '';
 
     const button = paymentsClientRef.current.createButton({
-      buttonColor: buttonColor,
-      buttonType: buttonType,
+      buttonColor: buttonColor || 'default',
+      buttonType: buttonType || 'buy',
+      buttonRadius: 25,
+      buttonBorderType: 'default_border',
       buttonSizeMode: 'fill',
-      onClick: handlePayment
+      onClick: handlePayment,
+      allowedPaymentMethods: [baseCardPaymentMethod]
     });
 
+    button.style.width = '100%';
+    button.style.borderRadius = '9999px';
     containerRef.current.appendChild(button);
   };
 
@@ -158,10 +163,13 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
   }
 
   return (
-    <div 
-      ref={containerRef} 
-      className="w-full flex justify-center mt-3"
-      style={{ minHeight: '40px' }} // To prevent layout shift
-    />
+    <div className="gpay-capsule-wrapper w-full flex justify-center mt-3">
+      <div 
+        ref={containerRef} 
+        data-gpay-wrapper="capsule-badge"
+        className="gpay-button-wrapper gpay-capsule-badge w-full flex justify-center"
+        style={{ minHeight: '40px', borderRadius: '9999px' }}
+      />
+    </div>
   );
 };

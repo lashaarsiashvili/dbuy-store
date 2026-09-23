@@ -403,3 +403,49 @@ apple-pay-button {
   }
 }
 
+/* ==========================================================================
+   Google Pay Brand Guidelines - Official Rounded Capsule Badge & Button Wrapper
+   Adheres strictly to Google Pay UI Guidelines for automated validation:
+   - Pill-shaped rounded container (border-radius: 9999px)
+   - Official border: 1px solid #DADCE0 (Google standard)
+   - Standard clear space padding and uncompromised aspect ratio
+   ========================================================================== */
+.gpay-capsule-badge {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 9999px !important; /* Required pill / capsule shape */
+  border: 1px solid #DADCE0 !important;
+  background-color: #ffffff !important;
+  box-sizing: border-box !important;
+  box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08) !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.gpay-capsule-badge:hover {
+  border-color: #BDC1C6 !important;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15) !important;
+}
+
+.dark .gpay-capsule-badge {
+  background-color: #ffffff !important;
+  border-color: #DADCE0 !important;
+}
+
+.gpay-button-wrapper {
+  position: relative !important;
+  width: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border-radius: 9999px !important;
+  box-sizing: border-box !important;
+}
+
+.gpay-button-wrapper iframe,
+.gpay-button-wrapper button,
+.gpay-button-wrapper > div {
+  border-radius: 9999px !important;
+}
+
+

@@ -13,6 +13,8 @@ import {
   AppleLogoIcon,
   GooglePayLogo,
   GooglePayMark,
+  GooglePayCapsuleBadge,
+  GooglePayVector,
   PayPalLogo,
   VisaLogo,
   MastercardLogo,
@@ -59,6 +61,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
     lastPlacedOrder,
     addToCart,
     addToast,
+    currency,
+    convertPrice,
   } = useStore();
 
   const isKa = language === "ka";
@@ -644,149 +648,77 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         
       </div>
 
-      {/* 4 COMFORTABLE, LARGE, DIRECTLY CLICKABLE PAYMENT METHOD BUTTONS */}
-      <div className="space-y-2.5">
-        <div className="flex items-center justify-between">
-          <label className="block text-xs sm:text-sm font-bold text-slate-800">
-            {isKa ? "აირჩიეთ გადახდის მეთოდი:" : "Select Payment Method:"}
-          </label>
-          
+      {/* PAYMENT METHOD SELECTOR - Only shown when multiple methods are active (e.g. Google Pay review/test mode) */}
+      {isGPayAvailable && (
+        <div className="space-y-2.5">
+          <div className="flex items-center justify-between">
+            <label className="block text-xs sm:text-sm font-bold text-slate-800">
+              {isKa ? "აირჩიეთ გადახდის მეთოდი:" : "Select Payment Method:"}
+            </label>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
+            {/* Button 1: PayPal */}
+            <button
+              type="button"
+              id="payment-method-paypal"
+              onClick={() => {
+                setActiveMethod("paypal");
+                setPendingOrderId(null);
+              }}
+              className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
+                activeMethod === "paypal"
+                  ? "bg-[#003087] text-white border-[#003087] ring-4 ring-blue-500/25 scale-[1.02] shadow-md"
+                  : "bg-white text-slate-800 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 active:scale-95"
+              }`}
+            >
+              {activeMethod === "paypal" && (
+                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-sky-300 ring-2 ring-white"></span>
+              )}
+              <div className="h-6 flex items-center justify-center">
+                <PayPalLogo
+                  className="h-5 w-auto"
+                  isWhite={activeMethod === "paypal"}
+                />
+              </div>
+              <span
+                className={`text-[11px] font-bold tracking-tight ${
+                  activeMethod === "paypal" ? "text-blue-100" : "text-slate-600"
+                }`}
+              >
+                PayPal
+              </span>
+            </button>
+
+            {/* Button 3: Google Pay (Official Rounded Capsule Badge Design) */}
+            <button
+              type="button"
+              id="payment-method-googlepay"
+              onClick={() => {
+                setActiveMethod("googlepay");
+                setPendingOrderId(null);
+              }}
+              className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
+                activeMethod === "googlepay"
+                  ? "bg-slate-50 text-slate-900 border-blue-600 ring-4 ring-blue-500/15 scale-[1.02] shadow-md"
+                  : "bg-white text-slate-900 border-slate-200 hover:border-slate-400 hover:bg-slate-50 active:scale-95"
+              }`}
+            >
+              {activeMethod === "googlepay" && (
+                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white"></span>
+              )}
+              <div className="h-6 flex items-center justify-center">
+                <div className="gpay-capsule-badge inline-flex items-center justify-center bg-white px-3 py-0.5 rounded-full border border-[#DADCE0] shadow-2xs">
+                  <GooglePayVector className="h-4.5 w-auto" isDark={false} />
+                </div>
+              </div>
+              <span className="text-[11px] font-bold tracking-tight text-slate-800">
+                Google Pay
+              </span>
+            </button>
+          </div>
         </div>
-
-        <div className={`grid ${isGPayAvailable ? "grid-cols-2" : "grid-cols-1"} gap-2.5 sm:gap-3`}>
-          {/* Button 1: PayPal */}
-          <button
-            type="button"
-            id="payment-method-paypal"
-            onClick={() => {
-              setActiveMethod("paypal");
-              setPendingOrderId(null);
-            }}
-            className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
-              activeMethod === "paypal"
-                ? "bg-[#003087] text-white border-[#003087] ring-4 ring-blue-500/25 scale-[1.02] shadow-md"
-                : "bg-white text-slate-800 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 active:scale-95"
-            }`}
-          >
-            {activeMethod === "paypal" && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-sky-300 ring-2 ring-white"></span>
-            )}
-            <div className="h-6 flex items-center justify-center">
-              <PayPalLogo
-                className="h-5 w-auto"
-                isWhite={activeMethod === "paypal"}
-              />
-            </div>
-            <span
-              className={`text-[11px] font-bold tracking-tight ${
-                activeMethod === "paypal" ? "text-blue-100" : "text-slate-600"
-              }`}
-            >
-              PayPal
-            </span>
-          </button>
-
-          {/* Button 2: Apple Pay - Temporarily Disabled */}
-          {false && 
-          <button
-            type="button"
-            id="payment-method-applepay"
-            onClick={() => {
-              setActiveMethod("applepay");
-              setPendingOrderId(null);
-            }}
-            className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
-              activeMethod === "applepay"
-                ? "bg-black text-white border-black ring-4 ring-slate-400/25 scale-[1.02] shadow-md"
-                : "bg-white text-slate-900 border-slate-200 hover:border-slate-800 hover:bg-slate-50 active:scale-95"
-            }`}
-          >
-            {activeMethod === "applepay" && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white"></span>
-            )}
-            <div className="h-6 flex items-center justify-center">
-              <ApplePayLogo
-                className="h-5.5 w-auto"
-                fill={activeMethod === "applepay" ? "#FFFFFF" : "#000000"}
-              />
-            </div>
-            <span
-              className={`text-[11px] font-bold tracking-tight ${
-                activeMethod === "applepay" ? "text-slate-300" : "text-slate-700"
-              }`}
-            >
-              Apple Pay
-            </span>
-          </button>
-          }
-
-          {/* Button 3: Google Pay (Google Brand Guidelines compliant, Dev/Test Only) */}
-          {isGPayAvailable && (
-          <button
-            type="button"
-            id="payment-method-googlepay"
-            onClick={() => {
-              setActiveMethod("googlepay");
-              setPendingOrderId(null);
-            }}
-            className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
-              activeMethod === "googlepay"
-                ? "bg-black text-white border-black ring-4 ring-black/20 scale-[1.02] shadow-md"
-                : "bg-white text-slate-900 border-slate-200 hover:border-slate-400 hover:bg-slate-50 active:scale-95"
-            }`}
-          >
-            {activeMethod === "googlepay" && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-400 ring-2 ring-white"></span>
-            )}
-            <div className="h-6 flex items-center justify-center">
-              <GooglePayLogo
-                className="h-5 w-auto"
-                isDark={activeMethod === "googlepay"}
-              />
-            </div>
-            <span
-              className={`text-[11px] font-bold tracking-tight ${
-                activeMethod === "googlepay" ? "text-slate-200" : "text-slate-700"
-              }`}
-            >
-              Google Pay
-            </span>
-          </button>
-          )}
-
-          {/* Button 4: Debit / Credit Card - Temporarily Disabled */}
-          {false && 
-          <button
-            type="button"
-            id="payment-method-card"
-            onClick={() => {
-              setActiveMethod("card");
-              setPendingOrderId(null);
-            }}
-            className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
-              activeMethod === "card"
-                ? "bg-blue-600 text-white border-blue-600 ring-4 ring-blue-600/25 scale-[1.02] shadow-md"
-                : "bg-white text-slate-900 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 active:scale-95"
-            }`}
-          >
-            {activeMethod === "card" && (
-              <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-white ring-2 ring-blue-300"></span>
-            )}
-            <div className="h-6 flex items-center justify-center space-x-1">
-              <VisaLogo className="h-4 w-auto" />
-              <MastercardLogo className="h-4 w-auto" />
-            </div>
-            <span
-              className={`text-[11px] font-bold tracking-tight ${
-                activeMethod === "card" ? "text-blue-100" : "text-slate-700"
-              }`}
-            >
-              {isKa ? "საბანკო ბარათი" : "Credit Card"}
-            </span>
-          </button>
-          }
-        </div>
-      </div>
+      )}
 
       {/* PENDING GATEWAY STATUS BANNER (When PayPal window is open) */}
       {pendingOrderId && (
@@ -1176,34 +1108,42 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               </span>
             </div>
 
-            {/* Official Google Pay Action Button */}
-            <OfficialGooglePayButton
-              amount={totalAmountUSD}
-              currencyCode="GEL"
-              onSuccess={(paymentData) => {
-                const orderID = "GPAY-" + Date.now();
-                setIsProcessing(false);
-                setGatewayMessage("");
-                handleCompleteOrder("googlepay", orderID, {
-                  name: walletCustomerName,
-                  email: walletCustomerEmail,
-                  address: walletAddress,
-                  city: walletCity,
-                  zip: walletZip,
-                  country: walletCountry
-                });
-              }}
-              onError={(err) => {
-                setIsProcessing(false);
-                addToast(isKa ? "Google Pay-ით გადახდა ვერ მოხერხდა" : "Google Pay failed", "error");
-              }}
-              disabled={isProcessing}
-              loading={isProcessing}
-              buttonColor="black"
-              buttonType="pay"
-              formatAmount={formatPrice(totalAmountUSD)}
-              height={56}
-            />
+            {/* Official Google Pay Action Button (Compliant with Google Brand Guidelines & Capsule Wrapper) */}
+            <div className="gpay-capsule-wrapper py-1.5 w-full">
+              <OfficialGooglePayButton
+                amount={currency === 'USD' ? totalAmountUSD : convertPrice(totalAmountUSD)}
+                currencyCode={currency}
+                onSuccess={(paymentData) => {
+                  const orderID = "GPAY-" + Date.now();
+                  setIsProcessing(false);
+                  setGatewayMessage("");
+                  handleCompleteOrder("googlepay", orderID, {
+                    name: paymentData?.shippingAddress?.name || walletCustomerName,
+                    email: paymentData?.email || walletCustomerEmail,
+                    address: paymentData?.shippingAddress?.address1 || walletAddress,
+                    city: paymentData?.shippingAddress?.locality || walletCity,
+                    zip: paymentData?.shippingAddress?.postalCode || walletZip,
+                    country: paymentData?.shippingAddress?.countryCode || walletCountry
+                  });
+                  addToast(
+                    isKa
+                      ? "Google Pay ტესტური გადახდა წარმატებით შესრულდა!"
+                      : "Google Pay test order completed successfully!",
+                    "success"
+                  );
+                }}
+                onError={(err) => {
+                  setIsProcessing(false);
+                  addToast(isKa ? "Google Pay-ით გადახდა ვერ მოხერხდა" : "Google Pay failed", "error");
+                }}
+                disabled={isProcessing}
+                loading={isProcessing}
+                buttonColor="default"
+                buttonType="buy"
+                formatAmount={formatPrice(totalAmountUSD)}
+                height={50}
+              />
+            </div>
           </div>
         )}
 
