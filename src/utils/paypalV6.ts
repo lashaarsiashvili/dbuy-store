@@ -1,3 +1,5 @@
+import { isGooglePayAvailable } from './environment';
+
 export const LIVE_PAYPAL_CLIENT_ID = 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
 
 let v6InstancePromise: Promise<any> | null = null;
@@ -33,18 +35,25 @@ export async function getPayPalV6Instance(
     }
 
     if ((window as any).paypal?.createInstance) {
+      const isGPay = isGooglePayAvailable();
+      const primaryComponents = isGPay
+        ? ['paypal-payments', 'applepay-payments', 'googlepay-payments', 'card-fields']
+        : ['paypal-payments', 'card-fields'];
       try {
         const sdkInstance = await (window as any).paypal.createInstance({
           clientId,
-          components: ['paypal-payments', 'applepay-payments', 'googlepay-payments', 'card-fields'],
+          components: primaryComponents,
           pageType: 'checkout',
         });
         return sdkInstance;
       } catch (err) {
         try {
+          const fallbackComponents = isGPay
+            ? ['paypal-payments', 'googlepay-payments', 'card-fields']
+            : ['paypal-payments', 'card-fields'];
           const fallbackInstance1 = await (window as any).paypal.createInstance({
             clientId,
-            components: ['paypal-payments', 'googlepay-payments', 'card-fields'],
+            components: fallbackComponents,
             pageType: 'checkout',
           });
           return fallbackInstance1;
@@ -85,6 +94,10 @@ export async function getPayPalGooglePaySession(): Promise<{
   session: any;
   config: any;
 } | null> {
+  if (!isGooglePayAvailable()) {
+    return null;
+  }
+
   if (googlePayPaymentSessionPromise) {
     return googlePayPaymentSessionPromise;
   }
@@ -193,6 +206,11 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
 
   if (typeof window === 'undefined') {
     onError(new Error('Window not defined'));
+    return;
+  }
+
+  if (!isGooglePayAvailable()) {
+    onError(new Error('Google Pay is disabled in production. Please use PayPal.'));
     return;
   }
 

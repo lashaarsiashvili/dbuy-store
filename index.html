@@ -235,8 +235,23 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Noto+Sans+Georgian:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <!-- Google Pay API -->
-    <script src="https://pay.google.com/gp/p/js/pay.js" async></script>
+    <!-- Google Pay API (Loaded only in Development/Test environment; completely disabled in Production) -->
+    <script>
+      (function() {
+        try {
+          if (typeof window !== 'undefined') {
+            var host = (window.location.hostname || '').toLowerCase();
+            var isDev = host.includes('ais-dev') || host.includes('ais-pre') || host.includes('localhost') || host.includes('127.0.0.1') || host.indexOf('.local') !== -1 || host.indexOf('webcontainer') !== -1;
+            if (isDev) {
+              var gpayScript = document.createElement('script');
+              gpayScript.src = 'https://pay.google.com/gp/p/js/pay.js';
+              gpayScript.async = true;
+              document.head.appendChild(gpayScript);
+            }
+          }
+        } catch (e) {}
+      })();
+    </script>
     <!-- Tidio Live Chat Integration (Safe asynchronous loading) -->
     <script>
       (function() {

@@ -3,6 +3,7 @@ import { PayPalButtons, FUNDING } from "@paypal/react-paypal-js";
 import { Product } from "../types";
 import { useStore } from "../context/StoreContext";
 import { safeApiFetch } from "../utils/apiSafe";
+import { isGooglePayAvailable } from "../utils/environment";
 import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
 import { PayPalV6CardFields } from "./PayPalV6CardFields";
@@ -114,6 +115,15 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   
   // Digital Wallet support states
 
+  const isGPayAvailable = isGooglePayAvailable();
+
+  // Reset activeMethod to paypal if Google Pay is disabled in production
+  useEffect(() => {
+    if (!isGPayAvailable && activeMethod === "googlepay") {
+      setActiveMethod("paypal");
+    }
+  }, [isGPayAvailable, activeMethod]);
+
   useEffect(() => {
     // 1. Detect Native Apple Pay (Safari on macOS / iOS)
     if (typeof window !== "undefined" && (window as any).ApplePaySession) {
@@ -127,7 +137,12 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       setIsApplePaySupported(false);
     }
 
-    // 2. Detect Google Pay SDK Readiness
+    // 2. Detect Google Pay SDK Readiness (Only in Development/Test environment)
+    if (!isGPayAvailable) {
+      setIsGooglePayReady(false);
+      return;
+    }
+
     const detectGooglePay = async () => {
       try {
         if (
@@ -137,7 +152,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           const paymentsClient = new (
             window as any
           ).google.payments.api.PaymentsClient({
-            environment: "PRODUCTION",
+            environment: "TEST",
           });
           const ready = await paymentsClient.isReadyToPay({
             apiVersion: 2,
@@ -168,7 +183,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       }
     };
     detectGooglePay();
-  }, []);
+  }, [isGPayAvailable]);
 
   // Format Card Number (XXXX XXXX XXXX XXXX)
   const handleCardNumberChange = (val: string) => {
@@ -638,7 +653,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 sm:gap-3">
+        <div className={`grid ${isGPayAvailable ? "grid-cols-2" : "grid-cols-1"} gap-2.5 sm:gap-3`}>
           {/* Button 1: PayPal */}
           <button
             type="button"
@@ -705,7 +720,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           </button>
           }
 
-          {/* Button 3: Google Pay (Google Brand Guidelines compliant) */}
+          {/* Button 3: Google Pay (Google Brand Guidelines compliant, Dev/Test Only) */}
+          {isGPayAvailable && (
           <button
             type="button"
             id="payment-method-googlepay"
@@ -736,6 +752,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               Google Pay
             </span>
           </button>
+          )}
 
           {/* Button 4: Debit / Credit Card - Temporarily Disabled */}
           {false && 
@@ -1105,8 +1122,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           </div>
         )}
 
-        {/* Method 3: GOOGLE PAY 1-CLICK DIRECT PAYMENT */}
-        {activeMethod === "googlepay" && (
+        {/* Method 3: GOOGLE PAY 1-CLICK DIRECT PAYMENT (Dev/Test Only) */}
+        {isGPayAvailable && activeMethod === "googlepay" && (
           <div className="space-y-4 animate-in fade-in duration-200">
             <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
               <div className="flex items-center space-x-2">

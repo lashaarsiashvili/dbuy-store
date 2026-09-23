@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { GooglePayVector } from './PaymentLogos';
+import { isGooglePayAvailable } from '../utils/environment';
 
 interface OfficialGooglePayButtonProps {
   onSuccess: (paymentData: any) => void;
@@ -62,11 +63,13 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
   className = '',
   height = 52,
 }) => {
+  const isGPayEnabled = isGooglePayAvailable();
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [googleClientReady, setGoogleClientReady] = useState(false);
   const paymentsClientRef = useRef<any>(null);
 
   useEffect(() => {
+    if (!isGPayEnabled) return;
     let isMounted = true;
     let checkInterval: any = null;
 
@@ -196,6 +199,10 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
     order: 'Order with',
     plain: '',
   }[buttonType];
+
+  if (!isGPayEnabled) {
+    return null;
+  }
 
   return (
     <div className={`relative w-full ${className}`}>

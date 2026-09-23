@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { PayPalButtons, FUNDING } from "@paypal/react-paypal-js";
 import { ALL_COUNTRIES } from "../data/countries";
+import { isGooglePayAvailable } from "../utils/environment";
 import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
 import { PayPalV6CardFields } from "./PayPalV6CardFields";
@@ -50,11 +51,20 @@ export const CheckoutModal: React.FC = () => {
     addToast,
   } = useStore();
 
+  const isGPayAvailable = isGooglePayAvailable();
+
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [activePaymentMethod, setActivePaymentMethod] = useState<
     "paypal" | "applepay" | "googlepay" | "card"
   >("paypal");
+
+  // Reset activePaymentMethod to paypal if Google Pay is not available
+  useEffect(() => {
+    if (!isGPayAvailable && activePaymentMethod === "googlepay") {
+      setActivePaymentMethod("paypal");
+    }
+  }, [isGPayAvailable, activePaymentMethod]);
 
 
   // Digital Wallet & Card interactive states
@@ -732,7 +742,7 @@ export const CheckoutModal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-4 gap-2.5">
+                <div className={`grid ${isGPayAvailable ? "grid-cols-2" : "grid-cols-1"} gap-2.5`}>
                   {/* Apple Pay Tab - Temporarily Disabled */}
                   {false && (
                   <button
@@ -754,7 +764,8 @@ export const CheckoutModal: React.FC = () => {
                   </button>
                   )}
 
-                  {/* Google Pay Tab (Google Brand compliant white capsule) */}
+                  {/* Google Pay Tab (Google Brand compliant white capsule, Dev/Test Only) */}
+                  {isGPayAvailable && (
                   <button
                     type="button"
                     onClick={() => setActivePaymentMethod("googlepay")}
@@ -772,6 +783,7 @@ export const CheckoutModal: React.FC = () => {
                     </div>
                     <span className="text-[10px] font-bold tracking-tight">Google Pay</span>
                   </button>
+                  )}
 
                   {/* PayPal Tab */}
                   <button
@@ -792,7 +804,8 @@ export const CheckoutModal: React.FC = () => {
                     <span className="text-[10px] font-bold tracking-tight">PayPal</span>
                   </button>
 
-                  {/* Card Tab */}
+                  {/* Card Tab - Temporarily Disabled */}
+                  {false && (
                   <button
                     type="button"
                     onClick={() => setActivePaymentMethod("card")}
@@ -810,6 +823,7 @@ export const CheckoutModal: React.FC = () => {
                       {language === "ka" ? "საბანკო ბარათი" : "Card"}
                     </span>
                   </button>
+                  )}
                 </div>
               </div>
 
@@ -893,8 +907,8 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 2: GOOGLE PAY */}
-              {activePaymentMethod === "googlepay" && (
+              {/* TAB 2: GOOGLE PAY (Dev/Test Only) */}
+              {isGPayAvailable && activePaymentMethod === "googlepay" && (
                 <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
@@ -1020,8 +1034,8 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 4: CREDIT / DEBIT CARD */}
-              {activePaymentMethod === "card" && (
+              {/* TAB 4: CREDIT / DEBIT CARD - Temporarily Disabled */}
+              {false && activePaymentMethod === "card" && (
                 <div className="space-y-4">
                   {/* Official PayPal v6 Hosted Card Fields (Number, Expiry, CVV + 3DS) */}
                   <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200">

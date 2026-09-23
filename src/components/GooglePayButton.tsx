@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { isGooglePayAvailable } from '../utils/environment';
 
 declare global {
   interface Window {
@@ -49,11 +50,13 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
   buttonType = 'buy',
   buttonColor = 'black'
 }) => {
+  const isEnabled = isGooglePayAvailable();
   const containerRef = useRef<HTMLDivElement>(null);
   const [isReady, setIsReady] = useState(false);
   const paymentsClientRef = useRef<any>(null);
 
   useEffect(() => {
+    if (!isEnabled) return;
     let checkInterval: any;
 
     const initGooglePay = () => {
@@ -149,6 +152,10 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
         }
       });
   };
+
+  if (!isEnabled) {
+    return null;
+  }
 
   return (
     <div 

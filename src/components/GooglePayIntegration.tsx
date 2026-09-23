@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShoppingBag, ShieldCheck, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
+import { isGooglePayAvailable } from '../utils/environment';
 
 interface GooglePayIntegrationProps {
   productTitle?: string;
@@ -67,7 +68,13 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
     tokenizationSpecification,
   };
 
+  const isAvailable = isGooglePayAvailable();
+
   useEffect(() => {
+    if (!isAvailable) {
+      setIsLoading(false);
+      return;
+    }
     let isMounted = true;
     let pollTimer: any = null;
 
@@ -206,6 +213,10 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
       text: `Added Size ${selectedSize} to your shopping bag!`,
     });
   };
+
+  if (!isAvailable) {
+    return null;
+  }
 
   return (
     <div id="google-pay-integration-card" className="w-full max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden font-sans">
