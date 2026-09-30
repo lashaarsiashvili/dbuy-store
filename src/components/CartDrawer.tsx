@@ -13,6 +13,7 @@ import {
   Truck 
 } from 'lucide-react';
 import { analytics } from './AdminAnalyticsDashboard';
+import { ApplePayLogo, GooglePayVector, PayPalLogo, VisaLogo, MastercardLogo } from './PaymentLogos';
 
 export const CartDrawer: React.FC = () => {
   const {
@@ -320,17 +321,32 @@ export const CartDrawer: React.FC = () => {
                   <ArrowRight className="w-4 h-4" />
                 </button>
 
-                {/* Instant Express Badges */}
-                <div className="p-2.5 rounded-xl bg-slate-50 border border-slate-200/80 text-center space-y-1.5">
-                  <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                {/* Instant Express Badges with Authentic Official Brand Logos */}
+                <div className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-center space-y-2">
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                     {language === 'ka' ? 'მყისიერი ექსპრეს გადახდა' : 'Express Checkout Supported'}
                   </p>
-                  <div className="flex items-center justify-center space-x-1.5 text-xs font-black">
-                    <span className="px-2 py-0.5 rounded-md bg-black text-white text-[10px]">Pay</span>
-                    <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-800 text-[10px]">GPay</span>
-                    <span className="px-2 py-0.5 rounded-md bg-blue-700 text-white text-[10px]">PayPal</span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-blue-900 text-white text-[9px] italic">VISA</span>
-                    <span className="px-1.5 py-0.5 rounded-md bg-amber-500 text-slate-900 text-[9px]">MC</span>
+                  <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                    {/* Official Apple Pay Badge */}
+                    <div className="h-6 px-2.5 bg-black rounded-md flex items-center justify-center shadow-2xs border border-black select-none" title="Apple Pay">
+                      <ApplePayLogo className="h-3 w-auto" fill="#FFFFFF" />
+                    </div>
+                    {/* Official Google Pay Badge */}
+                    <div className="h-6 px-2 bg-white rounded-md flex items-center justify-center shadow-2xs border border-[#DADCE0] select-none" title="Google Pay">
+                      <GooglePayVector className="h-3 w-auto" isDark={false} />
+                    </div>
+                    {/* Official PayPal Badge */}
+                    <div className="h-6 px-2 bg-white rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none" title="PayPal">
+                      <PayPalLogo className="h-3 w-auto" />
+                    </div>
+                    {/* Official Visa Badge */}
+                    <div className="h-6 px-2 bg-white rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none" title="Visa">
+                      <VisaLogo className="h-2.5 w-auto" />
+                    </div>
+                    {/* Official Mastercard Badge */}
+                    <div className="h-6 px-1.5 bg-white rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none" title="Mastercard">
+                      <MastercardLogo className="h-3.5 w-auto" />
+                    </div>
                   </div>
                 </div>
 

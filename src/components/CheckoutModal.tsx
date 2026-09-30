@@ -22,6 +22,7 @@ import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
 import { PayPalV6CardFields } from "./PayPalV6CardFields";
 import { startPayPalV6ApplePayCheckout, startPayPalV6GooglePayCheckout } from "../utils/paypalV6";
 import {
+  AppleLogoIcon,
   ApplePayLogo,
   GooglePayLogo,
   GooglePayMark,
@@ -339,8 +340,8 @@ export const CheckoutModal: React.FC = () => {
           setStep(3);
           addToast(
             language === "ka"
-              ? " Apple Pay გადახდა წარმატებით შესრულდა!"
-              : " Apple Pay authorized successfully!",
+              ? "Apple Pay გადახდა წარმატებით შესრულდა!"
+              : "Apple Pay authorized successfully!",
             "success",
           );
         },
@@ -805,8 +806,8 @@ export const CheckoutModal: React.FC = () => {
                 <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center font-bold text-sm">
-                        
+                      <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center">
+                        <AppleLogoIcon className="w-4 h-4 fill-white" />
                       </div>
                       <div>
                         <h4 className="text-xs font-bold text-slate-900">

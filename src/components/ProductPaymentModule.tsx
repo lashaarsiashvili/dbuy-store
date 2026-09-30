@@ -459,7 +459,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             zip: details.payer?.zip || walletZip,
             country: details.payer?.country || walletCountry
           });
-          addToast(isKa ? " Apple Pay გადახდა წარმატებით შესრულდა!" : " Apple Pay authorized successfully!", "success");
+          addToast(isKa ? "Apple Pay გადახდა წარმატებით შესრულდა!" : "Apple Pay authorized successfully!", "success");
         },
         onError: (err) => {
           setIsProcessing(false);
@@ -469,8 +469,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           if (msg.includes("not supported") || msg.includes("not active")) {
             addToast(
               isKa
-                ? " Apple Pay არ არის მხარდაჭერილი ამ მოწყობილობაზე/ბრაუზერში. გთხოვთ გამოიყენოთ Safari ან საბანკო ბარათი / PayPal."
-                : " Apple Pay is not supported on this browser/device. Please use Safari on Apple device or Card / PayPal.",
+                ? "Apple Pay არ არის მხარდაჭერილი ამ მოწყობილობაზე/ბრაუზერში. გთხოვთ გამოიყენოთ Safari ან საბანკო ბარათი / PayPal."
+                : "Apple Pay is not supported on this browser/device. Please use Safari on Apple device or Card / PayPal.",
               "info"
             );
           } else {
@@ -974,7 +974,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               </div>
               <div className="flex items-center space-x-2">
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  {isKa ? "✓ Pay მზად არის" : "✓ Apple Pay Ready"}
+                  {isKa ? "✓ Apple Pay მზად არის" : "✓ Apple Pay Ready"}
                 </span>
                 <span className="text-sm font-black text-slate-900">
                   {formatPrice(totalAmountUSD)}
@@ -1036,7 +1036,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
               <span>
                 {isKa
-                  ? "Pay-ით გადახდა რეალურად სრულდება Touch ID / Face ID-ით და თანხა პირდაპირ ჩაირიცხება PayPal ანგარიშზე."
+                  ? "Apple Pay-ით გადახდა რეალურად სრულდება Touch ID / Face ID-ით და თანხა პირდაპირ ჩაირიცხება PayPal ანგარიშზე."
                   : "Apple Pay authorizations are verified with Touch ID / Face ID and deposited directly into merchant PayPal account."}
               </span>
             </div>
