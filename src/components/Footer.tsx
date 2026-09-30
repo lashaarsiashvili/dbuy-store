@@ -4,6 +4,7 @@ import { BrandLogo } from './BrandLogo';
 import { ShieldCheck, Mail, ArrowRight, Lock, CheckCircle2 } from 'lucide-react';
 import { GooglePayMark } from './PaymentLogos';
 import { InstagramOriginalLogo } from './InstagramLogo';
+import { ScrollReveal } from './ScrollReveal';
 
 export const Footer: React.FC = () => {
   const { t, setCurrentPage, setSelectedCategory, addToast, theme, isAdmin } = useStore();
@@ -22,50 +23,53 @@ export const Footer: React.FC = () => {
   return (
     <footer className="bg-slate-950 text-slate-400 text-xs border-t border-slate-800/80">
       {/* Newsletter Section */}
-      <div className="border-b border-slate-800/80 py-10 bg-slate-900/40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
-          <div className="space-y-1.5 text-center md:text-left max-w-lg">
-            <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
-              {t('footer.newsletter.title')}
-            </h3>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              {t('footer.newsletter.subtitle')}
-            </p>
-          </div>
-
-          <form onSubmit={handleSubscribe} className="flex w-full md:w-auto max-w-md gap-2">
-            <div className="relative flex-1">
-              <input
-                type="email"
-                required
-                value={newsletterEmail ?? ''}
-                onChange={e => setNewsletterEmail(e.target.value)}
-                placeholder={t('footer.newsletter.placeholder')}
-                className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-inner"
-              />
+      <ScrollReveal direction="up" delay={0}>
+        <div className="border-b border-slate-800/80 py-10 bg-slate-900/40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex flex-col md:flex-row items-center justify-between gap-6">
+            <div className="space-y-1.5 text-center md:text-left max-w-lg">
+              <h3 className="text-base sm:text-lg font-bold text-white tracking-tight">
+                {t('footer.newsletter.title')}
+              </h3>
+              <p className="text-xs text-slate-400 leading-relaxed">
+                {t('footer.newsletter.subtitle')}
+              </p>
             </div>
-            <button
-              type="submit"
-              className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shrink-0 flex items-center justify-center space-x-1.5 cursor-pointer shadow-md hover:shadow-blue-500/20"
-            >
-              {isSubscribed ? (
-                <>
-                  <CheckCircle2 className="w-4 h-4 text-emerald-300" />
-                  <span>{t('footer.newsletter.subscribe')}</span>
-                </>
-              ) : (
-                <>
-                  <span>{t('footer.newsletter.subscribe')}</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </>
-              )}
-            </button>
-          </form>
+
+            <form onSubmit={handleSubscribe} className="flex w-full md:w-auto max-w-md gap-2">
+              <div className="relative flex-1">
+                <input
+                  type="email"
+                  required
+                  value={newsletterEmail ?? ''}
+                  onChange={e => setNewsletterEmail(e.target.value)}
+                  placeholder={t('footer.newsletter.placeholder')}
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700/80 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all shadow-inner"
+                />
+              </div>
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold text-xs rounded-xl transition-all shrink-0 flex items-center justify-center space-x-1.5 cursor-pointer shadow-md hover:shadow-blue-500/20 active:scale-95"
+              >
+                {isSubscribed ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-300" />
+                    <span>{t('footer.newsletter.subscribe')}</span>
+                  </>
+                ) : (
+                  <>
+                    <span>{t('footer.newsletter.subscribe')}</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
         </div>
-      </div>
+      </ScrollReveal>
 
       {/* Main Links */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12">
+      <ScrollReveal direction="up" delay={80}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-8 lg:gap-12">
         {/* Brand column */}
         <div className="space-y-4 sm:col-span-2 md:col-span-1">
           <div 
@@ -254,6 +258,7 @@ export const Footer: React.FC = () => {
           </ul>
         </div>
       </div>
+    </ScrollReveal>
 
       {/* Bottom Legal & Payment Badges */}
       <div className="border-t border-slate-800/80 py-6 bg-slate-950">

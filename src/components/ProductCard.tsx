@@ -4,12 +4,14 @@ import { useStore } from '../context/StoreContext';
 import { Star, ShoppingCart, Eye, Check, Heart, Share2, Link as LinkIcon } from 'lucide-react';
 import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
+import { ScrollReveal } from './ScrollReveal';
 
 interface ProductCardProps {
   product: Product;
+  index?: number;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
   const { 
     t, 
     language, 
@@ -65,27 +67,28 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   };
 
   return (
-    <div 
-      className="product-card-root group relative flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer transform-gpu"
-      style={{ contentVisibility: 'auto', containIntrinsicSize: '0 380px' }}
-      onClick={handleCardClick}
-    >
-      {/* Badge */}
-      {product.badge && (
-        <div className="product-card-badge-container absolute top-3 left-3 z-10">
-          <span className={`product-card-badge px-2.5 py-1 text-[11px] font-bold rounded-md uppercase tracking-wider shadow-xs ${
-            product.badge === 'Best Seller'
-              ? 'bg-amber-500 text-slate-950'
-              : product.badge === 'Hot Deal'
-              ? 'bg-red-600 text-white'
-              : product.badge === 'Trending'
-              ? 'bg-blue-600 text-white'
-              : 'bg-emerald-600 text-white'
-          }`}>
-            {getBadgeLabel(product.badge)}
-          </span>
-        </div>
-      )}
+    <ScrollReveal delay={Math.min((index % 4) * 60, 240)} className="h-full">
+      <div 
+        className="product-card-root group relative flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer transform-gpu h-full"
+        style={{ contentVisibility: 'auto', containIntrinsicSize: '0 380px' }}
+        onClick={handleCardClick}
+      >
+        {/* Badge */}
+        {product.badge && (
+          <div className="product-card-badge-container absolute top-3 left-3 z-10">
+            <span className={`product-card-badge px-2.5 py-1 text-[11px] font-bold rounded-md uppercase tracking-wider shadow-xs ${
+              product.badge === 'Best Seller'
+                ? 'bg-amber-500 text-slate-950'
+                : product.badge === 'Hot Deal'
+                ? 'bg-red-600 text-white'
+                : product.badge === 'Trending'
+                ? 'bg-blue-600 text-white'
+                : 'bg-emerald-600 text-white'
+            }`}>
+              {getBadgeLabel(product.badge)}
+            </span>
+          </div>
+        )}
 
       {/* Top Right Controls: Quick Copy URL & Wishlist Button & Discount Tag */}
       <div className="product-card-controls absolute top-3 right-3 z-10 flex items-center space-x-1.5">
@@ -219,26 +222,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </span>
           </div>
 
-          {/* Add to Cart Button */}
+          {/* Add to Cart Button with Pulse & Checkmark Pop Feedback */}
           <button
             onClick={handleAddToCart}
             disabled={product.stock <= 0}
-            className={`product-card-btn w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer ${
+            className={`product-card-btn w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all duration-200 cursor-pointer active:scale-95 ${
               justAdded
-                ? 'bg-emerald-600 text-white'
+                ? 'animate-cart-pulse bg-emerald-600 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/50'
                 : product.stock > 0
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md'
+                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md hover:scale-[1.01]'
                 : 'bg-slate-100 text-slate-400 cursor-not-allowed'
             }`}
           >
             {justAdded ? (
               <>
-                <Check className="w-4 h-4" />
-                <span>{t('products.added')}</span>
+                <Check className="w-4 h-4 animate-check-pop text-white" />
+                <span className="font-extrabold tracking-wide">{t('products.added')}</span>
               </>
             ) : (
               <>
-                <ShoppingCart className="w-4 h-4" />
+                <ShoppingCart className="w-4 h-4 transition-transform group-hover:scale-110" />
                 <span>{t('products.addToCart')}</span>
               </>
             )}
@@ -246,5 +249,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
         </div>
       </div>
     </div>
-  );
+  </ScrollReveal>
+);
 };

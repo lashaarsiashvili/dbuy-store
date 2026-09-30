@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
 import { SearchX, ArrowUpDown } from 'lucide-react';
+import { ScrollReveal } from './ScrollReveal';
 
 export const ProductGrid: React.FC = () => {
   const {
@@ -67,52 +68,54 @@ export const ProductGrid: React.FC = () => {
     <section id="products" className="w-full py-8 sm:py-12 bg-slate-50/50 dark:bg-slate-950 relative min-h-[300px]">
       <div className="w-full max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header with Title & Sort Bar */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-6 sm:pb-8 border-b border-slate-200 dark:border-slate-800">
-          <div>
-            <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
-              {selectedCategory === 'deals'
-                ? t('nav.cat.deals')
-                : selectedCategory === 'tech'
-                ? t('nav.cat.tech')
-                : selectedCategory === 'fitness'
-                ? t('nav.cat.fitness')
-                : selectedCategory === 'everyday'
-                ? t('nav.cat.everyday')
-                : selectedCategory === 'accessories'
-                ? t('nav.cat.accessories')
-                : t('products.title')}
-            </h2>
-            <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
-              {t('products.showing', { count: filteredProducts.length })}
-              {searchQuery && ` for "${searchQuery}"`}
-            </p>
-          </div>
+        <ScrollReveal direction="up" delay={0}>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 pb-6 sm:pb-8 border-b border-slate-200 dark:border-slate-800">
+            <div>
+              <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
+                {selectedCategory === 'deals'
+                  ? t('nav.cat.deals')
+                  : selectedCategory === 'tech'
+                  ? t('nav.cat.tech')
+                  : selectedCategory === 'fitness'
+                  ? t('nav.cat.fitness')
+                  : selectedCategory === 'everyday'
+                  ? t('nav.cat.everyday')
+                  : selectedCategory === 'accessories'
+                  ? t('nav.cat.accessories')
+                  : t('products.title')}
+              </h2>
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
+                {t('products.showing', { count: filteredProducts.length })}
+                {searchQuery && ` for "${searchQuery}"`}
+              </p>
+            </div>
 
-          {/* Sort selector */}
-          <div className="flex items-center space-x-2 self-start sm:self-auto bg-white dark:bg-slate-900 sm:bg-transparent p-1.5 sm:p-0 rounded-xl border sm:border-0 border-slate-200 dark:border-slate-800 shadow-2xs sm:shadow-none">
-            <ArrowUpDown className="w-4 h-4 text-slate-400 shrink-0" />
-            <label htmlFor="sort-dropdown" className="text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
-              {t('products.sortBy')}
-            </label>
-            <select
-              id="sort-dropdown"
-              value={sortOption}
-              onChange={e => setSortOption(e.target.value)}
-              className="px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
-            >
-              <option value="featured">{t('products.sortFeatured')}</option>
-              <option value="price-low">{t('products.sortPriceLow')}</option>
-              <option value="price-high">{t('products.sortPriceHigh')}</option>
-              <option value="rating">{t('products.sortRating')}</option>
-            </select>
+            {/* Sort selector */}
+            <div className="flex items-center space-x-2 self-start sm:self-auto bg-white dark:bg-slate-900 sm:bg-transparent p-1.5 sm:p-0 rounded-xl border sm:border-0 border-slate-200 dark:border-slate-800 shadow-2xs sm:shadow-none">
+              <ArrowUpDown className="w-4 h-4 text-slate-400 shrink-0" />
+              <label htmlFor="sort-dropdown" className="text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
+                {t('products.sortBy')}
+              </label>
+              <select
+                id="sort-dropdown"
+                value={sortOption}
+                onChange={e => setSortOption(e.target.value)}
+                className="px-3 py-1.5 text-xs font-semibold bg-white dark:bg-slate-800 border border-slate-300 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 shadow-2xs focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+              >
+                <option value="featured">{t('products.sortFeatured')}</option>
+                <option value="price-low">{t('products.sortPriceLow')}</option>
+                <option value="price-high">{t('products.sortPriceHigh')}</option>
+                <option value="rating">{t('products.sortRating')}</option>
+              </select>
+            </div>
           </div>
-        </div>
+        </ScrollReveal>
 
         {/* Products Grid - Enforced Responsive Layout for Mobile (1 col), Tablet (2-3 cols), Desktop (4 cols) */}
         {filteredProducts.length > 0 ? (
           <div id="product-grid-container" className="product-catalog-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 pt-6 sm:pt-8 w-full min-w-full opacity-100">
-            {filteredProducts.map(product => (
-              <ProductCard key={product.id} product={product} />
+            {filteredProducts.map((product, idx) => (
+              <ProductCard key={product.id} product={product} index={idx} />
             ))}
           </div>
         ) : (

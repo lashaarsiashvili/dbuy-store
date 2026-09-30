@@ -458,20 +458,20 @@ export const ProductDetailPage: React.FC = () => {
               {/* Add to Cart Button */}
               <button
                 onClick={handleAddToCart}
-                className={`flex-1 py-3.5 px-6 rounded-2xl font-black text-sm flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg ${
+                className={`flex-1 py-3.5 px-6 rounded-2xl font-black text-sm flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg active:scale-95 duration-200 ${
                   justAdded
-                    ? 'bg-emerald-600 text-white shadow-emerald-500/20'
+                    ? 'animate-cart-pulse bg-emerald-600 text-white shadow-emerald-500/30 ring-4 ring-emerald-400/40'
                     : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25 hover:shadow-blue-500/35 hover:-translate-y-0.5'
                 }`}
               >
                 {justAdded ? (
                   <>
-                    <Check className="w-5 h-5" />
-                    <span>{language === 'ka' ? 'დაემატა კალათაში!' : 'Added to Cart!'}</span>
+                    <Check className="w-5 h-5 animate-check-pop text-white" />
+                    <span className="font-extrabold tracking-wide">{language === 'ka' ? 'დაემატა კალათაში!' : 'Added to Cart!'}</span>
                   </>
                 ) : (
                   <>
-                    <ShoppingCart className="w-5 h-5" />
+                    <ShoppingCart className="w-5 h-5 transition-transform group-hover:scale-110" />
                     <span>{t('products.addToCart')}</span>
                   </>
                 )}

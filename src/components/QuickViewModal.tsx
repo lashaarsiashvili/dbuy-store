@@ -329,22 +329,22 @@ export const QuickViewModal: React.FC = () => {
                 <button
                   onClick={handleAdd}
                   disabled={quickViewProduct.stock <= 0}
-                  className={`flex-1 py-3.5 px-6 rounded-xl font-black text-sm flex items-center justify-center space-x-2 transition-all shadow-md cursor-pointer ${
+                  className={`flex-1 py-3.5 px-6 rounded-xl font-black text-sm flex items-center justify-center space-x-2 transition-all shadow-md cursor-pointer active:scale-95 duration-200 ${
                     added
-                      ? 'bg-emerald-600 hover:bg-emerald-700 text-white'
+                      ? 'animate-cart-pulse bg-emerald-600 hover:bg-emerald-700 text-white ring-4 ring-emerald-400/40 shadow-emerald-500/30'
                       : quickViewProduct.stock > 0
-                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/25 hover:shadow-lg'
+                      ? 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/25 hover:shadow-lg hover:scale-[1.01]'
                       : 'bg-slate-200 dark:bg-slate-800 text-slate-400 cursor-not-allowed'
                   }`}
                 >
                   {added ? (
                     <>
-                      <Check className="w-5 h-5" />
-                      <span>{t('products.added')}</span>
+                      <Check className="w-5 h-5 animate-check-pop text-white" />
+                      <span className="font-extrabold tracking-wide">{t('products.added')}</span>
                     </>
                   ) : (
                     <>
-                      <ShoppingCart className="w-5 h-5" />
+                      <ShoppingCart className="w-5 h-5 transition-transform group-hover:scale-110" />
                       <span>{t('products.addToCart')}</span>
                     </>
                   )}
