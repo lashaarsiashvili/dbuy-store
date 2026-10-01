@@ -1588,7 +1588,7 @@ export const AdminDashboard: React.FC = () => {
       <div className="max-w-7xl mx-auto px-4 pt-6 space-y-6">
         
         {/* Metrics Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3.5">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
           {/* Revenue */}
           <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex items-center space-x-3.5">
             <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
@@ -1617,52 +1617,6 @@ export const AdminDashboard: React.FC = () => {
               <h3 className="text-lg font-black text-slate-900">{totalOrdersCount}</h3>
               <p className="text-[10px] text-blue-600 font-semibold mt-0.5 group-hover:underline">
                 {orders.filter(o => o.status === 'Processing').length} pending fulfillment
-              </p>
-            </div>
-          </div>
-
-          {/* Today's Visitors (LIVE) */}
-          <div 
-            onClick={() => setActiveTab('analytics')}
-            className="p-4 bg-white rounded-2xl border border-blue-200 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-blue-500 hover:shadow-md transition-all group"
-          >
-            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 shrink-0 group-hover:scale-105 transition-transform">
-              <Activity className="w-5 h-5 text-blue-600 animate-pulse" />
-            </div>
-            <div>
-              <div className="flex items-center space-x-1.5">
-                <p className="text-[10px] font-bold text-blue-600 uppercase tracking-wider">
-                  {isKa ? 'დღის ვიზიტები' : "Today's Visits"}
-                </p>
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-              </div>
-              <h3 className="text-lg font-black text-slate-900">
-                {analyticsData.totalVisitorsToday} <span className="text-xs font-normal text-slate-400">{isKa ? 'ვიზიტორი' : 'visitors'}</span>
-              </h3>
-              <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
-                🛡️ {isKa ? 'ადმინი გამორიცხულია' : 'Admin excluded'}
-              </p>
-            </div>
-          </div>
-
-          {/* Top Country */}
-          <div 
-            onClick={() => setActiveTab('analytics')}
-            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-indigo-400 hover:shadow-md transition-all"
-          >
-            <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600 shrink-0">
-              <Globe className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                {isKa ? 'ტოპ ქვეყანა' : 'Top Country'}
-              </p>
-              <h3 className="text-base font-black text-slate-900 truncate flex items-center space-x-1">
-                <span>{analyticsData.countryStatsToday[0]?.flag || '🇬🇪'}</span>
-                <span className="truncate">{analyticsData.countryStatsToday[0]?.country || 'Georgia'}</span>
-              </h3>
-              <p className="text-[10px] text-indigo-600 font-semibold mt-0.5">
-                {analyticsData.countryStatsToday[0]?.visitors || 1} hits today
               </p>
             </div>
           </div>
