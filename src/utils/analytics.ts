@@ -164,8 +164,8 @@ export function getCloudflareConfig(): CloudflareAnalyticsConfig {
   }
   return {
     webAnalyticsToken: (import.meta as any).env?.VITE_CLOUDFLARE_ANALYTICS_TOKEN || '',
-    zoneId: (import.meta as any).env?.VITE_CLOUDFLARE_ZONE_ID || '',
-    apiToken: (import.meta as any).env?.VITE_CLOUDFLARE_API_TOKEN || '',
+    zoneId: (import.meta as any).env?.VITE_CLOUDFLARE_ZONE_ID || 'c9957440e03d6b646b62dbbd0be7e958',
+    apiToken: (import.meta as any).env?.VITE_CLOUDFLARE_API_TOKEN || 'cfut_AKp3yaqzAYmQIR7olCJTowvii6pFS8nSraCXSdCT029619bb',
     isAutoSyncEnabled: true,
   };
 }

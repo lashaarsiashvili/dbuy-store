@@ -1,0 +1,908 @@
+{
+  "success": true,
+  "domain": "dbuystore.com",
+  "zoneId": "c9957440e03d6b646b62dbbd0be7e958",
+  "isConfigured": true,
+  "isCached": false,
+  "lastSyncedAt": "2026-10-01T19:26:34.957Z",
+  "timeRangeDays": 25,
+  "totalRequests": 153942,
+  "totalPageViews": 36792,
+  "totalUniques": 9734,
+  "totalBytes": 7450046333,
+  "totalThreats": 2322,
+  "dailyTrend": [
+    {
+      "date": "2026-10-01",
+      "requests": 3421,
+      "pageViews": 1196,
+      "uniques": 203,
+      "bytes": 126626758,
+      "threats": 205
+    },
+    {
+      "date": "2026-09-30",
+      "requests": 2943,
+      "pageViews": 824,
+      "uniques": 295,
+      "bytes": 227875935,
+      "threats": 19
+    },
+    {
+      "date": "2026-09-29",
+      "requests": 2165,
+      "pageViews": 875,
+      "uniques": 445,
+      "bytes": 82235870,
+      "threats": 31
+    },
+    {
+      "date": "2026-09-28",
+      "requests": 2754,
+      "pageViews": 1232,
+      "uniques": 281,
+      "bytes": 71748644,
+      "threats": 37
+    },
+    {
+      "date": "2026-09-27",
+      "requests": 4108,
+      "pageViews": 2163,
+      "uniques": 269,
+      "bytes": 93203271,
+      "threats": 118
+    },
+    {
+      "date": "2026-09-26",
+      "requests": 2443,
+      "pageViews": 1501,
+      "uniques": 301,
+      "bytes": 59205799,
+      "threats": 34
+    },
+    {
+      "date": "2026-09-25",
+      "requests": 3438,
+      "pageViews": 1774,
+      "uniques": 168,
+      "bytes": 94102194,
+      "threats": 138
+    },
+    {
+      "date": "2026-09-24",
+      "requests": 3019,
+      "pageViews": 1399,
+      "uniques": 225,
+      "bytes": 86855187,
+      "threats": 182
+    },
+    {
+      "date": "2026-09-23",
+      "requests": 2177,
+      "pageViews": 1016,
+      "uniques": 204,
+      "bytes": 114873085,
+      "threats": 31
+    },
+    {
+      "date": "2026-09-22",
+      "requests": 4507,
+      "pageViews": 2211,
+      "uniques": 555,
+      "bytes": 114827789,
+      "threats": 173
+    },
+    {
+      "date": "2026-09-21",
+      "requests": 1116,
+      "pageViews": 687,
+      "uniques": 192,
+      "bytes": 36524541,
+      "threats": 17
+    },
+    {
+      "date": "2026-09-20",
+      "requests": 2252,
+      "pageViews": 1039,
+      "uniques": 304,
+      "bytes": 89937947,
+      "threats": 22
+    },
+    {
+      "date": "2026-09-19",
+      "requests": 2742,
+      "pageViews": 620,
+      "uniques": 244,
+      "bytes": 117576411,
+      "threats": 30
+    },
+    {
+      "date": "2026-09-18",
+      "requests": 16445,
+      "pageViews": 2885,
+      "uniques": 848,
+      "bytes": 1127693740,
+      "threats": 32
+    },
+    {
+      "date": "2026-09-17",
+      "requests": 21338,
+      "pageViews": 2094,
+      "uniques": 981,
+      "bytes": 1485893885,
+      "threats": 30
+    },
+    {
+      "date": "2026-09-16",
+      "requests": 8133,
+      "pageViews": 679,
+      "uniques": 739,
+      "bytes": 527942247,
+      "threats": 9
+    },
+    {
+      "date": "2026-09-15",
+      "requests": 7276,
+      "pageViews": 1795,
+      "uniques": 681,
+      "bytes": 219703195,
+      "threats": 1034
+    },
+    {
+      "date": "2026-09-14",
+      "requests": 1986,
+      "pageViews": 696,
+      "uniques": 223,
+      "bytes": 119961363,
+      "threats": 5
+    },
+    {
+      "date": "2026-09-13",
+      "requests": 5741,
+      "pageViews": 2714,
+      "uniques": 211,
+      "bytes": 248694114,
+      "threats": 22
+    },
+    {
+      "date": "2026-09-12",
+      "requests": 13342,
+      "pageViews": 1886,
+      "uniques": 424,
+      "bytes": 778339026,
+      "threats": 10
+    },
+    {
+      "date": "2026-09-11",
+      "requests": 10518,
+      "pageViews": 1281,
+      "uniques": 644,
+      "bytes": 779045772,
+      "threats": 9
+    },
+    {
+      "date": "2026-09-10",
+      "requests": 11962,
+      "pageViews": 1208,
+      "uniques": 646,
+      "bytes": 262575388,
+      "threats": 19
+    },
+    {
+      "date": "2026-09-09",
+      "requests": 10221,
+      "pageViews": 1502,
+      "uniques": 255,
+      "bytes": 276521614,
+      "threats": 52
+    },
+    {
+      "date": "2026-09-08",
+      "requests": 7974,
+      "pageViews": 2854,
+      "uniques": 296,
+      "bytes": 275936069,
+      "threats": 52
+    },
+    {
+      "date": "2026-09-07",
+      "requests": 1921,
+      "pageViews": 661,
+      "uniques": 100,
+      "bytes": 32146489,
+      "threats": 11
+    }
+  ],
+  "monthlyTrend": [
+    {
+      "month": "2026-10",
+      "label": "Oct 2026",
+      "requests": 3421,
+      "pageViews": 1196,
+      "uniques": 203,
+      "bytes": 126626758
+    },
+    {
+      "month": "2026-09",
+      "label": "Sep 2026",
+      "requests": 150521,
+      "pageViews": 35596,
+      "uniques": 9531,
+      "bytes": 7323419575
+    }
+  ],
+  "countryStats": [
+    {
+      "country": "India",
+      "countryCode": "IN",
+      "flag": "🇮🇳",
+      "requests": 48331,
+      "percentage": 29.6
+    },
+    {
+      "country": "United States",
+      "countryCode": "US",
+      "flag": "🇺🇸",
+      "requests": 34565,
+      "percentage": 21.1
+    },
+    {
+      "country": "Germany",
+      "countryCode": "DE",
+      "flag": "🇩🇪",
+      "requests": 30070,
+      "percentage": 18.4
+    },
+    {
+      "country": "Georgia",
+      "countryCode": "GE",
+      "flag": "🇬🇪",
+      "requests": 10714,
+      "percentage": 6.6
+    },
+    {
+      "country": "Netherlands",
+      "countryCode": "NL",
+      "flag": "🇳🇱",
+      "requests": 8278,
+      "percentage": 5.1
+    },
+    {
+      "country": "South Korea",
+      "countryCode": "KR",
+      "flag": "🇰🇷",
+      "requests": 3964,
+      "percentage": 2.4
+    },
+    {
+      "country": "Belgium",
+      "countryCode": "BE",
+      "flag": "🇧🇪",
+      "requests": 2994,
+      "percentage": 1.8
+    },
+    {
+      "country": "China",
+      "countryCode": "CN",
+      "flag": "🇨🇳",
+      "requests": 2465,
+      "percentage": 1.5
+    },
+    {
+      "country": "Japan",
+      "countryCode": "JP",
+      "flag": "🇯🇵",
+      "requests": 2391,
+      "percentage": 1.5
+    },
+    {
+      "country": "Taiwan",
+      "countryCode": "TW",
+      "flag": "🇹🇼",
+      "requests": 2265,
+      "percentage": 1.4
+    },
+    {
+      "country": "United Kingdom",
+      "countryCode": "GB",
+      "flag": "🇬🇧",
+      "requests": 2194,
+      "percentage": 1.3
+    },
+    {
+      "country": "Singapore",
+      "countryCode": "SG",
+      "flag": "🇸🇬",
+      "requests": 1813,
+      "percentage": 1.1
+    },
+    {
+      "country": "Hong Kong",
+      "countryCode": "HK",
+      "flag": "🇭🇰",
+      "requests": 1775,
+      "percentage": 1.1
+    },
+    {
+      "country": "Italy",
+      "countryCode": "IT",
+      "flag": "🇮🇹",
+      "requests": 1632,
+      "percentage": 1
+    },
+    {
+      "country": "Sweden",
+      "countryCode": "SE",
+      "flag": "🇸🇪",
+      "requests": 1111,
+      "percentage": 0.7
+    },
+    {
+      "country": "Australia",
+      "countryCode": "AU",
+      "flag": "🇦🇺",
+      "requests": 1086,
+      "percentage": 0.7
+    },
+    {
+      "country": "Canada",
+      "countryCode": "CA",
+      "flag": "🇨🇦",
+      "requests": 884,
+      "percentage": 0.5
+    },
+    {
+      "country": "France",
+      "countryCode": "FR",
+      "flag": "🇫🇷",
+      "requests": 851,
+      "percentage": 0.5
+    },
+    {
+      "country": "United Arab Emirates",
+      "countryCode": "AE",
+      "flag": "🇦🇪",
+      "requests": 704,
+      "percentage": 0.4
+    },
+    {
+      "country": "Spain",
+      "countryCode": "ES",
+      "flag": "🇪🇸",
+      "requests": 604,
+      "percentage": 0.4
+    },
+    {
+      "country": "Saudi Arabia",
+      "countryCode": "SA",
+      "flag": "🇸🇦",
+      "requests": 595,
+      "percentage": 0.4
+    },
+    {
+      "country": "Cloudflare Network",
+      "countryCode": "XX",
+      "flag": "🌐",
+      "requests": 539,
+      "percentage": 0.3
+    },
+    {
+      "country": "Indonesia",
+      "countryCode": "ID",
+      "flag": "🇮🇩",
+      "requests": 519,
+      "percentage": 0.3
+    },
+    {
+      "country": "Lithuania",
+      "countryCode": "LT",
+      "flag": "🇱🇹",
+      "requests": 482,
+      "percentage": 0.3
+    },
+    {
+      "country": "Ireland",
+      "countryCode": "IE",
+      "flag": "🇮🇪",
+      "requests": 341,
+      "percentage": 0.2
+    },
+    {
+      "country": "Poland",
+      "countryCode": "PL",
+      "flag": "🇵🇱",
+      "requests": 329,
+      "percentage": 0.2
+    },
+    {
+      "country": "Israel",
+      "countryCode": "IL",
+      "flag": "🇮🇱",
+      "requests": 306,
+      "percentage": 0.2
+    },
+    {
+      "country": "Switzerland",
+      "countryCode": "CH",
+      "flag": "🇨🇭",
+      "requests": 284,
+      "percentage": 0.2
+    },
+    {
+      "country": "Romania",
+      "countryCode": "RO",
+      "flag": "🇷🇴",
+      "requests": 240,
+      "percentage": 0.1
+    },
+    {
+      "country": "Nepal",
+      "countryCode": "NP",
+      "flag": "🇳🇵",
+      "requests": 216,
+      "percentage": 0.1
+    },
+    {
+      "country": "Thailand",
+      "countryCode": "TH",
+      "flag": "🇹🇭",
+      "requests": 170,
+      "percentage": 0.1
+    },
+    {
+      "country": "New Zealand",
+      "countryCode": "NZ",
+      "flag": "🇳🇿",
+      "requests": 162,
+      "percentage": 0.1
+    },
+    {
+      "country": "Brazil",
+      "countryCode": "BR",
+      "flag": "🇧🇷",
+      "requests": 154,
+      "percentage": 0.1
+    },
+    {
+      "country": "Luxembourg",
+      "countryCode": "LU",
+      "flag": "🇱🇺",
+      "requests": 45,
+      "percentage": 0
+    },
+    {
+      "country": "Finland",
+      "countryCode": "FI",
+      "flag": "🇫🇮",
+      "requests": 41,
+      "percentage": 0
+    },
+    {
+      "country": "Turkey",
+      "countryCode": "TR",
+      "flag": "🇹🇷",
+      "requests": 31,
+      "percentage": 0
+    },
+    {
+      "country": "Slovenia",
+      "countryCode": "SI",
+      "flag": "🇸🇮",
+      "requests": 31,
+      "percentage": 0
+    },
+    {
+      "country": "Portugal",
+      "countryCode": "PT",
+      "flag": "🇵🇹",
+      "requests": 26,
+      "percentage": 0
+    },
+    {
+      "country": "Bangladesh",
+      "countryCode": "BD",
+      "flag": "🇧🇩",
+      "requests": 26,
+      "percentage": 0
+    },
+    {
+      "country": "Ukraine",
+      "countryCode": "UA",
+      "flag": "🇺🇦",
+      "requests": 25,
+      "percentage": 0
+    },
+    {
+      "country": "Argentina",
+      "countryCode": "AR",
+      "flag": "🇦🇷",
+      "requests": 17,
+      "percentage": 0
+    },
+    {
+      "country": "Mexico",
+      "countryCode": "MX",
+      "flag": "🇲🇽",
+      "requests": 17,
+      "percentage": 0
+    },
+    {
+      "country": "Pakistan",
+      "countryCode": "PK",
+      "flag": "🇵🇰",
+      "requests": 16,
+      "percentage": 0
+    },
+    {
+      "country": "Venezuela",
+      "countryCode": "VE",
+      "flag": "🇻🇪",
+      "requests": 14,
+      "percentage": 0
+    },
+    {
+      "country": "Vietnam",
+      "countryCode": "VN",
+      "flag": "🇻🇳",
+      "requests": 13,
+      "percentage": 0
+    },
+    {
+      "country": "South Africa",
+      "countryCode": "ZA",
+      "flag": "🇿🇦",
+      "requests": 13,
+      "percentage": 0
+    },
+    {
+      "country": "Denmark",
+      "countryCode": "DK",
+      "flag": "🇩🇰",
+      "requests": 11,
+      "percentage": 0
+    },
+    {
+      "country": "Russia",
+      "countryCode": "RU",
+      "flag": "🇷🇺",
+      "requests": 11,
+      "percentage": 0
+    },
+    {
+      "country": "Austria",
+      "countryCode": "AT",
+      "flag": "🇦🇹",
+      "requests": 10,
+      "percentage": 0
+    },
+    {
+      "country": "Colombia",
+      "countryCode": "CO",
+      "flag": "🇨🇴",
+      "requests": 10,
+      "percentage": 0
+    },
+    {
+      "country": "MA",
+      "countryCode": "MA",
+      "flag": "🌐",
+      "requests": 10,
+      "percentage": 0
+    },
+    {
+      "country": "PH",
+      "countryCode": "PH",
+      "flag": "🌐",
+      "requests": 8,
+      "percentage": 0
+    },
+    {
+      "country": "IQ",
+      "countryCode": "IQ",
+      "flag": "🌐",
+      "requests": 7,
+      "percentage": 0
+    },
+    {
+      "country": "MD",
+      "countryCode": "MD",
+      "flag": "🌐",
+      "requests": 7,
+      "percentage": 0
+    },
+    {
+      "country": "Czechia",
+      "countryCode": "CZ",
+      "flag": "🇨🇿",
+      "requests": 6,
+      "percentage": 0
+    },
+    {
+      "country": "IR",
+      "countryCode": "IR",
+      "flag": "🌐",
+      "requests": 6,
+      "percentage": 0
+    },
+    {
+      "country": "DZ",
+      "countryCode": "DZ",
+      "flag": "🌐",
+      "requests": 6,
+      "percentage": 0
+    },
+    {
+      "country": "MY",
+      "countryCode": "MY",
+      "flag": "🌐",
+      "requests": 6,
+      "percentage": 0
+    },
+    {
+      "country": "PY",
+      "countryCode": "PY",
+      "flag": "🌐",
+      "requests": 6,
+      "percentage": 0
+    },
+    {
+      "country": "CL",
+      "countryCode": "CL",
+      "flag": "🌐",
+      "requests": 5,
+      "percentage": 0
+    },
+    {
+      "country": "BO",
+      "countryCode": "BO",
+      "flag": "🌐",
+      "requests": 5,
+      "percentage": 0
+    },
+    {
+      "country": "EC",
+      "countryCode": "EC",
+      "flag": "🌐",
+      "requests": 5,
+      "percentage": 0
+    },
+    {
+      "country": "NG",
+      "countryCode": "NG",
+      "flag": "🌐",
+      "requests": 5,
+      "percentage": 0
+    },
+    {
+      "country": "Greece",
+      "countryCode": "GR",
+      "flag": "🇬🇷",
+      "requests": 4,
+      "percentage": 0
+    },
+    {
+      "country": "UZ",
+      "countryCode": "UZ",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "JO",
+      "countryCode": "JO",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "TN",
+      "countryCode": "TN",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "KE",
+      "countryCode": "KE",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "SC",
+      "countryCode": "SC",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "DO",
+      "countryCode": "DO",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "UY",
+      "countryCode": "UY",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "Hungary",
+      "countryCode": "HU",
+      "flag": "🇭🇺",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "T1",
+      "countryCode": "T1",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "LV",
+      "countryCode": "LV",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "EG",
+      "countryCode": "EG",
+      "flag": "🌐",
+      "requests": 3,
+      "percentage": 0
+    },
+    {
+      "country": "PA",
+      "countryCode": "PA",
+      "flag": "🌐",
+      "requests": 2,
+      "percentage": 0
+    },
+    {
+      "country": "TG",
+      "countryCode": "TG",
+      "flag": "🌐",
+      "requests": 2,
+      "percentage": 0
+    },
+    {
+      "country": "BH",
+      "countryCode": "BH",
+      "flag": "🌐",
+      "requests": 2,
+      "percentage": 0
+    },
+    {
+      "country": "GH",
+      "countryCode": "GH",
+      "flag": "🌐",
+      "requests": 2,
+      "percentage": 0
+    },
+    {
+      "country": "Azerbaijan",
+      "countryCode": "AZ",
+      "flag": "🇦🇿",
+      "requests": 2,
+      "percentage": 0
+    },
+    {
+      "country": "OM",
+      "countryCode": "OM",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "ET",
+      "countryCode": "ET",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "NI",
+      "countryCode": "NI",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "BA",
+      "countryCode": "BA",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "PE",
+      "countryCode": "PE",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "SY",
+      "countryCode": "SY",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "JM",
+      "countryCode": "JM",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "KH",
+      "countryCode": "KH",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "Kazakhstan",
+      "countryCode": "KZ",
+      "flag": "🇰🇿",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "QA",
+      "countryCode": "QA",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "CI",
+      "countryCode": "CI",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "Armenia",
+      "countryCode": "AM",
+      "flag": "🇦🇲",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "PS",
+      "countryCode": "PS",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "HN",
+      "countryCode": "HN",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "CR",
+      "countryCode": "CR",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    },
+    {
+      "country": "RS",
+      "countryCode": "RS",
+      "flag": "🌐",
+      "requests": 1,
+      "percentage": 0
+    }
+  ]
+}
