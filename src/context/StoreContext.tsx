@@ -1181,19 +1181,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         return;
       }
 
-      const res = await fetch(`/api/store/products/${productId}/view`, {
+      // Optimistically increment views in local state
+      setProducts(prev =>
+        prev.map(p => (p.id === productId ? { ...p, views: (Number(p.views) || 0) + 1 } : p))
+      );
+
+      // Notify Node server / local API
+      fetch(`/api/store/products/${productId}/view`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-      });
-
-      if (res.ok) {
-        const json = await res.json();
-        if (json && json.success && typeof json.views === 'number') {
-          setProducts(prev =>
-            prev.map(p => (p.id === productId ? { ...p, views: json.views } : p))
-          );
+      }).then(async res => {
+        if (res.ok) {
+          const json = await res.json();
+          if (json && json.success && typeof json.views === 'number') {
+            setProducts(prev =>
+              prev.map(p => (p.id === productId ? { ...p, views: json.views } : p))
+            );
+          }
         }
-      }
+      }).catch(() => {});
+
+      // Notify Cloudflare /track endpoint
+      fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'product_view', productId }),
+      }).catch(() => {});
     } catch (err) {
       console.warn('Failed to increment product views:', err);
     }
@@ -2549,8 +2562,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const analyticsData = useMemo(() => {
-    return computeAnalytics(visitorLogs);
-  }, [visitorLogs]);
+    return computeAnalytics(visitorLogs, products);
+  }, [visitorLogs, products]);
 
   // Currency Converter Helpers
   const convertPrice = (usd: number): number => {

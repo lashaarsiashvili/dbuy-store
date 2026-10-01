@@ -854,15 +854,35 @@ app.get('/api/health', (req, res) => {
 // Analytics tracking endpoints for store performance
 const serverAnalytics = {
   visits: 0,
+  dailyVisits: {} as Record<string, number>,
+  countryVisits: {} as Record<string, number>,
+  productViews: {} as Record<string, number>,
   checkouts: 0,
-  cart_data: {} as Record<string, number>
+  cart_data: {} as Record<string, number>,
 };
 
 app.post('/api/track', (req, res) => {
   try {
-    const { type, productId } = req.body || {};
+    const { type, productId, country: bodyCountry, countryCode: bodyCode } = req.body || {};
+    const today = new Date().toISOString().split('T')[0];
+
     if (type === 'visit') {
+      const headerCountry = (req.headers['cf-ipcountry'] as string) || bodyCode || 'GE';
+      const country = bodyCountry || (headerCountry === 'GE' ? 'Georgia' : headerCountry);
+
       serverAnalytics.visits += 1;
+      serverAnalytics.dailyVisits[today] = (serverAnalytics.dailyVisits[today] || 0) + 1;
+      serverAnalytics.countryVisits[country] = (serverAnalytics.countryVisits[country] || 0) + 1;
+    } else if (type === 'product_view' && productId) {
+      const pid = String(productId);
+      serverAnalytics.productViews[pid] = (serverAnalytics.productViews[pid] || 0) + 1;
+
+      // Also ensure product in database has views updated
+      const product = storeDb.products.find(p => p.id === pid);
+      if (product) {
+        product.views = (product.views || 0) + 1;
+        saveStoreDatabase();
+      }
     } else if (type === 'checkout') {
       serverAnalytics.checkouts += 1;
     } else if (type === 'cart' && productId) {
@@ -876,12 +896,124 @@ app.post('/api/track', (req, res) => {
 });
 
 app.get('/api/analytics', (req, res) => {
-  res.json({
-    visits: serverAnalytics.visits,
-    checkouts: serverAnalytics.checkouts,
-    cart_data: serverAnalytics.cart_data
-  });
+  try {
+    const today = new Date().toISOString().split('T')[0];
+    const visitsToday = serverAnalytics.dailyVisits[today] || 0;
+    
+    // Sort most viewed products directly from storeDb
+    const mostViewedProducts = (storeDb.products || [])
+      .map(p => ({
+        id: p.id,
+        title: p.title || p.titleKa || 'Product',
+        titleKa: p.titleKa,
+        category: p.category,
+        price: p.price,
+        image: p.image,
+        views: p.views || serverAnalytics.productViews[p.id] || 0,
+      }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 15);
+
+    res.json({
+      success: true,
+      visitsToday,
+      visitsTotal: serverAnalytics.visits,
+      dailyVisits: serverAnalytics.dailyVisits,
+      countryVisits: serverAnalytics.countryVisits,
+      productViews: serverAnalytics.productViews,
+      mostViewedProducts,
+      checkouts: serverAnalytics.checkouts,
+      cart_data: serverAnalytics.cart_data,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to fetch analytics' });
+  }
 });
+
+// Cloudflare GraphQL Analytics API proxy
+const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express.Response) => {
+  try {
+    const zoneId = req.body?.zoneId || process.env.CLOUDFLARE_ZONE_ID;
+    const apiToken = req.body?.apiToken || process.env.CLOUDFLARE_API_TOKEN;
+
+    if (!zoneId || !apiToken) {
+      res.json({
+        success: false,
+        error: 'Zone ID or API Token missing',
+        isConfigured: false,
+      });
+      return;
+    }
+
+    const today = new Date();
+    const startDate = new Date(today.getTime() - 7 * 86400000).toISOString().split('T')[0];
+
+    const query = `
+      query GetZoneAnalytics($zoneId: String!, $startDate: String!) {
+        viewer {
+          zones(filter: { zoneTag: $zoneId }) {
+            httpRequests1dGroups(limit: 7, filter: { date_geq: $startDate }) {
+              dimensions { date }
+              sum { requests pageViews }
+              uniq { uniques }
+            }
+          }
+        }
+      }
+    `;
+
+    const cfRes = await fetch('https://api.cloudflare.com/client/v4/graphql', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${apiToken}`,
+      },
+      body: JSON.stringify({ query, variables: { zoneId, startDate } }),
+    });
+
+    if (!cfRes.ok) {
+      const errText = await cfRes.text();
+      res.json({ success: false, error: `Cloudflare API returned ${cfRes.status}: ${errText}` });
+      return;
+    }
+
+    const cfData = await cfRes.json();
+    const zoneData = cfData?.data?.viewer?.zones?.[0]?.httpRequests1dGroups || [];
+
+    let totalRequests = 0;
+    let totalPageViews = 0;
+    let totalUniques = 0;
+
+    const dailyTrend = zoneData.map((day: any) => {
+      const reqs = Number(day.sum?.requests) || 0;
+      const views = Number(day.sum?.pageViews) || 0;
+      const uniq = Number(day.uniq?.uniques) || 0;
+      totalRequests += reqs;
+      totalPageViews += views;
+      totalUniques += uniq;
+      return {
+        date: day.dimensions?.date,
+        requests: reqs,
+        pageViews: views,
+        uniques: uniq,
+      };
+    });
+
+    res.json({
+      success: true,
+      isConfigured: true,
+      totalRequests,
+      totalPageViews,
+      totalUniques,
+      dailyTrend,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to query Cloudflare GraphQL' });
+  }
+};
+
+app.post('/api/cloudflare/analytics-proxy', handleCloudflareAnalyticsProxy);
+app.post('/api/cloudflare-analytics', handleCloudflareAnalyticsProxy);
 
 // ==========================================
 // AI PRODUCT AD COPYWRITER & DESCRIPTION API

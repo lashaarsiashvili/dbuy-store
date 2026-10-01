@@ -1,4 +1,4 @@
-import { VisitorLog, CountryStat, DailyStat } from '../types';
+import { VisitorLog, CountryStat, DailyStat, Product } from '../types';
 
 export function getFlagEmoji(countryCode: string): string {
   if (!countryCode || countryCode.length !== 2) return '🌐';
@@ -95,9 +95,9 @@ export function detectLocalCountry(): { country: string; code: string; city: str
 
 export async function fetchLiveGeoLocation(): Promise<{ country: string; code: string; city: string; flag: string }> {
   try {
-    // Attempt fast light-weight IP Geo Lookup
+    // 1. Attempt fast light-weight IP Geo Lookup (free and CORS friendly)
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 2500);
 
     const res = await fetch('https://api.country.is/', { signal: controller.signal });
     clearTimeout(timeoutId);
@@ -123,6 +123,9 @@ export async function fetchLiveGeoLocation(): Promise<{ country: string; code: s
         JP: 'Japan',
         AM: 'Armenia',
         AZ: 'Azerbaijan',
+        NL: 'Netherlands',
+        SE: 'Sweden',
+        CH: 'Switzerland',
       };
       const country = countryNames[code] || code;
       return {
@@ -133,7 +136,7 @@ export async function fetchLiveGeoLocation(): Promise<{ country: string; code: s
       };
     }
   } catch {
-    // Ignore and fallback
+    // Fallback to secondary geo lookup
   }
 
   return detectLocalCountry();
@@ -142,10 +145,63 @@ export async function fetchLiveGeoLocation(): Promise<{ country: string; code: s
 const STORAGE_KEY = 'dbuy_analytics_visitor_logs';
 const EXCLUDE_ADMIN_KEY = 'dbuy_exclude_my_visits';
 const ADMIN_DEVICE_KEY = 'dbuy_is_admin_device';
+const CLOUDFLARE_CONFIG_KEY = 'dbuy_cloudflare_analytics_config';
+
+export interface CloudflareAnalyticsConfig {
+  webAnalyticsToken?: string;
+  zoneId?: string;
+  apiToken?: string;
+  isAutoSyncEnabled?: boolean;
+}
+
+export function getCloudflareConfig(): CloudflareAnalyticsConfig {
+  if (typeof localStorage === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(CLOUDFLARE_CONFIG_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch {
+    // Ignore
+  }
+  return {
+    webAnalyticsToken: (import.meta as any).env?.VITE_CLOUDFLARE_ANALYTICS_TOKEN || '',
+    zoneId: (import.meta as any).env?.VITE_CLOUDFLARE_ZONE_ID || '',
+    apiToken: (import.meta as any).env?.VITE_CLOUDFLARE_API_TOKEN || '',
+    isAutoSyncEnabled: true,
+  };
+}
+
+export function saveCloudflareConfig(config: CloudflareAnalyticsConfig): void {
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(CLOUDFLARE_CONFIG_KEY, JSON.stringify(config));
+    if (config.webAnalyticsToken) {
+      injectCloudflareBeacon(config.webAnalyticsToken);
+    }
+  } catch {
+    // Ignore
+  }
+}
 
 /**
- * Checks if the current browser/device is configured to be excluded from analytics
- * (e.g. Admin/Owner visits, logged-in administrators, or explicitly excluded devices).
+ * Injects official Cloudflare Web Analytics beacon script into head
+ */
+export function injectCloudflareBeacon(token: string): void {
+  if (typeof document === 'undefined' || !token) return;
+  const existing = document.getElementById('cf-web-analytics-beacon');
+  if (existing) {
+    existing.setAttribute('data-cf-beacon', JSON.stringify({ token }));
+    return;
+  }
+  const script = document.createElement('script');
+  script.id = 'cf-web-analytics-beacon';
+  script.defer = true;
+  script.src = 'https://static.cloudflareinsights.com/beacon.min.js';
+  script.setAttribute('data-cf-beacon', JSON.stringify({ token }));
+  document.head.appendChild(script);
+}
+
+/**
+ * Checks if current browser/device is configured to be excluded from analytics
  */
 export function isExcludedAdminDevice(): boolean {
   if (typeof window === 'undefined') return false;
@@ -154,10 +210,8 @@ export function isExcludedAdminDevice(): boolean {
     if (explicitSetting === 'true') return true;
     if (explicitSetting === 'false') return false;
 
-    // Check if device was previously marked as an admin device
     if (localStorage.getItem(ADMIN_DEVICE_KEY) === 'true') return true;
 
-    // Check if user is logged in as admin in local storage
     const rawUser = localStorage.getItem('dbuy_user');
     if (rawUser) {
       const u = JSON.parse(rawUser);
@@ -170,19 +224,15 @@ export function isExcludedAdminDevice(): boolean {
       }
     }
 
-    // Check active session storage for admin session
     if (sessionStorage.getItem('dbuy_admin_session') === 'true') {
       return true;
     }
   } catch {
-    // Ignore storage parse errors
+    // Ignore
   }
   return false;
 }
 
-/**
- * Permanently marks or unmarks the current browser device as an admin device
- */
 export function setAdminDeviceExclusion(exclude: boolean): void {
   if (typeof localStorage === 'undefined') return;
   try {
@@ -195,19 +245,12 @@ export function setAdminDeviceExclusion(exclude: boolean): void {
   }
 }
 
-/**
- * Cleans out any internal admin visits or test pages from logs
- */
 export function filterOutAdminLogs(logs: VisitorLog[]): VisitorLog[] {
   if (!Array.isArray(logs)) return [];
   return logs.filter(l => {
     if (!l) return false;
     const pageLower = (l.page || '').toLowerCase();
     if (pageLower.includes('admin') || pageLower.includes('dashboard') || pageLower.includes('portal-sec')) {
-      return false;
-    }
-    // Remove mock legacy ids if any
-    if (l.id?.startsWith('v_2026-') && l.id.length <= 25) {
       return false;
     }
     return true;
@@ -218,9 +261,7 @@ export function loadVisitorLogs(): VisitorLog[] {
   if (typeof localStorage === 'undefined') return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) {
-      return [];
-    }
+    if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (Array.isArray(parsed)) {
       return filterOutAdminLogs(parsed);
@@ -235,7 +276,6 @@ export function saveVisitorLogs(logs: VisitorLog[]): void {
   if (typeof localStorage === 'undefined') return;
   try {
     const cleanLogs = filterOutAdminLogs(logs);
-    // Keep at most 2000 recent logs to keep storage light
     const trimmed = cleanLogs.slice(0, 2000);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed));
   } catch (err) {
@@ -248,12 +288,10 @@ export function logNewVisitor(
   pageName: string = 'Storefront (Home)',
   forceLog: boolean = false
 ): VisitorLog | null {
-  // If this device is the admin's device or excluded, do NOT record any visit!
   if (!forceLog && isExcludedAdminDevice()) {
     return null;
   }
 
-  // Never record admin dashboard pages
   const pageLower = pageName.toLowerCase();
   if (!forceLog && (pageLower.includes('admin') || pageLower.includes('portal-sec'))) {
     return null;
@@ -279,20 +317,42 @@ export function logNewVisitor(
 
   const updated = [newLog, ...currentLogs];
   saveVisitorLogs(updated);
+
+  // Send to backend tracker asynchronously
+  fetch('/api/track', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      type: 'visit',
+      country: geo.country,
+      countryCode: geo.code,
+    }),
+  }).catch(() => {});
+
   return newLog;
 }
 
-export function computeAnalytics(logs: VisitorLog[]) {
+export interface MostViewedProductItem {
+  id: string;
+  title: string;
+  titleKa?: string;
+  category: string;
+  price: number;
+  image: string;
+  views: number;
+  percentage: number;
+}
+
+export function computeAnalytics(logs: VisitorLog[], products: Product[] = []) {
   const todayStr = new Date().toISOString().split('T')[0];
   const yesterdayDate = new Date(Date.now() - 86400000);
   const yesterdayStr = yesterdayDate.toISOString().split('T')[0];
 
-  // Today's logs
   const todayLogs = logs.filter(l => l.dateString === todayStr);
   const yesterdayLogs = logs.filter(l => l.dateString === yesterdayStr);
 
   const totalVisitorsToday = todayLogs.length;
-  const uniqueVisitorsToday = Math.max(1, Math.round(totalVisitorsToday * 0.78));
+  const uniqueVisitorsToday = Math.max(1, Math.round(totalVisitorsToday * 0.8));
 
   // Country Aggregation (Today)
   const countryCountsToday: Record<string, { count: number; name: string; flag: string }> = {};
@@ -332,11 +392,25 @@ export function computeAnalytics(logs: VisitorLog[]) {
     }))
     .sort((a, b) => b.visitors - a.visitors);
 
-  // Device Breakdown (Today & Total)
-  const deviceCounts: Record<string, number> = { Mobile: 0, Desktop: 0, Tablet: 0 };
-  todayLogs.forEach(l => {
-    deviceCounts[l.device] = (deviceCounts[l.device] || 0) + 1;
-  });
+  // Most Viewed Products Computation
+  const sortedProducts = [...products]
+    .map(p => ({
+      id: p.id,
+      title: p.title || p.titleKa || 'Product',
+      titleKa: p.titleKa,
+      category: p.category,
+      price: p.price,
+      image: p.image,
+      views: Number(p.views) || 0,
+    }))
+    .sort((a, b) => b.views - a.views);
+
+  const totalProductViews = sortedProducts.reduce((sum, p) => sum + p.views, 0) || 1;
+
+  const mostViewedProducts: MostViewedProductItem[] = sortedProducts.slice(0, 10).map(p => ({
+    ...p,
+    percentage: Math.round((p.views / totalProductViews) * 100),
+  }));
 
   // Daily Chart Data for the last 7 days
   const dailyStats: DailyStat[] = [];
@@ -354,13 +428,10 @@ export function computeAnalytics(logs: VisitorLog[]) {
     });
   }
 
-  // Hourly Breakdown for Today (00:00 to 23:00)
-  const hourlyCounts = Array(24).fill(0);
+  // Device Breakdown (Today & Total)
+  const deviceCounts: Record<string, number> = { Mobile: 0, Desktop: 0, Tablet: 0 };
   todayLogs.forEach(l => {
-    const h = new Date(l.timestamp).getHours();
-    if (h >= 0 && h < 24) {
-      hourlyCounts[h] += 1;
-    }
+    deviceCounts[l.device] = (deviceCounts[l.device] || 0) + 1;
   });
 
   return {
@@ -372,9 +443,10 @@ export function computeAnalytics(logs: VisitorLog[]) {
     totalAllTime: logs.length,
     countryStatsToday,
     countryStatsAllTime,
+    mostViewedProducts,
+    totalProductViews,
     deviceCounts,
     dailyStats,
-    hourlyCounts,
     recentLogs: logs.slice(0, 50),
   };
 }

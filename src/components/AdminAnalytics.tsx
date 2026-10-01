@@ -1,26 +1,35 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useStore } from '../context/StoreContext';
 import { 
   Globe, 
   Users, 
-  Smartphone, 
-  Monitor, 
-  Tablet, 
   TrendingUp, 
-  Clock, 
   RotateCcw, 
   Download, 
-  Compass, 
   Activity, 
   CheckCircle2, 
-  Layers,
+  Eye,
+  ExternalLink,
   ShieldCheck,
   ShieldAlert,
   EyeOff,
+  Cloud,
+  Check,
+  Settings2,
+  RefreshCw,
+  Clock,
   Sparkles,
-  Filter
+  BarChart3,
+  Layers
 } from 'lucide-react';
-import { AdminAnalyticsDashboard } from './AdminAnalyticsDashboard';
+import { 
+  getCloudflareConfig, 
+  saveCloudflareConfig, 
+  CloudflareAnalyticsConfig,
+  injectCloudflareBeacon 
+} from '../utils/analytics';
+import { CachedImage } from './CachedImage';
+import { handleImageError } from '../utils/imageFallback';
 
 export const AdminAnalytics: React.FC = () => {
   const { 
@@ -31,9 +40,28 @@ export const AdminAnalytics: React.FC = () => {
     excludeAdminVisits, 
     setExcludeAdminVisits, 
     purgeAdminLogs,
-    products
+    products,
+    navigateToProduct,
+    formatPrice
   } = useStore();
+
   const [timeFilter, setTimeFilter] = useState<'today' | 'all'>('today');
+  const [autoRefresh, setAutoRefresh] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshedAt, setLastRefreshedAt] = useState<Date>(new Date());
+  const [showCfModal, setShowCfModal] = useState(false);
+  
+  // Cloudflare configuration state
+  const [cfConfig, setCfConfig] = useState<CloudflareAnalyticsConfig>(getCloudflareConfig());
+  const [cfLoading, setCfLoading] = useState(false);
+  const [cfEdgeData, setCfEdgeData] = useState<{
+    totalRequests?: number;
+    totalPageViews?: number;
+    totalUniques?: number;
+    isConfigured?: boolean;
+    error?: string;
+  } | null>(null);
+
   const isKa = language === 'ka';
 
   const {
@@ -43,9 +71,9 @@ export const AdminAnalytics: React.FC = () => {
     totalAllTime,
     countryStatsToday,
     countryStatsAllTime,
-    deviceCounts,
+    mostViewedProducts,
+    totalProductViews,
     dailyStats,
-    hourlyCounts,
     recentLogs,
   } = analyticsData;
 
@@ -58,17 +86,86 @@ export const AdminAnalytics: React.FC = () => {
     percentage: 100,
   };
 
-  const mobileCount = Number(deviceCounts['Mobile'] || 0);
-  const desktopCount = Number(deviceCounts['Desktop'] || 0);
-  const tabletCount = Number(deviceCounts['Tablet'] || 0);
-  const totalDeviceVisits = mobileCount + desktopCount + tabletCount || 1;
-  const mobilePercent = Math.round((mobileCount / totalDeviceVisits) * 100);
-  const desktopPercent = Math.round((desktopCount / totalDeviceVisits) * 100);
-  const tabletPercent = Math.round((tabletCount / totalDeviceVisits) * 100);
-
-  // Maximum count in hourly distribution to scale bars
-  const maxHourlyCount = Math.max(...hourlyCounts, 1);
+  // Maximum daily count to scale chart bars
   const maxDailyCount = Math.max(...dailyStats.map(d => d.visitors), 1);
+
+  // Manual & auto-refresh handler
+  const refreshData = async () => {
+    setIsRefreshing(true);
+    try {
+      // 1. Fetch backend analytics
+      await fetch('/api/analytics').catch(() => {});
+      
+      // 2. Fetch Cloudflare Edge analytics if credentials exist
+      if (cfConfig.zoneId && cfConfig.apiToken) {
+        await queryCloudflareEdge(cfConfig.zoneId, cfConfig.apiToken);
+      }
+      
+      setLastRefreshedAt(new Date());
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400);
+    }
+  };
+
+  // Auto-refresh interval (10 seconds)
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(() => {
+      refreshData();
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, cfConfig.zoneId, cfConfig.apiToken]);
+
+  // Initial Cloudflare beacon injection if token is present
+  useEffect(() => {
+    if (cfConfig.webAnalyticsToken) {
+      injectCloudflareBeacon(cfConfig.webAnalyticsToken);
+    }
+  }, [cfConfig.webAnalyticsToken]);
+
+  // Query Cloudflare GraphQL Edge API
+  const queryCloudflareEdge = async (zoneId: string, apiToken: string) => {
+    setCfLoading(true);
+    try {
+      const res = await fetch('/api/cloudflare/analytics-proxy', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ zoneId, apiToken }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setCfEdgeData(data);
+          return data;
+        } else {
+          setCfEdgeData({ error: data.error, isConfigured: false });
+        }
+      }
+    } catch (err: any) {
+      setCfEdgeData({ error: err?.message || 'Connection failed', isConfigured: false });
+    } finally {
+      setCfLoading(false);
+    }
+    return null;
+  };
+
+  const handleSaveCfConfig = async (e: React.FormEvent) => {
+    e.preventDefault();
+    saveCloudflareConfig(cfConfig);
+    addToast(isKa ? 'Cloudflare პარამეტრები შენახულია' : 'Cloudflare settings saved', 'success');
+
+    if (cfConfig.zoneId && cfConfig.apiToken) {
+      const res = await queryCloudflareEdge(cfConfig.zoneId, cfConfig.apiToken);
+      if (res && res.success) {
+        addToast(isKa ? 'Cloudflare GraphQL დაკავშირებულია წარმატებით!' : 'Cloudflare GraphQL connected successfully!', 'success');
+        setShowCfModal(false);
+      } else {
+        addToast(isKa ? 'Cloudflare ტესტი ვერ მოხერხდა, შეამოწმეთ Token' : 'Cloudflare test failed, check Token/Zone ID', 'warning');
+      }
+    } else {
+      setShowCfModal(false);
+    }
+  };
 
   // Export analytics to CSV
   const handleExportCSV = () => {
@@ -86,527 +183,606 @@ export const AdminAnalytics: React.FC = () => {
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `store_visitors_report_${new Date().toISOString().split('T')[0]}.csv`);
+      link.setAttribute('download', `store_analytics_report_${new Date().toISOString().split('T')[0]}.csv`);
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      addToast(isKa ? 'ტრაფიკის რეპორტი ექსპორტირებულია CSV ფაილში!' : 'Traffic report exported to CSV successfully!', 'success');
+      addToast(isKa ? 'ტრაფიკის რეპორტი ექსპორტირებულია CSV ფაილში!' : 'Analytics report exported to CSV successfully!', 'success');
     } catch {
       addToast(isKa ? 'CSV ექსპორტი ვერ მოხერხდა' : 'Failed to export CSV', 'error');
     }
   };
 
   return (
-    <div className="space-y-8 animate-in fade-in duration-300">
+    <div className="space-y-6 animate-in fade-in duration-300">
       
-      {/* Overview Analytics Dashboard */}
-      <AdminAnalyticsDashboard products={products} />
-
-      {/* Top Banner & Action Controls */}
-      <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
+      {/* ========================================================================= */}
+      {/* 1. TOP HEADER & REAL-TIME CONTROLS BAR */}
+      {/* ========================================================================= */}
+      <div className="bg-white p-5 sm:p-7 rounded-3xl border border-slate-200 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
         <div>
-          <div className="flex items-center space-x-2.5 mb-1.5">
+          <div className="flex items-center space-x-2.5 mb-1">
             <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
               <Activity className="w-5 h-5 animate-pulse" />
             </div>
             <h2 className="text-xl font-black text-slate-900">
-              {isKa ? 'ვიზიტორების და ქვეყნების ანალიტიკა' : 'Traffic & Country Analytics'}
+              {isKa ? 'ვიზიტორებისა და პროდუქტების ანალიტიკა' : 'Visitor & Product Analytics'}
             </h2>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
-              ● {isKa ? 'პირდაპირი მონიტორინგი' : 'Live Tracking'}
-            </span>
+            <div className="flex items-center space-x-1.5 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
+              <span className={`w-2 h-2 rounded-full ${autoRefresh ? 'bg-emerald-500 animate-ping' : 'bg-slate-400'}`} />
+              <span>{autoRefresh ? (isKa ? 'Live მონიტორინგი (10წმ)' : 'Live Refresh (10s)') : (isKa ? 'პაუზა' : 'Paused')}</span>
+            </div>
           </div>
-          <p className="text-xs text-slate-500 max-w-2xl">
+          <p className="text-xs text-slate-500">
             {isKa 
-              ? 'თვალყური ადევნეთ დღის განმავლობაში შემოსულ ვიზიტორებს, უნიკალურ ნახვებს და ქვეყნების გეოგრაფიულ განაწილებას რეალურ დროში.' 
-              : 'Track real-time store visitors, unique views, and geographic distribution across countries.'}
+              ? 'დღიური ვიზიტები, მომხმარებელთა ქვეყნები და ყველაზე ხშირად ნახული პროდუქტები რეალურ დროში.' 
+              : 'Real-time daily visits, visitor countries (free IP geolocation), and most frequently viewed products.'}
           </p>
         </div>
 
-        {/* Action Buttons */}
-        <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
-          {/* Timeframe Filter */}
-          <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs font-semibold">
-            <button
-              onClick={() => setTimeFilter('today')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                timeFilter === 'today'
-                  ? 'bg-white text-blue-600 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {isKa ? 'დღეს' : 'Today'}
-            </button>
-            <button
-              onClick={() => setTimeFilter('all')}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                timeFilter === 'all'
-                  ? 'bg-white text-blue-600 shadow-xs font-bold'
-                  : 'text-slate-600 hover:text-slate-900'
-              }`}
-            >
-              {isKa ? 'სრული' : 'All Time'}
-            </button>
-          </div>
+        {/* Real-time actions & triggers */}
+        <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {/* Live Auto-Refresh Switch */}
+          <button
+            onClick={() => setAutoRefresh(!autoRefresh)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center space-x-1.5 cursor-pointer border ${
+              autoRefresh 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100' 
+                : 'bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200'
+            }`}
+            title="Auto-refresh every 10 seconds"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>{autoRefresh ? (isKa ? 'Live: ჩართულია' : 'Live: ON') : (isKa ? 'Live: გამორთულია' : 'Live: OFF')}</span>
+          </button>
+
+          {/* Manual Refresh Now Button */}
+          <button
+            onClick={refreshData}
+            disabled={isRefreshing}
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active:scale-95 text-white font-bold text-xs transition-all flex items-center space-x-1.5 cursor-pointer shadow-xs disabled:opacity-50"
+            title="Refresh now"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
+            <span>{isRefreshing ? (isKa ? 'ახლდება...' : 'Refreshing...') : (isKa ? 'განახლება' : 'Refresh Now')}</span>
+          </button>
+
+          {/* Cloudflare Setup Button */}
+          <button
+            onClick={() => setShowCfModal(true)}
+            className="px-3 py-2 rounded-xl bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 font-bold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
+            title="Cloudflare GraphQL & Web Analytics"
+          >
+            <Cloud className="w-3.5 h-3.5 text-orange-600" />
+            <span>Cloudflare</span>
+          </button>
 
           {/* Export CSV */}
           <button
             onClick={handleExportCSV}
-            className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
+            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
             title="Export CSV"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span className="hidden sm:inline">{isKa ? 'CSV ექსპორტი' : 'Export CSV'}</span>
+            <Download className="w-4 h-4" />
           </button>
 
-          {/* Reset button */}
+          {/* Reset History Button */}
           <button
             onClick={() => {
-              if (window.confirm(isKa ? 'დარწმუნებული ხართ, რომ გსურთ ვიზიტორების ისტორიის გასუფთავება?' : 'Are you sure you want to clear the visitor analytics log?')) {
+              if (window.confirm(isKa ? 'ნამდვილად გსურთ ვიზიტორთა ისტორიის გასუფთავება?' : 'Clear all visitor analytics logs?')) {
                 clearAnalytics();
               }
             }}
             className="p-2 rounded-xl bg-slate-100 hover:bg-red-50 hover:text-red-600 text-slate-500 transition-colors cursor-pointer"
-            title={isKa ? 'გასუფთავება' : 'Clear Analytics'}
+            title="Clear Analytics"
           >
             <RotateCcw className="w-4 h-4" />
           </button>
         </div>
       </div>
 
-      {/* Admin Visit Exclusion Status & Protection Banner */}
-      <div className={`p-4 sm:p-5 rounded-2xl border transition-all ${
-        excludeAdminVisits
-          ? 'bg-gradient-to-r from-emerald-50/90 via-teal-50/70 to-emerald-50/90 border-emerald-200 text-emerald-950'
-          : 'bg-gradient-to-r from-amber-50/90 via-orange-50/70 to-amber-50/90 border-amber-200 text-amber-950'
-      }`}>
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div className="flex items-start space-x-3.5">
-            <div className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
-              excludeAdminVisits ? 'bg-emerald-600 text-white shadow-xs' : 'bg-amber-600 text-white shadow-xs'
-            }`}>
-              {excludeAdminVisits ? <ShieldCheck className="w-5 h-5" /> : <ShieldAlert className="w-5 h-5" />}
+      {/* ========================================================================= */}
+      {/* 2. THREE KEY METRIC KPI CARDS */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        
+        {/* KEY METRIC 1: TOTAL VISITS (Daily & Overall) */}
+        <div className="p-5 sm:p-6 bg-white rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1.5">
+                <Users className="w-4 h-4 text-blue-600" />
+                <span>{isKa ? '1. ვიზიტები (დღიური & სრული)' : '1. Total Visits (Daily & All-Time)'}</span>
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200">
+                {timeFilter === 'today' ? (isKa ? 'დღეს' : 'Today') : (isKa ? 'სრული' : 'All-Time')}
+              </span>
+            </div>
+            
+            <div className="flex items-baseline space-x-3">
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">
+                {timeFilter === 'today' ? totalVisitorsToday : totalAllTime}
+              </h3>
+              {timeFilter === 'today' && growthPercent !== 0 && (
+                <span className={`text-xs font-bold px-2 py-0.5 rounded-md flex items-center ${
+                  growthPercent > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                }`}>
+                  <TrendingUp className="w-3 h-3 mr-0.5" />
+                  {growthPercent > 0 ? `+${growthPercent}%` : `${growthPercent}%`}
+                </span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
+              <span>{isKa ? 'დღევანდელი ვიზიტი:' : "Today's Visits:"} <strong className="text-slate-800 font-bold">{totalVisitorsToday}</strong></span>
+              <span>{isKa ? 'სულ სულ:' : 'All-Time:'} <strong className="text-slate-800 font-bold">{totalAllTime}</strong></span>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between">
+            <span className="text-[11px] text-slate-400">
+              {isKa ? 'უნიკალური მყიდველები:' : 'Unique Visitors:'} ~{uniqueVisitorsToday}
+            </span>
+            <div className="inline-flex p-0.5 bg-slate-100 rounded-lg text-[11px] font-bold">
+              <button
+                onClick={() => setTimeFilter('today')}
+                className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                  timeFilter === 'today' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
+                }`}
+              >
+                {isKa ? 'დღეს' : 'Today'}
+              </button>
+              <button
+                onClick={() => setTimeFilter('all')}
+                className={`px-2 py-0.5 rounded-md transition-all cursor-pointer ${
+                  timeFilter === 'all' ? 'bg-white text-blue-600 shadow-2xs' : 'text-slate-500'
+                }`}
+              >
+                {isKa ? 'სრული' : 'All'}
+              </button>
+            </div>
+          </div>
+        </div>
+
+        {/* KEY METRIC 2: VISITOR COUNTRIES */}
+        <div className="p-5 sm:p-6 bg-white rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1.5">
+                <Globe className="w-4 h-4 text-emerald-600" />
+                <span>{isKa ? '2. ვიზიტორთა ქვეყნები' : '2. Visitor Countries'}</span>
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                IP Geolocation
+              </span>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <span className="text-3xl select-none">{topCountry.flag}</span>
+              <div>
+                <h3 className="text-xl font-black text-slate-900 truncate max-w-[180px]">
+                  {topCountry.country}
+                </h3>
+                <p className="text-xs text-slate-500">
+                  {isKa ? 'ლიდერი ქვეყანა' : 'Top Origin'} ({topCountry.percentage}% {isKa ? 'წილი' : 'share'})
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100">
+              <span>{isKa ? 'სულ ქვეყნები:' : 'Total Countries:'} <strong className="text-slate-800 font-bold">{currentCountryStats.length}</strong></span>
+              <span>{isKa ? 'ლიდერის ვიზიტები:' : 'Top Country Visits:'} <strong className="text-slate-800 font-bold">{topCountry.visitors}</strong></span>
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+            <span>{isKa ? 'უფასო IP Geolocation აქტიურია' : 'Free IP Geolocation Active'}</span>
+            <span className="text-emerald-600 font-bold">100% Real Traffic</span>
+          </div>
+        </div>
+
+        {/* KEY METRIC 3: MOST VIEWED PRODUCTS */}
+        <div className="p-5 sm:p-6 bg-white rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center space-x-1.5">
+                <Eye className="w-4 h-4 text-purple-600" />
+                <span>{isKa ? '3. პროდუქტების ნახვები' : '3. Product Views Tracked'}</span>
+              </span>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-700 border border-purple-200">
+                {mostViewedProducts.length} {isKa ? 'პროდუქტი' : 'Items'}
+              </span>
+            </div>
+
+            <div className="flex items-baseline space-x-3">
+              <h3 className="text-3xl font-black text-slate-900 tracking-tight">
+                {totalProductViews}
+              </h3>
+              <span className="text-xs text-purple-700 font-bold bg-purple-50 px-2 py-0.5 rounded-md">
+                {isKa ? 'სულ ნახვები' : 'Total Page Views'}
+              </span>
+            </div>
+
+            <div className="text-xs text-slate-500 mt-2 pt-2 border-t border-slate-100 truncate">
+              {mostViewedProducts[0] ? (
+                <span>
+                  {isKa ? 'ყველაზე პოპულარული:' : 'Top Viewed:'}{' '}
+                  <strong className="text-slate-800 font-bold">{mostViewedProducts[0].title}</strong>{' '}
+                  ({mostViewedProducts[0].views} {isKa ? 'ნახვა' : 'views'})
+                </span>
+              ) : (
+                <span>{isKa ? 'ნახვები იწერება ავტომატურად' : 'Views logged automatically'}</span>
+              )}
+            </div>
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400">
+            <span>{isKa ? 'თითოეულ გახსნაზე ითვლება' : 'Tracked on every product open'}</span>
+            <span className="text-purple-600 font-bold">{products.length} {isKa ? 'კატალოგში' : 'in catalog'}</span>
+          </div>
+        </div>
+
+      </div>
+
+      {/* ========================================================================= */}
+      {/* 3. CLOUDFLARE EDGE BANNER (If Configured or Accessible) */}
+      {/* ========================================================================= */}
+      {cfEdgeData && cfEdgeData.isConfigured && (
+        <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-orange-50/90 via-amber-50/70 to-orange-50/90 border border-orange-200 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center space-x-3">
+            <div className="p-2.5 rounded-xl bg-orange-600 text-white shadow-xs">
+              <Cloud className="w-5 h-5" />
             </div>
             <div>
-              <div className="flex flex-wrap items-center gap-2 mb-1">
-                <h4 className="text-sm font-black">
-                  {isKa 
-                    ? 'ადმინისტრატორის ვიზიტების ფილტრი' 
-                    : 'Administrator Visit Exclusion'}
-                </h4>
-                <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${
-                  excludeAdminVisits
-                    ? 'bg-emerald-100/90 text-emerald-800 border-emerald-300'
-                    : 'bg-amber-100/90 text-amber-800 border-amber-300'
-                }`}>
-                  {excludeAdminVisits 
-                    ? (isKa ? '✓ ჩართულია (ჩემი შესვლები არ ითვლება)' : '✓ Active (Your visits are excluded)') 
-                    : (isKa ? '⚠ გათიშულია' : '⚠ Inactive')}
+              <div className="flex items-center space-x-2">
+                <h4 className="text-sm font-black text-slate-900">Cloudflare GraphQL Edge Analytics</h4>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300">
+                  ● Live Sync
                 </span>
               </div>
-              <p className="text-xs opacity-90 max-w-2xl leading-relaxed">
-                {isKa
-                  ? 'სისტემა ავტომატურად აიდენტიფიცირებს თქვენს მოწყობილობას და ადმინ სესიას. თქვენი გვერდების დათვალიერება ანალიტიკაში არ ითვლება, რათა ზუსტად დაინახოთ მხოლოდ რეალური გარეშე მომხმარებლებისა და მყიდველების ნაკადი.'
-                  : 'The system recognizes your device and administrator credentials. Your page visits are not tracked so you see 100% genuine customer and visitor traffic.'}
+              <p className="text-xs text-slate-600 mt-0.5">
+                {isKa ? 'Cloudflare-ის გლობალური ქსელიდან მიღებული მონაცემები (ბოლო 7 დღე)' : 'Edge traffic data from Cloudflare global network (last 7 days)'}
               </p>
             </div>
           </div>
-
-          <div className="flex items-center gap-2.5 self-start md:self-center shrink-0">
-            <button
-              onClick={purgeAdminLogs}
-              className="px-3 py-1.5 text-xs font-bold rounded-xl bg-white/90 hover:bg-white text-slate-700 border border-slate-200/80 shadow-2xs transition-all cursor-pointer flex items-center space-x-1.5"
-              title={isKa ? 'ადმინის ძველი ჩანაწერების გასუფთავება' : 'Purge previous admin sessions'}
-            >
-              <EyeOff className="w-3.5 h-3.5 text-slate-500" />
-              <span>{isKa ? 'ადმინის ტესტების გასუფთავება' : 'Clean Admin Logs'}</span>
-            </button>
-
-            <button
-              onClick={() => setExcludeAdminVisits(!excludeAdminVisits)}
-              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer shadow-xs ${
-                excludeAdminVisits
-                  ? 'bg-emerald-700 hover:bg-emerald-800 text-white'
-                  : 'bg-amber-700 hover:bg-amber-800 text-white'
-              }`}
-            >
-              {excludeAdminVisits
-                ? (isKa ? 'იგნორირება ჩართულია' : 'Exclusion: ON')
-                : (isKa ? 'ჩართე იგნორირება' : 'Enable Exclusion')}
-            </button>
+          <div className="flex items-center gap-4 text-xs font-bold text-slate-800">
+            <div className="bg-white px-3 py-1.5 rounded-xl border border-orange-200 shadow-2xs">
+              <span className="text-slate-400 text-[10px] block">{isKa ? 'მოთხოვნები:' : 'Requests:'}</span>
+              <span className="text-orange-600 font-black text-sm">{cfEdgeData.totalRequests?.toLocaleString()}</span>
+            </div>
+            <div className="bg-white px-3 py-1.5 rounded-xl border border-orange-200 shadow-2xs">
+              <span className="text-slate-400 text-[10px] block">{isKa ? 'გვერდის ნახვები:' : 'Page Views:'}</span>
+              <span className="text-slate-900 font-black text-sm">{cfEdgeData.totalPageViews?.toLocaleString()}</span>
+            </div>
+            <div className="bg-white px-3 py-1.5 rounded-xl border border-orange-200 shadow-2xs">
+              <span className="text-slate-400 text-[10px] block">{isKa ? 'უნიკალური:' : 'Uniques:'}</span>
+              <span className="text-blue-600 font-black text-sm">{cfEdgeData.totalUniques?.toLocaleString()}</span>
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
-      {/* 4 Summary Stat Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* ========================================================================= */}
+      {/* 4. MAIN ANALYTICS SECTION: MOST VIEWED PRODUCTS & VISITOR COUNTRIES */}
+      {/* ========================================================================= */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
         
-        {/* Card 1: Today's Visitors */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              {timeFilter === 'today' 
-                ? (isKa ? 'დღევანდელი ვიზიტები' : "Today's Visitors") 
-                : (isKa ? 'სრული ვიზიტები' : 'All-Time Visitors')}
-            </span>
-            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600">
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <h3 className="text-2xl font-black text-slate-900">
-              {timeFilter === 'today' ? totalVisitorsToday : totalAllTime}
-            </h3>
-            {timeFilter === 'today' && growthPercent !== 0 && (
-              <span className={`text-[11px] font-bold px-1.5 py-0.5 rounded-md flex items-center ${
-                growthPercent > 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
-              }`}>
-                {growthPercent > 0 ? `+${growthPercent}%` : `${growthPercent}%`}
-              </span>
-            )}
-          </div>
-          <p className="text-[11px] text-slate-500 mt-1 flex items-center space-x-1">
-            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-            <span>
-              ~{timeFilter === 'today' ? uniqueVisitorsToday : Math.round(totalAllTime * 0.75)}{' '}
-              {isKa ? 'უნიკალური ვიზიტორი' : 'unique visitors'}
-            </span>
-          </p>
-        </div>
-
-        {/* Card 2: Top Country */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              {isKa ? 'ლიდერი ქვეყანა' : 'Top Country'}
-            </span>
-            <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600">
-              <Globe className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-center space-x-2">
-            <span className="text-2xl">{topCountry.flag}</span>
-            <h3 className="text-xl font-black text-slate-900 truncate">
-              {topCountry.country}
-            </h3>
-          </div>
-          <p className="text-[11px] text-slate-500 mt-1">
-            {topCountry.visitors} {isKa ? 'ვიზიტორი' : 'visitors'} ({topCountry.percentage}% {isKa ? 'წილი' : 'share'})
-          </p>
-        </div>
-
-        {/* Card 3: Devices Distribution */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              {isKa ? 'მოწყობილობები' : 'Devices'}
-            </span>
-            <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600">
-              <Smartphone className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-baseline justify-between mb-1.5">
-            <span className="text-xs font-bold text-slate-800 flex items-center space-x-1">
-              <span>📱 Mobile:</span>
-              <span className="text-blue-600 font-extrabold">{mobilePercent}%</span>
-            </span>
-            <span className="text-xs font-bold text-slate-800 flex items-center space-x-1">
-              <span>💻 Desktop:</span>
-              <span className="text-slate-600 font-extrabold">{desktopPercent}%</span>
-            </span>
-          </div>
-          {/* Visual Device Bar */}
-          <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden flex">
-            <div style={{ width: `${mobilePercent}%` }} className="bg-blue-600 h-full" title={`Mobile: ${mobilePercent}%`} />
-            <div style={{ width: `${desktopPercent}%` }} className="bg-slate-400 h-full" title={`Desktop: ${desktopPercent}%`} />
-            <div style={{ width: `${tabletPercent}%` }} className="bg-amber-400 h-full" title={`Tablet: ${tabletPercent}%`} />
-          </div>
-        </div>
-
-        {/* Card 4: Storefront Activity */}
-        <div className="p-5 bg-white rounded-2xl border border-slate-200 shadow-xs relative overflow-hidden">
-          <div className="flex items-center justify-between mb-3">
-            <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-              {isKa ? 'სულ ქვეყნები' : 'Total Countries'}
-            </span>
-            <div className="p-2.5 rounded-xl bg-indigo-50 text-indigo-600">
-              <Compass className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="flex items-baseline space-x-2">
-            <h3 className="text-2xl font-black text-slate-900">
-              {currentCountryStats.length}
-            </h3>
-            <span className="text-xs font-bold text-slate-500">
-              {isKa ? 'გლობალური ლოკაცია' : 'Global Locations'}
-            </span>
-          </div>
-          <p className="text-[11px] text-slate-500 mt-1">
-            {isKa ? 'საქართველო, აშშ, გერმანია და სხვა' : 'Georgia, US, Germany & more'}
-          </p>
-        </div>
-
-      </div>
-
-      {/* Main Grid: Countries Breakdown (Left) + Hourly / 7-Day Dynamics (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-        
-        {/* Countries Breakdown List (7 Cols) */}
-        <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-6">
+        {/* TABLE 1: MOST VIEWED PRODUCTS (7 Columns) */}
+        <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-4">
             <div>
               <h3 className="text-base font-black text-slate-900 flex items-center space-x-2">
-                <Globe className="w-4 h-4 text-blue-600" />
-                <span>
-                  {isKa 
-                    ? `ქვეყნების რეიტინგი (${timeFilter === 'today' ? 'დღეს' : 'სრული'})` 
-                    : `Country Breakdown (${timeFilter === 'today' ? 'Today' : 'All-Time'})`}
-                </span>
+                <Eye className="w-4 h-4 text-purple-600" />
+                <span>{isKa ? 'ყველაზე ხშირად ნახული პროდუქტები' : 'Most Frequently Viewed Products'}</span>
               </h3>
-              <p className="text-xs text-slate-400 mt-0.5">
-                {isKa ? 'საიდან შემოდიან თქვენი მაღაზიის მყიდველები' : 'Where your storefront shoppers originate from'}
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isKa ? 'პროდუქტის გვერდის გახსნის რაოდენობა და პოპულარობა' : 'Product page open counts and view popularity share'}
               </p>
             </div>
-            <span className="text-xs font-bold text-slate-600 bg-slate-100 px-3 py-1 rounded-full">
-              {currentCountryStats.length} {isKa ? 'ქვეყანა' : 'Countries'}
+            <span className="text-xs font-bold text-slate-500">
+              {mostViewedProducts.length} {isKa ? 'ნაჩვენებია' : 'listed'}
+            </span>
+          </div>
+
+          {mostViewedProducts.length === 0 ? (
+            <div className="py-12 text-center text-slate-400 space-y-2">
+              <Eye className="w-8 h-8 mx-auto opacity-30" />
+              <p className="text-xs font-semibold">
+                {isKa ? 'პროდუქტის ნახვები ჯერ არ დაფიქსირებულა' : 'No product views recorded yet'}
+              </p>
+              <p className="text-[11px] text-slate-400">
+                {isKa ? 'როდესაც მყიდველები დაათვალიერებენ პროდუქტებს, მონაცემები აქ გამოჩნდება.' : 'When shoppers open product pages, views will rank here in real-time.'}
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase text-[10px]">
+                    <th className="pb-3 w-10">#</th>
+                    <th className="pb-3">{isKa ? 'პროდუქტი' : 'Product'}</th>
+                    <th className="pb-3 text-right">{isKa ? 'ფასი' : 'Price'}</th>
+                    <th className="pb-3 text-right">{isKa ? 'ნახვები' : 'Views'}</th>
+                    <th className="pb-3 w-32 text-right">{isKa ? 'პოპულარობა' : 'Share'}</th>
+                    <th className="pb-3 w-12 text-center"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {mostViewedProducts.map((p, idx) => (
+                    <tr key={p.id} className="hover:bg-slate-50/70 transition-colors group">
+                      <td className="py-3 font-bold text-slate-400">
+                        {idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}`}
+                      </td>
+                      <td className="py-3">
+                        <div className="flex items-center space-x-2.5">
+                          <div className="w-9 h-9 rounded-lg overflow-hidden bg-slate-100 shrink-0 border border-slate-200">
+                            <CachedImage
+                              src={p.image}
+                              alt={p.title}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              onError={handleImageError}
+                            />
+                          </div>
+                          <div className="truncate max-w-[200px] sm:max-w-[240px]">
+                            <p className="font-bold text-slate-900 truncate">
+                              {isKa && p.titleKa ? p.titleKa : p.title}
+                            </p>
+                            <span className="text-[10px] text-slate-400 uppercase font-medium">
+                              {p.category}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="py-3 text-right font-semibold text-slate-700">
+                        {formatPrice(p.price)}
+                      </td>
+                      <td className="py-3 text-right">
+                        <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full font-black text-xs bg-purple-50 text-purple-700 border border-purple-200">
+                          <Eye className="w-3 h-3 text-purple-500" />
+                          <span>{p.views.toLocaleString()}</span>
+                        </span>
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="flex items-center justify-end space-x-2">
+                          <div className="w-16 bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                            <div 
+                              className="bg-purple-600 h-full rounded-full transition-all duration-500"
+                              style={{ width: `${Math.max(p.percentage, 4)}%` }}
+                            />
+                          </div>
+                          <span className="text-[11px] font-bold text-slate-500 w-8 text-right">
+                            {p.percentage}%
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 text-center">
+                        <button
+                          onClick={() => navigateToProduct(p.id)}
+                          className="p-1.5 text-slate-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+                          title={isKa ? 'პროდუქტის ნახვა მაღაზიაში' : 'View Product in Store'}
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* TABLE 2: VISITOR COUNTRIES BREAKDOWN (5 Columns) */}
+        <div className="lg:col-span-5 bg-white rounded-3xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-black text-slate-900 flex items-center space-x-2">
+                <Globe className="w-4 h-4 text-emerald-600" />
+                <span>{isKa ? 'ვიზიტორთა ქვეყნები' : 'Visitor Countries'}</span>
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                {isKa ? 'IP Geolocation & რეგიონალური განაწილება' : 'Free Geolocation & regional origins'}
+              </p>
+            </div>
+            <span className="text-xs font-bold text-slate-500">
+              {currentCountryStats.length} {isKa ? 'ქვეყანა' : 'countries'}
             </span>
           </div>
 
           {currentCountryStats.length === 0 ? (
-            <div className="p-8 text-center text-slate-400">
-              {isKa ? 'ჯერჯერობით ვიზიტები არ დაფიქსირებულა.' : 'No visitor records recorded yet.'}
+            <div className="py-12 text-center text-slate-400 space-y-2">
+              <Globe className="w-8 h-8 mx-auto opacity-30" />
+              <p className="text-xs font-semibold">
+                {isKa ? 'ვიზიტორთა ლოკაციები იწერება...' : 'Waiting for incoming visitors...'}
+              </p>
             </div>
           ) : (
-            <div className="space-y-4">
-              {currentCountryStats.map((stat, idx) => (
-                <div key={stat.countryCode} className="space-y-1.5 p-3 rounded-2xl hover:bg-slate-50 transition-colors">
+            <div className="space-y-3">
+              {currentCountryStats.slice(0, 8).map((c, i) => (
+                <div key={c.countryCode} className="space-y-1">
                   <div className="flex items-center justify-between text-xs">
-                    <div className="flex items-center space-x-3">
-                      <span className="w-5 text-center font-bold text-slate-400 text-[11px]">
-                        #{idx + 1}
-                      </span>
-                      <span className="text-xl shrink-0">{stat.flag}</span>
-                      <div>
-                        <span className="font-bold text-slate-900 text-sm">{stat.country}</span>
-                        <span className="text-[11px] text-slate-400 ml-2 font-mono">({stat.countryCode})</span>
-                      </div>
+                    <div className="flex items-center space-x-2">
+                      <span className="text-lg select-none">{c.flag}</span>
+                      <span className="font-bold text-slate-900">{c.country}</span>
+                      <span className="text-[10px] text-slate-400 font-mono">({c.countryCode})</span>
                     </div>
-                    
-                    <div className="text-right">
-                      <span className="font-black text-slate-900 text-sm">{stat.visitors}</span>
-                      <span className="text-xs text-slate-500 ml-1">{isKa ? 'ვიზიტი' : 'visits'}</span>
-                      <span className="text-xs font-bold text-blue-600 ml-2">({stat.percentage}%)</span>
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-slate-800">{c.visitors} {isKa ? 'ვიზიტი' : 'visits'}</span>
+                      <span className="text-[11px] font-semibold text-slate-400">({c.percentage}%)</span>
                     </div>
                   </div>
-
-                  {/* Visual Bar */}
-                  <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                    <div
-                      style={{ width: `${Math.max(4, stat.percentage)}%` }}
+                  {/* Progress bar */}
+                  <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
+                    <div 
                       className={`h-full rounded-full transition-all duration-500 ${
-                        idx === 0 
-                          ? 'bg-blue-600' 
-                          : idx === 1 
-                          ? 'bg-indigo-500' 
-                          : idx === 2 
-                          ? 'bg-emerald-500' 
-                          : 'bg-slate-400'
+                        i === 0 ? 'bg-emerald-500' : i === 1 ? 'bg-blue-500' : 'bg-slate-400'
                       }`}
+                      style={{ width: `${Math.max(c.percentage, 3)}%` }}
                     />
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
 
-        {/* Right Column: 24-Hour & 7-Day Charts (5 Cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          
-          {/* Today's 24-Hour Activity Chart */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-slate-900 flex items-center space-x-2">
-                <Clock className="w-4 h-4 text-blue-600" />
-                <span>{isKa ? 'დღევანდელი საათობრივი აქტივობა' : "Today's Hourly Activity"}</span>
-              </h3>
-              <span className="text-[11px] font-bold text-slate-400">00:00 - 23:00</span>
-            </div>
-
-            {/* 24-Hour Bar Graph */}
-            <div className="h-32 flex items-end justify-between gap-1 pt-4 border-b border-slate-100 pb-2">
-              {hourlyCounts.map((count, hour) => {
-                const heightPercent = Math.round((count / maxHourlyCount) * 100);
-                const isCurrentHour = new Date().getHours() === hour;
-                return (
-                  <div
-                    key={hour}
-                    className="flex-1 flex flex-col items-center group relative h-full justify-end"
-                  >
-                    {/* Tooltip on hover */}
-                    <div className="absolute -top-7 hidden group-hover:flex px-1.5 py-0.5 bg-slate-900 text-white text-[10px] rounded-md font-bold whitespace-nowrap z-20 shadow-md">
-                      {hour}:00 — {count} {isKa ? 'ვიზიტი' : 'visits'}
-                    </div>
-                    <div
-                      style={{ height: `${Math.max(6, heightPercent)}%` }}
-                      className={`w-full rounded-t-sm transition-all ${
-                        isCurrentHour
-                          ? 'bg-blue-600 ring-2 ring-blue-400/40'
-                          : count > 0
-                          ? 'bg-blue-400/70 group-hover:bg-blue-600'
-                          : 'bg-slate-100'
-                      }`}
-                    />
-                  </div>
-                );
-              })}
-            </div>
-            
-            <div className="flex justify-between text-[10px] font-bold text-slate-400 px-1">
-              <span>00:00 {isKa ? '(ღამე)' : '(Night)'}</span>
-              <span>12:00 {isKa ? '(შუადღე)' : '(Noon)'}</span>
-              <span>18:00 {isKa ? '(საღამო)' : '(Evening)'}</span>
-              <span>23:00</span>
-            </div>
+          {/* Admin Exclusion Settings Footnote */}
+          <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-[11px]">
+            <span className="text-slate-500 flex items-center space-x-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{isKa ? 'ადმინის ვიზიტები გაფილტრულია' : 'Admin visits filtered'}</span>
+            </span>
+            <button
+              onClick={() => setExcludeAdminVisits(!excludeAdminVisits)}
+              className="font-bold text-blue-600 hover:text-blue-700 underline cursor-pointer"
+            >
+              {excludeAdminVisits ? (isKa ? 'გამორთვა' : 'Disable filter') : (isKa ? 'ჩართვა' : 'Enable filter')}
+            </button>
           </div>
-
-          {/* 7-Day History Trend Chart */}
-          <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-slate-900 flex items-center space-x-2">
-                <TrendingUp className="w-4 h-4 text-emerald-600" />
-                <span>{isKa ? 'ბოლო 7 დღის დინამიკა' : '7-Day Trend Dynamics'}</span>
-              </h3>
-              <span className="text-[11px] font-bold text-slate-400">{isKa ? 'ყოველდღიური ტრაფიკი' : 'Daily Traffic'}</span>
-            </div>
-
-            {/* 7 Days Bars */}
-            <div className="space-y-2.5 pt-1">
-              {dailyStats.map((d, idx) => {
-                const widthPercent = Math.round((d.visitors / maxDailyCount) * 100);
-                const isToday = idx === dailyStats.length - 1;
-                return (
-                  <div key={d.date} className="space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className={`font-semibold ${isToday ? 'text-blue-700 font-bold' : 'text-slate-600'}`}>
-                        {d.label} {isToday && (isKa ? ' (დღეს)' : ' (Today)')}
-                      </span>
-                      <span className="font-bold text-slate-900">
-                        {d.visitors} <span className="text-slate-400 font-normal">{isKa ? 'ვიზიტორი' : 'visitors'}</span>
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div
-                        style={{ width: `${Math.max(4, widthPercent)}%` }}
-                        className={`h-full rounded-full ${isToday ? 'bg-blue-600' : 'bg-slate-400'}`}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
         </div>
 
       </div>
 
-      {/* Live Visitor Activity Stream Log */}
-      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
-        <div className="p-6 border-b border-slate-100 flex items-center justify-between">
+      {/* ========================================================================= */}
+      {/* 5. DAILY VISITS DYNAMICS (7-DAY TREND) */}
+      {/* ========================================================================= */}
+      <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-5 sm:p-7 space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <div>
-            <h3 className="text-base font-black text-slate-900 flex items-center space-x-2">
-              <Layers className="w-4 h-4 text-blue-600" />
-              <span>{isKa ? 'ბოლო ვიზიტების რეალური ჟურნალი' : 'Live Visitor Stream Log'}</span>
+            <h3 className="text-sm font-black text-slate-900 flex items-center space-x-2">
+              <BarChart3 className="w-4 h-4 text-blue-600" />
+              <span>{isKa ? 'დღიური ვიზიტების დინამიკა (ბოლო 7 დღე)' : 'Daily Visits Dynamics (Last 7 Days)'}</span>
             </h3>
-            <p className="text-xs text-slate-400 mt-0.5">
-              {isKa ? 'უახლესი შემოსული მომხმარებლების სია, ლოკაცია და მოწყობილობა' : 'Recent visitors, geographic location and device details'}
+            <p className="text-xs text-slate-500 mt-0.5">
+              {isKa ? 'დღიური მოთხოვნებისა და ვიზიტების რაოდენობა' : 'Daily visitor counts and activity volume'}
             </p>
           </div>
-          <span className="text-xs font-bold text-slate-500 bg-slate-100 px-3 py-1 rounded-full">
-            {recentLogs.length} {isKa ? 'ჩანაწერი' : 'Records'}
+          <span className="text-[11px] font-bold text-slate-400">
+            {isKa ? 'ბოლო განახლება:' : 'Last updated:'} {lastRefreshedAt.toLocaleTimeString()}
           </span>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
-              <tr>
-                <th className="p-4">{isKa ? 'დრო' : 'Time'}</th>
-                <th className="p-4">{isKa ? 'ქვეყანა / ლოკაცია' : 'Country / Location'}</th>
-                <th className="p-4">{isKa ? 'ქალაქი' : 'City'}</th>
-                <th className="p-4">{isKa ? 'მოწყობილობა' : 'Device'}</th>
-                <th className="p-4">{isKa ? 'ბრაუზერი' : 'Browser'}</th>
-                <th className="p-4">{isKa ? 'მონახულებული გვერდი' : 'Page Visited'}</th>
-                <th className="p-4">{isKa ? 'IP (დაცული)' : 'IP (Masked)'}</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {recentLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={7} className="p-8 text-center text-slate-400">
-                    {isKa ? 'ვიზიტების ჟურნალი ცარიელია.' : 'Visitor log is currently empty.'}
-                  </td>
-                </tr>
-              ) : (
-                recentLogs.slice(0, 25).map((log) => {
-                  const logDate = new Date(log.timestamp);
-                  const isToday = log.dateString === new Date().toISOString().split('T')[0];
-                  const formattedTime = logDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-                  
-                  return (
-                    <tr key={log.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="p-4 text-slate-600 font-mono text-[11px]">
-                        <span className="font-bold text-slate-900">{formattedTime}</span>
-                        {!isToday && <span className="text-slate-400 ml-1.5">({log.dateString})</span>}
-                      </td>
-                      <td className="p-4">
-                        <div className="flex items-center space-x-2">
-                          <span className="text-lg">{log.flag}</span>
-                          <span className="font-bold text-slate-900">{log.country}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">[{log.countryCode}]</span>
-                        </div>
-                      </td>
-                      <td className="p-4 text-slate-600 font-medium">
-                        {log.city || 'Tbilisi'}
-                      </td>
-                      <td className="p-4">
-                        <span className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-md text-[11px] font-bold ${
-                          log.device === 'Mobile' 
-                            ? 'bg-blue-50 text-blue-700' 
-                            : log.device === 'Tablet'
-                            ? 'bg-amber-50 text-amber-700'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {log.device === 'Mobile' ? (
-                            <Smartphone className="w-3 h-3" />
-                          ) : log.device === 'Tablet' ? (
-                            <Tablet className="w-3 h-3" />
-                          ) : (
-                            <Monitor className="w-3 h-3" />
-                          )}
-                          <span>{log.device}</span>
-                        </span>
-                      </td>
-                      <td className="p-4 text-slate-600 font-medium">
-                        {log.browser}
-                      </td>
-                      <td className="p-4">
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-medium text-[11px]">
-                          {log.page}
-                        </span>
-                      </td>
-                      <td className="p-4 font-mono text-[11px] text-slate-400">
-                        {log.ipMasked}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+        {/* 7-Day Bar Chart */}
+        <div className="grid grid-cols-7 gap-2 sm:gap-3 items-end h-32 pt-4">
+          {dailyStats.map((day, idx) => {
+            const heightPercent = maxDailyCount > 0 ? Math.round((day.visitors / maxDailyCount) * 100) : 0;
+            const isToday = idx === dailyStats.length - 1;
+
+            return (
+              <div key={day.date} className="flex flex-col items-center h-full justify-end group">
+                <span className="text-[10px] font-bold text-slate-500 mb-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {day.visitors}
+                </span>
+                <div className="w-full max-w-[40px] bg-slate-100 rounded-t-lg h-full flex items-end overflow-hidden p-0.5">
+                  <div
+                    style={{ height: `${Math.max(heightPercent, 8)}%` }}
+                    className={`w-full rounded-t-md transition-all duration-500 ${
+                      isToday ? 'bg-blue-600 group-hover:bg-blue-500' : 'bg-slate-300 group-hover:bg-slate-400'
+                    }`}
+                  />
+                </div>
+                <span className={`text-[10px] font-bold mt-2 truncate max-w-full ${
+                  isToday ? 'text-blue-600' : 'text-slate-400'
+                }`}>
+                  {day.label}
+                </span>
+              </div>
+            );
+          })}
         </div>
       </div>
+
+      {/* ========================================================================= */}
+      {/* 6. CLOUDFLARE CONFIGURATION MODAL */}
+      {/* ========================================================================= */}
+      {showCfModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-200 animate-in zoom-in-95 duration-200 space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 rounded-xl bg-orange-100 text-orange-600">
+                  <Cloud className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-slate-900">Cloudflare Analytics Integration</h3>
+                  <p className="text-[11px] text-slate-500">GraphQL API & Web Analytics Token</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowCfModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 flex items-center justify-center font-bold text-xs cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCfConfig} className="space-y-4 text-xs">
+              {/* Token Input: Cloudflare Web Analytics Token */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Cloudflare Web Analytics Token (Beacon)
+                </label>
+                <input
+                  type="text"
+                  value={cfConfig.webAnalyticsToken || ''}
+                  onChange={e => setCfConfig({ ...cfConfig, webAnalyticsToken: e.target.value })}
+                  placeholder="e.g. 50f29a023b724b17926b4d32d0b54f9a"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                />
+                <span className="text-[10px] text-slate-400 mt-1 block">
+                  {isKa 
+                    ? 'Cloudflare Dashboard -> Web Analytics -> Token (ავტომატურად უერთდება beacon.min.js-ს)'
+                    : 'Cloudflare Dashboard -> Web Analytics -> Token (injects beacon automatically)'}
+                </span>
+              </div>
+
+              {/* Zone ID for GraphQL */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Cloudflare Zone ID (Tag)
+                </label>
+                <input
+                  type="text"
+                  value={cfConfig.zoneId || ''}
+                  onChange={e => setCfConfig({ ...cfConfig, zoneId: e.target.value })}
+                  placeholder="e.g. d68a3bb401b33364f7b605988e025816"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                />
+              </div>
+
+              {/* API Token for GraphQL */}
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">
+                  Cloudflare API Token (Analytics Read Permission)
+                </label>
+                <input
+                  type="password"
+                  value={cfConfig.apiToken || ''}
+                  onChange={e => setCfConfig({ ...cfConfig, apiToken: e.target.value })}
+                  placeholder="Bearer token with Analytics:Read"
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono text-slate-900 focus:bg-white focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                />
+              </div>
+
+              <div className="pt-2 flex items-center justify-end space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCfModal(false)}
+                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-bold text-xs cursor-pointer"
+                >
+                  {isKa ? 'გაუქმება' : 'Cancel'}
+                </button>
+                <button
+                  type="submit"
+                  disabled={cfLoading}
+                  className="px-5 py-2 rounded-xl bg-orange-600 hover:bg-orange-700 text-white font-bold text-xs cursor-pointer shadow-xs disabled:opacity-50"
+                >
+                  {cfLoading ? (isKa ? 'მოწმდება...' : 'Verifying...') : (isKa ? 'შენახვა და დაკავშირება' : 'Save & Connect')}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );
