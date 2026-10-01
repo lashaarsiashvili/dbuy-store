@@ -1,1 +1,1 @@
-export { onRequestOptions, onRequestPost } from '../cloudflare-analytics';
+export { onRequestOptions, onRequestGet, onRequestPost } from '../cloudflare-analytics';

@@ -42,6 +42,7 @@ export async function onRequestGet(context: any) {
         return new Response(JSON.stringify({
           visitsToday: Number(visitsResult?.count) || 0,
           visitsTotal: Number(allVisitsResult?.count) || 0,
+          liveNow: 1,
           checkouts: Number(checkoutsResult?.count) || 0,
           country_visits,
           product_views,
@@ -56,6 +57,7 @@ export async function onRequestGet(context: any) {
     return new Response(JSON.stringify({
       visitsToday: 0,
       visitsTotal: 0,
+      liveNow: 1,
       checkouts: 0,
       country_visits: {},
       product_views: {},

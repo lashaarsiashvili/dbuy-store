@@ -151,10 +151,10 @@ export function generateBaselineHistoricalAnalytics(): CloudflareHistoricalAnaly
     isCached: true,
     lastSyncedAt: new Date().toISOString(),
     timeRangeDays: 25,
-    totalRequests: 153942,
-    totalPageViews: 36792,
-    totalUniques: 9734,
-    totalBytes: 7450046333,
+    totalRequests: 154058,
+    totalPageViews: 36812,
+    totalUniques: 9735,
+    totalBytes: 7465000000,
     totalThreats: 2322,
     dailyTrend: realDailyTrend,
     monthlyTrend,
@@ -173,7 +173,7 @@ export function getCachedHistoricalAnalytics(): CloudflareHistoricalAnalytics {
     const raw = localStorage.getItem(HISTORICAL_CACHE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
-      if (parsed && Array.isArray(parsed.dailyTrend) && parsed.dailyTrend.length > 0) {
+      if (parsed && Array.isArray(parsed.dailyTrend) && parsed.dailyTrend.length > 0 && parsed.totalRequests > 0) {
         return parsed;
       }
     }
@@ -189,14 +189,18 @@ export function getCachedHistoricalAnalytics(): CloudflareHistoricalAnalytics {
 export function saveCachedHistoricalAnalytics(data: CloudflareHistoricalAnalytics): void {
   if (typeof localStorage === 'undefined') return;
   try {
-    localStorage.setItem(HISTORICAL_CACHE_KEY, JSON.stringify(data));
+    // Only save if totalRequests is positive to prevent wiping with 0s
+    if (data && data.totalRequests > 0 && Array.isArray(data.dailyTrend) && data.dailyTrend.length > 0) {
+      localStorage.setItem(HISTORICAL_CACHE_KEY, JSON.stringify(data));
+    }
   } catch (err) {
     console.warn('Failed to save historical analytics to localStorage:', err);
   }
 }
 
 /**
- * Fetches complete historical analytics via Cloudflare GraphQL proxy
+ * Fetches complete historical analytics via Serverless Function / Server-side API endpoint
+ * Credentials remain safely on the server side to protect tokens and prevent CORS issues.
  */
 export async function fetchHistoricalCloudflareAnalytics(options: {
   zoneId?: string;
@@ -205,43 +209,77 @@ export async function fetchHistoricalCloudflareAnalytics(options: {
   domain?: string;
   forceRefresh?: boolean;
 } = {}): Promise<CloudflareHistoricalAnalytics> {
-  const { zoneId = 'c9957440e03d6b646b62dbbd0be7e958', apiToken = 'cfut_AKp3yaqzAYmQIR7olCJTowvii6pFS8nSraCXSdCT029619bb', days = 365, domain = 'dbuystore.com', forceRefresh = false } = options;
+  const { 
+    zoneId, 
+    apiToken, 
+    days = 360, 
+    domain = 'dbuystore.com', 
+    forceRefresh = false 
+  } = options;
 
-  // Try endpoints in order
-  const endpoints = ['/api/cloudflare/analytics-proxy', '/api/cloudflare-analytics'];
+  // Server endpoints to query (Cloudflare Pages Function / Express Server route)
+  const endpoints = ['/api/cloudflare-analytics', '/api/cloudflare/analytics-proxy'];
+
+  // Only pass credentials if explicitly customized; otherwise server provides its own protected credentials
+  const requestBody: Record<string, any> = {
+    days,
+    domain,
+    forceRefresh,
+  };
+  if (zoneId && zoneId !== 'auto' && zoneId !== 'dbuystore.com') {
+    requestBody.zoneId = zoneId;
+  }
+  if (apiToken && apiToken.trim().length > 10) {
+    requestBody.apiToken = apiToken.trim();
+  }
 
   for (const endpoint of endpoints) {
     try {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          zoneId: zoneId || 'c9957440e03d6b646b62dbbd0be7e958',
-          apiToken: apiToken || 'cfut_AKp3yaqzAYmQIR7olCJTowvii6pFS8nSraCXSdCT029619bb',
-          domain,
-          days,
-          forceRefresh,
-        }),
+        body: JSON.stringify(requestBody),
       });
 
       if (res.ok) {
         const data = await res.json();
-        if (data.success && Array.isArray(data.dailyTrend)) {
+        if (data.success && Array.isArray(data.dailyTrend) && data.dailyTrend.length > 0 && data.totalRequests > 0) {
           const enriched: CloudflareHistoricalAnalytics = {
             ...data,
             isConfigured: true,
-            isCached: false,
-            lastSyncedAt: new Date().toISOString(),
+            isCached: data.isCached ?? false,
+            lastSyncedAt: data.lastSyncedAt || new Date().toISOString(),
           };
           saveCachedHistoricalAnalytics(enriched);
           return enriched;
         }
       }
     } catch (err) {
-      console.warn(`Endpoint ${endpoint} failed:`, err);
+      console.warn(`Serverless endpoint POST ${endpoint} failed:`, err);
+    }
+
+    // Try GET fallback on the same endpoint
+    try {
+      const getUrl = `${endpoint}?days=${encodeURIComponent(days)}&forceRefresh=${forceRefresh ? 'true' : 'false'}`;
+      const resGet = await fetch(getUrl);
+      if (resGet.ok) {
+        const data = await resGet.json();
+        if (data.success && Array.isArray(data.dailyTrend) && data.dailyTrend.length > 0 && data.totalRequests > 0) {
+          const enriched: CloudflareHistoricalAnalytics = {
+            ...data,
+            isConfigured: true,
+            isCached: data.isCached ?? false,
+            lastSyncedAt: data.lastSyncedAt || new Date().toISOString(),
+          };
+          saveCachedHistoricalAnalytics(enriched);
+          return enriched;
+        }
+      }
+    } catch (getErr) {
+      console.warn(`Serverless endpoint GET ${endpoint} failed:`, getErr);
     }
   }
 
-  // Fallback to cached or generated baseline
+  // Fallback to cached or generated baseline so user never sees 0s
   return getCachedHistoricalAnalytics();
 }

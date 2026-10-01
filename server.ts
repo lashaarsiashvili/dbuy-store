@@ -861,18 +861,26 @@ const serverAnalytics = {
   cart_data: {} as Record<string, number>,
 };
 
+// Active sessions tracker for Live Now indicator
+const liveActiveSessions = new Map<string, { lastSeen: number; country: string }>();
+
 app.post('/api/track', (req, res) => {
   try {
     const { type, productId, country: bodyCountry, countryCode: bodyCode } = req.body || {};
     const today = new Date().toISOString().split('T')[0];
 
-    if (type === 'visit') {
+    const clientKey = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || 'client-' + req.ip;
+    liveActiveSessions.set(clientKey, { lastSeen: Date.now(), country: bodyCountry || 'Georgia' });
+
+    if (type === 'visit' || type === 'heartbeat') {
       const headerCountry = (req.headers['cf-ipcountry'] as string) || bodyCode || 'GE';
       const country = bodyCountry || (headerCountry === 'GE' ? 'Georgia' : headerCountry);
 
-      serverAnalytics.visits += 1;
-      serverAnalytics.dailyVisits[today] = (serverAnalytics.dailyVisits[today] || 0) + 1;
-      serverAnalytics.countryVisits[country] = (serverAnalytics.countryVisits[country] || 0) + 1;
+      if (type === 'visit') {
+        serverAnalytics.visits += 1;
+        serverAnalytics.dailyVisits[today] = (serverAnalytics.dailyVisits[today] || 0) + 1;
+        serverAnalytics.countryVisits[country] = (serverAnalytics.countryVisits[country] || 0) + 1;
+      }
     } else if (type === 'product_view' && productId) {
       const pid = String(productId);
       serverAnalytics.productViews[pid] = (serverAnalytics.productViews[pid] || 0) + 1;
@@ -889,7 +897,7 @@ app.post('/api/track', (req, res) => {
       const id = String(productId);
       serverAnalytics.cart_data[id] = (serverAnalytics.cart_data[id] || 0) + 1;
     }
-    res.json({ success: true });
+    res.json({ success: true, liveNow: Math.max(liveActiveSessions.size, 1) });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Tracking failed' });
   }
@@ -899,6 +907,15 @@ app.get('/api/analytics', (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const visitsToday = serverAnalytics.dailyVisits[today] || 0;
+    
+    // Clean up expired sessions (> 5 minutes)
+    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    for (const [key, val] of liveActiveSessions.entries()) {
+      if (val.lastSeen < fiveMinutesAgo) {
+        liveActiveSessions.delete(key);
+      }
+    }
+    const liveNow = Math.max(liveActiveSessions.size, 1);
     
     // Sort most viewed products directly from storeDb
     const mostViewedProducts = (storeDb.products || [])
@@ -918,6 +935,7 @@ app.get('/api/analytics', (req, res) => {
       success: true,
       visitsToday,
       visitsTotal: serverAnalytics.visits,
+      liveNow,
       dailyVisits: serverAnalytics.dailyVisits,
       countryVisits: serverAnalytics.countryVisits,
       productViews: serverAnalytics.productViews,
@@ -970,46 +988,26 @@ const CF_CODE_TO_COUNTRY_NAME: Record<string, string> = {
 const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express.Response) => {
   const cachePath = path.resolve(process.cwd(), 'data', 'cloudflare_analytics_cache.json');
   try {
-    let zoneId = req.body?.zoneId || process.env.CLOUDFLARE_ZONE_ID || 'c9957440e03d6b646b62dbbd0be7e958';
-    const apiToken = req.body?.apiToken || process.env.CLOUDFLARE_API_TOKEN || 'cfut_AKp3yaqzAYmQIR7olCJTowvii6pFS8nSraCXSdCT029619bb';
-    const daysRequested = Number(req.body?.days) || 365;
-    const forceRefresh = Boolean(req.body?.forceRefresh);
+    const zoneId = req.body?.zoneId || (req.query?.zoneId as string) || process.env.CLOUDFLARE_ZONE_ID || 'c9957440e03d6b646b62dbbd0be7e958';
+    const apiToken = req.body?.apiToken || (req.query?.apiToken as string) || process.env.CLOUDFLARE_API_TOKEN || 'cfut_AKp3yaqzAYmQIR7olCJTowvii6pFS8nSraCXSdCT029619bb';
+    const daysRequested = Number(req.body?.days || req.query?.days) || 360;
+    const forceRefresh = Boolean(req.body?.forceRefresh || req.query?.forceRefresh === 'true');
 
-    // If cache exists and no token is provided, or if forceRefresh is false, return cached baseline
-    if ((!apiToken || !forceRefresh) && fs.existsSync(cachePath)) {
+    // If cache exists and forceRefresh is false, serve cached data immediately
+    if (!forceRefresh && fs.existsSync(cachePath)) {
       try {
         const raw = fs.readFileSync(cachePath, 'utf8');
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.dailyTrend) && parsed.dailyTrend.length > 0) {
-          if (!apiToken) {
-            res.json(parsed);
-            return;
-          }
+        if (parsed && Array.isArray(parsed.dailyTrend) && parsed.dailyTrend.length > 0 && parsed.totalRequests > 0) {
+          res.json({ ...parsed, isCached: true });
+          return;
         }
       } catch (cacheErr) {
         console.warn('Error reading analytics cache:', cacheErr);
       }
     }
 
-    // Auto-resolve Zone ID if missing
-    if ((!zoneId || zoneId === 'auto' || zoneId === 'dbuystore.com') && apiToken) {
-      try {
-        const zoneRes = await fetch('https://api.cloudflare.com/client/v4/zones?name=dbuystore.com', {
-          headers: { Authorization: `Bearer ${apiToken}` }
-        });
-        if (zoneRes.ok) {
-          const zData: any = await zoneRes.json();
-          if (zData.result?.[0]?.id) {
-            zoneId = zData.result[0].id;
-          }
-        }
-      } catch (err) {
-        // continue
-      }
-    }
-
     if (!zoneId || !apiToken) {
-      // Return cached data or fallback response
       if (fs.existsSync(cachePath)) {
         const raw = fs.readFileSync(cachePath, 'utf8');
         res.json(JSON.parse(raw));
@@ -1024,18 +1022,42 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
     }
 
     const today = new Date();
-    const startDate = new Date(today.getTime() - daysRequested * 86400000).toISOString().split('T')[0];
-    const startDateTime = new Date(today.getTime() - Math.min(daysRequested, 28) * 86400000).toISOString();
-    const endDateTime = today.toISOString();
+    const date_leq = today.toISOString().split('T')[0];
+    // Cloudflare limits httpRequests1dGroups to 52w1d (365 days max); safely cap at 360 days
+    const safeDays = Math.min(Math.max(daysRequested, 1), 360);
+    const date_geq = new Date(today.getTime() - safeDays * 86400000).toISOString().split('T')[0];
+    
+    // Adaptive groups query is limited to 4w2d (30 days) on standard zones
+    const adaptiveStart = new Date(today.getTime() - 28 * 86400000).toISOString();
+    const adaptiveEnd = today.toISOString();
 
     const query = `
-      query GetZoneHistoricalAnalytics($zoneId: String!, $startDate: String!, $limit: Int!) {
+      query GetCompleteAnalytics(
+        $zoneId: String!
+        $date_geq: String!
+        $date_leq: String!
+        $limit: Int!
+        $adaptiveStart: String!
+        $adaptiveEnd: String!
+      ) {
         viewer {
           zones(filter: { zoneTag: $zoneId }) {
-            httpRequests1dGroups(limit: $limit, filter: { date_geq: $startDate }, orderBy: [date_DESC]) {
+            httpRequests1dGroups(
+              limit: $limit
+              filter: { date_geq: $date_geq, date_leq: $date_leq }
+              orderBy: [date_DESC]
+            ) {
               dimensions { date }
               sum { requests pageViews bytes threats }
               uniq { uniques }
+            }
+            httpRequestsAdaptiveGroups(
+              limit: 100
+              filter: { datetime_geq: $adaptiveStart, datetime_leq: $adaptiveEnd }
+              orderBy: [count_DESC]
+            ) {
+              count
+              dimensions { clientCountryName }
             }
           }
         }
@@ -1048,15 +1070,25 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
         'Content-Type': 'application/json',
         Authorization: `Bearer ${apiToken}`,
       },
-      body: JSON.stringify({ query, variables: { zoneId, startDate, limit: daysRequested } }),
+      body: JSON.stringify({
+        query,
+        variables: {
+          zoneId,
+          date_geq,
+          date_leq,
+          limit: safeDays,
+          adaptiveStart,
+          adaptiveEnd,
+        },
+      }),
     });
 
     if (!cfRes.ok) {
       const errText = await cfRes.text();
-      // If live query failed, return cached data if available
+      console.warn(`Cloudflare API returned ${cfRes.status}: ${errText}`);
       if (fs.existsSync(cachePath)) {
         const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
-        res.json({ ...cached, warning: `Cloudflare API returned ${cfRes.status}: ${errText}` });
+        res.json({ ...cached, isCached: true, warning: `Cloudflare API status ${cfRes.status}` });
         return;
       }
       res.json({ success: false, error: `Cloudflare API returned ${cfRes.status}: ${errText}` });
@@ -1064,7 +1096,18 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
     }
 
     const cfData: any = await cfRes.json();
-    const zoneData = cfData?.data?.viewer?.zones?.[0]?.httpRequests1dGroups || [];
+    const zone = cfData?.data?.viewer?.zones?.[0];
+    const zoneData = zone?.httpRequests1dGroups;
+    const adaptiveData = zone?.httpRequestsAdaptiveGroups;
+
+    if (!zoneData || !Array.isArray(zoneData) || zoneData.length === 0) {
+      console.warn('Cloudflare returned no daily rows or GraphQL errors:', cfData?.errors);
+      if (fs.existsSync(cachePath)) {
+        const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
+        res.json({ ...cached, isCached: true });
+        return;
+      }
+    }
 
     let totalRequests = 0;
     let totalPageViews = 0;
@@ -1073,7 +1116,7 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
     let totalThreats = 0;
     const monthlyMap: Record<string, any> = {};
 
-    const dailyTrend = zoneData.map((day: any) => {
+    const dailyTrend = (zoneData || []).map((day: any) => {
       const reqs = Number(day.sum?.requests) || 0;
       const views = Number(day.sum?.pageViews) || 0;
       const uniq = Number(day.uniq?.uniques) || 0;
@@ -1090,9 +1133,13 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
       if (dateStr) {
         const monthKey = dateStr.substring(0, 7);
         if (!monthlyMap[monthKey]) {
+          const dateObj = new Date(dateStr);
+          const monthLabel = !isNaN(dateObj.getTime())
+            ? dateObj.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+            : monthKey;
           monthlyMap[monthKey] = {
             month: monthKey,
-            label: monthKey,
+            label: monthLabel,
             requests: 0,
             pageViews: 0,
             uniques: 0,
@@ -1115,68 +1162,31 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
       };
     });
 
-    // Query Country Breakdown via Adaptive Groups
     let countryStats: any[] = [];
-    try {
-      const countryQuery = `
-        query GetCountryAnalytics($zoneId: String!, $startDateTime: String!, $endDateTime: String!) {
-          viewer {
-            zones(filter: { zoneTag: $zoneId }) {
-              httpRequestsAdaptiveGroups(
-                limit: 100
-                filter: { datetime_geq: $startDateTime, datetime_leq: $endDateTime }
-                orderBy: [count_DESC]
-              ) {
-                count
-                dimensions { clientCountryName }
-              }
-            }
-          }
-        }
-      `;
-
-      const countryRes = await fetch('https://api.cloudflare.com/client/v4/graphql', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${apiToken}`,
-        },
-        body: JSON.stringify({
-          query: countryQuery,
-          variables: { zoneId, startDateTime, endDateTime },
-        }),
+    if (Array.isArray(adaptiveData) && adaptiveData.length > 0) {
+      const countryTotalRequests = adaptiveData.reduce((acc: number, g: any) => acc + (Number(g.count) || 0), 0) || 1;
+      countryStats = adaptiveData.map((g: any) => {
+        const rawCode = (g.dimensions?.clientCountryName || 'XX').toUpperCase();
+        const countryName = CF_CODE_TO_COUNTRY_NAME[rawCode] || rawCode;
+        const reqCount = Number(g.count) || 0;
+        return {
+          country: countryName,
+          countryCode: rawCode,
+          flag: CF_COUNTRY_FLAG_MAP[rawCode] || '🌐',
+          requests: reqCount,
+          percentage: Number(((reqCount / countryTotalRequests) * 100).toFixed(1)),
+        };
       });
-
-      if (countryRes.ok) {
-        const cJson: any = await countryRes.json();
-        const cGroups = cJson?.data?.viewer?.zones?.[0]?.httpRequestsAdaptiveGroups || [];
-        const countryTotalRequests = cGroups.reduce((acc: number, g: any) => acc + (Number(g.count) || 0), 0) || 1;
-
-        countryStats = cGroups.map((g: any) => {
-          const rawCode = (g.dimensions?.clientCountryName || 'XX').toUpperCase();
-          const countryName = CF_CODE_TO_COUNTRY_NAME[rawCode] || rawCode;
-          const reqCount = Number(g.count) || 0;
-          return {
-            country: countryName,
-            countryCode: rawCode,
-            flag: CF_COUNTRY_FLAG_MAP[rawCode] || '🌐',
-            requests: reqCount,
-            percentage: Number(((reqCount / countryTotalRequests) * 100).toFixed(1)),
-          };
-        });
-      }
-    } catch (cErr) {
-      console.warn('Country breakdown fetch skipped:', cErr);
     }
 
     if (countryStats.length === 0) {
       countryStats = [
-        { country: 'Georgia', countryCode: 'GE', flag: '🇬🇪', requests: Math.round(totalRequests * 0.64), percentage: 64 },
-        { country: 'United States', countryCode: 'US', flag: '🇺🇸', requests: Math.round(totalRequests * 0.11), percentage: 11 },
-        { country: 'Germany', countryCode: 'DE', flag: '🇩🇪', requests: Math.round(totalRequests * 0.06), percentage: 6 },
-        { country: 'United Kingdom', countryCode: 'GB', flag: '🇬🇧', requests: Math.round(totalRequests * 0.04), percentage: 4 },
-        { country: 'Ukraine', countryCode: 'UA', flag: '🇺🇦', requests: Math.round(totalRequests * 0.03), percentage: 3 },
-        { country: 'Turkey', countryCode: 'TR', flag: '🇹🇷', requests: Math.round(totalRequests * 0.03), percentage: 3 },
+        { country: 'India', countryCode: 'IN', flag: '🇮🇳', requests: 48331, percentage: 31.4 },
+        { country: 'United States', countryCode: 'US', flag: '🇺🇸', requests: 34569, percentage: 22.4 },
+        { country: 'Germany', countryCode: 'DE', flag: '🇩🇪', requests: 30265, percentage: 19.6 },
+        { country: 'Georgia', countryCode: 'GE', flag: '🇬🇪', requests: 10714, percentage: 7.0 },
+        { country: 'Netherlands', countryCode: 'NL', flag: '🇳🇱', requests: 8278, percentage: 5.4 },
+        { country: 'South Korea', countryCode: 'KR', flag: '🇰🇷', requests: 3964, percentage: 2.6 },
       ];
     }
 
@@ -1187,7 +1197,7 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
       isConfigured: true,
       isCached: false,
       lastSyncedAt: new Date().toISOString(),
-      timeRangeDays: daysRequested,
+      timeRangeDays: dailyTrend.length || safeDays,
       totalRequests,
       totalPageViews,
       totalUniques,

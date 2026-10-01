@@ -4,20 +4,20 @@
   "zoneId": "c9957440e03d6b646b62dbbd0be7e958",
   "isConfigured": true,
   "isCached": false,
-  "lastSyncedAt": "2026-10-01T19:26:34.957Z",
+  "lastSyncedAt": "2026-10-01T19:39:31.779Z",
   "timeRangeDays": 25,
-  "totalRequests": 153942,
-  "totalPageViews": 36792,
-  "totalUniques": 9734,
-  "totalBytes": 7450046333,
+  "totalRequests": 154058,
+  "totalPageViews": 36812,
+  "totalUniques": 9735,
+  "totalBytes": 7465074255,
   "totalThreats": 2322,
   "dailyTrend": [
     {
       "date": "2026-10-01",
-      "requests": 3421,
-      "pageViews": 1196,
-      "uniques": 203,
-      "bytes": 126626758,
+      "requests": 3537,
+      "pageViews": 1216,
+      "uniques": 204,
+      "bytes": 141654680,
       "threats": 205
     },
     {
@@ -217,10 +217,10 @@
     {
       "month": "2026-10",
       "label": "Oct 2026",
-      "requests": 3421,
-      "pageViews": 1196,
-      "uniques": 203,
-      "bytes": 126626758
+      "requests": 3537,
+      "pageViews": 1216,
+      "uniques": 204,
+      "bytes": 141654680
     },
     {
       "month": "2026-09",
@@ -237,28 +237,28 @@
       "countryCode": "IN",
       "flag": "🇮🇳",
       "requests": 48331,
-      "percentage": 29.6
+      "percentage": 29.5
     },
     {
       "country": "United States",
       "countryCode": "US",
       "flag": "🇺🇸",
-      "requests": 34565,
+      "requests": 34569,
       "percentage": 21.1
     },
     {
       "country": "Germany",
       "countryCode": "DE",
       "flag": "🇩🇪",
-      "requests": 30070,
-      "percentage": 18.4
+      "requests": 30282,
+      "percentage": 18.5
     },
     {
       "country": "Georgia",
       "countryCode": "GE",
       "flag": "🇬🇪",
-      "requests": 10714,
-      "percentage": 6.6
+      "requests": 10723,
+      "percentage": 6.5
     },
     {
       "country": "Netherlands",
@@ -383,7 +383,7 @@
       "country": "Cloudflare Network",
       "countryCode": "XX",
       "flag": "🌐",
-      "requests": 539,
+      "requests": 547,
       "percentage": 0.3
     },
     {
@@ -513,16 +513,16 @@
       "percentage": 0
     },
     {
-      "country": "Argentina",
-      "countryCode": "AR",
-      "flag": "🇦🇷",
+      "country": "Mexico",
+      "countryCode": "MX",
+      "flag": "🇲🇽",
       "requests": 17,
       "percentage": 0
     },
     {
-      "country": "Mexico",
-      "countryCode": "MX",
-      "flag": "🇲🇽",
+      "country": "Argentina",
+      "countryCode": "AR",
+      "flag": "🇦🇷",
       "requests": 17,
       "percentage": 0
     },
@@ -646,15 +646,15 @@
       "percentage": 0
     },
     {
-      "country": "CL",
-      "countryCode": "CL",
+      "country": "BO",
+      "countryCode": "BO",
       "flag": "🌐",
-      "requests": 5,
+      "requests": 6,
       "percentage": 0
     },
     {
-      "country": "BO",
-      "countryCode": "BO",
+      "country": "CL",
+      "countryCode": "CL",
       "flag": "🌐",
       "requests": 5,
       "percentage": 0
