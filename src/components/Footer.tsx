@@ -121,16 +121,6 @@ export const Footer: React.FC = () => {
                 {t('nav.myOrders')}
               </button>
             </li>
-            {isAdmin && (
-              <li>
-                <button
-                  onClick={() => setCurrentPage('admin')}
-                  className="text-amber-400 hover:text-amber-300 font-bold transition-colors cursor-pointer text-left flex items-center space-x-1"
-                >
-                  <span>⚙️ {t('top.admin')}</span>
-                </button>
-              </li>
-            )}
           </ul>
         </div>
 
@@ -235,15 +225,6 @@ export const Footer: React.FC = () => {
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
                 <span>{useStore().language === 'ka' ? 'ვერიფიცირებული მიწოდება' : 'Verified Deliveries'}</span>
-              </button>
-            </li>
-            <li>
-              <button
-                onClick={() => setCurrentPage('admin')}
-                className="hover:text-amber-400 text-slate-400 font-medium transition-colors cursor-pointer text-left flex items-center space-x-1.5 text-[11px]"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-500 shrink-0" />
-                <span>{useStore().language === 'ka' ? 'ადმინ პორტალი' : 'Admin Portal'}</span>
               </button>
             </li>
             <li className="pt-1">

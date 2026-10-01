@@ -149,6 +149,7 @@ export const AdminDashboard: React.FC = () => {
   }, [adminSecretSlug]);
 
   // Password Login Gate State for non-logged in or non-admin users
+  const [adminEmailInput, setAdminEmailInput] = useState('');
   const [pinInput, setPinInput] = useState('');
   const [showPinPassword, setShowPinPassword] = useState(false);
   const [authError, setAuthError] = useState(false);
@@ -657,10 +658,12 @@ export const AdminDashboard: React.FC = () => {
 
   const handlePinSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const success = loginUser('lashaarsiashvili@gmail.com', 'Lasha (Admin)', pinInput);
+    const emailToUse = adminEmailInput.trim().toLowerCase();
+    const success = loginUser(emailToUse, 'Administrator', pinInput);
     if (success) {
       setAuthError(false);
       setPinInput('');
+      setAdminEmailInput('');
     } else {
       setAuthError(true);
       setPinInput('');
@@ -1402,11 +1405,9 @@ export const AdminDashboard: React.FC = () => {
               {isKa ? 'ადმინისტრატორის ავტორიზაცია' : 'Administrator Authorization'}
             </h2>
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              {isKa ? (
-                <>ადმინ პანელზე წვდომა დაცულია. გთხოვთ შეიყვანოთ ადმინის (<span className="text-amber-600 dark:text-amber-300 font-semibold">lashaarsiashvili@gmail.com</span>) პაროლი.</>
-              ) : (
-                <>Admin panel access is protected. Please enter admin (<span className="text-amber-600 dark:text-amber-300 font-semibold">lashaarsiashvili@gmail.com</span>) password.</>
-              )}
+              {isKa 
+                ? 'ადმინ პანელზე წვდომა დაცულია. შეიყვანეთ ავტორიზაციის მონაცემები.' 
+                : 'Admin panel access is protected. Please enter your administrator credentials.'}
             </p>
           </div>
 
@@ -1417,9 +1418,15 @@ export const AdminDashboard: React.FC = () => {
               </label>
               <input
                 type="email"
-                disabled
-                value="lashaarsiashvili@gmail.com"
-                className="w-full px-4 py-2.5 text-xs bg-slate-100 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-600 dark:text-slate-400 font-mono select-none"
+                required
+                autoComplete="username"
+                value={adminEmailInput}
+                onChange={e => {
+                  setAdminEmailInput(e.target.value);
+                  setAuthError(false);
+                }}
+                placeholder={isKa ? 'შეიყვანეთ ელ-ფოსტა...' : 'Enter administrator email...'}
+                className="w-full px-4 py-2.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:bg-white dark:focus:bg-slate-950 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
               />
             </div>
 
@@ -1477,7 +1484,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
               {authError && (
                 <p className="text-xs text-red-500 dark:text-red-400 font-medium mt-1.5">
-                  {isKa ? 'პაროლი არასწორია! გთხოვთ სცადოთ თავიდან.' : 'Incorrect password! Please try again.'}
+                  {isKa ? 'ელ-ფოსტა ან პაროლი არასწორია! გთხოვთ სცადოთ თავიდან.' : 'Invalid email or password! Please try again.'}
                 </p>
               )}
             </div>
@@ -3481,7 +3488,7 @@ export const AdminDashboard: React.FC = () => {
                     <span>{isKa ? 'Session Shield' : 'Session Shield'}</span>
                   </div>
                   <p className="text-[11px] text-slate-400">
-                    {isKa ? 'მოითხოვს დაცულ პაროლს lashaarsiashvili@gmail.com ექაუნთისთვის.' : 'Enforces cryptographic authentication for admin account.'}
+                    {isKa ? 'მოითხოვს დაცულ პაროლს ადმინისტრატორის ანგარიშისთვის.' : 'Enforces cryptographic authentication for admin account.'}
                   </p>
                 </div>
               </div>
@@ -3509,7 +3516,7 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     {isKa ? 'ადმინის ელ-ფოსტა' : 'Admin Email'}
                   </p>
-                  <p className="text-xs font-mono font-bold text-slate-900">lashaarsiashvili@gmail.com</p>
+                  <p className="text-xs font-mono font-bold text-slate-900">{user.email || 'admin@dbuystore.com'}</p>
                 </div>
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
