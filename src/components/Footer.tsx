@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { BrandLogo } from './BrandLogo';
 import { ShieldCheck, Mail, ArrowRight, Lock, CheckCircle2 } from 'lucide-react';
-import { GooglePayMark, GooglePayVector, VisaLogo, MastercardLogo, PayPalLogo, ApplePayLogo } from './PaymentLogos';
+import { PaymentBadges } from './PaymentBadges';
 import { InstagramOriginalLogo } from './InstagramLogo';
 import { ScrollReveal } from './ScrollReveal';
 
@@ -278,64 +278,28 @@ export const Footer: React.FC = () => {
             </p>
           </div>
 
-          {/* Authentic Official Payment System Badges & Logos */}
-          <div className="flex flex-wrap items-center justify-center gap-2.5">
-            {/* 1. Official VISA Brand Logo */}
-            <div 
-              className="h-8 px-3.5 bg-white rounded-lg flex items-center justify-center shadow-xs border border-slate-200 hover:border-slate-300 transition-all cursor-default select-none"
-              title="Visa"
-            >
-              <VisaLogo className="h-3.5 w-auto" />
-            </div>
+          {/* Authentic Official Payment Methods Bar */}
+          <div className="flex flex-col items-center gap-1.5 order-2">
+            <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 hidden sm:block">
+              {useStore().language === 'ka' ? 'გადახდის მეთოდები' : 'Secure Payment Methods'}
+            </span>
+            <PaymentBadges />
+          </div>
 
-            {/* 2. Official MASTERCARD Brand Logo */}
-            <div 
-              className="h-8 px-3 bg-white rounded-lg flex items-center justify-center shadow-xs border border-slate-200 hover:border-slate-300 transition-all cursor-default select-none"
-              title="Mastercard"
-            >
-              <MastercardLogo className="h-5 w-auto" />
-            </div>
-
-            {/* 3. Official PAYPAL Brand Logo */}
-            <div 
-              className="h-8 px-3.5 bg-white rounded-lg flex items-center justify-center shadow-xs border border-slate-200 hover:border-slate-300 transition-all cursor-default select-none"
-              title="PayPal"
-            >
-              <PayPalLogo className="h-4.5 w-auto" />
-            </div>
-
-            {/* 4. Official APPLE PAY Brand Logo (Authentic Apple Silhouette + Vector 'Pay' path) */}
-            <div 
-              className="h-8 px-3 bg-white rounded-lg flex items-center justify-center shadow-xs border border-slate-200 hover:border-slate-300 transition-all cursor-default select-none"
-              title="Apple Pay"
-            >
-              <ApplePayLogo className="h-4 w-auto" fill="#000000" />
-            </div>
-
-            {/* 5. Official GOOGLE PAY Brand Logo */}
-            <div 
-              className="h-8 px-3 bg-white rounded-lg flex items-center justify-center shadow-xs border border-slate-200 hover:border-slate-300 transition-all cursor-default select-none"
-              title="Google Pay"
-            >
-              <GooglePayVector className="h-4 w-auto" isDark={false} />
-            </div>
-
-            {/* Subtle separator */}
-            <div className="h-5 w-px bg-slate-800 mx-0.5 hidden sm:block"></div>
-
-            {/* Official Instagram Badge (Bottom-Right Corner) */}
+          {/* Dedicated Social Media Section (Decoupled from Payment Trust Row) */}
+          <div className="flex items-center space-x-2 order-3">
             <a
               id="footer-bottom-right-instagram"
               href="https://www.instagram.com/dbuy.store/"
               target="_blank"
               rel="noopener noreferrer"
-              className="h-8 px-2.5 bg-slate-900 hover:bg-slate-850 rounded-lg flex items-center justify-center space-x-1.5 border border-slate-800 hover:border-pink-500/50 shadow-xs transition-all group cursor-pointer"
+              className="h-[30px] px-3 bg-slate-900 hover:bg-slate-850 rounded-[6px] flex items-center space-x-2 border border-slate-800 hover:border-pink-500/50 shadow-2xs transition-all group cursor-pointer select-none"
               title="Follow DBUY on Instagram (@dbuy.store)"
               aria-label="Instagram Profile @dbuy.store"
             >
               <InstagramOriginalLogo size="xs" />
-              <span className="text-[11px] font-bold text-slate-200 group-hover:text-pink-400 transition-colors">
-                Instagram
+              <span className="text-[11px] font-bold text-slate-300 group-hover:text-pink-400 transition-colors">
+                @dbuy.store
               </span>
             </a>
           </div>
