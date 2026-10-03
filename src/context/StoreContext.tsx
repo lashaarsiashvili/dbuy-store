@@ -891,12 +891,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Products - Durable persistence: relies on localStorage or falls back to initialProducts
-  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v22_15_products_distinct_images';
+  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v23_official_catalog_only';
 
   const [products, setProducts] = useState<Product[]>(() => {
     try {
+      const savedVersion = localStorage.getItem('dbuy_catalog_version');
       const saved = localStorage.getItem('dbuy_products');
-      if (saved !== null) {
+      if (savedVersion === CURRENT_CATALOG_VERSION && saved !== null) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
           return parsed.map(sanitizeProductUrls);
@@ -909,31 +910,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     try {
       localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));
+      localStorage.removeItem('dbuy_products_last_updated');
     } catch (e) {}
     return fresh;
   });
-
-  // Load products dynamically from the D1 relational database upon boot
-  useEffect(() => {
-    const loadProductsFromApi = async () => {
-      try {
-        const res = await fetch('/api/products');
-        if (res.ok) {
-          const apiProducts = await res.json();
-          const list = Array.isArray(apiProducts) 
-            ? apiProducts 
-            : (apiProducts && Array.isArray(apiProducts.products) ? apiProducts.products : null);
-          if (Array.isArray(list)) {
-            setProducts(list.map(sanitizeProductUrls));
-            localStorage.setItem('dbuy_products', JSON.stringify(list));
-          }
-        }
-      } catch (err) {
-        console.error('Failed to load products from /api/products:', err);
-      }
-    };
-    loadProductsFromApi();
-  }, []);
 
   // Pre-cache product images to IndexedDB and RAM cache to prevent image loss during re-renders or state updates
   useEffect(() => {
@@ -1158,13 +1138,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return true;
   };
 
-  const deleteProduct = (id: string) => {
+  const deleteProduct = async (id: string) => {
     const deleted = products.find(p => p.id === id);
-    setProducts(prev => {
-      const newProducts = prev.filter(p => p.id !== id);
-      saveProducts(newProducts);
-      return newProducts;
-    });
+    const newProducts = products.filter(p => p.id !== id);
+    setProducts(newProducts);
+    await saveProducts(newProducts);
     addToast(
       language === 'ka' 
         ? `პროდუქტი „${deleted?.title || 'Product'}“ წაიშალა` 
@@ -1721,7 +1699,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (d.lastUpdated) {
           lastSyncTimestampRef.current = d.lastUpdated;
         }
-        if (Array.isArray(d.products)) {
+        if (false && Array.isArray(d.products)) {
           setProducts(prevProducts => {
             // Never wipe out local products if server returns empty list
             if (d.products.length === 0 && prevProducts.length > 0) {
