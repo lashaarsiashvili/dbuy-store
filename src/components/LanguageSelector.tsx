@@ -211,10 +211,9 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
                 <button
                   key={item.code}
                   type="button"
-                  onClick={() => handleSelectLanguage(item.code)}
-                  onPointerDown={(e) => {
-                    // Prevent outside touch/click dismissal race condition
+                  onClick={(e) => {
                     e.stopPropagation();
+                    handleSelectLanguage(item.code);
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors cursor-pointer text-left ${
                     isSelected

@@ -332,7 +332,8 @@ export const CategoryBrowse: React.FC = () => {
     products, 
     selectedCategory, 
     setSelectedCategory, 
-    language 
+    language,
+    t
   } = useStore();
 
   const isKa = language === 'ka';
@@ -351,71 +352,71 @@ export const CategoryBrowse: React.FC = () => {
     return [
       {
         id: 'drinkware',
-        titleEn: 'Smart Hydration',
-        titleKa: 'Smart Hydration',
-        countTextEn: `${countDrinkware} ${countDrinkware === 1 ? 'item' : 'items'}`,
+        titleEn: t('nav.cat.drinkware'),
+        titleKa: t('nav.cat.drinkware'),
+        countTextEn: `${countDrinkware} items`,
         countTextKa: `${countDrinkware} ნივთი`,
         photoComponent: SmartHydrationPhoto,
       },
       {
         id: 'gaming',
-        titleEn: 'Gaming',
-        titleKa: 'Gaming',
-        countTextEn: `${countGaming} ${countGaming === 1 ? 'item' : 'items'}`,
+        titleEn: t('nav.cat.gaming'),
+        titleKa: t('nav.cat.gaming'),
+        countTextEn: `${countGaming} items`,
         countTextKa: `${countGaming} ნივთი`,
         photoComponent: GamingPhoto,
       },
       {
         id: 'wearables',
-        titleEn: 'Fitness Trackers',
-        titleKa: 'Fitness Trackers',
-        countTextEn: `${countWearables} ${countWearables === 1 ? 'item' : 'items'}`,
+        titleEn: t('nav.cat.wearables'),
+        titleKa: t('nav.cat.wearables'),
+        countTextEn: `${countWearables} items`,
         countTextKa: `${countWearables} ნივთი`,
         photoComponent: FitnessTrackersPhoto,
       },
       {
         id: 'audio',
-        titleEn: 'Studio',
-        titleKa: 'Studio',
-        countTextEn: `${countAudio} ${countAudio === 1 ? 'item' : 'items'}`,
+        titleEn: t('nav.cat.audio'),
+        titleKa: t('nav.cat.audio'),
+        countTextEn: `${countAudio} items`,
         countTextKa: `${countAudio} ნივთი`,
         photoComponent: StudioPhoto,
       },
       {
         id: 'tech',
-        titleEn: 'Tech',
-        titleKa: 'Tech',
-        countTextEn: `${countTech} ${countTech === 1 ? 'item' : 'items'}`,
+        titleEn: t('nav.cat.tech'),
+        titleKa: t('nav.cat.tech'),
+        countTextEn: `${countTech} items`,
         countTextKa: `${countTech} ნივთი`,
         photoComponent: TechPhoto,
       },
       {
         id: 'fitness',
-        titleEn: 'Health & Fitness',
-        titleKa: 'Health & Fitness',
-        countTextEn: `${countFitness} ${countFitness === 1 ? 'item' : 'items'}`,
+        titleEn: t('nav.cat.fitness'),
+        titleKa: t('nav.cat.fitness'),
+        countTextEn: `${countFitness} items`,
         countTextKa: `${countFitness} ნივთი`,
         photoComponent: HealthFitnessPhoto,
       },
       {
         id: 'deals',
-        titleEn: 'Hot Deals',
-        titleKa: 'Hot Deals',
-        countTextEn: `${countDeals} ${countDeals === 1 ? 'deal' : 'deals'}`,
+        titleEn: t('nav.cat.deals'),
+        titleKa: t('nav.cat.deals'),
+        countTextEn: `${countDeals} deals`,
         countTextKa: `${countDeals} ფასდაკლება`,
         photoComponent: HotDealsPhoto,
         isHotDeals: true,
       },
       {
         id: 'all',
-        titleEn: 'All Products',
-        titleKa: isKa ? 'ყველა პროდუქტი' : 'All Products',
-        countTextEn: `${countAll} ${countAll === 1 ? 'item' : 'items'}`,
+        titleEn: t('nav.allCategories'),
+        titleKa: t('nav.allCategories'),
+        countTextEn: `${countAll} items`,
         countTextKa: `${countAll} ნივთი`,
         photoComponent: AllProductsPhoto,
       },
     ];
-  }, [products, isKa]);
+  }, [products, language, t]);
 
   const handleCategoryClick = (catId: Category) => {
     setSelectedCategory(catId);

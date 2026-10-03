@@ -127,11 +127,33 @@ export const Hero: React.FC = () => {
         style={{ transform: `translateX(-${currentIndex * 100}vw)` }}
       >
         {slides.map((slide, idx) => {
-          const slideTitle = isKa && slide.titleKa ? slide.titleKa : slide.title;
-          const slideSubtitle = isKa && slide.subtitleKa 
+          const slideTitle = language === 'ka' && slide.titleKa 
+            ? slide.titleKa 
+            : (
+                language === 'ru' && (slide as any).titleRu 
+                  ? (slide as any).titleRu 
+                  : (language === 'es' && (slide as any).titleEs 
+                      ? (slide as any).titleEs 
+                      : (slide.title || (slide as any).title_en || ''))
+              );
+          const slideSubtitle = language === 'ka' && slide.subtitleKa 
             ? slide.subtitleKa 
-            : (slide.subtitle || (slide as unknown as { desc?: string }).desc || '');
-          const slideBadge = isKa && slide.badgeKa ? slide.badgeKa : slide.badge;
+            : (
+                language === 'ru' && (slide as any).subtitleRu 
+                  ? (slide as any).subtitleRu 
+                  : (language === 'es' && (slide as any).subtitleEs 
+                      ? (slide as any).subtitleEs 
+                      : (slide.subtitle || (slide as unknown as { desc?: string }).desc || ''))
+              );
+          const slideBadge = language === 'ka' && slide.badgeKa 
+            ? slide.badgeKa 
+            : (
+                language === 'ru' && (slide as any).badgeRu 
+                  ? (slide as any).badgeRu 
+                  : (language === 'es' && (slide as any).badgeEs 
+                      ? (slide as any).badgeEs 
+                      : (slide.badge || ''))
+              );
           const slideImage = slide.image || slide.bgImage || '';
 
           return (
@@ -158,15 +180,16 @@ export const Hero: React.FC = () => {
                   {slideTitle}
                 </h1>
 
-                {/* Minimalist CTA Button */}
-                <div className="pt-1">
+                {/* Modern Pill CTA Button */}
+                <div className="pt-2">
                   <button
                     type="button"
                     onClick={() => handleSlideAction(slide)}
-                    className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-blue-900/50 hover:shadow-blue-600/50 transition-all cursor-pointer inline-flex items-center space-x-2"
+                    className="group relative inline-flex items-center space-x-3 px-7 py-3.5 rounded-full bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 active:scale-95 text-white font-black text-xs sm:text-sm tracking-wider uppercase shadow-[0_0_25px_rgba(56,189,248,0.5)] hover:shadow-[0_0_30px_rgba(56,189,248,0.8)] border border-white/30 transition-all duration-300 cursor-pointer overflow-hidden"
                   >
-                    <span>{isKa ? slide.buttonTextKa || 'ყიდვა ახლა' : slide.buttonText || 'Shop Now'}</span>
-                    <span className="text-base sm:text-lg leading-none">&#10095;</span>
+                    <span className="relative z-10">{isKa ? slide.buttonTextKa || 'ყიდვა ახლა' : slide.buttonText || 'Shop Now'}</span>
+                    <span className="relative z-10 text-base leading-none transform group-hover:translate-x-1 transition-transform duration-200">&#8594;</span>
+                    <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   </button>
                 </div>
 
