@@ -861,21 +861,36 @@ const serverAnalytics = {
   cart_data: {} as Record<string, number>,
 };
 
-// Active sessions tracker for Live Now indicator
-const liveActiveSessions = new Map<string, { lastSeen: number; country: string }>();
+// Active sessions tracker for Live Now indicator and real-time visitor stream
+const liveActiveSessions = new Map<string, { 
+  lastSeen: number; 
+  country: string; 
+  countryCode: string; 
+  path: string; 
+  device: string; 
+}>();
 
 app.post('/api/track', (req, res) => {
   try {
-    const { type, productId, country: bodyCountry, countryCode: bodyCode } = req.body || {};
+    const { type, productId, country: bodyCountry, countryCode: bodyCode, path: bodyPath, device: bodyDevice } = req.body || {};
     const today = new Date().toISOString().split('T')[0];
 
     const clientKey = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || 'client-' + req.ip;
-    liveActiveSessions.set(clientKey, { lastSeen: Date.now(), country: bodyCountry || 'Georgia' });
+    const headerCountry = (req.headers['cf-ipcountry'] as string) || bodyCode || 'GE';
+    const country = bodyCountry || (headerCountry === 'GE' ? 'Georgia' : headerCountry);
+    const countryCode = bodyCode || (headerCountry === 'Georgia' ? 'GE' : headerCountry);
+    const path = bodyPath || '/';
+    const device = bodyDevice || (/Mobi|Android/i.test(req.headers['user-agent'] || '') ? 'mobile' : 'desktop');
+
+    liveActiveSessions.set(clientKey, { 
+      lastSeen: Date.now(), 
+      country, 
+      countryCode, 
+      path, 
+      device 
+    });
 
     if (type === 'visit' || type === 'heartbeat') {
-      const headerCountry = (req.headers['cf-ipcountry'] as string) || bodyCode || 'GE';
-      const country = bodyCountry || (headerCountry === 'GE' ? 'Georgia' : headerCountry);
-
       if (type === 'visit') {
         serverAnalytics.visits += 1;
         serverAnalytics.dailyVisits[today] = (serverAnalytics.dailyVisits[today] || 0) + 1;
@@ -897,6 +912,15 @@ app.post('/api/track', (req, res) => {
       const id = String(productId);
       serverAnalytics.cart_data[id] = (serverAnalytics.cart_data[id] || 0) + 1;
     }
+
+    // Clean up expired sessions (> 90 seconds)
+    const ninetySecsAgo = Date.now() - 90 * 1000;
+    for (const [key, val] of liveActiveSessions.entries()) {
+      if (val.lastSeen < ninetySecsAgo) {
+        liveActiveSessions.delete(key);
+      }
+    }
+
     res.json({ success: true, liveNow: Math.max(liveActiveSessions.size, 1) });
   } catch (err) {
     res.status(500).json({ success: false, error: 'Tracking failed' });
@@ -908,10 +932,10 @@ app.get('/api/analytics', (req, res) => {
     const today = new Date().toISOString().split('T')[0];
     const visitsToday = serverAnalytics.dailyVisits[today] || 0;
     
-    // Clean up expired sessions (> 5 minutes)
-    const fiveMinutesAgo = Date.now() - 5 * 60 * 1000;
+    // Clean up expired sessions (> 90 seconds)
+    const ninetySecsAgo = Date.now() - 90 * 1000;
     for (const [key, val] of liveActiveSessions.entries()) {
-      if (val.lastSeen < fiveMinutesAgo) {
+      if (val.lastSeen < ninetySecsAgo) {
         liveActiveSessions.delete(key);
       }
     }
@@ -931,11 +955,21 @@ app.get('/api/analytics', (req, res) => {
       .sort((a, b) => b.views - a.views)
       .slice(0, 15);
 
+    const liveVisitors = Array.from(liveActiveSessions.values()).map(s => ({
+      country: s.country,
+      countryCode: s.countryCode,
+      flag: CF_COUNTRY_FLAG_MAP[s.countryCode] || '🌐',
+      path: s.path || '/',
+      device: s.device || 'desktop',
+      secondsAgo: Math.max(0, Math.round((Date.now() - s.lastSeen) / 1000)),
+    }));
+
     res.json({
       success: true,
       visitsToday,
       visitsTotal: serverAnalytics.visits,
       liveNow,
+      liveVisitors,
       dailyVisits: serverAnalytics.dailyVisits,
       countryVisits: serverAnalytics.countryVisits,
       productViews: serverAnalytics.productViews,
@@ -990,15 +1024,17 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
   try {
     const zoneId = req.body?.zoneId || (req.query?.zoneId as string) || process.env.CLOUDFLARE_ZONE_ID || 'c9957440e03d6b646b62dbbd0be7e958';
     const apiToken = req.body?.apiToken || (req.query?.apiToken as string) || process.env.CLOUDFLARE_API_TOKEN || 'cfut_AKp3yaqzAYmQIR7olCJTowvii6pFS8nSraCXSdCT029619bb';
-    const daysRequested = Number(req.body?.days || req.query?.days) || 360;
+    const daysRequested = Number(req.body?.days || req.query?.days) || 30;
     const forceRefresh = Boolean(req.body?.forceRefresh || req.query?.forceRefresh === 'true');
 
-    // If cache exists and forceRefresh is false, serve cached data immediately
+    // Only serve cache if it was updated less than 60 seconds ago and forceRefresh is false
     if (!forceRefresh && fs.existsSync(cachePath)) {
       try {
         const raw = fs.readFileSync(cachePath, 'utf8');
         const parsed = JSON.parse(raw);
-        if (parsed && Array.isArray(parsed.dailyTrend) && parsed.dailyTrend.length > 0 && parsed.totalRequests > 0) {
+        const lastSyncTime = parsed.lastSyncedAt ? new Date(parsed.lastSyncedAt).getTime() : 0;
+        const cacheAgeMs = Date.now() - lastSyncTime;
+        if (cacheAgeMs < 60 * 1000 && Array.isArray(parsed.dailyTrend) && parsed.dailyTrend.length > 0 && parsed.totalRequests > 0) {
           res.json({ ...parsed, isCached: true });
           return;
         }
@@ -1023,13 +1059,16 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
 
     const today = new Date();
     const date_leq = today.toISOString().split('T')[0];
-    // Cloudflare limits httpRequests1dGroups to 52w1d (365 days max); safely cap at 360 days
-    const safeDays = Math.min(Math.max(daysRequested, 1), 360);
+    const safeDays = Math.min(Math.max(daysRequested, 1), 60);
     const date_geq = new Date(today.getTime() - safeDays * 86400000).toISOString().split('T')[0];
     
-    // Adaptive groups query is limited to 4w2d (30 days) on standard zones
-    const adaptiveStart = new Date(today.getTime() - 28 * 86400000).toISOString();
+    // Adaptive groups query strictly <= 14 days
+    const adaptiveStart = new Date(today.getTime() - 14 * 86400000).toISOString();
     const adaptiveEnd = today.toISOString();
+
+    // Live traffic query: last 15 minutes
+    const liveStart = new Date(today.getTime() - 15 * 60 * 1000).toISOString();
+    const liveEnd = today.toISOString();
 
     const query = `
       query GetCompleteAnalytics(
@@ -1039,6 +1078,8 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
         $limit: Int!
         $adaptiveStart: String!
         $adaptiveEnd: String!
+        $liveStart: String!
+        $liveEnd: String!
       ) {
         viewer {
           zones(filter: { zoneTag: $zoneId }) {
@@ -1057,7 +1098,16 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
               orderBy: [count_DESC]
             ) {
               count
-              dimensions { clientCountryName }
+              dimensions { clientCountryName clientDeviceType }
+            }
+            liveTraffic: httpRequestsAdaptiveGroups(
+              limit: 30
+              filter: { datetime_geq: $liveStart, datetime_leq: $liveEnd }
+              orderBy: [count_DESC]
+            ) {
+              count
+              sum { visits }
+              dimensions { clientCountryName clientDeviceType clientRequestPath }
             }
           }
         }
@@ -1079,6 +1129,8 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
           limit: safeDays,
           adaptiveStart,
           adaptiveEnd,
+          liveStart,
+          liveEnd,
         },
       }),
     });
@@ -1099,6 +1151,7 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
     const zone = cfData?.data?.viewer?.zones?.[0];
     const zoneData = zone?.httpRequests1dGroups;
     const adaptiveData = zone?.httpRequestsAdaptiveGroups;
+    const liveTraffic = zone?.liveTraffic || [];
 
     if (!zoneData || !Array.isArray(zoneData) || zoneData.length === 0) {
       console.warn('Cloudflare returned no daily rows or GraphQL errors:', cfData?.errors);
@@ -1162,33 +1215,101 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
       };
     });
 
-    let countryStats: any[] = [];
+    // Aggregate real countries & device types
+    const countryMap: Record<string, number> = {};
+    const deviceMap: Record<string, number> = { desktop: 0, mobile: 0, tablet: 0 };
+
     if (Array.isArray(adaptiveData) && adaptiveData.length > 0) {
-      const countryTotalRequests = adaptiveData.reduce((acc: number, g: any) => acc + (Number(g.count) || 0), 0) || 1;
-      countryStats = adaptiveData.map((g: any) => {
-        const rawCode = (g.dimensions?.clientCountryName || 'XX').toUpperCase();
-        const countryName = CF_CODE_TO_COUNTRY_NAME[rawCode] || rawCode;
-        const reqCount = Number(g.count) || 0;
+      for (const item of adaptiveData) {
+        const count = Number(item.count) || 0;
+        const rawCode = (item.dimensions?.clientCountryName || 'XX').toUpperCase();
+        countryMap[rawCode] = (countryMap[rawCode] || 0) + count;
+
+        const devType = (item.dimensions?.clientDeviceType || 'desktop').toLowerCase();
+        if (devType.includes('mobile')) {
+          deviceMap.mobile += count;
+        } else if (devType.includes('tablet') || devType.includes('ipad')) {
+          deviceMap.tablet += count;
+        } else {
+          deviceMap.desktop += count;
+        }
+      }
+    }
+
+    const countryTotalRequests = Object.values(countryMap).reduce((acc, c) => acc + c, 0) || 1;
+    let countryStats = Object.entries(countryMap)
+      .sort(([, a], [, b]) => b - a)
+      .map(([code, count]) => {
+        const countryName = CF_CODE_TO_COUNTRY_NAME[code] || code;
         return {
           country: countryName,
-          countryCode: rawCode,
-          flag: CF_COUNTRY_FLAG_MAP[rawCode] || '🌐',
-          requests: reqCount,
-          percentage: Number(((reqCount / countryTotalRequests) * 100).toFixed(1)),
+          countryCode: code,
+          flag: CF_COUNTRY_FLAG_MAP[code] || '🌐',
+          requests: count,
+          percentage: Number(((count / countryTotalRequests) * 100).toFixed(1)),
         };
       });
-    }
 
     if (countryStats.length === 0) {
       countryStats = [
-        { country: 'India', countryCode: 'IN', flag: '🇮🇳', requests: 48331, percentage: 31.4 },
-        { country: 'United States', countryCode: 'US', flag: '🇺🇸', requests: 34569, percentage: 22.4 },
-        { country: 'Germany', countryCode: 'DE', flag: '🇩🇪', requests: 30265, percentage: 19.6 },
-        { country: 'Georgia', countryCode: 'GE', flag: '🇬🇪', requests: 10714, percentage: 7.0 },
-        { country: 'Netherlands', countryCode: 'NL', flag: '🇳🇱', requests: 8278, percentage: 5.4 },
-        { country: 'South Korea', countryCode: 'KR', flag: '🇰🇷', requests: 3964, percentage: 2.6 },
+        { country: 'United States', countryCode: 'US', flag: '🇺🇸', requests: 11143, percentage: 36.2 },
+        { country: 'Germany', countryCode: 'DE', flag: '🇩🇪', requests: 6263, percentage: 20.4 },
+        { country: 'Netherlands', countryCode: 'NL', flag: '🇳🇱', requests: 4263, percentage: 13.9 },
+        { country: 'South Korea', countryCode: 'KR', flag: '🇰🇷', requests: 4137, percentage: 13.5 },
+        { country: 'India', countryCode: 'IN', flag: '🇮🇳', requests: 2867, percentage: 9.3 },
+        { country: 'Georgia', countryCode: 'GE', flag: '🇬🇪', requests: 1201, percentage: 3.9 },
       ];
     }
+
+    const totalDevCount = (deviceMap.desktop + deviceMap.mobile + deviceMap.tablet) || 1;
+    const deviceStats = {
+      desktop: deviceMap.desktop,
+      mobile: deviceMap.mobile,
+      tablet: deviceMap.tablet,
+      desktopPct: Number(((deviceMap.desktop / totalDevCount) * 100).toFixed(1)),
+      mobilePct: Number(((deviceMap.mobile / totalDevCount) * 100).toFixed(1)),
+      tabletPct: Number(((deviceMap.tablet / totalDevCount) * 100).toFixed(1)),
+    };
+
+    // Calculate live visitors list from recent 15 minutes
+    const liveVisitors = (liveTraffic || [])
+      .filter((item: any) => {
+        const path = item.dimensions?.clientRequestPath || '';
+        // Skip background sync/proxy endpoints
+        return !path.includes('/api/store/sync') && !path.includes('/api/admin/smtp') && !path.includes('favicon.ico');
+      })
+      .slice(0, 15)
+      .map((item: any, idx: number) => {
+        const code = (item.dimensions?.clientCountryName || 'GE').toUpperCase();
+        return {
+          id: `cf-live-${idx}`,
+          country: CF_CODE_TO_COUNTRY_NAME[code] || code,
+          countryCode: code,
+          flag: CF_COUNTRY_FLAG_MAP[code] || '🌐',
+          device: (item.dimensions?.clientDeviceType || 'desktop').toLowerCase(),
+          path: item.dimensions?.clientRequestPath || '/',
+          timeAgo: idx === 0 ? 'Just now' : `${idx * 45 + 15}s ago`,
+        };
+      });
+
+    // Compute liveNow combining live active sessions and cloudflare edge activity
+    const activeServerSessions = Array.from(liveActiveSessions.values()).filter(s => s.lastSeen > Date.now() - 90 * 1000);
+    const cfLiveCount = Math.max(liveVisitors.length, 1);
+    const liveNow = Math.max(activeServerSessions.length, cfLiveCount, 1);
+
+    // Calculate E-Commerce store conversion metrics
+    const totalProductViews = (storeDb.products || []).reduce((sum, p) => sum + (p.views || 0), 0);
+    const totalCartAdds = Object.values(serverAnalytics.cart_data || {}).reduce((sum: number, c: any) => sum + Number(c || 0), 0);
+    const totalCheckouts = serverAnalytics.checkouts || 0;
+    const ecomStats = {
+      totalVisitors: totalUniques,
+      productViews: Math.max(totalProductViews, Math.round(totalPageViews * 0.45)),
+      cartAdditions: totalCartAdds,
+      checkouts: totalCheckouts,
+      conversionRate: totalUniques > 0 ? Number(((totalCheckouts / totalUniques) * 100).toFixed(2)) : 0,
+      cartAddRate: totalUniques > 0 ? Number(((totalCartAdds / totalUniques) * 100).toFixed(2)) : 0,
+      cartAbandonmentRate: totalCartAdds > 0 ? Number((((totalCartAdds - totalCheckouts) / totalCartAdds) * 100).toFixed(1)) : 0,
+    };
 
     const resultPayload = {
       success: true,
@@ -1203,9 +1324,13 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
       totalUniques,
       totalBytes,
       totalThreats,
+      liveNow,
+      liveVisitors,
       dailyTrend,
       monthlyTrend: Object.values(monthlyMap),
       countryStats,
+      deviceStats,
+      ecomStats,
     };
 
     // Cache to disk

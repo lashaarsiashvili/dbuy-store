@@ -1742,14 +1742,14 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('analytics')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'analytics'
-                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Activity className="w-4 h-4 text-blue-600" />
+            <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>{isKa ? 'ტრაფიკი & ანალიტიკა' : 'Traffic & Analytics'}</span>
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'analytics' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+              activeTab === 'analytics' ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}>
               {analyticsData.totalVisitorsToday}
             </span>
@@ -1759,14 +1759,14 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('products')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'products'
-                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Package className="w-4 h-4 text-blue-600" />
+            <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>{isKa ? 'პროდუქტების კატალოგი' : 'Products Catalog'}</span>
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'products' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+              activeTab === 'products' ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}>
               {products.length}
             </span>
@@ -1776,14 +1776,14 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('billboards')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'billboards'
-                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Layers className="w-4 h-4 text-blue-600" />
+            <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>{isKa ? 'ბილბორდები & ბანერები' : 'Billboards & Banners'}</span>
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'billboards' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+              activeTab === 'billboards' ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}>
               {billboards.length}
             </span>
@@ -1793,11 +1793,11 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('theme')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'theme'
-                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Sparkles className="w-4 h-4 text-blue-600" />
+            <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>{isKa ? 'ვიზუალური თემა' : 'Theme & Styles'}</span>
           </button>
 
@@ -1805,14 +1805,14 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('orders')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'orders'
-                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <ShoppingBag className="w-4 h-4 text-blue-600" />
+            <ShoppingBag className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>{isKa ? 'შეკვეთები' : 'Orders'}</span>
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'orders' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+              activeTab === 'orders' ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}>
               {orders.length}
             </span>
@@ -1822,14 +1822,14 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('users')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'users'
-                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Users className="w-4 h-4 text-blue-600" />
+            <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>{isKa ? 'იუზერები' : 'Users'}</span>
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'users' ? 'bg-blue-100 text-blue-800' : 'bg-slate-200 text-slate-600'
+              activeTab === 'users' ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}>
               {registeredUsers.length}
             </span>
@@ -1839,11 +1839,11 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('security')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'security'
-                ? 'bg-white text-amber-700 shadow-sm border border-amber-200/80'
-                : 'text-slate-600 hover:text-amber-800 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 shadow-sm border border-amber-200/80 dark:border-amber-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-amber-800 dark:hover:text-amber-300 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Lock className="w-4 h-4 text-amber-600" />
+            <Lock className="w-4 h-4 text-amber-600 dark:text-amber-400" />
             <span>{isKa ? 'უსაფრთხოება' : 'Security'}</span>
           </button>
 
@@ -1851,11 +1851,11 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('messages')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'messages'
-                ? 'bg-white text-blue-700 shadow-sm border border-slate-200/80'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
-            <Mail className="w-4 h-4 text-blue-600" />
+            <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <span>{isKa ? 'შეტყობინებები & Zoho Email' : 'Messages & Zoho Email'}</span>
             {contactMessages.filter(m => m.status === 'unread').length > 0 && (
               <span className="px-1.5 py-0.5 rounded-full text-[10px] font-extrabold bg-red-500 text-white animate-pulse">
@@ -1868,14 +1868,14 @@ export const AdminDashboard: React.FC = () => {
             onClick={() => setActiveTab('reviews')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'reviews'
-                ? 'bg-white text-amber-700 shadow-sm border border-slate-200/80'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                ? 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
             <span>{isKa ? 'შეფასებები' : 'Reviews'}</span>
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
-              activeTab === 'reviews' ? 'bg-amber-100 text-amber-800' : 'bg-slate-200 text-slate-600'
+              activeTab === 'reviews' ? 'bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}>
               {reviewService.getAllReviews().length}
             </span>

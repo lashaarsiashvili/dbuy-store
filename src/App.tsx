@@ -38,6 +38,16 @@ const MainLayout: React.FC = () => {
       user?.email?.toLowerCase().trim() === 'admin@dbuy.com'
     );
     analytics.trackVisit(isCurrentAdmin);
+
+    // Active session heartbeat every 25 seconds for real-time live visitor tracking
+    if (!isCurrentAdmin) {
+      const interval = setInterval(() => {
+        if (typeof document !== 'undefined' && !document.hidden) {
+          analytics.trackHeartbeat(window.location.pathname);
+        }
+      }, 25000);
+      return () => clearInterval(interval);
+    }
   }, [user, isAdmin]);
 
   // Scroll to top on page change and log view

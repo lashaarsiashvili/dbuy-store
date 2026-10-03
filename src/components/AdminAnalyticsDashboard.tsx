@@ -71,7 +71,11 @@ export const analytics = {
   // Record visits from guests/mobiles/socials (Excludes Admin)
   trackVisit: async (isAdmin: boolean = false) => {
     if (isAdmin) return;
-    if (typeof sessionStorage !== 'undefined' && (sessionStorage.getItem('cf_visit_recorded') || sessionStorage.getItem('session_visit_recorded'))) return; // Avoid refresh spam
+    if (typeof sessionStorage !== 'undefined' && (sessionStorage.getItem('cf_visit_recorded') || sessionStorage.getItem('session_visit_recorded'))) {
+      // Still send heartbeat to maintain active session
+      analytics.trackHeartbeat();
+      return;
+    }
 
     // Dual-record locally for offline / preview resilience
     const local = getLocalAnalyticsStorage();
@@ -84,15 +88,57 @@ export const analytics = {
     }
 
     try {
-      if (CLOUDFLARE_WORKER_URL && !CLOUDFLARE_WORKER_URL.includes('your-worker-subdomain')) {
-        await fetch(`${CLOUDFLARE_WORKER_URL}/api/track`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'visit' })
-        });
-      }
+      await fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          type: 'visit',
+          path: typeof window !== 'undefined' ? window.location.pathname : '/',
+          device: typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+        }),
+        keepalive: true,
+      });
     } catch (err) {
-      console.error('Analytics: Failed to track visit on Cloudflare:', err);
+      console.warn('Analytics: Failed to track visit:', err);
+    }
+  },
+
+  // Record active visitor heartbeat (every 25s while browsing)
+  trackHeartbeat: async (path?: string) => {
+    try {
+      const currentPath = path || (typeof window !== 'undefined' ? window.location.pathname : '/');
+      await fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          type: 'heartbeat',
+          path: currentPath,
+          device: typeof navigator !== 'undefined' && /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+        }),
+        keepalive: true,
+      });
+    } catch {
+      // Non-blocking
+    }
+  },
+
+  // Record product view
+  trackProductView: async (productId?: string | number) => {
+    if (!productId) return;
+    const pid = String(productId);
+    try {
+      await fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          type: 'product_view',
+          productId: pid,
+          path: `/product/${pid}`,
+        }),
+        keepalive: true,
+      });
+    } catch {
+      // Non-blocking
     }
   },
 
@@ -107,15 +153,14 @@ export const analytics = {
     saveLocalAnalyticsStorage(local);
 
     try {
-      if (CLOUDFLARE_WORKER_URL && !CLOUDFLARE_WORKER_URL.includes('your-worker-subdomain')) {
-        await fetch(`${CLOUDFLARE_WORKER_URL}/api/track`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'cart', productId: pid })
-        });
-      }
+      await fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'cart', productId: pid }),
+        keepalive: true,
+      });
     } catch (err) {
-      console.error('Analytics: Failed to track cart addition on Cloudflare:', err);
+      console.warn('Analytics: Failed to track cart addition:', err);
     }
   },
 
@@ -129,15 +174,14 @@ export const analytics = {
     saveLocalAnalyticsStorage(local);
 
     try {
-      if (CLOUDFLARE_WORKER_URL && !CLOUDFLARE_WORKER_URL.includes('your-worker-subdomain')) {
-        await fetch(`${CLOUDFLARE_WORKER_URL}/api/track`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'checkout' })
-        });
-      }
+      await fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'checkout' }),
+        keepalive: true,
+      });
     } catch (err) {
-      console.error('Analytics: Failed to track checkout attempt on Cloudflare:', err);
+      console.warn('Analytics: Failed to track checkout attempt:', err);
     }
   },
 

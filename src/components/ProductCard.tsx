@@ -5,6 +5,7 @@ import { Star, ShoppingCart, Eye, Check, Heart, Share2, Link as LinkIcon } from 
 import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
+import { getProductTitle } from '../utils/productLanguage';
 
 interface ProductCardProps {
   product: Product;
@@ -26,9 +27,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
   const [justAdded, setJustAdded] = useState(false);
 
   const isFavorite = isInWishlist(product.id);
-  const displayTitle = language === 'en'
-    ? (product.title_en || product.title)
-    : (product.title_ka || product.titleKa || product.title);
+  const displayTitle = getProductTitle(product, language);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();

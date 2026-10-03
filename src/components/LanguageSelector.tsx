@@ -158,21 +158,30 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
 
   // Close on outside click
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
+    const handleClickOutside = (event: MouseEvent | TouchEvent) => {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setIsOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('touchstart', handleClickOutside, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('touchstart', handleClickOutside);
+    };
   }, []);
+
+  const handleSelectLanguage = (code: Language) => {
+    setLanguage(code);
+    setIsOpen(false);
+  };
 
   return (
     <div className="relative inline-block text-left" ref={containerRef}>
       {/* Trigger Button */}
       <button
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={() => setIsOpen(prev => !prev)}
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         className={`inline-flex items-center space-x-1.5 px-2 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer select-none shadow-2xs ${
@@ -202,9 +211,10 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
                 <button
                   key={item.code}
                   type="button"
-                  onClick={() => {
-                    setLanguage(item.code);
-                    setIsOpen(false);
+                  onClick={() => handleSelectLanguage(item.code)}
+                  onPointerDown={(e) => {
+                    // Prevent outside touch/click dismissal race condition
+                    e.stopPropagation();
                   }}
                   className={`w-full flex items-center justify-between px-3 py-2 text-xs transition-colors cursor-pointer text-left ${
                     isSelected

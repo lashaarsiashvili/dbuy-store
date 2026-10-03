@@ -5,6 +5,7 @@ import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { analytics } from './AdminAnalyticsDashboard';
+import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { 
   X, 
   Star, 
@@ -52,13 +53,8 @@ export const QuickViewModal: React.FC = () => {
 
   if (!quickViewProduct) return null;
 
-  const displayTitle = language === 'en'
-    ? (quickViewProduct.title_en || quickViewProduct.title)
-    : (quickViewProduct.title_ka || quickViewProduct.titleKa || quickViewProduct.title);
-
-  const displayDesc = language === 'en'
-    ? (quickViewProduct.description_en || quickViewProduct.description)
-    : (quickViewProduct.description_ka || quickViewProduct.descriptionKa || quickViewProduct.description);
+  const displayTitle = getProductTitle(quickViewProduct, language);
+  const displayDesc = getProductDescription(quickViewProduct, language);
 
   // Build full gallery of images for this product
   const galleryImages: string[] = (quickViewProduct.images && Array.isArray(quickViewProduct.images) && quickViewProduct.images.length > 0)

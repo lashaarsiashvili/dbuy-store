@@ -26,6 +26,35 @@ export interface CloudflareMonthlyRecord {
   bytes: number;
 }
 
+export interface CloudflareDeviceStats {
+  desktop: number;
+  mobile: number;
+  tablet: number;
+  desktopPct: number;
+  mobilePct: number;
+  tabletPct: number;
+}
+
+export interface CloudflareLiveVisitor {
+  id: string;
+  country: string;
+  countryCode: string;
+  flag: string;
+  device: string;
+  path: string;
+  timeAgo: string;
+}
+
+export interface CloudflareEcomStats {
+  totalVisitors: number;
+  productViews: number;
+  cartAdditions: number;
+  checkouts: number;
+  conversionRate: number;
+  cartAddRate: number;
+  cartAbandonmentRate: number;
+}
+
 export interface CloudflareHistoricalAnalytics {
   success: boolean;
   domain: string;
@@ -39,9 +68,13 @@ export interface CloudflareHistoricalAnalytics {
   totalUniques: number;
   totalBytes: number;
   totalThreats: number;
+  liveNow?: number;
+  liveVisitors?: CloudflareLiveVisitor[];
   dailyTrend: CloudflareDailyRecord[];
   monthlyTrend: CloudflareMonthlyRecord[];
   countryStats: CloudflareCountryRecord[];
+  deviceStats?: CloudflareDeviceStats;
+  ecomStats?: CloudflareEcomStats;
   error?: string;
 }
 
@@ -70,7 +103,15 @@ export const COUNTRY_NAME_TO_CODE: Record<string, string> = {
 
 export function getFlagForCountry(nameOrCode: string): string {
   if (!nameOrCode) return '🌐';
-  const code = nameOrCode.length === 2 ? nameOrCode.toUpperCase() : (COUNTRY_NAME_TO_CODE[nameOrCode] || '');
+  const code = (nameOrCode.length === 2 ? nameOrCode : (COUNTRY_NAME_TO_CODE[nameOrCode] || '')).toUpperCase();
+  if (code && code.length === 2 && /^[A-Z]{2}$/.test(code)) {
+    const codePoints = code.split('').map(char => 127397 + char.charCodeAt(0));
+    try {
+      return String.fromCodePoint(...codePoints);
+    } catch {
+      return COUNTRY_FLAG_MAP[code] || '🌐';
+    }
+  }
   return COUNTRY_FLAG_MAP[code] || '🌐';
 }
 

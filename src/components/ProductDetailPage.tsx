@@ -8,6 +8,7 @@ import { ProductPaymentModule } from './ProductPaymentModule';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
 import { analytics } from './AdminAnalyticsDashboard';
 import { ProductReviewsSection } from './ProductReviewsSection';
+import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { 
   Star, 
   ShoppingCart, 
@@ -72,9 +73,7 @@ export const ProductDetailPage: React.FC = () => {
     setActiveImageIndex(0);
     setQuantity(1);
     if (product) {
-      const activeTitle = language === 'en'
-        ? (product.title_en || product.title)
-        : (product.title_ka || product.titleKa || product.title);
+      const activeTitle = getProductTitle(product, language);
       recordVisit(`Product: ${activeTitle}`);
       
       // Update dynamic Open Graph meta tags matching generated marketing copy
@@ -114,12 +113,8 @@ export const ProductDetailPage: React.FC = () => {
   }
 
   const isFavorite = isInWishlist(product.id);
-  const displayTitle = language === 'en'
-    ? (product.title_en || product.title)
-    : (product.title_ka || product.titleKa || product.title);
-  const displayDesc = language === 'en'
-    ? (product.description_en || product.description)
-    : (product.description_ka || product.descriptionKa || product.description);
+  const displayTitle = getProductTitle(product, language);
+  const displayDesc = getProductDescription(product, language);
   const productUrl = getProductUrl(product.id);
 
   let parsedImages: string[] = [];
