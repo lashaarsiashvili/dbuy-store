@@ -149,7 +149,24 @@ export const ProductGrid: React.FC = () => {
         </ScrollReveal>
 
         {/* Products Grid - Enforced Responsive Layout for Mobile (1 col), Tablet (2-3 cols), Desktop (4 cols) */}
-        {filteredProducts.length > 0 ? (
+        {products === null ? (
+          /* Skeleton Loading State */
+          <div className="product-catalog-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 pt-6 sm:pt-8 w-full min-w-full">
+            {[...Array(8)].map((_, i) => (
+              <div key={i} className="bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 animate-pulse space-y-4">
+                <div className="w-full h-48 bg-slate-200 dark:bg-slate-800 rounded-xl" />
+                <div className="space-y-2">
+                  <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
+                  <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
+                </div>
+                <div className="flex justify-between items-center pt-2">
+                  <div className="h-6 bg-slate-200 dark:bg-slate-800 rounded w-1/3" />
+                  <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded w-1/4" />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : filteredProducts.length > 0 ? (
           <div id="product-grid-container" className="product-catalog-grid grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6 pt-6 sm:pt-8 w-full min-w-full opacity-100">
             {filteredProducts.map((product, idx) => (
               <ProductCard key={product.id} product={product} index={idx} />
