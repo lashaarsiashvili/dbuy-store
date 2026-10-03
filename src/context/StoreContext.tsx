@@ -781,11 +781,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Rotating Billboard Banners
   const [billboards, setBillboards] = useState<BillboardSlide[]>(() => {
-    const saved = localStorage.getItem('dbuy_billboards');
+    const saved = localStorage.getItem('dbuy_billboards') || localStorage.getItem('dbuy_slides');
     if (saved) {
       try {
         const parsed: BillboardSlide[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        const hasObsoleteSlides = Array.isArray(parsed) && (
+          parsed.some(b => 
+            b.title?.includes('Headphones') || 
+            b.title?.includes('Mechanical Keyboard') ||
+            b.id === 'billboard-1' ||
+            b.id === 'billboard-2' ||
+            b.id === 'billboard-hume-band'
+          ) ||
+          !parsed.some(b => b.id === 'billboard-active-fitness-kit')
+        );
+        if (Array.isArray(parsed) && parsed.length > 0 && !hasObsoleteSlides) {
           return parsed.map(sanitizeBillboardUrls);
         }
       } catch (e) {
@@ -828,6 +838,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // 2. Set React state and localStorage with the optimized slides (no raw base64!)
     setBillboards(finalSlides);
     localStorage.setItem('dbuy_billboards', JSON.stringify(finalSlides));
+    localStorage.setItem('dbuy_slides', JSON.stringify(finalSlides));
 
     // 3. Save optimized slides & interval to Firestore's store/database document
     try {
@@ -859,13 +870,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteBillboard = (id: string) => {
-    if (billboards.length <= 1) {
-      addToast('Cannot delete the only remaining billboard slide', 'error');
-      return;
-    }
     const next = billboards.filter(b => b.id !== id);
     saveBillboards(next);
-    addToast('Billboard slide removed', 'info');
+    addToast(language === 'ka' ? 'ბილბორდის სლაიდი წაიშალა!' : 'Billboard slide removed', 'info');
   };
 
   const resetBillboards = () => {

@@ -3,8 +3,8 @@ import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
+import { CategoryBrowse } from './components/CategoryBrowse';
 import { ProductGrid } from './components/ProductGrid';
-import { TrustSection } from './components/TrustSection';
 import { Footer } from './components/Footer';
 import { QuickViewModal } from './components/QuickViewModal';
 import { CartDrawer } from './components/CartDrawer';
@@ -18,6 +18,7 @@ import { GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPage
 import { MyOrdersPage } from './components/MyOrdersPage';
 import { ProductDetailPage } from './components/ProductDetailPage';
 import { VerifiedDeliveriesPage } from './components/VerifiedDeliveriesPage';
+import { AdsGallery } from './components/AdsGallery';
 import { ToastContainer } from './components/ToastContainer';
 import { getPayPalV6Instance } from './utils/paypalV6';
 import { analytics } from './components/AdminAnalyticsDashboard';
@@ -52,6 +53,7 @@ const MainLayout: React.FC = () => {
         returns: 'Returns Policy',
         privacy: 'Privacy Policy',
         'my-orders': 'My Orders Page',
+        campaigns: 'Tbilisi Ad Campaigns',
       };
       recordVisit(pageNames[currentPage] || currentPage);
     }
@@ -66,9 +68,9 @@ const MainLayout: React.FC = () => {
       <main className="flex-1">
         {currentPage === 'home' && (
           <>
+            <CategoryBrowse />
             <Hero />
             <ProductGrid />
-            <TrustSection />
           </>
         )}
 
@@ -80,6 +82,7 @@ const MainLayout: React.FC = () => {
         {currentPage === 'privacy' && <PrivacyPage />}
         {currentPage === 'my-orders' && <MyOrdersPage />}
         {currentPage === 'deliveries' && <VerifiedDeliveriesPage />}
+        {currentPage === 'campaigns' && <AdsGallery />}
         {currentPage === 'admin' && <AdminDashboard />}
       </main>
 

@@ -14,7 +14,10 @@ export const ProductGrid: React.FC = () => {
     setSearchQuery,
     sortOption,
     setSortOption,
+    language,
   } = useStore();
+
+  const isKa = language === 'ka';
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
@@ -22,6 +25,36 @@ export const ProductGrid: React.FC = () => {
       // Category filter
       if (selectedCategory === 'deals') {
         if (!product.isDeal && !product.badge?.toLowerCase().includes('deal') && !product.origPrice) {
+          return false;
+        }
+      } else if (selectedCategory === 'drinkware') {
+        const text = (product.title + ' ' + (product.titleKa || '') + ' ' + product.category).toLowerCase();
+        if (!text.includes('bottle') && !text.includes('drinkware') && !text.includes('aquaminder') && !text.includes('hydration') && !text.includes('ბოთლ') && !text.includes('camelbak')) {
+          return false;
+        }
+      } else if (selectedCategory === 'gaming') {
+        const text = (product.title + ' ' + (product.titleKa || '')).toLowerCase();
+        if (!text.includes('g309') && !text.includes('lightspeed') && !text.includes('pro x') && !text.includes('superlight') && !text.includes('superstrike') && !text.includes('mouse') && !text.includes('headset')) {
+          return false;
+        }
+      } else if (selectedCategory === 'wearables') {
+        const text = (product.title + ' ' + (product.titleKa || '')).toLowerCase();
+        if (!text.includes('band') && !text.includes('whoop') && !text.includes('hume') && !text.includes('watch') && !text.includes('სამაჯურ') && !text.includes('tracker')) {
+          return false;
+        }
+      } else if (selectedCategory === 'audio') {
+        const text = (product.title + ' ' + (product.titleKa || '')).toLowerCase();
+        if (!text.includes('mic') && !text.includes('microphone') && !text.includes('podmic') && !text.includes('audio') && !text.includes('მიკროფონ')) {
+          return false;
+        }
+      } else if (selectedCategory === 'tech') {
+        const text = (product.title + ' ' + (product.titleKa || '') + ' ' + product.category).toLowerCase();
+        if (product.category !== 'tech' && !text.includes('cam') && !text.includes('camera') && !text.includes('black box') && !text.includes('pro x') && !text.includes('smart')) {
+          return false;
+        }
+      } else if (selectedCategory === 'fitness') {
+        const text = (product.title + ' ' + (product.titleKa || '') + ' ' + product.category).toLowerCase();
+        if (product.category !== 'fitness' && !text.includes('collagen') && !text.includes('protein') && !text.includes('nutricost') && !text.includes('კოლაგენ') && !text.includes('bottle') && !text.includes('sport')) {
           return false;
         }
       } else if (selectedCategory !== 'all') {
@@ -73,15 +106,19 @@ export const ProductGrid: React.FC = () => {
             <div>
               <h2 className="text-xl sm:text-2xl md:text-3xl font-extrabold text-slate-900 dark:text-slate-100 tracking-tight">
                 {selectedCategory === 'deals'
-                  ? t('nav.cat.deals')
+                  ? (isKa ? 'ცხელი შეთავაზებები' : 'Hot Deals')
+                  : selectedCategory === 'drinkware'
+                  ? (isKa ? 'ჭკვიანი ჰიდრატაცია' : 'Smart Hydration')
+                  : selectedCategory === 'gaming'
+                  ? (isKa ? 'გეიმინგი' : 'Gaming')
+                  : selectedCategory === 'wearables'
+                  ? (isKa ? 'ფიტნეს ტრეკერები' : 'Fitness Trackers')
+                  : selectedCategory === 'audio'
+                  ? (isKa ? 'სტუდია' : 'Studio')
                   : selectedCategory === 'tech'
-                  ? t('nav.cat.tech')
+                  ? (isKa ? 'ტექნიკა' : 'Tech')
                   : selectedCategory === 'fitness'
-                  ? t('nav.cat.fitness')
-                  : selectedCategory === 'everyday'
-                  ? t('nav.cat.everyday')
-                  : selectedCategory === 'accessories'
-                  ? t('nav.cat.accessories')
+                  ? (isKa ? 'ჯანმრთელობა & ფიტნესი' : 'Health & Fitness')
                   : t('products.title')}
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">

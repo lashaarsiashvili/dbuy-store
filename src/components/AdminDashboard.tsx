@@ -516,6 +516,92 @@ export const AdminDashboard: React.FC = () => {
   const [billboardImageMode, setBillboardImageMode] = useState<'upload' | 'url'>('url');
   const billboardFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Quick Full-Width Hero Slider Upload Form State (User Admin Panel)
+  const [quickSlideTitle, setQuickSlideTitle] = useState('');
+  const [quickSlideDesc, setQuickSlideDesc] = useState('');
+  const [quickSlideImage, setQuickSlideImage] = useState('');
+  const [isUploadingQuickSlide, setIsUploadingQuickSlide] = useState(false);
+  const quickSlideFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleQuickSlideImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (uploadEvent) => {
+      if (uploadEvent.target?.result) {
+        setQuickSlideImage(uploadEvent.target.result as string);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleQuickSlideSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!quickSlideTitle.trim()) {
+      addToast(isKa ? 'გთხოვთ მიუთითოთ სათაური' : 'Please provide a title', 'error');
+      return;
+    }
+    if (!quickSlideDesc.trim()) {
+      addToast(isKa ? 'გთხოვთ მიუთითოთ აღწერა' : 'Please provide a description', 'error');
+      return;
+    }
+    if (!quickSlideImage) {
+      addToast(isKa ? 'გთხოვთ ატვირთოთ ბანერის სურათი' : 'Please upload a banner image', 'error');
+      return;
+    }
+
+    setIsUploadingQuickSlide(true);
+    try {
+      const newSlide: Omit<BillboardSlide, 'id'> = {
+        title: quickSlideTitle.trim(),
+        titleKa: quickSlideTitle.trim(),
+        subtitle: quickSlideDesc.trim(),
+        subtitleKa: quickSlideDesc.trim(),
+        image: quickSlideImage,
+        bgImage: quickSlideImage,
+        bgGradient: 'from-slate-950 via-indigo-950 to-slate-900',
+        priceTag: '$189.00',
+        origPriceTag: '',
+        discountTag: 'EXCLUSIVE',
+        buttonText: 'Shop Bundle',
+        buttonTextKa: 'ყიდვა ახლავე',
+        badge: 'FEATURED EDIT',
+        badgeKa: 'სპეციალური შეთავაზება',
+        isActive: true,
+      };
+
+      await addBillboard(newSlide);
+
+      // Also sync to dbuy_slides in localStorage
+      try {
+        const saved = localStorage.getItem('dbuy_slides');
+        const existing = saved ? JSON.parse(saved) : [];
+        existing.push({
+          title: quickSlideTitle.trim(),
+          desc: quickSlideDesc.trim(),
+          image: quickSlideImage
+        });
+        localStorage.setItem('dbuy_slides', JSON.stringify(existing));
+      } catch (err) {
+        console.error(err);
+      }
+
+      addToast(isKa ? 'სლაიდი წარმატებით დაემატა!' : 'Slide added successfully!', 'success');
+      alert(isKa ? 'სლაიდი წარმატებით დაემატა!' : 'Slide added successfully!');
+      setQuickSlideTitle('');
+      setQuickSlideDesc('');
+      setQuickSlideImage('');
+      if (quickSlideFileInputRef.current) {
+        quickSlideFileInputRef.current.value = '';
+      }
+    } catch (err) {
+      console.error(err);
+      addToast(isKa ? 'სლაიდის დამატება ვერ მოხერხდა' : 'Failed to add slide', 'error');
+    } finally {
+      setIsUploadingQuickSlide(false);
+    }
+  };
+
   const [billboardForm, setBillboardForm] = useState<Omit<BillboardSlide, 'id'>>({
     title: '',
     titleKa: '',
@@ -641,7 +727,7 @@ export const AdminDashboard: React.FC = () => {
       return;
     }
     try {
-      const base64Data = await readImageAsBase64(file);
+      const base64Data = await readImageAsBase64(file, 1920, 1080);
       setBillboardForm(prev => ({ ...prev, image: base64Data }));
       addToast(isKa ? 'ბილბორდის სურათი დაემატა!' : 'Billboard image added!', 'success');
     } catch (err) {
@@ -684,7 +770,7 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const readImageAsBase64 = (file: File): Promise<string> => {
+  const readImageAsBase64 = (file: File, maxW = 1200, maxH = 1200): Promise<string> => {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = (event) => {
@@ -699,15 +785,16 @@ export const AdminDashboard: React.FC = () => {
             const canvas = document.createElement('canvas');
             let width = img.width;
             let height = img.height;
-            const maxDimension = 1200;
 
-            if (width > maxDimension || height > maxDimension) {
-              if (width > height) {
-                height = Math.round((height * maxDimension) / width);
-                width = maxDimension;
-              } else {
-                width = Math.round((width * maxDimension) / height);
-                height = maxDimension;
+            if (width > height) {
+              if (width > maxW) {
+                height = Math.round((height * maxW) / width);
+                width = maxW;
+              }
+            } else {
+              if (height > maxH) {
+                width = Math.round((width * maxH) / height);
+                height = maxH;
               }
             }
 
@@ -722,11 +809,8 @@ export const AdminDashboard: React.FC = () => {
 
             ctx.drawImage(img, 0, 0, width, height);
 
-            // Convert using image/webp, 0.82 (fallback to image/jpeg, 0.85 if unsupported)
-            let dataUrl = canvas.toDataURL('image/webp', 0.82);
-            if (!dataUrl.startsWith('data:image/webp')) {
-              dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-            }
+            // Convert using image/jpeg, 0.85 quality as requested
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
             resolve(dataUrl);
           } catch (err) {
             reject(err);
@@ -2271,24 +2355,125 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            {/* Auto-billboards Information Banner */}
-            <div className="bg-gradient-to-r from-blue-500 to-indigo-600 text-white rounded-3xl p-6 shadow-md relative overflow-hidden">
-              <div className="absolute top-0 right-0 p-8 opacity-10 pointer-events-none">
-                <Layers className="w-40 h-40" />
+            {/* User Requested Slider Admin Panel */}
+            <div 
+              className="admin-panel shadow-xl"
+              style={{
+                background: '#1e293b',
+                padding: '24px',
+                borderRadius: '16px',
+                color: '#fff',
+                marginTop: '10px',
+                border: '1px solid #334155'
+              }}
+            >
+              <div className="flex items-center space-x-2.5 mb-5 pb-3 border-b border-slate-700">
+                <Sliders className="w-5 h-5 text-blue-400" />
+                <h3 className="text-lg font-bold text-white tracking-tight">
+                  სლაიდერის მართვა (ადმინი)
+                </h3>
               </div>
-              <div className="relative z-10 flex items-start space-x-4">
-                <div className="p-3 bg-white/20 rounded-2xl">
-                  <Sparkles className="w-6 h-6 text-yellow-300 animate-pulse" />
+
+              <form id="slideUploadForm" onSubmit={handleQuickSlideSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="slideTitle" className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+                    სათაური:
+                  </label>
+                  <input 
+                    type="text" 
+                    id="slideTitle" 
+                    required 
+                    value={quickSlideTitle}
+                    onChange={e => setQuickSlideTitle(e.target.value)}
+                    placeholder="მაგ: Quality Products for Modern Living"
+                    className="w-full text-sm rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all"
+                    style={{
+                      padding: '10px 14px',
+                      background: '#0b0f19',
+                      color: '#fff',
+                      border: '1px solid #334155'
+                    }}
+                  />
                 </div>
-                <div className="space-y-1.5">
-                  <h4 className="text-base font-black tracking-tight">
-                    🌐 სარეკლამო ბანერები ახლა სრულად ავტომატიზებულია! (Automated Billboards Active)
-                  </h4>
-                  <p className="text-xs text-blue-100 leading-relaxed max-w-4xl">
-                    თქვენი მოთხოვნის შესაბამისად, მაღაზიაში დამატებული **ყველა პროდუქტი** ავტომატურად ხდება ინტერაქტიული სარეკლამო ბანერი მთავარ გვერდზე! სლაიდები ავტომატურად ტრიალებს და თითოეულ პროდუქტს უკეთებს რეკლამას, რაც ზრდის გაყიდვებს. აღარ არის საჭირო ბანერების ხელით დიზაინი და სურათების ატვირთვა.
-                  </p>
+
+                <div>
+                  <label htmlFor="slideDesc" className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+                    აღწერა:
+                  </label>
+                  <textarea 
+                    id="slideDesc" 
+                    required 
+                    rows={3}
+                    value={quickSlideDesc}
+                    onChange={e => setQuickSlideDesc(e.target.value)}
+                    placeholder="მაგ: Discover premium lifestyle, fitness, and tech accessories."
+                    className="w-full text-sm rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all resize-y"
+                    style={{
+                      padding: '10px 14px',
+                      background: '#0b0f19',
+                      color: '#fff',
+                      border: '1px solid #334155'
+                    }}
+                  />
                 </div>
-              </div>
+
+                <div>
+                  <label htmlFor="slideImageFile" className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
+                    ატვირთეთ ბანერის სურათი (მთელი სიგანე):
+                  </label>
+                  <input 
+                    type="file" 
+                    id="slideImageFile" 
+                    accept="image/*" 
+                    required={!quickSlideImage}
+                    ref={quickSlideFileInputRef}
+                    onChange={handleQuickSlideImageChange}
+                    className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                    style={{ color: '#fff' }}
+                  />
+
+                  {/* Image Preview if selected */}
+                  {quickSlideImage && (
+                    <div className="mt-3 relative w-full h-40 rounded-xl overflow-hidden border border-slate-700 bg-slate-950">
+                      <img 
+                        src={quickSlideImage} 
+                        alt="Banner Preview" 
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQuickSlideImage('');
+                          if (quickSlideFileInputRef.current) {
+                            quickSlideFileInputRef.current.value = '';
+                          }
+                        }}
+                        className="absolute top-2 right-2 px-2 py-1 bg-red-600/80 hover:bg-red-600 text-white text-xs font-bold rounded-md"
+                      >
+                        წაშლა
+                      </button>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-2">
+                  <button 
+                    type="submit" 
+                    disabled={isUploadingQuickSlide}
+                    className="hover:scale-102 active:scale-98 transition-all font-bold text-sm shadow-md shadow-blue-500/20 cursor-pointer flex items-center space-x-2"
+                    style={{
+                      background: '#3b82f6',
+                      color: 'white',
+                      padding: '12px 24px',
+                      border: 'none',
+                      borderRadius: '8px'
+                    }}
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{isUploadingQuickSlide ? 'იტვირთება...' : 'სლაიდის დამატება'}</span>
+                  </button>
+                </div>
+              </form>
             </div>
 
             {/* Billboards Slides Grid */}
@@ -2401,18 +2586,13 @@ export const AdminDashboard: React.FC = () => {
 
                         <button
                           onClick={() => {
-                            if (billboards.length <= 1) {
-                              addToast('მინიმუმ 1 ბილბორდი უნდა დარჩეს', 'error');
-                              return;
-                            }
-                            if (window.confirm(`ნამდვილად გსურთ ბილბორდის წაშლა?`)) {
-                              deleteBillboard(slide.id);
-                            }
+                            deleteBillboard(slide.id);
                           }}
-                          className="p-2 rounded-xl text-red-600 hover:bg-red-50 hover:text-red-700 transition-colors cursor-pointer"
-                          title="წაშლა"
+                          className="px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 font-bold text-xs transition-colors flex items-center space-x-1 cursor-pointer"
+                          title={isKa ? 'წაშლა' : 'Delete'}
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" />
+                          <span>{isKa ? 'წაშლა' : 'Delete'}</span>
                         </button>
                       </div>
                     </div>

@@ -1,10 +1,10 @@
-export type Category = 'all' | 'tech' | 'fitness' | 'everyday' | 'accessories' | 'deals';
+export type Category = 'all' | 'tech' | 'fitness' | 'everyday' | 'accessories' | 'deals' | 'drinkware' | 'gaming' | 'wearables' | 'supplements' | 'security' | 'audio' | string;
 
 export type Currency = 'USD' | 'EUR' | 'GEL';
 
 export type Language = 'en' | 'ka' | 'es' | 'ru' | 'de' | 'zh';
 
-export type PageView = 'home' | 'product' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders' | 'deliveries';
+export type PageView = 'home' | 'product' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders' | 'deliveries' | 'campaigns';
 
 export interface Product {
   id: string;
@@ -116,6 +116,8 @@ export interface BillboardSlide {
   discountTag?: string; // e.g. "-32% OFF"
   buttonText?: string;
   buttonTextKa?: string;
+  features?: string[];
+  featuresKa?: string[];
   isActive: boolean;
 }
 
