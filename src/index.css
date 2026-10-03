@@ -86,10 +86,37 @@
     color: #0f172a;
   }
 
+  option {
+    background-color: #ffffff;
+    color: #0f172a;
+  }
+
+  .dark option {
+    background-color: #0f172a !important;
+    color: #f8fafc !important;
+  }
+
   .dark input,
   .dark textarea,
   .dark select {
     color: #f8fafc;
+    background-color: #0f172a;
+    border-color: #334155;
+  }
+
+  /* Form controls with explicit white/light background in dark mode must use dark background with white text */
+  .dark input.bg-white,
+  .dark textarea.bg-white,
+  .dark select.bg-white,
+  .dark input.bg-slate-50,
+  .dark textarea.bg-slate-50,
+  .dark select.bg-slate-50,
+  .dark input.bg-slate-100,
+  .dark textarea.bg-slate-100,
+  .dark select.bg-slate-100 {
+    background-color: #0f172a !important;
+    border-color: #334155 !important;
+    color: #f8fafc !important;
   }
 
   /* Universal browser autofill contrast guard (prevents invisible white-on-white text) */

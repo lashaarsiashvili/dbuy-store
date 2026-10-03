@@ -337,74 +337,85 @@ export const CategoryBrowse: React.FC = () => {
 
   const isKa = language === 'ka';
 
-  // 8 Category Card Specifications matching user reference image & prompts
-  const categoryCards: CategoryCardSpec[] = useMemo(() => [
-    {
-      id: 'drinkware',
-      titleEn: 'Smart Hydration',
-      titleKa: 'Smart Hydration',
-      countTextEn: '6 items',
-      countTextKa: '6 ნივთი',
-      photoComponent: SmartHydrationPhoto,
-    },
-    {
-      id: 'gaming',
-      titleEn: 'Gaming',
-      titleKa: 'Gaming',
-      countTextEn: '3 items',
-      countTextKa: '3 ნივთი',
-      photoComponent: GamingPhoto,
-    },
-    {
-      id: 'wearables',
-      titleEn: 'Fitness Trackers',
-      titleKa: 'Fitness Trackers',
-      countTextEn: '3 items',
-      countTextKa: '3 ნივთი',
-      photoComponent: FitnessTrackersPhoto,
-    },
-    {
-      id: 'audio',
-      titleEn: 'Studio',
-      titleKa: 'Studio',
-      countTextEn: '1 item',
-      countTextKa: '1 ნივთი',
-      photoComponent: StudioPhoto,
-    },
-    {
-      id: 'tech',
-      titleEn: 'Tech',
-      titleKa: 'Tech',
-      countTextEn: '15 items',
-      countTextKa: '15 ნივთი',
-      photoComponent: TechPhoto,
-    },
-    {
-      id: 'fitness',
-      titleEn: 'Health & Fitness',
-      titleKa: 'Health & Fitness',
-      countTextEn: '9 items',
-      countTextKa: '9 ნივთი',
-      photoComponent: HealthFitnessPhoto,
-    },
-    {
-      id: 'deals',
-      titleEn: 'Hot Deals',
-      titleKa: 'Hot Deals',
-      countTextEn: 'Deals',
-      countTextKa: 'ფასდაკლება',
-      photoComponent: HotDealsPhoto,
-      isHotDeals: true,
-    },
-    {
-      id: 'all',
-      titleEn: 'All Products',
-      titleKa: isKa ? 'ყველა პროდუქტი' : 'All Products',
-      countTextEn: `${products.length || 15} items`,
-      countTextKa: `${products.length || 15} ნივთი`,
-      photoComponent: AllProductsPhoto,
-    },
-  ], [products, isKa]);
+  // Dynamic item counts for categories
+  const categoryCards: CategoryCardSpec[] = useMemo(() => {
+    const countDrinkware = products.filter(p => p.category === 'drinkware').length;
+    const countGaming = products.filter(p => p.category === 'gaming').length;
+    const countWearables = products.filter(p => p.category === 'wearables').length;
+    const countAudio = products.filter(p => p.category === 'audio').length;
+    const countTech = products.filter(p => p.category === 'tech').length;
+    const countFitness = products.filter(p => p.category === 'fitness').length;
+    const countDeals = products.filter(p => p.isDeal || p.badge?.toLowerCase().includes('deal') || (p.origPrice && p.origPrice > p.price)).length;
+    const countAll = products.length;
+
+    return [
+      {
+        id: 'drinkware',
+        titleEn: 'Smart Hydration',
+        titleKa: 'Smart Hydration',
+        countTextEn: `${countDrinkware} ${countDrinkware === 1 ? 'item' : 'items'}`,
+        countTextKa: `${countDrinkware} ნივთი`,
+        photoComponent: SmartHydrationPhoto,
+      },
+      {
+        id: 'gaming',
+        titleEn: 'Gaming',
+        titleKa: 'Gaming',
+        countTextEn: `${countGaming} ${countGaming === 1 ? 'item' : 'items'}`,
+        countTextKa: `${countGaming} ნივთი`,
+        photoComponent: GamingPhoto,
+      },
+      {
+        id: 'wearables',
+        titleEn: 'Fitness Trackers',
+        titleKa: 'Fitness Trackers',
+        countTextEn: `${countWearables} ${countWearables === 1 ? 'item' : 'items'}`,
+        countTextKa: `${countWearables} ნივთი`,
+        photoComponent: FitnessTrackersPhoto,
+      },
+      {
+        id: 'audio',
+        titleEn: 'Studio',
+        titleKa: 'Studio',
+        countTextEn: `${countAudio} ${countAudio === 1 ? 'item' : 'items'}`,
+        countTextKa: `${countAudio} ნივთი`,
+        photoComponent: StudioPhoto,
+      },
+      {
+        id: 'tech',
+        titleEn: 'Tech',
+        titleKa: 'Tech',
+        countTextEn: `${countTech} ${countTech === 1 ? 'item' : 'items'}`,
+        countTextKa: `${countTech} ნივთი`,
+        photoComponent: TechPhoto,
+      },
+      {
+        id: 'fitness',
+        titleEn: 'Health & Fitness',
+        titleKa: 'Health & Fitness',
+        countTextEn: `${countFitness} ${countFitness === 1 ? 'item' : 'items'}`,
+        countTextKa: `${countFitness} ნივთი`,
+        photoComponent: HealthFitnessPhoto,
+      },
+      {
+        id: 'deals',
+        titleEn: 'Hot Deals',
+        titleKa: 'Hot Deals',
+        countTextEn: `${countDeals} ${countDeals === 1 ? 'deal' : 'deals'}`,
+        countTextKa: `${countDeals} ფასდაკლება`,
+        photoComponent: HotDealsPhoto,
+        isHotDeals: true,
+      },
+      {
+        id: 'all',
+        titleEn: 'All Products',
+        titleKa: isKa ? 'ყველა პროდუქტი' : 'All Products',
+        countTextEn: `${countAll} ${countAll === 1 ? 'item' : 'items'}`,
+        countTextKa: `${countAll} ნივთი`,
+        photoComponent: AllProductsPhoto,
+      },
+    ];
+  }, [products, isKa]);
 
   const handleCategoryClick = (catId: Category) => {
     setSelectedCategory(catId);

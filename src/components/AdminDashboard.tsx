@@ -520,6 +520,7 @@ export const AdminDashboard: React.FC = () => {
   const [quickSlideTitle, setQuickSlideTitle] = useState('');
   const [quickSlideDesc, setQuickSlideDesc] = useState('');
   const [quickSlideImage, setQuickSlideImage] = useState('');
+  const [quickSlideProductId, setQuickSlideProductId] = useState('');
   const [isUploadingQuickSlide, setIsUploadingQuickSlide] = useState(false);
   const quickSlideFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -552,6 +553,7 @@ export const AdminDashboard: React.FC = () => {
 
     setIsUploadingQuickSlide(true);
     try {
+      const matchedProd = quickSlideProductId ? products.find(p => p.id === quickSlideProductId) : null;
       const newSlide: Omit<BillboardSlide, 'id'> = {
         title: quickSlideTitle.trim(),
         titleKa: quickSlideTitle.trim(),
@@ -560,13 +562,15 @@ export const AdminDashboard: React.FC = () => {
         image: quickSlideImage,
         bgImage: quickSlideImage,
         bgGradient: 'from-slate-950 via-indigo-950 to-slate-900',
-        priceTag: '$189.00',
-        origPriceTag: '',
-        discountTag: 'EXCLUSIVE',
-        buttonText: 'Shop Bundle',
-        buttonTextKa: 'ყიდვა ახლავე',
-        badge: 'FEATURED EDIT',
-        badgeKa: 'სპეციალური შეთავაზება',
+        priceTag: matchedProd ? formatPrice(matchedProd.price) : '$189.00',
+        origPriceTag: matchedProd?.origPrice ? formatPrice(matchedProd.origPrice) : '',
+        discountTag: matchedProd ? 'FEATURED DEAL' : 'EXCLUSIVE',
+        buttonText: matchedProd ? `Shop ${matchedProd.title}` : 'Shop Now',
+        buttonTextKa: matchedProd ? `ყიდვა ${matchedProd.titleKa || matchedProd.title}` : 'ყიდვა ახლავე',
+        badge: matchedProd ? `${matchedProd.category.toUpperCase()} • ADVERTISED` : 'FEATURED EDIT',
+        badgeKa: 'რეკლამირებული პროდუქტი',
+        productId: quickSlideProductId || undefined,
+        category: matchedProd?.category || 'tech',
         isActive: true,
       };
 
@@ -1597,7 +1601,7 @@ export const AdminDashboard: React.FC = () => {
 
   // 2. Authenticated Admin Dashboard
   return (
-    <div className="min-h-screen bg-slate-100/70 pb-16">
+    <div className="min-h-screen bg-slate-100/70 dark:bg-slate-950 text-slate-900 dark:text-slate-100 pb-16 transition-colors">
       {/* Top Admin Header */}
       <div className="bg-slate-900 text-white border-b border-slate-800 shadow-md sticky top-0 z-30">
         <div className="max-w-7xl mx-auto px-4 py-3.5 flex flex-wrap items-center justify-between gap-4">
@@ -1681,14 +1685,14 @@ export const AdminDashboard: React.FC = () => {
         {/* Metrics Grid */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
           {/* Revenue */}
-          <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs hover:shadow-md transition-all flex items-center space-x-3.5">
-            <div className="p-2.5 rounded-xl bg-emerald-50 text-emerald-600 shrink-0">
+          <div className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs hover:shadow-md transition-all flex items-center space-x-3.5">
+            <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 shrink-0">
               <DollarSign className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Total Revenue</p>
-              <h3 className="text-lg font-black text-slate-900">{formatPrice(totalRevenueUSD)}</h3>
-              <p className="text-[10px] text-emerald-600 font-semibold flex items-center space-x-1 mt-0.5">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Total Revenue</p>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">{formatPrice(totalRevenueUSD)}</h3>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold flex items-center space-x-1 mt-0.5">
                 <TrendingUp className="w-3 h-3" />
                 <span>Verified Orders</span>
               </p>
@@ -1698,15 +1702,15 @@ export const AdminDashboard: React.FC = () => {
           {/* Orders */}
           <div 
             onClick={() => setActiveTab('orders')}
-            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs hover:border-blue-400 hover:shadow-md transition-all flex items-center space-x-3.5 cursor-pointer group"
+            className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs hover:border-blue-400 hover:shadow-md transition-all flex items-center space-x-3.5 cursor-pointer group"
           >
-            <div className="p-2.5 rounded-xl bg-blue-50 text-blue-600 shrink-0 group-hover:scale-105 transition-transform">
+            <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 shrink-0 group-hover:scale-105 transition-transform">
               <ShoppingBag className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Orders Placed</p>
-              <h3 className="text-lg font-black text-slate-900">{totalOrdersCount}</h3>
-              <p className="text-[10px] text-blue-600 font-semibold mt-0.5 group-hover:underline">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Orders Placed</p>
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">{totalOrdersCount}</h3>
+              <p className="text-[10px] text-blue-600 dark:text-blue-400 font-semibold mt-0.5 group-hover:underline">
                 {orders.filter(o => o.status === 'Processing').length} pending fulfillment
               </p>
             </div>
@@ -1715,17 +1719,17 @@ export const AdminDashboard: React.FC = () => {
           {/* Products & Inventory Health */}
           <div 
             onClick={() => setActiveTab('products')}
-            className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-amber-400 hover:shadow-md transition-all group"
+            className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs flex items-center space-x-3.5 cursor-pointer hover:border-amber-400 hover:shadow-md transition-all group"
           >
-            <div className="p-2.5 rounded-xl bg-amber-50 text-amber-600 shrink-0 group-hover:scale-105 transition-transform">
+            <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 shrink-0 group-hover:scale-105 transition-transform">
               <Package className="w-5 h-5" />
             </div>
             <div>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+              <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                 {isKa ? 'პროდუქტების კატალოგი' : 'Catalog Products'}
               </p>
-              <h3 className="text-lg font-black text-slate-900">{totalProductsCount}</h3>
-              <p className="text-[10px] text-emerald-600 font-semibold mt-0.5">
+              <h3 className="text-lg font-black text-slate-900 dark:text-white">{totalProductsCount}</h3>
+              <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold mt-0.5">
                 {products.filter(p => p.stock > 0).length} In Stock
               </p>
             </div>
@@ -1733,7 +1737,7 @@ export const AdminDashboard: React.FC = () => {
         </div>
 
         {/* Tab Navigation - Modern Segmented Control */}
-        <div className="bg-slate-200/75 p-1.5 rounded-2xl flex items-center space-x-1.5 overflow-x-auto border border-slate-300/60 shadow-xs scrollbar-none">
+        <div className="bg-slate-200/75 dark:bg-slate-900 p-1.5 rounded-2xl flex items-center space-x-1.5 overflow-x-auto border border-slate-300/60 dark:border-slate-800 shadow-xs scrollbar-none">
           <button
             onClick={() => setActiveTab('analytics')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
@@ -1941,9 +1945,9 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-xs overflow-hidden">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-xs overflow-hidden">
               {/* Action & Filter Bar */}
-              <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3.5">
+              <div className="p-4 sm:p-5 border-b border-slate-100 dark:border-slate-800 flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-3.5">
                 <div className="flex flex-wrap items-center gap-2.5 flex-1">
                   {/* Search Input with Clear Button */}
                   <div className="relative flex-1 min-w-[220px]">
@@ -1953,13 +1957,13 @@ export const AdminDashboard: React.FC = () => {
                       value={productSearch}
                       onChange={e => setProductSearch(e.target.value)}
                       placeholder={isKa ? 'ძიება: სახელი, ID, ბეიჯი...' : 'Search title, ID, badge...'}
-                      className="w-full pl-8.5 pr-8 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:transition-opacity focus:placeholder:opacity-0 focus:placeholder:text-transparent"
+                      className="w-full pl-8.5 pr-8 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                     {productSearch && (
                       <button
                         type="button"
                         onClick={() => setProductSearch('')}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
                         title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -1971,40 +1975,44 @@ export const AdminDashboard: React.FC = () => {
                   <select
                     value={categoryFilter}
                     onChange={e => setCategoryFilter(e.target.value)}
-                    className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
+                    className="px-3 py-2 text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden cursor-pointer"
                   >
-                    <option value="all">{isKa ? 'ყველა კატეგორია' : 'All Categories'}</option>
-                    <option value="tech">Smart Tech</option>
-                    <option value="fitness">Fitness & Hydration</option>
-                    <option value="everyday">Everyday Carry</option>
-                    <option value="accessories">Accessories</option>
+                    <option value="all" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ყველა კატეგორია' : 'All Categories'}</option>
+                    <option value="drinkware" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Smart Hydration (ჭკვიანი ჭურჭელი)' : 'Smart Hydration'}</option>
+                    <option value="gaming" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Gaming (გეიმინგი)' : 'Gaming'}</option>
+                    <option value="wearables" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Fitness Trackers (ფიტნეს ტრეკერები)' : 'Fitness Trackers'}</option>
+                    <option value="audio" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Studio & Audio (სტუდია)' : 'Studio & Audio'}</option>
+                    <option value="tech" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Smart Tech (ტექნიკა)' : 'Smart Tech'}</option>
+                    <option value="fitness" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Health & Fitness (ფიტნესი)' : 'Health & Fitness'}</option>
+                    <option value="everyday" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Everyday Carry' : 'Everyday Carry'}</option>
+                    <option value="accessories" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Accessories (აქსესუარები)' : 'Accessories'}</option>
                   </select>
 
                   {/* Stock Status Filter */}
                   <select
                     value={stockFilter}
                     onChange={e => setStockFilter(e.target.value as typeof stockFilter)}
-                    className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
+                    className="px-3 py-2 text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden cursor-pointer"
                   >
-                    <option value="all">{isKa ? 'სრული მარაგი' : 'All Stock Status'}</option>
-                    <option value="in_stock">{isKa ? 'მარაგშია (>0)' : 'In Stock (>0)'}</option>
-                    <option value="low_stock">{isKa ? 'მწირი მარაგი (≤5)' : 'Low Stock (≤5)'}</option>
-                    <option value="out_of_stock">{isKa ? 'გამოლეულია (0)' : 'Out of Stock (0)'}</option>
+                    <option value="all" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'სრული მარაგი' : 'All Stock Status'}</option>
+                    <option value="in_stock" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'მარაგშია (>0)' : 'In Stock (>0)'}</option>
+                    <option value="low_stock" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'მწირი მარაგი (≤5)' : 'Low Stock (≤5)'}</option>
+                    <option value="out_of_stock" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'გამოლეულია (0)' : 'Out of Stock (0)'}</option>
                   </select>
 
                   {/* Sort Order */}
                   <select
                     value={productSort}
                     onChange={e => setProductSort(e.target.value as typeof productSort)}
-                    className="px-3 py-2 text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden cursor-pointer"
+                    className="px-3 py-2 text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden cursor-pointer"
                   >
-                    <option value="default">{isKa ? 'დალაგება: სტანდარტული' : 'Sort: Default'}</option>
-                    <option value="price_asc">{isKa ? 'ფასი: ზრდადი' : 'Price: Low to High'}</option>
-                    <option value="price_desc">{isKa ? 'ფასი: კლებადი' : 'Price: High to Low'}</option>
-                    <option value="stock_desc">{isKa ? 'მარაგი: მაღალი' : 'Stock: High to Low'}</option>
-                    <option value="stock_asc">{isKa ? 'მარაგი: დაბალი' : 'Stock: Low to High'}</option>
-                    <option value="title_asc">{isKa ? 'სახელი: A-Z' : 'Title: A to Z'}</option>
-                    <option value="views_desc">{isKa ? 'ნახვები: კლებადი' : 'Views: High to Low'}</option>
+                    <option value="default" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'დალაგება: სტანდარტული' : 'Sort: Default'}</option>
+                    <option value="price_asc" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ფასი: ზრდადი' : 'Price: Low to High'}</option>
+                    <option value="price_desc" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ფასი: კლებადი' : 'Price: High to Low'}</option>
+                    <option value="stock_desc" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'მარაგი: მაღალი' : 'Stock: High to Low'}</option>
+                    <option value="stock_asc" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'მარაგი: დაბალი' : 'Stock: Low to High'}</option>
+                    <option value="title_asc" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'სახელი: A-Z' : 'Title: A to Z'}</option>
+                    <option value="views_desc" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ნახვები: კლებადი' : 'Views: High to Low'}</option>
                   </select>
                 </div>
 
@@ -2375,6 +2383,45 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <form id="slideUploadForm" onSubmit={handleQuickSlideSubmit} className="space-y-4">
+                <div>
+                  <label htmlFor="quickSlideProduct" className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider flex items-center justify-between">
+                    <span>{isKa ? 'მიაბით რეკლამირებული პროდუქტი:' : 'Attach Advertised Store Product:'}</span>
+                    <span className="text-[10px] text-blue-400 font-normal">{isKa ? 'არჩევისას ავტომატურად შეავსებს სათაურს' : 'Auto-fills title and description'}</span>
+                  </label>
+                  <select
+                    id="quickSlideProduct"
+                    value={quickSlideProductId}
+                    onChange={e => {
+                      const pid = e.target.value;
+                      setQuickSlideProductId(pid);
+                      if (pid) {
+                        const selProd = products.find(p => p.id === pid);
+                        if (selProd) {
+                          setQuickSlideTitle(selProd.titleKa || selProd.title);
+                          setQuickSlideDesc(selProd.descriptionKa || selProd.description);
+                          if (selProd.image) {
+                            setQuickSlideImage(selProd.image);
+                          }
+                        }
+                      }
+                    }}
+                    className="w-full text-xs rounded-lg focus:outline-hidden focus:ring-2 focus:ring-blue-500 transition-all cursor-pointer font-medium"
+                    style={{
+                      padding: '10px 14px',
+                      background: '#0b0f19',
+                      color: '#fff',
+                      border: '1px solid #334155'
+                    }}
+                  >
+                    <option value="">{isKa ? '-- ზოგადი ბანერი (პროდუქტი არ არის მიბმული) --' : '-- General Banner (No linked product) --'}</option>
+                    {products.map(p => (
+                      <option key={p.id} value={p.id}>
+                        {p.titleKa || p.title} ({formatPrice(p.price)})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
                 <div>
                   <label htmlFor="slideTitle" className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
                     სათაური:
@@ -4709,16 +4756,16 @@ export const AdminDashboard: React.FC = () => {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in duration-200">
           <div className="absolute inset-0" onClick={() => setIsProductModalOpen(false)} />
 
-          <div className="relative w-full max-w-xl bg-white rounded-3xl shadow-2xl border border-slate-100 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
+          <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsProductModalOpen(false)}
-              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100"
+              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="flex items-center justify-between mb-4 pr-10">
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 {editingProduct
                   ? (isKa ? 'პროდუქტის რედაქტირება' : 'Edit Product')
                   : (isKa ? 'ახალი პროდუქტის დამატება' : 'Add New Product')}
@@ -4739,7 +4786,7 @@ export const AdminDashboard: React.FC = () => {
 
             <form onSubmit={handleSaveProduct} className="space-y-4">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   {isKa ? 'პროდუქტის სათაური (EN) *' : 'Product Title (EN) *'}
                 </label>
                 <input
@@ -4748,12 +4795,12 @@ export const AdminDashboard: React.FC = () => {
                   value={prodForm.title ?? ''}
                   onChange={e => setProdForm({ ...prodForm, title: e.target.value })}
                   placeholder=""
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   {isKa ? 'პროდუქტის სათაური ქართულად (KA)' : 'Product Title in Georgian (KA)'}
                 </label>
                 <input
@@ -4761,7 +4808,7 @@ export const AdminDashboard: React.FC = () => {
                   value={prodForm.titleKa ?? ''}
                   onChange={e => setProdForm({ ...prodForm, titleKa: e.target.value })}
                   placeholder=""
-                  className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
 
@@ -4802,36 +4849,40 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     {isKa ? 'კატეგორია *' : 'Category *'}
                   </label>
                   <select
                     value={prodForm.category ?? 'tech'}
                     onChange={e => setProdForm({ ...prodForm, category: e.target.value as Product['category'] })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden font-medium cursor-pointer"
                   >
-                    <option value="tech">{isKa ? 'ჭკვიანი ტექნიკა' : 'Smart Tech'}</option>
-                    <option value="fitness">{isKa ? 'ფიტნესი და აქტივობა' : 'Fitness & Hydration'}</option>
-                    <option value="everyday">{isKa ? 'ყოველდღიური ნივთები' : 'Everyday Carry'}</option>
-                    <option value="accessories">{isKa ? 'აქსესუარები' : 'Accessories'}</option>
+                    <option value="drinkware" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Smart Hydration (ჭკვიანი ჭურჭელი)' : 'Smart Hydration (Drinkware)'}</option>
+                    <option value="gaming" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Gaming (გეიმინგი)' : 'Gaming'}</option>
+                    <option value="wearables" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Fitness Trackers (ფიტნეს ტრეკერები)' : 'Fitness Trackers (Wearables)'}</option>
+                    <option value="audio" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Studio & Audio (სტუდია & აუდიო)' : 'Studio & Audio'}</option>
+                    <option value="tech" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Smart Tech (ჭკვიანი ტექნიკა)' : 'Smart Tech'}</option>
+                    <option value="fitness" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Health & Fitness (ჯანმრთელობა & ფიტნესი)' : 'Health & Fitness'}</option>
+                    <option value="everyday" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Everyday Carry (ყოველდღიური ნივთები)' : 'Everyday Carry'}</option>
+                    <option value="accessories" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Accessories (აქსესუარები)' : 'Accessories'}</option>
                   </select>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     {isKa ? 'ბეიჯის იარლიყი' : 'Badge Label'}
                   </label>
                   <select
                     value={prodForm.badge ?? ''}
                     onChange={e => setProdForm({ ...prodForm, badge: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden cursor-pointer"
                   >
-                    <option value="">{isKa ? 'არცერთი' : 'None'}</option>
-                    <option value="Best Seller">{isKa ? 'ბესტსელერი' : 'Best Seller'}</option>
-                    <option value="Trending">{isKa ? 'პოპულარული' : 'Trending'}</option>
-                    <option value="Hot Deal">{isKa ? 'ცხელი შეთავაზება' : 'Hot Deal'}</option>
-                    <option value="New">{isKa ? 'ახალი' : 'New'}</option>
-                    <option value="Sale">{isKa ? 'ფასდაკლება' : 'Sale'}</option>
+                    <option value="" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'არცერთი' : 'None'}</option>
+                    <option value="Best Seller" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ბესტსელერი' : 'Best Seller'}</option>
+                    <option value="Trending" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'პოპულარული' : 'Trending'}</option>
+                    <option value="Hot Deal" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ცხელი შეთავაზება' : 'Hot Deal'}</option>
+                    <option value="New" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ახალი' : 'New'}</option>
+                    <option value="Sale" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ფასდაკლება' : 'Sale'}</option>
                   </select>
                 </div>
               </div>
@@ -5208,14 +5259,14 @@ export const AdminDashboard: React.FC = () => {
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                       {isKa ? 'პროდუქტის სარეკლამო აღწერა (EN)' : 'Product Description (EN)'}
                     </label>
                     <button
                       type="button"
                       disabled={isGeneratingCopy}
                       onClick={() => handleGenerateAdCopy('descriptionEn')}
-                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center space-x-1 cursor-pointer disabled:opacity-50"
                       title="Generate English advertising copy"
                     >
                       <Sparkles className="w-3 h-3 text-blue-500" />
@@ -5227,20 +5278,20 @@ export const AdminDashboard: React.FC = () => {
                     value={prodForm.description ?? ''}
                     onChange={e => setProdForm({ ...prodForm, description: e.target.value })}
                     placeholder=""
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
                       {isKa ? 'პროდუქტის სარეკლამო აღწერა ქართულად (KA)' : 'Product Description in Georgian (KA)'}
                     </label>
                     <button
                       type="button"
                       disabled={isGeneratingCopy}
                       onClick={() => handleGenerateAdCopy('descriptionKa')}
-                      className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 cursor-pointer disabled:opacity-50"
+                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center space-x-1 cursor-pointer disabled:opacity-50"
                       title="Generate Georgian advertising copy"
                     >
                       <Sparkles className="w-3 h-3 text-blue-500" />
@@ -5252,7 +5303,7 @@ export const AdminDashboard: React.FC = () => {
                     value={prodForm.descriptionKa ?? ''}
                     onChange={e => setProdForm({ ...prodForm, descriptionKa: e.target.value })}
                     placeholder=""
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed"
                   />
                 </div>
               </div>

@@ -1345,7 +1345,7 @@ Return ONLY a valid JSON object matching this schema without markdown code block
         let response: any = null;
         try {
           response = await ai.models.generateContent({
-            model: 'gemini-3.8-flash',
+            model: 'gemini-2.5-flash',
             contents,
             config: {
               responseMimeType: 'application/json',

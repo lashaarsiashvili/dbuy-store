@@ -10,6 +10,7 @@ export const Hero: React.FC = () => {
     setSelectedCategory, 
     products, 
     setQuickViewProduct, 
+    navigateToProduct,
     billboards,
     billboardIntervalSeconds,
   } = useStore();
@@ -91,6 +92,13 @@ export const Hero: React.FC = () => {
   }, [slides.length]);
 
   const handleSlideAction = (slide: BillboardSlide) => {
+    if (slide.productId) {
+      const matchedProduct = products.find(p => p.id === slide.productId || p.customSlug === slide.productId);
+      if (matchedProduct) {
+        navigateToProduct(matchedProduct.id);
+        return;
+      }
+    }
     if (slide.category) {
       setSelectedCategory(slide.category);
     } else {

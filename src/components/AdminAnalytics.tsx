@@ -314,20 +314,20 @@ export const AdminAnalytics: React.FC = () => {
       {/* ========================================================================= */}
       {/* TOP HEADER: Clean Title, Live Indicator & Days/Weeks/Months Toggle */}
       {/* ========================================================================= */}
-      <div className="bg-white p-5 sm:p-7 rounded-3xl border border-slate-200/90 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
+      <div className="bg-white dark:bg-slate-900 p-5 sm:p-7 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs flex flex-col md:flex-row items-start md:items-center justify-between gap-5">
         <div>
           <div className="flex items-center space-x-2.5 mb-1.5">
-            <div className="p-2 rounded-xl bg-orange-50 text-orange-600">
+            <div className="p-2 rounded-xl bg-orange-50 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400">
               <Users className="w-5 h-5" />
             </div>
-            <h2 className="text-xl font-black text-slate-900 tracking-tight">
+            <h2 className="text-xl font-black text-slate-900 dark:text-slate-100 tracking-tight">
               {isKa ? 'საიტის აუდიტორიის ანალიტიკა' : 'Store Audience Analytics'}
             </h2>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 text-orange-800 border border-orange-200">
+            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-100 dark:bg-orange-950 text-orange-800 dark:text-orange-300 border border-orange-200 dark:border-orange-800">
               dbuystore.com
             </span>
           </div>
-          <p className="text-xs text-slate-500 max-w-xl">
+          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xl">
             {isKa 
               ? 'უნიკალური ვიზიტორები, მომხმარებელთა ქვეყნები და ყველაზე პოპულარული პროდუქტები.' 
               : 'Unique visitors, visitor countries breakdown, and most viewed products.'}
@@ -338,7 +338,7 @@ export const AdminAnalytics: React.FC = () => {
         <div className="flex flex-wrap items-center gap-3 w-full md:w-auto justify-between md:justify-end">
           
           {/* REAL-TIME "LIVE NOW" INDICATOR BADGE */}
-          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-2xl bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-black shadow-2xs">
+          <div className="inline-flex items-center space-x-2 px-3.5 py-1.5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300 dark:border-emerald-800 text-emerald-800 dark:text-emerald-300 text-xs font-black shadow-2xs">
             <span className="relative flex h-2.5 w-2.5">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
@@ -351,13 +351,13 @@ export const AdminAnalytics: React.FC = () => {
           </div>
 
           {/* TIME-BASED FILTER TOGGLE (Days, Weeks, Months) */}
-          <div className="inline-flex items-center p-1 bg-slate-100 rounded-2xl border border-slate-200 shadow-inner">
+          <div className="inline-flex items-center p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl border border-slate-200 dark:border-slate-700 shadow-inner">
             <button
               onClick={() => setTimeRange('days')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
                 timeRange === 'days'
-                  ? 'bg-white text-orange-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <span>{isKa ? 'დღეები' : 'Days'}</span>
@@ -369,8 +369,8 @@ export const AdminAnalytics: React.FC = () => {
               onClick={() => setTimeRange('weeks')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
                 timeRange === 'weeks'
-                  ? 'bg-white text-orange-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <span>{isKa ? 'კვირები' : 'Weeks'}</span>
@@ -382,8 +382,8 @@ export const AdminAnalytics: React.FC = () => {
               onClick={() => setTimeRange('months')}
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-1 ${
                 timeRange === 'months'
-                  ? 'bg-white text-orange-600 shadow-xs'
-                  : 'text-slate-600 hover:text-slate-900'
+                  ? 'bg-white dark:bg-slate-900 text-orange-600 dark:text-orange-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
               }`}
             >
               <span>{isKa ? 'თვეები' : 'Months'}</span>
@@ -405,14 +405,14 @@ export const AdminAnalytics: React.FC = () => {
             </button>
             <button
               onClick={handleExportCSV}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
               title="Export CSV"
             >
               <Download className="w-4 h-4" />
             </button>
             <button
               onClick={() => setShowCfModal(true)}
-              className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer"
+              className="p-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
               title="Settings"
             >
               <Settings2 className="w-4 h-4" />
