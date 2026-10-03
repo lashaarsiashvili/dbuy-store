@@ -891,7 +891,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Products - Durable persistence: relies on localStorage or falls back to initialProducts
-  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v23_official_catalog_only';
+  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v30_empty_catalog_studio';
 
   const [products, setProducts] = useState<Product[]>(() => {
     try {
@@ -899,7 +899,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const saved = localStorage.getItem('dbuy_products');
       if (savedVersion === CURRENT_CATALOG_VERSION && saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        if (Array.isArray(parsed)) {
           return parsed.map(sanitizeProductUrls);
         }
       }
