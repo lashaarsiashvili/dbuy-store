@@ -114,7 +114,7 @@ export const Header: React.FC = () => {
                 autoFocus
                 value={searchQuery ?? ''}
                 onChange={e => setSearchQuery(e.target.value)}
-                placeholder={language === 'ka' ? 'ძებნა...' : 'Search tech, fitness...'}
+                placeholder={t('nav.searchPlaceholder')}
                 className="w-full text-xs text-slate-800 dark:text-slate-100 bg-transparent focus:outline-none placeholder-slate-400"
               />
               {searchQuery && (
@@ -130,7 +130,7 @@ export const Header: React.FC = () => {
               onClick={() => setIsMobileSearchExpanded(false)}
               className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold shrink-0 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
             >
-              {language === 'ka' ? 'დახურვა' : 'Close'}
+              {t('nav.close')}
             </button>
           </div>
         ) : (

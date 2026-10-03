@@ -40,6 +40,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.myOrders': '📦 My Orders',
     'nav.adminDash': '⚙️ Admin Dashboard',
     'nav.signOut': '🚪 Sign Out',
+    'nav.close': 'Close',
 
     // Hero
     'hero.badge': '🌟 Verified Premium Quality',
@@ -482,6 +483,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.myOrders': '📦 ჩემი შეკვეთები',
     'nav.adminDash': '⚙️ ადმინ პანელი',
     'nav.signOut': '🚪 გამოსვლა',
+    'nav.close': 'დახურვა',
 
     // Hero
     'hero.badge': '🌟 პრემიუმ ხარისხის გარანტია',
@@ -911,6 +913,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.myOrders': '📦 Mis pedidos',
     'nav.adminDash': '⚙️ Panel Admin',
     'nav.signOut': '🚪 Cerrar sesión',
+    'nav.close': 'Cerrar',
     'hero.badge': '🌟 Calidad Premium Verificada',
     'hero.title': 'Productos de Calidad para la Vida Moderna',
     'hero.subtitle': 'Descubra accesorios premium de estilo de vida, fitness y tecnología.',
@@ -1206,6 +1209,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.myOrders': '📦 Мои заказы',
     'nav.adminDash': '⚙️ Админ панель',
     'nav.signOut': '🚪 Выйти',
+    'nav.close': 'Закрыть',
     'hero.badge': '🌟 Премиальное качество',
     'hero.title': 'Качественные товары для современной жизни',
     'hero.subtitle': 'Премиальные аксессуары для спорта, фитнеса и технологий.',
@@ -1501,6 +1505,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.myOrders': '📦 Meine Bestellungen',
     'nav.adminDash': '⚙️ Admin Dashboard',
     'nav.signOut': '🚪 Abmelden',
+    'nav.close': 'Schließen',
     'hero.badge': '🌟 Geprüfte Premium-Qualität',
     'hero.title': 'Qualitätsprodukte für modernes Leben',
     'hero.subtitle': 'Entdecken Sie Lifestyle-, Fitness- und Tech-Zubehör für Ihren Alltag.',
@@ -1796,6 +1801,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.myOrders': '📦 我的订单',
     'nav.adminDash': '⚙️ 管理面板',
     'nav.signOut': '🚪 退出登录',
+    'nav.close': '关闭',
     'hero.badge': '🌟 官方认证·高品质精选',
     'hero.title': '品质生活·从精选好物开始',
     'hero.subtitle': '精选智能科技、健康健身与日常便携装备，让生活更轻松高效。',

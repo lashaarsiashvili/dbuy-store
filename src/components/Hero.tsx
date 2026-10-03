@@ -137,78 +137,33 @@ export const Hero: React.FC = () => {
           return (
             <div 
               key={slide.id || idx}
-              className="slide-item min-w-[100vw] w-[100vw] h-full relative flex items-center px-4 xs:px-6 sm:px-14 md:px-20 lg:px-24 shrink-0"
-              style={{
-                backgroundImage: `url('${slideImage}')`,
-                backgroundSize: 'cover',
-                backgroundPosition: 'center',
-              }}
+              className="slide-item min-w-[100vw] w-[100vw] h-full relative flex items-end justify-start pb-6 pl-4 sm:pb-10 sm:pl-12 shrink-0"
             >
-              {/* Full-Bleed Optimized Cached Background Fallback */}
-              <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
+              {/* Full-Bleed Fitted Vivid Image in Foreground */}
+              <div className="absolute inset-0 z-0 overflow-hidden">
                 <CachedImage
                   src={slideImage}
                   alt={slideTitle}
-                  className="w-full h-full object-cover object-center scale-105 transform transition-transform duration-1000 ease-out"
+                  className="w-full h-full object-cover object-center transform transition-transform duration-1000 ease-out"
                 />
+                {/* Subtle gradient at bottom to keep text readable while keeping image 100% crisp and clear */}
+                <div className="absolute inset-0 bg-gradient-to-t from-slate-950/80 via-slate-950/20 to-transparent pointer-events-none" />
               </div>
 
-              {/* Dark Gradient Overlay for optimal legibility */}
-              <div 
-                className="absolute inset-0 z-1 pointer-events-none"
-                style={{
-                  background: 'linear-gradient(90deg, rgba(11,15,25,0.92) 25%, rgba(11,15,25,0.72) 55%, rgba(11,15,25,0.35) 100%)'
-                }}
-              />
-
-              {/* Clean Minimalist Slide Content */}
-              <div className="slide-content relative z-2 text-white max-w-[580px] space-y-2 sm:space-y-4">
+              {/* Direct Image Overlay Content (Title & Button Only) */}
+              <div className="slide-content relative z-10 text-white max-w-[420px] sm:max-w-[480px] p-2 sm:p-4 space-y-3 sm:space-y-4 drop-shadow-[0_2px_12px_rgba(0,0,0,0.9)]">
                 
-                {/* Minimalist Badge & Discount */}
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                  <span className="inline-flex items-center px-2.5 py-0.5 sm:px-3 sm:py-1 rounded-full bg-blue-500/20 border border-blue-400/40 text-blue-300 text-[10px] sm:text-xs font-black tracking-wide uppercase backdrop-blur-md">
-                    {slideBadge || 'DBUY STORE • CURATED KIT'}
-                  </span>
-                  
-                  {slide.discountTag && (
-                    <span className="px-2 py-0.5 sm:px-2.5 sm:py-1 rounded-full bg-rose-500 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-xs">
-                      {slide.discountTag}
-                    </span>
-                  )}
-                </div>
-
                 {/* Promotional Title */}
-                <h1 className="text-xl xs:text-2xl sm:text-4xl md:text-5xl font-black tracking-tight leading-[1.15] text-white drop-shadow-md">
+                <h1 className="text-xl xs:text-2xl sm:text-3xl font-black tracking-tight leading-[1.15] text-white drop-shadow-md">
                   {slideTitle}
                 </h1>
-                
-                {/* Minimalist Subtitle / Description */}
-                {slideSubtitle && (
-                  <p className="text-slate-300 text-xs sm:text-base leading-snug sm:leading-relaxed line-clamp-2 sm:line-clamp-3 drop-shadow-xs max-w-lg">
-                    {slideSubtitle}
-                  </p>
-                )}
-
-                {/* Price Display */}
-                {slide.priceTag && (
-                  <div className="flex items-baseline space-x-2 sm:space-x-3 pt-0.5 sm:pt-1">
-                    <span className="text-xl sm:text-3xl font-black text-white tracking-tight drop-shadow-md">
-                      {slide.priceTag}
-                    </span>
-                    {slide.origPriceTag && (
-                      <span className="text-xs sm:text-base text-slate-400 line-through font-medium">
-                        {slide.origPriceTag}
-                      </span>
-                    )}
-                  </div>
-                )}
 
                 {/* Minimalist CTA Button */}
-                <div className="pt-1 sm:pt-2">
+                <div className="pt-1">
                   <button
                     type="button"
                     onClick={() => handleSlideAction(slide)}
-                    className="px-5 py-2 sm:px-7 sm:py-3 rounded-xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-xl shadow-blue-900/40 hover:shadow-blue-600/50 transition-all cursor-pointer inline-flex items-center space-x-2"
+                    className="px-5 py-2.5 sm:px-6 sm:py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-extrabold text-xs sm:text-sm shadow-lg shadow-blue-900/50 hover:shadow-blue-600/50 transition-all cursor-pointer inline-flex items-center space-x-2"
                   >
                     <span>{isKa ? slide.buttonTextKa || 'ყიდვა ახლა' : slide.buttonText || 'Shop Now'}</span>
                     <span className="text-base sm:text-lg leading-none">&#10095;</span>

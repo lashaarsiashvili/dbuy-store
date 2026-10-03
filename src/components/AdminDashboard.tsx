@@ -1736,8 +1736,8 @@ export const AdminDashboard: React.FC = () => {
           </div>
         </div>
 
-        {/* Tab Navigation - Modern Segmented Control */}
-        <div className="bg-slate-200/75 dark:bg-slate-900 p-1.5 rounded-2xl flex items-center space-x-1.5 overflow-x-auto border border-slate-300/60 dark:border-slate-800 shadow-xs scrollbar-none">
+        {/* Tab Navigation - Modern Segmented Control with Wrapping */}
+        <div className="bg-slate-200/75 dark:bg-slate-900 p-1.5 rounded-2xl flex flex-wrap items-center gap-1.5 border border-slate-300/60 dark:border-slate-800 shadow-xs">
           <button
             onClick={() => setActiveTab('analytics')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${

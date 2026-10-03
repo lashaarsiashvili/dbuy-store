@@ -470,17 +470,13 @@ export const CategoryBrowse: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Title & Item Count Below Circle */}
-                  <div className="mt-1 text-center space-y-0.5 w-full px-0.5 flex flex-col items-center">
+                  {/* Title Below Circle */}
+                  <div className="mt-1 text-center w-full px-0.5 flex flex-col items-center">
                     <h3 className={`text-[10px] xs:text-[11px] sm:text-[10px] md:text-[11px] lg:text-xs font-medium leading-tight tracking-tight text-center text-balance w-full flex items-center justify-center min-h-[26px] xs:min-h-[28px] sm:min-h-[28px] md:min-h-[30px] transition-colors ${
                       isSelected ? 'text-sky-400 font-semibold' : 'text-slate-100 group-hover:text-sky-300'
                     }`}>
                       {isKa ? card.titleKa : card.titleEn}
                     </h3>
-                    
-                    <p className="text-[9px] xs:text-[9.5px] sm:text-[9px] md:text-[10px] text-slate-400 font-light leading-none whitespace-nowrap">
-                      {isKa ? card.countTextKa : card.countTextEn}
-                    </p>
                   </div>
 
                 </button>
