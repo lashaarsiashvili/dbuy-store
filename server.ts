@@ -402,8 +402,8 @@ function initStoreDatabase(): StoreDatabase {
     products = fileProducts;
   } else if (Array.isArray(backupProducts)) {
     products = backupProducts;
-  } else if (Array.isArray(initialProducts)) {
-    products = initialProducts;
+  } else {
+    products = [];
   }
 
   const defaultFallbackImages: Record<string, string> = {

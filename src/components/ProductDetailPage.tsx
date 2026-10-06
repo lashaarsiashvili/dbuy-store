@@ -467,7 +467,7 @@ export const ProductDetailPage: React.FC = () => {
                 ) : (
                   <>
                     <ShoppingCart className="w-5 h-5 transition-transform group-hover:scale-110" />
-                    <span>{t('products.addToCart')}</span>
+                    <span data-i18n="add_to_cart">{(typeof window !== 'undefined' && window.t ? window.t('add_to_cart') : t('add_to_cart'))}</span>
                   </>
                 )}
               </button>

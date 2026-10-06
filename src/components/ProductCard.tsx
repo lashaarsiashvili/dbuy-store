@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { Star, ShoppingCart, Eye, Check, Heart, Share2, Link as LinkIcon } from 'lucide-react';
+import { Star, ShoppingCart, Eye, Check, Heart, Share2, Link as LinkIcon, Play, Video } from 'lucide-react';
 import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
@@ -25,9 +25,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
     toggleWishlist,
   } = useStore();
   const [justAdded, setJustAdded] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const isFavorite = isInWishlist(product.id);
   const displayTitle = getProductTitle(product, language);
+  const youtubeId = product.youtubeId || product.youtubeVideoId || (product as any).youtube_id;
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -119,7 +121,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
       </div>
 
       {/* Product Image Container */}
-      <div className="product-card-image-wrapper relative w-full pt-[85%] bg-slate-100 overflow-hidden">
+      <div 
+        className="product-card-image-wrapper relative w-full pt-[85%] bg-slate-100 overflow-hidden group cursor-pointer"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
         {(() => {
           let parsedImages: string[] = [];
           if (Array.isArray(product.images)) {
@@ -158,14 +164,40 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
           );
         })()}
 
+        {/* YouTube Video Hover Preview Overlay (smooth CSS fade transition on mouseenter / mouseleave) */}
+        {youtubeId && (
+          <div 
+            className={`youtube-hover-preview absolute inset-0 w-full h-full z-15 overflow-hidden transition-all duration-500 ease-in-out pointer-events-none bg-black ${
+              isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+            }`}
+          >
+            {isHovered && (
+              <iframe
+                src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&loop=1&playlist=${youtubeId}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&disablekb=1&fs=0`}
+                title={`${displayTitle} - Video Preview`}
+                className="w-[140%] h-[140%] -translate-x-[15%] -translate-y-[15%] object-cover border-0 pointer-events-none scale-105 transform-gpu"
+                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              />
+            )}
+          </div>
+        )}
+
+        {/* Video Availability Badge Indicator */}
+        {youtubeId && !isHovered && (
+          <div className="absolute bottom-2.5 left-2.5 z-10 flex items-center space-x-1 px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-md text-white text-[9.5px] font-extrabold uppercase tracking-wider shadow-sm pointer-events-none transition-opacity duration-300">
+            <Play className="w-2.5 h-2.5 fill-white text-white" />
+            <span>Video</span>
+          </div>
+        )}
+
         {/* Quick View Hover Overlay Button */}
-        <div className="product-card-quickview-overlay absolute inset-0 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center space-x-2">
+        <div className="product-card-quickview-overlay absolute inset-0 z-20 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center space-x-2 pointer-events-none">
           <button
             onClick={(e) => {
               e.stopPropagation();
               setQuickViewProduct(product);
             }}
-            className="flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-slate-50 transition-transform transform translate-y-2 group-hover:translate-y-0 duration-200 cursor-pointer"
+            className="pointer-events-auto flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-slate-50 transition-transform transform translate-y-2 group-hover:translate-y-0 duration-200 cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5 text-blue-600" />
             <span>{t('products.quickView')}</span>
@@ -241,7 +273,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
             ) : (
               <>
                 <ShoppingCart className="w-4 h-4 transition-transform group-hover:scale-110" />
-                <span>{t('products.addToCart')}</span>
+                <span data-i18n="add_to_cart">{(typeof window !== 'undefined' && window.t ? window.t('add_to_cart') : t('add_to_cart'))}</span>
               </>
             )}
           </button>

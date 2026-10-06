@@ -13,7 +13,7 @@ export interface Product {
   title_en?: string;
   title_ka?: string;
   customSlug?: string;
-  category: 'tech' | 'fitness' | 'everyday' | 'accessories';
+  category: Category;
   price: number;
   origPrice?: number;
   stock: number;
@@ -33,6 +33,8 @@ export interface Product {
   isPublishedGlobally?: boolean;
   publishedAt?: string;
   views?: number;
+  youtubeId?: string;
+  youtubeVideoId?: string;
 }
 
 export interface CartItem {

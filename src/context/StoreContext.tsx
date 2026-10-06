@@ -19,6 +19,7 @@ import {
 import { initialProducts } from '../data/initialProducts';
 import { initialBillboards } from '../data/initialBillboards';
 import { translations } from '../data/translations';
+import { getSavedLanguage, getTranslation, changeLanguage } from '../utils/i18n';
 import { loadImageBackupsIDB, preloadProductImages } from '../utils/imageStorage';
 import { 
   loadVisitorLogs, 
@@ -360,15 +361,20 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Multi-language State
-  const [language, setLanguageState] = useState<Language>(() => {
-    const saved = localStorage.getItem('dbuy_lang');
-    return (saved as Language) || 'ka';
-  });
+  const [language, setLanguageState] = useState<Language>(() => getSavedLanguage());
 
   const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    localStorage.setItem('dbuy_lang', lang);
+    const updatedLang = changeLanguage(lang);
+    setLanguageState(updatedLang);
   };
+
+  // Sync document.documentElement.lang and trigger DOM i18n updates on mount and language changes
+  useEffect(() => {
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = language;
+      changeLanguage(language);
+    }
+  }, [language]);
 
   // Toast Notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -388,21 +394,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Translation helper
   const t = (key: string, params?: Record<string, string | number>): string => {
-    const dict = translations[language] || translations['en'];
-    let text = dict[key] || translations['en']?.[key];
-
-    if (!text) {
-      const cleanKey = key.includes('.') ? key.split('.').pop() || key : key;
-      text = cleanKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()).trim();
-    }
-
-    if (params) {
-      Object.entries(params).forEach(([paramKey, value]) => {
-        text = text.replace(new RegExp(`{${paramKey}}`, 'g'), String(value));
-      });
-    }
-
-    return text;
+    return getTranslation(language, key, params);
   };
 
   const safeFirestoreSetDoc = async (documentRef: any, data: any, options: any = { merge: true }) => {
@@ -906,7 +898,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (e) {
       console.error('Error initializing products state:', e);
     }
-    const fresh = initialProducts.map(sanitizeProductUrls);
+    const fresh: Product[] = [];
     try {
       localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));

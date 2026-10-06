@@ -173,7 +173,7 @@ export const WishlistDrawer: React.FC = () => {
                           className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold text-[11px] flex items-center space-x-1 transition-colors cursor-pointer shadow-2xs"
                         >
                           <ShoppingBag className="w-3 h-3" />
-                          <span>{t('products.addToCart')}</span>
+                          <span data-i18n="add_to_cart">{(typeof window !== 'undefined' && window.t ? window.t('add_to_cart') : t('add_to_cart'))}</span>
                         </button>
                         <button
                           onClick={() => setQuickViewProduct(product)}
