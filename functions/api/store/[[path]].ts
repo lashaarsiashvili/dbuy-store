@@ -198,7 +198,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   // --- INITIAL SEEDING (Run only once if D1 is completely empty) ---
-  const productsExist = await dbGet(db, 'products');
+  const existingProductsRes = await db.prepare('SELECT id FROM products LIMIT 1').all();
+  const productsExist = Boolean(existingProductsRes?.results && existingProductsRes.results.length > 0);
   if (!productsExist) {
     console.log('[SEED] Initializing empty D1 SQL storage with default database assets...');
     await dbPut(db, 'products', JSON.stringify(initialProducts));

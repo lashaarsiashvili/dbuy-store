@@ -14,10 +14,40 @@ export default {
 
     const KV_KEY = "SITE_PRODUCTS_LIST";
 
-    // 1. პროდუქტების წამოღება (მხოლოდ რეალური ბაზიდან)
+    // 1. პროდუქტების წამოღება Cloudflare D1 ბაზიდან (env.DB)
     if (url.pathname === "/api/products" && request.method === "GET") {
-      const data = await env.PRODUCTS_KV.get(KV_KEY, { type: "json" });
-      // თუ ბაზაში არაფერია, აბრუნებს ცარიელ მასივს და არა დეფოლტ პროდუქტებს!
+      if (env.DB) {
+        try {
+          const { results } = await env.DB.prepare("SELECT * FROM products ORDER BY created_at DESC").all();
+          const products = (results || []).map(row => ({
+            id: String(row.id),
+            title: row.name || row.title || '',
+            titleKa: row.name_ka || row.titleKa || '',
+            title_en: row.name || row.title || '',
+            title_ka: row.name_ka || row.titleKa || '',
+            description: row.description || '',
+            descriptionKa: row.description_ka || row.descriptionKa || '',
+            price: Number(row.price) || 0,
+            origPrice: Number(row.original_price || row.origPrice) || 0,
+            image: row.image || '',
+            images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : (row.image ? [row.image] : []),
+            category: row.category || 'tech',
+            stock: Number(row.stock) || 0,
+            rating: Number(row.rating) || 5.0,
+            reviewsCount: Number(row.reviewsCount) || 1,
+            isPublishedGlobally: true
+          }));
+
+          return new Response(JSON.stringify(products), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        } catch (err) {
+          console.error("D1 Fetch Error:", err);
+        }
+      }
+
+      // KV Fallback if DB is not bound
+      const data = env.PRODUCTS_KV ? await env.PRODUCTS_KV.get(KV_KEY, { type: "json" }) : null;
       const products = data || [];
       return new Response(JSON.stringify(products), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -86,61 +86,59 @@ export const onRequest: PagesFunction<any> = async (context) => {
     });
   }
 
+  const db = env.DB;
   const kv = env.PRODUCTS_KV || env.KV || env.STORE_KV;
   const KV_KEY = 'SITE_PRODUCTS_LIST';
 
-  // 1. If PRODUCTS_KV is bound, prioritize direct KV storage (as in cloudflare-worker.js)
-  if (kv) {
-    if (request.method === 'GET') {
-      try {
-        const data = await kv.get(KV_KEY, { type: 'json' });
-        // Returns empty array if empty, does not overwrite with default products
-        const products = data || [];
-        return new Response(JSON.stringify(products), {
+  // 1. Prioritize Cloudflare D1 database binding "DB"
+  if (db && request.method === 'GET') {
+    try {
+      // Ensure products table schema exists without overwriting live data
+      await db.exec(
+        `CREATE TABLE IF NOT EXISTS products (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          description TEXT,
+          price REAL,
+          original_price REAL,
+          image TEXT,
+          images TEXT,
+          category TEXT,
+          stock INTEGER DEFAULT 0,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );`
+      );
+
+      // Query live products directly from D1
+      const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+      if (results && Array.isArray(results)) {
+        return Response.json(formatProducts(results), {
           headers: CORS_HEADERS,
         });
-      } catch (err: any) {
-        return new Response(
-          JSON.stringify({ success: false, error: err?.message || 'Failed to get products from KV' }),
-          { status: 500, headers: CORS_HEADERS }
-        );
       }
-    }
-
-    if (request.method === 'POST') {
-      try {
-        const body = await request.json();
-        let list: any[] = [];
-        if (Array.isArray(body)) {
-          list = body;
-        } else if (body && body.id) {
-          const currentData = await kv.get(KV_KEY, { type: 'json' });
-          const existing = Array.isArray(currentData) ? currentData : [];
-          const idx = existing.findIndex((p: any) => p.id === body.id);
-          if (idx >= 0) {
-            existing[idx] = { ...existing[idx], ...body };
-          } else {
-            existing.unshift(body);
-          }
-          list = existing;
-        }
-        await kv.put(KV_KEY, JSON.stringify(list));
-
-        return new Response(
-          JSON.stringify({ success: true, message: 'Products updated successfully in Cloudflare KV', products: list }),
-          { headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-        );
-      } catch (err: any) {
-        return new Response(
-          JSON.stringify({ success: false, error: err?.message || 'Failed to save to KV' }),
-          { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-        );
-      }
+    } catch (err: any) {
+      console.error('[D1] Error querying products from DB:', err);
     }
   }
 
-  const db = env.DB;
-  if (!db) {
+  // 2. Fallback to PRODUCTS_KV if DB is not bound or empty
+  if (kv && request.method === 'GET') {
+    try {
+      const data = await kv.get(KV_KEY, { type: 'json' });
+      const products = data || [];
+      return new Response(JSON.stringify(products), {
+        headers: CORS_HEADERS,
+      });
+    } catch (err: any) {
+      return new Response(
+        JSON.stringify({ success: false, error: err?.message || 'Failed to get products from KV' }),
+        { status: 500, headers: CORS_HEADERS }
+      );
+    }
+  }
+
+  if (!db && !kv) {
     return Response.json({
       success: false,
       error: 'Cloudflare D1 Database binding "DB" or "PRODUCTS_KV" is missing in Cloudflare settings.',
