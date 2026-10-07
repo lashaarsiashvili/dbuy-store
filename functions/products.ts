@@ -1,30 +1,27 @@
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Content-Type': 'application/json',
-};
-
-export const onRequest: PagesFunction<any> = async (context) => {
+export const onRequest: PagesFunction<{ DB: D1Database }> = async (context) => {
   const { request, env } = context;
 
+  const corsHeaders = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Content-Type': 'application/json',
+  };
+
   if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: CORS_HEADERS });
+    return new Response(null, { headers: corsHeaders });
   }
 
-  const db = env.DB;
-  if (!db) {
-    return Response.json({ success: false, error: 'D1 Database binding missing' }, { status: 500, headers: CORS_HEADERS });
+  try {
+    const { results } = await env.DB.prepare('SELECT * FROM products').all();
+    return new Response(JSON.stringify(results || []), {
+      status: 200,
+      headers: corsHeaders,
+    });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: err.message }), {
+      status: 500,
+      headers: corsHeaders,
+    });
   }
-
-  if (request.method === 'GET') {
-    try {
-      const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
-      return Response.json(results || [], { headers: CORS_HEADERS });
-    } catch (err: any) {
-      return Response.json({ success: false, error: err?.message || 'Failed to fetch' }, { status: 500, headers: CORS_HEADERS });
-    }
-  }
-
-  return Response.json({ success: false, error: 'Method Not Allowed' }, { status: 405, headers: CORS_HEADERS });
 };
