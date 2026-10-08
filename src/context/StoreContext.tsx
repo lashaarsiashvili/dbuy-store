@@ -752,14 +752,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const sanitizeProductUrls = (p: Product): Product => {
-    const mainImage = sanitizeImageUrl(p.image);
-    const extraImages = Array.isArray(p.images)
+    let mainImage = sanitizeImageUrl(p.image);
+
+    // Look up the corresponding product in local initialProducts by ID if fetched image is null/empty/placeholder
+    if (!mainImage || mainImage === '' || mainImage === '/uploads/placeholder.jpg') {
+      const localMatch = initialProducts.find(ip => ip.id === p.id);
+      if (localMatch && localMatch.image && localMatch.image !== '') {
+        mainImage = sanitizeImageUrl(localMatch.image);
+      }
+    }
+
+    const extraImages = Array.isArray(p.images) && p.images.length > 0 && p.images.some(img => img && img !== '')
       ? p.images.map(img => sanitizeImageUrl(img))
       : (mainImage ? [mainImage] : []);
+
+    // Also fallback individual extra images to local initialProducts if empty
+    let finalExtraImages = extraImages;
+    if (finalExtraImages.length === 0 || (finalExtraImages.length === 1 && finalExtraImages[0] === '/uploads/placeholder.jpg')) {
+      const localMatch = initialProducts.find(ip => ip.id === p.id);
+      if (localMatch && Array.isArray(localMatch.images) && localMatch.images.length > 0) {
+        finalExtraImages = localMatch.images.map(img => sanitizeImageUrl(img));
+      }
+    }
+
     return {
       ...p,
-      image: mainImage,
-      images: extraImages
+      image: mainImage || '/uploads/placeholder.jpg',
+      images: finalExtraImages.length > 0 ? finalExtraImages : [mainImage || '/uploads/placeholder.jpg']
     };
   };
 
