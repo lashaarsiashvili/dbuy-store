@@ -94,10 +94,21 @@ export async function handleProductsGet(env: Env): Promise<Response> {
   }
 }
 
+async function dbGet(db: any, key: string): Promise<string | null> {
+  try {
+    const result = await db.prepare('SELECT value FROM store_kv WHERE key = ?').bind(key).first();
+    return result ? (result as any).value : null;
+  } catch (err) {
+    console.error('dbGet error:', err);
+    return null;
+  }
+}
+
 /**
  * Handles DELETE requests to /api/products:
  * 1. Validates DB connection
- * 2. Deletes the product matching the provided ID from D1
+ * 2. Authenticates administrative slug credentials
+ * 3. Deletes the product matching the provided ID from D1
  */
 export async function handleProductsDelete(request: Request, env: Env): Promise<Response> {
   if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
@@ -110,6 +121,19 @@ export async function handleProductsDelete(request: Request, env: Env): Promise<
   }
 
   try {
+    // 1. Authenticate administrative slug credentials
+    const adminSecretSlug = await dbGet(env.DB, 'adminSecretSlug') || 'dashboard';
+    const clientAdminSlug = request.headers.get('X-Admin-Slug') || request.headers.get('Authorization')?.replace('Bearer ', '') || request.headers.get('x-admin-key');
+    const isAuthorizedAdmin = clientAdminSlug && clientAdminSlug.trim() === adminSecretSlug.trim();
+
+    if (!isAuthorizedAdmin) {
+      console.warn(`[Cloudflare D1 /api/products DELETE] Unauthorized deletion attempt with slug: ${clientAdminSlug}`);
+      return new Response(
+        JSON.stringify({ success: false, error: 'Unauthorized: Invalid administrative credentials or slug' }),
+        { status: 403, headers: CORS_HEADERS }
+      );
+    }
+
     const url = new URL(request.url);
     const id = url.searchParams.get('id');
     if (!id) {
