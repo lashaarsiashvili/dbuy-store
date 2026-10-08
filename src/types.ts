@@ -8,6 +8,7 @@ export type PageView = 'home' | 'product' | 'about' | 'contact' | 'privacy' | 'r
 
 export interface Product {
   id: string;
+  name?: string;
   title: string;
   titleKa?: string;
   title_en?: string;
@@ -15,6 +16,7 @@ export interface Product {
   customSlug?: string;
   category: Category;
   price: number;
+  original_price?: number | null;
   origPrice?: number;
   stock: number;
   badge?: string;
@@ -26,15 +28,17 @@ export interface Product {
   description_ka?: string;
   rating: number;
   reviewsCount: number;
-  features?: string[];
-  features_en?: string[];
-  features_ka?: string[];
+  features?: string[] | null;
+  features_en?: string[] | null;
+  features_ka?: string[] | null;
   isDeal?: boolean;
   isPublishedGlobally?: boolean;
   publishedAt?: string;
   views?: number;
   youtubeId?: string;
   youtubeVideoId?: string;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface CartItem {

@@ -398,38 +398,17 @@ function initStoreDatabase(): StoreDatabase {
   // 3. Strict single source of truth - NEVER union-merge with default catalog!
   // Preserves deletions, edits, and additions permanently.
   let products: any[] = [];
-  if (Array.isArray(fileProducts)) {
+  if (Array.isArray(fileProducts) && fileProducts.length >= 24) {
     products = fileProducts;
-  } else if (Array.isArray(backupProducts)) {
+  } else if (Array.isArray(backupProducts) && backupProducts.length >= 24) {
     products = backupProducts;
   } else {
-    products = [];
+    products = initialProducts;
   }
 
-  const defaultFallbackImages: Record<string, string> = {
-    tech: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1000&q=80',
-    fitness: 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=1000&q=80',
-    accessories: 'https://images.unsplash.com/photo-1584438784894-089d6a62b8fa?auto=format&fit=crop&w=1000&q=80',
-    home: 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=1000&q=80',
-  };
-
   products.forEach((p: any) => {
-    const defaultImg = defaultFallbackImages[p.category] || defaultFallbackImages.tech;
-    if (!p.image || p.image.includes('placeholder.jpg') || p.image.trim() === '') {
-      p.image = defaultImg;
-    }
-    if (Array.isArray(p.images)) {
-      p.images = p.images.map((imgUrl: string) => {
-        if (!imgUrl || imgUrl.includes('placeholder.jpg') || imgUrl.trim() === '') {
-          return defaultImg;
-        }
-        return imgUrl;
-      });
-      if (p.images.length === 0) {
-        p.images = [p.image];
-      }
-    } else {
-      p.images = [p.image];
+    if (!Array.isArray(p.images)) {
+      p.images = p.image ? [p.image] : [];
     }
   });
 

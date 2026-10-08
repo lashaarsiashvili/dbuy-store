@@ -883,7 +883,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Products - Durable persistence: relies on localStorage or falls back to initialProducts
-  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v30_empty_catalog_studio';
+  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v33_d1_exact_clean';
 
   const [products, setProducts] = useState<Product[]>(() => {
     try {
@@ -891,18 +891,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const saved = localStorage.getItem('dbuy_products');
       if (savedVersion === CURRENT_CATALOG_VERSION && saved !== null) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) {
+        if (Array.isArray(parsed) && parsed.length >= 24) {
           return parsed.map(sanitizeProductUrls);
         }
       }
     } catch (e) {
       console.error('Error initializing products state:', e);
     }
-    const fresh: Product[] = [];
+    const fresh: Product[] = initialProducts.map(sanitizeProductUrls);
     try {
       localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));
-      localStorage.removeItem('dbuy_products_last_updated');
+      localStorage.setItem('dbuy_products_last_updated', new Date().toISOString());
     } catch (e) {}
     return fresh;
   });
@@ -1691,7 +1691,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (d.lastUpdated) {
           lastSyncTimestampRef.current = d.lastUpdated;
         }
-        if (false && Array.isArray(d.products)) {
+        if (Array.isArray(d.products) && d.products.length > 0) {
           setProducts(prevProducts => {
             // Never wipe out local products if server returns empty list
             if (d.products.length === 0 && prevProducts.length > 0) {

@@ -1,30 +1,187 @@
+/**
+ * /functions/api/products.ts
+ *
+ * Cloudflare Pages Function route handler for /api/products.
+ * Strictly validates the Cloudflare D1 env.DB connection, ensures a clean
+ * 'SELECT * FROM products' query, logs potential errors to the console,
+ * and returns the data as { success: true, products: [...] }.
+ */
+
+export interface Env {
+  DB: {
+    prepare(query: string): {
+      bind(...values: any[]): any;
+      all<T = any>(): Promise<{ results: T[]; [key: string]: any }>;
+      first<T = any>(colName?: string): Promise<T | null>;
+      run(): Promise<any>;
+    };
+    exec?(query: string): Promise<any>;
+  };
+  [key: string]: any;
+}
+
+export interface EventContext<Env = any> {
+  request: Request;
+  env: Env;
+  params?: Record<string, string>;
+  data?: Record<string, any>;
+}
+
+export type PagesFunction<Env = any> = (context: EventContext<Env>) => Promise<Response> | Response;
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS, DELETE',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Slug',
   'Content-Type': 'application/json',
 };
 
-export const onRequest: PagesFunction<any> = async (context) => {
-  const { request, env } = context;
-
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { headers: CORS_HEADERS });
+/**
+ * Handles GET requests to /api/products:
+ * 1. Strictly validates the Cloudflare D1 env.DB connection
+ * 2. Ensures a clean `SELECT * FROM products` query
+ * 3. Logs any potential errors to the console
+ * 4. Returns the data as { success: true, products: [...] }
+ */
+export async function handleProductsGet(env: Env): Promise<Response> {
+  // 1. Strictly validate the Cloudflare D1 env.DB connection
+  if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
+    const errorMsg = 'Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid';
+    console.error(`[Cloudflare D1 /api/products] Connection Validation Error: ${errorMsg}`);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: errorMsg,
+        products: [],
+      }),
+      {
+        status: 500,
+        headers: CORS_HEADERS,
+      }
+    );
   }
 
-  const db = env.DB;
-  if (!db) {
-    return Response.json({ success: false, error: 'D1 Database binding missing' }, { status: 500, headers: CORS_HEADERS });
+  // 2. Ensures a clean SELECT * FROM products query and logs any potential errors
+  try {
+    const query = 'SELECT * FROM products';
+    const { results } = await env.DB.prepare(query).all();
+    const products = Array.isArray(results) ? results : [];
+
+    // 3. Return the data as { success: true, products: [...] }
+    return new Response(
+      JSON.stringify({
+        success: true,
+        products,
+      }),
+      {
+        status: 200,
+        headers: CORS_HEADERS,
+      }
+    );
+  } catch (error: any) {
+    console.error('[Cloudflare D1 /api/products] Database query execution error on "SELECT * FROM products":', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error?.message || 'Database query error while retrieving products',
+        products: [],
+      }),
+      {
+        status: 500,
+        headers: CORS_HEADERS,
+      }
+    );
+  }
+}
+
+/**
+ * Handles DELETE requests to /api/products:
+ * 1. Validates DB connection
+ * 2. Deletes the product matching the provided ID from D1
+ */
+export async function handleProductsDelete(request: Request, env: Env): Promise<Response> {
+  if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
+    const errorMsg = 'Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid';
+    console.error(`[Cloudflare D1 /api/products DELETE] Connection Validation Error: ${errorMsg}`);
+    return new Response(
+      JSON.stringify({ success: false, error: errorMsg }),
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+
+  try {
+    const url = new URL(request.url);
+    const id = url.searchParams.get('id');
+    if (!id) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Product ID is required' }),
+        { status: 400, headers: CORS_HEADERS }
+      );
+    }
+
+    await env.DB.prepare('DELETE FROM products WHERE id = ?').bind(id).run();
+    console.log(`[Cloudflare D1 /api/products DELETE] Product "${id}" deleted successfully.`);
+
+    return new Response(
+      JSON.stringify({ success: true, message: 'Product deleted successfully' }),
+      { status: 200, headers: CORS_HEADERS }
+    );
+  } catch (error: any) {
+    console.error('[Cloudflare D1 /api/products DELETE] Database query execution error:', error);
+    return new Response(
+      JSON.stringify({
+        success: false,
+        error: error?.message || 'Database query error while deleting product',
+      }),
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+}
+
+// Cloudflare Pages Function primary entry point
+export const onRequest: PagesFunction<Env> = async (context) => {
+  const { request, env } = context;
+
+  // Handle CORS preflight options
+  if (request.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: CORS_HEADERS,
+    });
   }
 
   if (request.method === 'GET') {
-    try {
-      const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
-      return Response.json(results || [], { headers: CORS_HEADERS });
-    } catch (err: any) {
-      return Response.json({ success: false, error: err?.message || 'Failed to fetch' }, { status: 500, headers: CORS_HEADERS });
-    }
+    return handleProductsGet(env);
   }
 
-  return Response.json({ success: false, error: 'Method Not Allowed' }, { status: 405, headers: CORS_HEADERS });
+  if (request.method === 'DELETE') {
+    return handleProductsDelete(request, env);
+  }
+
+  return new Response(
+    JSON.stringify({
+      success: false,
+      error: `Method ${request.method} Not Allowed`,
+    }),
+    {
+      status: 405,
+      headers: CORS_HEADERS,
+    }
+  );
+};
+
+// Method-specific Cloudflare Pages Function exports
+export const onRequestGet: PagesFunction<Env> = async (context) => {
+  return handleProductsGet(context.env);
+};
+
+export const onRequestDelete: PagesFunction<Env> = async (context) => {
+  return handleProductsDelete(context.request, context.env);
+};
+
+export const onRequestOptions: PagesFunction<Env> = async () => {
+  return new Response(null, {
+    status: 204,
+    headers: CORS_HEADERS,
+  });
 };

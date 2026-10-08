@@ -14,7 +14,11 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "fetch-cf-analytics": "tsx scripts/fetch-cloudflare-analytics.ts"
+    "fetch-cf-analytics": "tsx scripts/fetch-cloudflare-analytics.ts",
+    "enrich-d1-products": "tsx scripts/enrich-products-d1-gemini.ts",
+    "fetch-products": "tsx scripts/fetch-products.ts",
+    "sync-d1-to-local": "tsx scripts/sync-d1-to-local.ts",
+    "delete-products-list": "tsx scripts/delete-products-list.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

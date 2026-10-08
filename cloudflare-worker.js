@@ -16,42 +16,47 @@ export default {
 
     // 1. პროდუქტების წამოღება Cloudflare D1 ბაზიდან (env.DB)
     if (url.pathname === "/api/products" && request.method === "GET") {
-      if (env.DB) {
-        try {
-          const { results } = await env.DB.prepare("SELECT * FROM products ORDER BY created_at DESC").all();
-          const products = (results || []).map(row => ({
-            id: String(row.id),
-            title: row.name || row.title || '',
-            titleKa: row.name_ka || row.titleKa || '',
-            title_en: row.name || row.title || '',
-            title_ka: row.name_ka || row.titleKa || '',
-            description: row.description || '',
-            descriptionKa: row.description_ka || row.descriptionKa || '',
-            price: Number(row.price) || 0,
-            origPrice: Number(row.original_price || row.origPrice) || 0,
-            image: row.image || '',
-            images: row.images ? (typeof row.images === 'string' ? JSON.parse(row.images) : row.images) : (row.image ? [row.image] : []),
-            category: row.category || 'tech',
-            stock: Number(row.stock) || 0,
-            rating: Number(row.rating) || 5.0,
-            reviewsCount: Number(row.reviewsCount) || 1,
-            isPublishedGlobally: true
-          }));
-
-          return new Response(JSON.stringify(products), {
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        } catch (err) {
-          console.error("D1 Fetch Error:", err);
-        }
+      // Strictly validate Cloudflare D1 env.DB connection
+      if (!env || !env.DB || typeof env.DB.prepare !== "function") {
+        console.error("[Cloudflare D1 /api/products] Connection Validation Error: env.DB connection is missing or invalid");
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: "Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid",
+            products: [],
+          }),
+          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
       }
 
-      // KV Fallback if DB is not bound
-      const data = env.PRODUCTS_KV ? await env.PRODUCTS_KV.get(KV_KEY, { type: "json" }) : null;
-      const products = data || [];
-      return new Response(JSON.stringify(products), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      try {
+        const { results } = await env.DB.prepare("SELECT * FROM products").all();
+        const products = Array.isArray(results) ? results : [];
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            products,
+          }),
+          {
+            status: 200,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      } catch (err) {
+        console.error("[Cloudflare D1 /api/products] Error executing \"SELECT * FROM products\" query:", err);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: err?.message || "Database query error while retrieving products",
+            products: [],
+          }),
+          {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          }
+        );
+      }
     }
 
     // 2. ადმინიდან ცვლილებების შენახვა (დამატება/განახლება/წაშლა)
