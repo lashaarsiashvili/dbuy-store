@@ -29,11 +29,7 @@ export const DEFAULT_PRODUCT_IMAGE =
 
 export const resolveUploadUrl = (url: string | null | undefined): string => {
   if (!url || typeof url !== 'string') return '';
-  const trimmed = url.trim();
-  if (trimmed.startsWith('/uploads/')) {
-    return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data${trimmed}`;
-  }
-  return trimmed;
+  return url.trim();
 };
 
 export const getCleanProductImage = (product: Product | any): string => {
