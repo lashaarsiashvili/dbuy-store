@@ -657,6 +657,6 @@ export const initialProducts: Product[] = [
     "isDeal": true,
     "created_at": "2026-10-09 16:47:19",
     "updated_at": "2026-10-09 16:47:19",
-    "views": 6
+    "views": 10
   }
 ];

@@ -3,13 +3,14 @@ import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Star, ShoppingCart, Eye, Check, Heart, Link as LinkIcon, Play } from 'lucide-react';
 import { handleImageError, DEFAULT_PRODUCT_IMAGE, getCleanProductImage } from '../utils/imageFallback';
-import { resolveProductImage } from '../utils/productImages';
+import { getProductImageUrl } from '../utils/productImages';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
 
 const getCardImageSrc = (product: Product): string => {
-  return product.image || (Array.isArray(product.images) && product.images[0]) || '';
+  const raw = product.image || (Array.isArray(product.images) && product.images[0]) || '';
+  return getProductImageUrl(raw);
 };
 
 interface ProductCardProps {

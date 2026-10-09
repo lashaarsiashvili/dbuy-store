@@ -1,49 +1,45 @@
 import { DEFAULT_PRODUCT_IMAGE } from './imageFallback';
 
 /**
- * Bundler-based image resolver utility using Vite import.meta.glob.
- * Hashes and bundles all upload image files directly into dist/assets/,
- * bypassing external routing or serverless directory 404s completely.
+ * Direct Vite Asset Resolution Service for DBUY Store.
+ * Dynamically bundles and hashes static upload images using Vite's import.meta.glob,
+ * outputting them directly into dist/assets/ to bypass Cloudflare SPA routing interception 100%.
  */
 
-// Dynamically bundle and import all images eager-loaded
-const bundledImages = import.meta.glob<{ default: string }>(
+const imageModules = import.meta.glob<string>(
   [
-    '/public/uploads/*.{png,jpg,jpeg,webp,PNG,JPG,JPEG,WEBP}',
-    '/data/uploads/*.{png,jpg,jpeg,webp,PNG,JPG,JPEG,WEBP}'
+    '/public/uploads/**/*.{png,jpg,jpeg,webp,svg,PNG,JPG,JPEG,WEBP,SVG}',
+    '/data/uploads/**/*.{png,jpg,jpeg,webp,svg,PNG,JPG,JPEG,WEBP,SVG}',
+    '/src/assets/**/*.{png,jpg,jpeg,webp,svg,PNG,JPG,JPEG,WEBP,SVG}'
   ],
-  { eager: true }
+  { eager: true, import: 'default' }
 );
 
-// Pre-index by clean lowercase filename for O(1) fast lookup
-const filenameToAssetMap = new Map<string, string>();
-
-for (const [filePath, mod] of Object.entries(bundledImages)) {
-  if (mod && mod.default) {
-    const filename = filePath.split('/').pop()?.toLowerCase();
-    if (filename) {
-      filenameToAssetMap.set(filename, mod.default);
-    }
-  }
-}
-
-export const resolveProductImage = (rawPath: string | undefined | null): string => {
-  if (!rawPath || typeof rawPath !== 'string') return DEFAULT_PRODUCT_IMAGE;
-  const trimmed = rawPath.trim();
+export function resolveProductImage(src: string | undefined | null): string {
+  if (!src) return DEFAULT_PRODUCT_IMAGE;
+  const trimmed = src.trim();
   if (!trimmed) return DEFAULT_PRODUCT_IMAGE;
-
-  // If already a Data URL or HTTP URL, return directly
-  if (trimmed.startsWith('data:image/') || trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+  
+  // If it's already an external HTTP/HTTPS URL or Data URL, return as-is
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://') || trimmed.startsWith('data:image/')) {
     return trimmed;
   }
 
-  // Extract filename (e.g. prod-1788595035163-4dfq6x.png)
+  // Extract filename
   const filename = trimmed.split('/').pop()?.toLowerCase();
-  if (filename && filenameToAssetMap.has(filename)) {
-    return filenameToAssetMap.get(filename)!;
+  if (!filename) return trimmed;
+
+  // Match against bundled Vite assets
+  for (const [path, resolvedUrl] of Object.entries(imageModules)) {
+    if (path.toLowerCase().endsWith(filename)) {
+      return resolvedUrl;
+    }
   }
 
   return trimmed;
-};
+}
+
+export const getProductImageUrl = resolveProductImage;
+export const resolveProductImageUrl = resolveProductImage;
 
 export default resolveProductImage;
