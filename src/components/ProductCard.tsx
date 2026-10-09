@@ -9,8 +9,7 @@ import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
 
 const getCardImageSrc = (product: Product): string => {
-  const raw = product.image || (Array.isArray(product.images) && product.images[0]) || '';
-  return resolveProductImage(raw);
+  return product.image || (Array.isArray(product.images) && product.images[0]) || '';
 };
 
 interface ProductCardProps {
