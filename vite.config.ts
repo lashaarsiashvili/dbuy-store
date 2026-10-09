@@ -1,11 +1,37 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import fs from 'fs';
+import { defineConfig } from 'vite';
+
+function copyUploadsPlugin() {
+  return {
+    name: 'copy-uploads-to-dist',
+    closeBundle() {
+      const distUploads = path.resolve(__dirname, 'dist/uploads');
+      const publicUploads = path.resolve(__dirname, 'public/uploads');
+      const dataUploads = path.resolve(__dirname, 'data/uploads');
+
+      try {
+        fs.mkdirSync(distUploads, { recursive: true });
+        if (fs.existsSync(publicUploads)) {
+          fs.cpSync(publicUploads, distUploads, { recursive: true, force: true });
+        }
+        if (fs.existsSync(dataUploads)) {
+          fs.cpSync(dataUploads, distUploads, { recursive: true, force: true });
+        }
+        console.log('[copy-uploads-plugin] Successfully copied all upload assets into dist/uploads!');
+      } catch (err) {
+        console.warn('[copy-uploads-plugin] Warning copying uploads:', err);
+      }
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    publicDir: 'public',
+    plugins: [react(), tailwindcss(), copyUploadsPlugin()],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

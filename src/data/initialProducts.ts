@@ -109,7 +109,8 @@ export const initialProducts: Product[] = [
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20"
+    "updated_at": "2026-10-09 16:47:20",
+    "views": 4
   },
   {
     "id": "prod-1789153418419-mz6ptx2",
@@ -163,7 +164,8 @@ export const initialProducts: Product[] = [
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20"
+    "updated_at": "2026-10-09 16:47:20",
+    "views": 4
   },
   {
     "id": "prod-1789138699002-hmxeg6s",
@@ -190,7 +192,8 @@ export const initialProducts: Product[] = [
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20"
+    "updated_at": "2026-10-09 16:47:20",
+    "views": 2
   },
   {
     "id": "prod-1789138614222-4evc5wn",
@@ -217,7 +220,8 @@ export const initialProducts: Product[] = [
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20"
+    "updated_at": "2026-10-09 16:47:20",
+    "views": 2
   },
   {
     "id": "prod-1788724519740",
@@ -244,7 +248,8 @@ export const initialProducts: Product[] = [
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20"
+    "updated_at": "2026-10-09 16:47:20",
+    "views": 2
   },
   {
     "id": "prod-1788724361112",
@@ -271,7 +276,8 @@ export const initialProducts: Product[] = [
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20"
+    "updated_at": "2026-10-09 16:47:20",
+    "views": 4
   },
   {
     "id": "prod-1788723441741",
@@ -649,6 +655,7 @@ export const initialProducts: Product[] = [
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:19",
-    "updated_at": "2026-10-09 16:47:19"
+    "updated_at": "2026-10-09 16:47:19",
+    "views": 4
   }
 ];
