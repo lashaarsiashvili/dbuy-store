@@ -9,8 +9,7 @@ import {
   CATEGORIES_NAV_ITEMS, 
   getCategoryBySlugOrId, 
   categoryIdToSlug, 
-  slugToCategoryId,
-  SAMPLE_MOCK_PRODUCTS
+  slugToCategoryId
 } from '../data/categoryNavigationData';
 import { 
   SearchX, 
@@ -100,38 +99,21 @@ export const ProductGrid: React.FC = () => {
     }
   }, [selectedCategory]);
 
-  // Combine authentic products with mock dataset items to guarantee full coverage
+  // Strict Deduplication: Guarantees authentic catalog with strictly unique 24 products
   const allAvailableProducts = useMemo(() => {
-    // 1. Valid authentic products from local catalog
-    const localValid = (productsData as Product[]).filter(
+    const sourceList = Array.isArray(products) && products.length > 0
+      ? products
+      : (productsData as Product[]);
+
+    const validWithImages = sourceList.filter(
       (p) => p.image && p.image.trim() !== '' && !p.image.toLowerCase().includes('placeholder')
     );
 
-    // 2. Map mock dataset items as fallback items
-    const mockMapped: Product[] = SAMPLE_MOCK_PRODUCTS.map((m) => ({
-      id: m.id,
-      name: m.name,
-      title: m.title || m.name,
-      titleKa: m.titleKa || m.title || m.name,
-      price: m.price,
-      origPrice: m.origPrice,
-      rating: m.rating,
-      reviewsCount: m.reviewsCount || 10,
-      image: m.image,
-      category: m.category,
-      stock: m.stock || 10,
-      badge: m.badge,
-      description: m.description || '',
-      descriptionKa: m.descriptionKa || '',
-      isDeal: m.category === 'deals' || Boolean(m.origPrice && m.origPrice > m.price),
-    }));
+    // Deduplicate products by their unique `id`
+    const uniqueProducts: Product[] = Array.from(new Map<string, Product>(validWithImages.map((p) => [p.id, p])).values());
 
-    // Prevent duplicate IDs
-    const existingIds = new Set(localValid.map((p) => p.id));
-    const uniqueMocks = mockMapped.filter((m) => !existingIds.has(m.id));
-
-    return [...localValid, ...uniqueMocks];
-  }, []);
+    return uniqueProducts;
+  }, [products]);
 
   // Category matching helper
   const matchesCategory = (product: Product, catId: string): boolean => {
@@ -174,11 +156,17 @@ export const ProductGrid: React.FC = () => {
     return product.category === catId;
   };
 
-  // Compute live product counts per category for the sidebar badges
+  // Compute live product counts per category for the sidebar badges ensuring unique counts
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     CATEGORIES_NAV_ITEMS.forEach((cat) => {
-      counts[cat.id] = allAvailableProducts.filter((p) => matchesCategory(p, cat.id)).length;
+      if (cat.id === 'all') {
+        counts[cat.id] = allAvailableProducts.length;
+      } else {
+        const matched = allAvailableProducts.filter((p) => matchesCategory(p, cat.id));
+        const uniqueMatched = Array.from(new Map(matched.map((p) => [p.id, p])).values());
+        counts[cat.id] = uniqueMatched.length;
+      }
     });
     return counts;
   }, [allAvailableProducts]);
@@ -282,8 +270,12 @@ export const ProductGrid: React.FC = () => {
                 Home
               </button>
               <ChevronRight className="w-3 h-3 text-slate-400" />
-              <span>Categories</span>
-              <ChevronRight className="w-3 h-3 text-slate-400" />
+              {selectedCategory !== 'all' && (
+                <>
+                  <span>{isKa ? 'კატეგორიები' : 'Categories'}</span>
+                  <ChevronRight className="w-3 h-3 text-slate-400" />
+                </>
+              )}
               <span className="font-semibold text-slate-800 dark:text-slate-200">
                 {isKa ? activeCategoryInfo.nameKa : activeCategoryInfo.name}
               </span>
@@ -441,7 +433,7 @@ export const ProductGrid: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
                   {isKa 
                     ? 'სცადეთ ფილტრების გასუფთავება ან სხვა კატეგორიის არჩევა.'
-                    : 'Try clearing your active filters or select a different department.'}
+                    : 'Try clearing your active filters or select a different category.'}
                 </p>
                 <button
                   type="button"

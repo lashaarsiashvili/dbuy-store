@@ -614,5 +614,40 @@ apple-pay-button {
   }
 }
 
+/* ==========================================================================
+   Google Translate Seamless Native Integration Styles
+   Hides default Google top bar, banner frames, tooltips, and gadget icons
+   ========================================================================== */
+.goog-te-banner-frame.skiptranslate,
+.goog-te-gadget-icon,
+#goog-gt-tt,
+.goog-te-balloon-frame {
+  display: none !important;
+}
+
+body {
+  top: 0px !important;
+  position: static !important;
+}
+
+.skiptranslate {
+  display: none !important;
+}
+
+#google_translate_element {
+  display: none !important;
+}
+
+.goog-tooltip,
+.goog-tooltip:hover {
+  display: none !important;
+}
+
+.goog-text-highlight {
+  background-color: transparent !important;
+  box-shadow: none !important;
+}
+
+
 
 

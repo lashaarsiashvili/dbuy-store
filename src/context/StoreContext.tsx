@@ -941,11 +941,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(`Billboard auto-rotation set to ${val} seconds (${Math.round(val/60*10)/10}m)`, 'info');
   };
 
-  // Products - Durable persistence: strictly loads from the static products.json file
-  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v33_d1_exact_clean';
+  // Products - Durable persistence: strictly loads from the static products.json file (24 unique products)
+  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v34_dedup_24_clean';
 
   const [products, setProducts] = useState<Product[]>(() => {
-    const fresh: Product[] = (productsData as Product[]).map(sanitizeProductUrls);
+    const rawList: Product[] = Array.isArray(productsData) ? (productsData as Product[]) : [];
+    const validWithImages = rawList.filter(
+      (p) => p.image && p.image.trim() !== '' && !p.image.toLowerCase().includes('placeholder')
+    );
+    const uniqueMap = new Map<string, Product>();
+    validWithImages.forEach((p) => {
+      if (!uniqueMap.has(p.id)) {
+        uniqueMap.set(p.id, sanitizeProductUrls(p));
+      }
+    });
+    const fresh: Product[] = Array.from(uniqueMap.values());
     try {
       localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));

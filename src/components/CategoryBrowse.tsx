@@ -1,9 +1,13 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
-import { Category } from '../types';
-import { categoryIdToSlug } from '../data/categoryNavigationData';
+import { Category, Product } from '../types';
+import { 
+  categoryIdToSlug, 
+  matchesCategory 
+} from '../data/categoryNavigationData';
 import { ChevronRight, Check } from 'lucide-react';
 import { ScrollReveal } from './ScrollReveal';
+import productsData from '../data/products.json';
 
 // ==========================================
 // HIGH-END COMMERCIAL STUDIO PHOTOGRAPHY RENDERS (SVG)
@@ -332,7 +336,6 @@ export const CategoryBrowse: React.FC = () => {
   const { 
     products, 
     selectedCategory, 
-    setSelectedCategory, 
     navigateToCategory,
     language,
     t
@@ -340,16 +343,31 @@ export const CategoryBrowse: React.FC = () => {
 
   const isKa = language === 'ka';
 
-  // Dynamic item counts for categories
+  // Dynamic item counts for categories (strict deduplication by unique ID)
   const categoryCards: CategoryCardSpec[] = useMemo(() => {
-    const countDrinkware = products.filter(p => p.category === 'drinkware').length;
-    const countGaming = products.filter(p => p.category === 'gaming').length;
-    const countWearables = products.filter(p => p.category === 'wearables').length;
-    const countAudio = products.filter(p => p.category === 'audio').length;
-    const countTech = products.filter(p => p.category === 'tech').length;
-    const countFitness = products.filter(p => p.category === 'fitness').length;
-    const countDeals = products.filter(p => p.isDeal || p.badge?.toLowerCase().includes('deal') || (p.origPrice && p.origPrice > p.price)).length;
-    const countAll = products.length;
+    const sourceList = Array.isArray(products) && products.length > 0
+      ? products
+      : (productsData as Product[]);
+
+    const validWithImages = sourceList.filter(
+      (p) => p.image && p.image.trim() !== '' && !p.image.toLowerCase().includes('placeholder')
+    );
+    const uniqueMap = new Map<string, Product>();
+    validWithImages.forEach((p) => {
+      if (!uniqueMap.has(p.id)) {
+        uniqueMap.set(p.id, p);
+      }
+    });
+    const uniqueProducts: Product[] = Array.from(uniqueMap.values());
+
+    const countDrinkware = uniqueProducts.filter(p => matchesCategory(p, 'drinkware')).length;
+    const countGaming = uniqueProducts.filter(p => matchesCategory(p, 'gaming')).length;
+    const countWearables = uniqueProducts.filter(p => matchesCategory(p, 'wearables')).length;
+    const countAudio = uniqueProducts.filter(p => matchesCategory(p, 'audio')).length;
+    const countTech = uniqueProducts.filter(p => matchesCategory(p, 'tech')).length;
+    const countFitness = uniqueProducts.filter(p => matchesCategory(p, 'fitness')).length;
+    const countDeals = uniqueProducts.filter(p => matchesCategory(p, 'deals')).length;
+    const countAll = uniqueProducts.length;
 
     return [
       {
@@ -428,18 +446,18 @@ export const CategoryBrowse: React.FC = () => {
     <section className="relative py-3 sm:py-5 bg-[#0b0f19] text-white overflow-hidden select-none">
       <div className="relative max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
         
-        {/* 8 Circular Category Cards Grid: 2 rows (4 cols) on Mobile, 1 row (8 cols) on Tablet & Desktop */}
-        <div className="grid grid-cols-4 sm:grid-cols-8 gap-x-1 xs:gap-x-2 sm:gap-x-1.5 md:gap-x-3 lg:gap-x-4 gap-y-3 sm:gap-y-0 justify-items-center items-start">
+        {/* Swipeable horizontal row on Mobile, 8-column grid on Tablet & Desktop */}
+        <div className="flex sm:grid sm:grid-cols-8 gap-2.5 xs:gap-3 sm:gap-1.5 md:gap-3 lg:gap-4 overflow-x-auto sm:overflow-visible scrollbar-none pb-1 sm:pb-0 px-1 sm:px-0 scroll-smooth snap-x snap-mandatory items-start justify-start sm:justify-items-center">
           {categoryCards.map((card, index) => {
             const isSelected = selectedCategory === card.id;
             const PhotoComponent = card.photoComponent;
 
             return (
-              <ScrollReveal key={card.id} delay={index * 15} className="w-full flex justify-center">
+              <ScrollReveal key={card.id} delay={index * 15} className="shrink-0 snap-center sm:shrink sm:w-full flex justify-center">
                 <button
                   type="button"
                   onClick={() => handleCategoryClick(card.id)}
-                  className="group flex flex-col items-center cursor-pointer focus:outline-none w-full max-w-[76px] xs:max-w-[84px] sm:max-w-[72px] md:max-w-[90px] lg:max-w-[110px]"
+                  className="group flex flex-col items-center cursor-pointer focus:outline-none w-[72px] xs:w-[82px] sm:w-full max-w-[80px] xs:max-w-[88px] sm:max-w-[72px] md:max-w-[90px] lg:max-w-[110px] touch-manipulation min-h-[44px]"
                 >
                   {/* Outer Frame with category-circle-icon styling + glowing ring */}
                   <div className="relative shrink-0">
@@ -482,6 +500,13 @@ export const CategoryBrowse: React.FC = () => {
               </ScrollReveal>
             );
           })}
+        </div>
+
+        {/* Mobile Swipe Hint */}
+        <div className="flex sm:hidden justify-center items-center space-x-1 pt-1 opacity-70">
+          <span className="text-[10px] font-semibold text-sky-400/90 tracking-wide">
+            {isKa ? 'გაასრიალეთ მეტის სანახავად →' : 'Swipe to explore all →'}
+          </span>
         </div>
 
       </div>

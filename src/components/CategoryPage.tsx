@@ -10,7 +10,7 @@ import {
   getCategoryBySlugOrId, 
   categoryIdToSlug, 
   slugToCategoryId,
-  SAMPLE_MOCK_PRODUCTS
+  matchesCategory
 } from '../data/categoryNavigationData';
 import { 
   SearchX, 
@@ -28,6 +28,7 @@ import { Product } from '../types';
 export const CategoryPage: React.FC = () => {
   const {
     t,
+    products,
     selectedCategory,
     setSelectedCategory,
     navigateToCategory,
@@ -51,82 +52,38 @@ export const CategoryPage: React.FC = () => {
     inStockOnly: false,
   });
 
-  // Combine authentic products with mock dataset items to guarantee complete coverage
+  // Strict Deduplication: Guarantees authentic catalog with strictly unique 24 products
   const allAvailableProducts = useMemo(() => {
-    const localValid = (productsData as Product[]).filter(
+    const sourceList = Array.isArray(products) && products.length > 0
+      ? products
+      : (productsData as Product[]);
+
+    const validWithImages = sourceList.filter(
       (p) => p.image && p.image.trim() !== '' && !p.image.toLowerCase().includes('placeholder')
     );
 
-    const mockMapped: Product[] = SAMPLE_MOCK_PRODUCTS.map((m) => ({
-      id: m.id,
-      name: m.name,
-      title: m.title || m.name,
-      titleKa: m.titleKa || m.title || m.name,
-      price: m.price,
-      origPrice: m.origPrice,
-      rating: m.rating,
-      reviewsCount: m.reviewsCount || 10,
-      image: m.image,
-      category: m.category,
-      stock: m.stock || 10,
-      badge: m.badge,
-      description: m.description || '',
-      descriptionKa: m.descriptionKa || '',
-      isDeal: m.category === 'deals' || Boolean(m.origPrice && m.origPrice > m.price),
-    }));
+    // Strict deduplication by unique `id`
+    const uniqueMap = new Map<string, Product>();
+    validWithImages.forEach((p) => {
+      if (!uniqueMap.has(p.id)) {
+        uniqueMap.set(p.id, p);
+      }
+    });
 
-    const existingIds = new Set(localValid.map((p) => p.id));
-    const uniqueMocks = mockMapped.filter((m) => !existingIds.has(m.id));
+    return Array.from(uniqueMap.values());
+  }, [products]);
 
-    return [...localValid, ...uniqueMocks];
-  }, []);
-
-  // Category matching helper
-  const matchesCategory = (product: Product, catId: string): boolean => {
-    if (catId === 'all') return true;
-
-    if (catId === 'deals') {
-      return Boolean(product.isDeal || product.badge?.toLowerCase().includes('deal') || (product.origPrice && product.origPrice > product.price));
-    }
-
-    if (catId === 'drinkware') {
-      const text = `${product.title} ${product.titleKa || ''} ${product.category}`.toLowerCase();
-      return product.category === 'drinkware' || text.includes('bottle') || text.includes('drinkware') || text.includes('aquaminder') || text.includes('hydration') || text.includes('ბოთლ') || text.includes('camelbak') || text.includes('owala');
-    }
-
-    if (catId === 'gaming') {
-      const text = `${product.title} ${product.titleKa || ''} ${product.category}`.toLowerCase();
-      return product.category === 'gaming' || text.includes('g309') || text.includes('lightspeed') || text.includes('pro x') || text.includes('superlight') || text.includes('superstrike') || text.includes('mouse') || text.includes('headset') || text.includes('gaming');
-    }
-
-    if (catId === 'wearables') {
-      const text = `${product.title} ${product.titleKa || ''} ${product.category}`.toLowerCase();
-      return product.category === 'wearables' || text.includes('band') || text.includes('whoop') || text.includes('hume') || text.includes('watch') || text.includes('სამაჯურ') || text.includes('tracker');
-    }
-
-    if (catId === 'audio') {
-      const text = `${product.title} ${product.titleKa || ''} ${product.category}`.toLowerCase();
-      return product.category === 'audio' || text.includes('mic') || text.includes('microphone') || text.includes('podmic') || text.includes('audio') || text.includes('მიკროფონ') || text.includes('speaker') || text.includes('z207');
-    }
-
-    if (catId === 'tech') {
-      const text = `${product.title} ${product.titleKa || ''} ${product.category}`.toLowerCase();
-      return (product.category === 'tech' && !text.includes('collagen') && !text.includes('vitamin')) || text.includes('cam') || text.includes('camera') || text.includes('black box') || text.includes('ember') || text.includes('smart mug') || text.includes('charger') || text.includes('dongle');
-    }
-
-    if (catId === 'fitness') {
-      const text = `${product.title} ${product.titleKa || ''} ${product.category}`.toLowerCase();
-      return product.category === 'fitness' || text.includes('collagen') || text.includes('protein') || text.includes('nutricost') || text.includes('კოლაგენ') || text.includes('vitamin') || text.includes('omega') || text.includes('magnesium');
-    }
-
-    return product.category === catId;
-  };
-
-  // Live item counts per category for sidebar badges
+  // Live item counts per category for sidebar badges ensuring strictly unique product counts
   const categoryCounts = useMemo(() => {
     const counts: Record<string, number> = {};
     CATEGORIES_NAV_ITEMS.forEach((cat) => {
-      counts[cat.id] = allAvailableProducts.filter((p) => matchesCategory(p, cat.id)).length;
+      if (cat.id === 'all' || cat.slug === 'explore-all') {
+        counts[cat.id] = allAvailableProducts.length;
+      } else {
+        const matched = allAvailableProducts.filter((p) => matchesCategory(p, cat.id));
+        const uniqueMatched = Array.from(new Map(matched.map((p) => [p.id, p])).values());
+        counts[cat.id] = uniqueMatched.length;
+      }
     });
     return counts;
   }, [allAvailableProducts]);
@@ -211,24 +168,41 @@ export const CategoryPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full min-h-[600px] bg-slate-50/70 dark:bg-slate-950 py-6 sm:py-10">
+    <div className="w-full min-h-[650px] bg-slate-50/70 dark:bg-slate-950 py-5 sm:py-8 lg:py-10">
       <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8">
         
-        {/* Breadcrumb Navigation Bar */}
+        {/* Breadcrumb Navigation Bar: Cleanly formatted as Home > Categories > [Category Name] */}
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-4 mb-6 border-b border-slate-200 dark:border-slate-800">
           <div>
-            <nav className="flex items-center space-x-1.5 text-xs text-slate-500 dark:text-slate-400 mb-1">
+            <nav 
+              aria-label="Breadcrumbs"
+              className="flex items-center space-x-1.5 text-xs text-slate-500 dark:text-slate-400 mb-1.5"
+            >
+              {/* 1. Home Link */}
               <button 
+                type="button"
                 onClick={() => setCurrentPage('home')}
-                className="flex items-center space-x-1 hover:text-blue-600 dark:hover:text-blue-400 font-medium cursor-pointer"
+                className="flex items-center space-x-1 hover:text-blue-600 dark:hover:text-blue-400 font-medium cursor-pointer transition-colors"
               >
                 <Home className="w-3.5 h-3.5" />
                 <span>Home</span>
               </button>
-              <ChevronRight className="w-3 h-3 text-slate-400" />
-              <span>Departments</span>
-              <ChevronRight className="w-3 h-3 text-slate-400" />
-              <span className="font-semibold text-slate-800 dark:text-slate-200">
+
+              <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+
+              {/* 2. Categories Hub Link */}
+              <button
+                type="button"
+                onClick={() => navigateToCategory('all')}
+                className="hover:text-blue-600 dark:hover:text-blue-400 font-medium cursor-pointer transition-colors"
+              >
+                {isKa ? 'კატეგორიები' : 'Categories'}
+              </button>
+
+              <ChevronRight className="w-3 h-3 text-slate-400 shrink-0" />
+
+              {/* 3. Active Category Name */}
+              <span className="font-semibold text-slate-900 dark:text-slate-100 truncate">
                 {isKa ? activeCategoryInfo.nameKa : activeCategoryInfo.name}
               </span>
             </nav>
@@ -241,23 +215,23 @@ export const CategoryPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Controls: Sorting Dropdown & Mobile Filter Button */}
+          {/* Controls: Sorting Dropdown & Mobile Filter Trigger */}
           <div className="flex items-center space-x-2 self-start md:self-auto shrink-0">
             {/* Mobile Filter Drawer Trigger Button */}
             <button
               type="button"
               onClick={() => setIsMobileDrawerOpen(true)}
-              className="lg:hidden flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 cursor-pointer"
+              className="lg:hidden flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-2xs hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer"
             >
-              <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600" />
-              <span>{isKa ? 'ფილტრები' : 'Filters'}</span>
+              <SlidersHorizontal className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400" />
+              <span>{isKa ? 'ფილტრები და კატეგორიები' : 'Filters & Categories'}</span>
               {(filters.minRating > 0 || filters.priceRange !== 'all' || filters.inStockOnly) && (
                 <span className="w-2 h-2 rounded-full bg-blue-600" />
               )}
             </button>
 
             {/* Sort Dropdown */}
-            <div className="flex items-center space-x-2 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs">
+            <div className="flex items-center space-x-2 bg-white dark:bg-slate-900 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 shadow-2xs">
               <ArrowUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0" />
               <label htmlFor="category-page-sort" className="text-xs font-semibold text-slate-600 dark:text-slate-300 shrink-0">
                 {t('products.sortBy')}
@@ -289,7 +263,7 @@ export const CategoryPage: React.FC = () => {
                 <span>{filters.minRating}★ & Up</span>
                 <button 
                   onClick={() => handleFilterChange({ minRating: 0 })}
-                  className="hover:text-amber-700 cursor-pointer"
+                  className="hover:text-amber-700 cursor-pointer ml-1"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -305,7 +279,7 @@ export const CategoryPage: React.FC = () => {
                 </span>
                 <button 
                   onClick={() => handleFilterChange({ priceRange: 'all' })}
-                  className="hover:text-blue-700 cursor-pointer"
+                  className="hover:text-blue-700 cursor-pointer ml-1"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -317,7 +291,7 @@ export const CategoryPage: React.FC = () => {
                 <span>{isKa ? 'მარაგშია' : 'In Stock'}</span>
                 <button 
                   onClick={() => handleFilterChange({ inStockOnly: false })}
-                  className="hover:text-emerald-700 cursor-pointer"
+                  className="hover:text-emerald-700 cursor-pointer ml-1"
                 >
                   <X className="w-3 h-3" />
                 </button>
@@ -358,11 +332,11 @@ export const CategoryPage: React.FC = () => {
               </p>
             </div>
 
-            {/* Product Cards Grid: strictly displays ONLY products in this selected category */}
+            {/* Product Cards Grid: 1 col on xs mobile, 2 cols on mobile/tablet, 3-4 cols on desktop */}
             {filteredProducts.length > 0 ? (
               <div 
                 id="category-grid-container" 
-                className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 sm:gap-6 w-full"
+                className="grid grid-cols-1 xs:grid-cols-2 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 2xl:grid-cols-4 gap-3.5 sm:gap-5 lg:gap-6 w-full"
               >
                 {filteredProducts.map((product, idx) => (
                   <ProductCard 
@@ -384,7 +358,7 @@ export const CategoryPage: React.FC = () => {
                 <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm">
                   {isKa 
                     ? 'სცადეთ ფილტრების გასუფთავება ან სხვა კატეგორიის არჩევა.'
-                    : 'Try clearing your active filters or select a different department.'}
+                    : 'Try clearing your active filters or select a different category.'}
                 </p>
                 <button
                   type="button"
@@ -400,26 +374,45 @@ export const CategoryPage: React.FC = () => {
 
       </div>
 
-      {/* MOBILE COLLAPSIBLE FILTER DRAWER */}
+      {/* STICKY BOTTOM BUTTON FOR MOBILE / TABLET (< 1024px) */}
+      <div className="lg:hidden fixed bottom-4 right-4 z-40">
+        <button
+          type="button"
+          onClick={() => setIsMobileDrawerOpen(true)}
+          className="flex items-center space-x-2 px-4 py-3 rounded-full bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xl active:scale-95 transition-all cursor-pointer border border-white/20"
+          aria-label="Open Filters & Categories"
+        >
+          <SlidersHorizontal className="w-4 h-4" />
+          <span>{isKa ? 'ფილტრები & კატეგორიები' : 'Filters & Categories'}</span>
+          <span className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center text-[10px] font-black">
+            {filteredProducts.length}
+          </span>
+        </button>
+      </div>
+
+      {/* MOBILE COLLAPSIBLE OFF-CANVAS FILTER DRAWER */}
       {isMobileDrawerOpen && (
         <div className="fixed inset-0 z-50 lg:hidden flex">
+          {/* Backdrop overlay */}
           <div 
-            className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs transition-opacity"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
 
-          <div className="relative ml-auto w-full max-w-xs sm:max-w-sm bg-white dark:bg-slate-900 h-full p-4 overflow-y-auto shadow-2xl flex flex-col justify-between">
+          {/* Off-Canvas Slideout Panel */}
+          <div className="relative ml-auto w-full max-w-xs sm:max-w-sm bg-white dark:bg-slate-900 h-full p-4 overflow-y-auto shadow-2xl flex flex-col justify-between animate-in slide-in-from-right duration-200">
             <div>
               <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800 mb-4">
                 <div className="flex items-center space-x-2">
-                  <SlidersHorizontal className="w-4 h-4 text-blue-600" />
+                  <SlidersHorizontal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
                   <h3 className="font-bold text-sm text-slate-900 dark:text-slate-100">
                     {isKa ? 'ფილტრები და კატეგორიები' : 'Filters & Categories'}
                   </h3>
                 </div>
                 <button
+                  type="button"
                   onClick={() => setIsMobileDrawerOpen(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -430,14 +423,15 @@ export const CategoryPage: React.FC = () => {
                 filters={filters}
                 onFilterChange={handleFilterChange}
                 onResetFilters={() => setFilters({ minRating: 0, priceRange: 'all', inStockOnly: false })}
+                onCategorySelectCallback={() => setIsMobileDrawerOpen(false)}
               />
             </div>
 
-            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-6">
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 mt-6 sticky bottom-0 bg-white dark:bg-slate-900">
               <button
                 type="button"
                 onClick={() => setIsMobileDrawerOpen(false)}
-                className="w-full py-2.5 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-md hover:bg-blue-700 transition-colors cursor-pointer"
+                className="w-full py-3 rounded-xl bg-blue-600 text-white font-bold text-xs shadow-md hover:bg-blue-700 transition-colors cursor-pointer"
               >
                 {isKa ? 'შედეგების ნახვა' : `View ${filteredProducts.length} Results`}
               </button>

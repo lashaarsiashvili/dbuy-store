@@ -26,6 +26,7 @@ interface AmazonCategorySidebarProps {
   filters: FilterState;
   onFilterChange: (filters: Partial<FilterState>) => void;
   onResetFilters: () => void;
+  onCategorySelectCallback?: () => void;
   className?: string;
 }
 
@@ -34,6 +35,7 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
   filters,
   onFilterChange,
   onResetFilters,
+  onCategorySelectCallback,
   className = '',
 }) => {
   const { 
@@ -46,6 +48,9 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
 
   const handleCategorySelect = (item: CategoryNavItem) => {
     navigateToCategory(item.slug || item.id);
+    if (onCategorySelectCallback) {
+      onCategorySelectCallback();
+    }
   };
 
   const hasActiveSecondaryFilters = 
@@ -56,7 +61,7 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
   return (
     <aside 
       aria-label="Category and Product Filters"
-      className={`w-full flex flex-col space-y-6 ${className}`}
+      className={`w-full flex flex-col space-y-5 ${className}`}
     >
       {/* 1. Category Hierarchy Box (Amazon-like Department Sidebar) */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-2xs">
@@ -64,7 +69,7 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
           <div className="flex items-center space-x-2">
             <SlidersHorizontal className="w-4 h-4 text-blue-600 dark:text-blue-400" />
             <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100">
-              {isKa ? 'კატეგორიები' : 'Department'}
+              {isKa ? 'კატეგორიები' : 'Categories'}
             </h3>
           </div>
           {selectedCategory !== 'all' && (
@@ -72,16 +77,19 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
               onClick={() => handleCategorySelect(CATEGORIES_NAV_ITEMS.find(c => c.id === 'all')!)}
               className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 hover:underline cursor-pointer"
             >
-              {isKa ? 'ყველა' : 'Clear'}
+              {isKa ? 'ყველა (24)' : 'All (24)'}
             </button>
           )}
         </div>
 
-        {/* Vertical Category List with Active Highlighting */}
+        {/* Vertical Category List with Distinct Active Highlighting */}
         <div className="mt-3 space-y-1">
           {CATEGORIES_NAV_ITEMS.map((cat) => {
-            const isSelected = selectedCategory === cat.id || (selectedCategory === '' && cat.id === 'all');
-            const count = categoryCounts[cat.id] ?? 0;
+            const isSelected = 
+              selectedCategory === cat.id || 
+              selectedCategory === cat.slug || 
+              (selectedCategory === '' && cat.id === 'all');
+            const count = categoryCounts[cat.id] ?? (cat.id === 'all' ? 24 : 0);
             const isDeal = cat.id === 'deals';
 
             return (
@@ -100,7 +108,7 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
                     isSelected
                       ? 'text-blue-600 dark:text-blue-400'
                       : isDeal
-                      ? 'text-red-500'
+                      ? 'text-rose-500'
                       : 'text-slate-400 group-hover:text-blue-500'
                   }`}>
                     {renderCategoryIcon(cat.iconName, 'w-4 h-4')}
@@ -112,7 +120,7 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
 
                 <div className="flex items-center space-x-1.5 shrink-0">
                   {/* Dynamic Product Count */}
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold tabular-nums ${
+                  <span className={`text-[11px] px-2 py-0.5 rounded-full font-semibold tabular-nums transition-colors ${
                     isSelected
                       ? 'bg-blue-200/80 dark:bg-blue-900/80 text-blue-800 dark:text-blue-200'
                       : 'bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400'
@@ -120,7 +128,7 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
                     {count}
                   </span>
 
-                  {/* Active Indicator Chevron / Check */}
+                  {/* Active Indicator Checkmark */}
                   {isSelected && (
                     <Check className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 stroke-[3]" />
                   )}
@@ -131,15 +139,15 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
         </div>
       </div>
 
-      {/* 2. Customer Reviews Rating Filter (Amazon-like 4+ Stars) */}
+      {/* 2. Customer Reviews Rating Filter (4+ Stars, 3+ Stars) */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/90 dark:border-slate-800 p-4 shadow-2xs">
         <h4 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-slate-100 mb-3 pb-2 border-b border-slate-100 dark:border-slate-800">
           {isKa ? 'მომხმარებელთა შეფასება' : 'Customer Reviews'}
         </h4>
         <div className="space-y-1.5">
           {[
-            { stars: 4, label: isKa ? '4 ვარსკვლავი და მეტი' : '4 Stars & Up' },
-            { stars: 3, label: isKa ? '3 ვარსკვლავი და მეტი' : '3 Stars & Up' },
+            { stars: 4.8, label: isKa ? '4.8 ვარსკვლავი და მეტი' : '4.8 Stars & Up' },
+            { stars: 4.5, label: isKa ? '4.5 ვარსკვლავი და მეტი' : '4.5 Stars & Up' },
           ].map((item) => {
             const isChecked = filters.minRating === item.stars;
             return (
@@ -159,14 +167,14 @@ export const AmazonCategorySidebar: React.FC<AmazonCategorySidebarProps> = ({
                       <Star
                         key={i}
                         className={`w-3.5 h-3.5 ${
-                          i < item.stars
+                          i < Math.floor(item.stars)
                             ? 'fill-amber-400 text-amber-400'
                             : 'fill-slate-200 dark:fill-slate-700 text-slate-200 dark:text-slate-700'
                         }`}
                       />
                     ))}
                   </div>
-                  <span className="text-[11px]">& Up</span>
+                  <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">& Up</span>
                 </div>
                 {isChecked && <Check className="w-3.5 h-3.5 text-amber-600" />}
               </button>

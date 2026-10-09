@@ -15,9 +15,11 @@ export interface Product {
   title_ka?: string;
   customSlug?: string;
   category: Category;
+  categorySlug?: string;
   price: number;
   original_price?: number | null;
   origPrice?: number;
+  originalPrice?: number;
   stock: number;
   badge?: string;
   image: string;

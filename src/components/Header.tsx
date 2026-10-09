@@ -4,7 +4,6 @@ import { Category, Currency, Language } from '../types';
 import { BrandLogo } from './BrandLogo';
 import { LanguageSelector } from './LanguageSelector';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { AmazonCategoryTopNav } from './AmazonCategoryTopNav';
 import { 
   Search, 
   ShoppingCart, 
@@ -180,11 +179,11 @@ export const Header: React.FC = () => {
             </div>
 
             {/* Right Header Controls: Compact Search Trigger + Account + Wishlist + Cart */}
-            <div className="flex items-center space-x-1 sm:space-x-3 shrink-0">
+            <div className="flex items-center space-x-1 sm:space-x-2.5 shrink-0">
               {/* Mobile Compact Search Button on Logo Row */}
               <button
                 onClick={() => setIsMobileSearchExpanded(true)}
-                className="sm:hidden flex items-center space-x-1 px-2 py-1.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200/60 dark:border-slate-700/60"
+                className="sm:hidden flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200/60 dark:border-slate-700/60 touch-manipulation cursor-pointer"
                 aria-label="Expand Search"
                 title={language === 'ka' ? 'ძებნა' : 'Search'}
               >
@@ -201,7 +200,7 @@ export const Header: React.FC = () => {
                       setIsAuthModalOpen(true);
                     }
                   }}
-                  className="flex items-center space-x-1 sm:space-x-1.5 p-1.5 sm:p-2 rounded-lg text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                  className="flex items-center space-x-1 sm:space-x-1.5 min-h-[40px] px-2 py-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors touch-manipulation cursor-pointer"
                   aria-label="User Account"
                 >
                   <div className="p-1 sm:p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
@@ -294,7 +293,7 @@ export const Header: React.FC = () => {
                     setIsWishlistOpen(true);
                   }
                 }}
-                className="flex items-center space-x-1 sm:space-x-1.5 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-700 dark:text-slate-200 hover:text-red-600 transition-all font-semibold cursor-pointer border border-slate-100 dark:border-slate-700"
+                className="flex items-center space-x-1 sm:space-x-1.5 min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-700 dark:text-slate-200 hover:text-red-600 transition-all font-semibold cursor-pointer border border-slate-100 dark:border-slate-700 touch-manipulation"
                 aria-label="Open Wishlist"
                 title={t('wishlist.title')}
               >
@@ -312,7 +311,7 @@ export const Header: React.FC = () => {
               {/* Cart Button */}
               <button
                 onClick={() => setIsCartOpen(true)}
-                className="flex items-center space-x-1.5 sm:space-x-2 px-2 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/80 transition-all font-semibold cursor-pointer"
+                className="flex items-center space-x-1.5 sm:space-x-2 min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/80 transition-all font-semibold cursor-pointer touch-manipulation"
                 aria-label="Open Cart"
               >
                 <div className="relative">
@@ -413,9 +412,6 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </div>
-
-      {/* 4. Amazon-like Horizontal Category Navigation Bar (Home view only, unmounted on dedicated Category and sub-pages) */}
-      {currentPage === 'home' && <AmazonCategoryTopNav />}
 
       <ChangePasswordModal
         isOpen={isChangePasswordOpen}

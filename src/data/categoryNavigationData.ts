@@ -3,7 +3,7 @@
  * 
  * Centralized Category Navigation and Mock Product Dataset for DBuy Store.
  * Provides Amazon-like category hierarchy, slugs, icons, and sample products
- * conforming to: { id, name, price, rating, image, categorySlug }.
+ * conforming strictly to: { id, name, price, originalPrice, rating, reviewsCount, image, categorySlug, isDeal, badge }.
  */
 
 export interface CategoryNavItem {
@@ -24,21 +24,23 @@ export interface CategoryNavItem {
 export interface CategoryProductItem {
   id: string;
   name: string;
-  title?: string;
+  title: string;
   titleKa?: string;
   price: number;
-  origPrice?: number;
+  originalPrice: number;
+  origPrice: number;
   rating: number;
-  reviewsCount?: number;
+  reviewsCount: number;
   image: string;
   images?: string[];
   categorySlug: string;
   category: string;
   inStock: boolean;
-  stock?: number;
+  stock: number;
   badge?: string;
-  description?: string;
-  descriptionKa?: string;
+  isDeal: boolean;
+  description: string;
+  descriptionKa: string;
 }
 
 // 1. Amazon-like 8 Primary Categories
@@ -170,214 +172,599 @@ export const slugToCategoryId = (slug: string): string => {
   return item ? item.id : slug;
 };
 
-// 2. Sample Mock Dataset conforming strictly to user requirements
-// Each product has: id, name, price, rating, image, and categorySlug
+// Universal matching helper used across components
+export const matchesCategory = (
+  product: { 
+    category?: string; 
+    categorySlug?: string; 
+    isDeal?: boolean; 
+    badge?: string; 
+    price?: number; 
+    origPrice?: number; 
+    originalPrice?: number; 
+    title?: string;
+    titleKa?: string;
+  }, 
+  catIdOrSlug: string
+): boolean => {
+  if (!catIdOrSlug || catIdOrSlug === 'all' || catIdOrSlug === 'explore-all') return true;
+
+  if (catIdOrSlug === 'deals' || catIdOrSlug === 'daily-deals') {
+    const isExplicitDeal = Boolean(product.isDeal || (product.badge && product.badge.toLowerCase().includes('deal')));
+    const hasDiscount = Boolean(
+      (product.originalPrice && product.price && product.originalPrice > product.price) || 
+      (product.origPrice && product.price && product.origPrice > product.price)
+    );
+    return isExplicitDeal || hasDiscount;
+  }
+
+  const targetCategory = 
+    catIdOrSlug === 'smart-hydration' ? 'drinkware' :
+    catIdOrSlug === 'pro-gaming' ? 'gaming' :
+    catIdOrSlug === 'smart-wearables' ? 'wearables' :
+    catIdOrSlug === 'studio-audio' ? 'audio' :
+    catIdOrSlug === 'smart-tech' ? 'tech' :
+    catIdOrSlug === 'fitness-hydration' ? 'fitness' :
+    catIdOrSlug;
+
+  const targetSlug =
+    catIdOrSlug === 'drinkware' ? 'smart-hydration' :
+    catIdOrSlug === 'gaming' ? 'pro-gaming' :
+    catIdOrSlug === 'wearables' ? 'smart-wearables' :
+    catIdOrSlug === 'audio' ? 'studio-audio' :
+    catIdOrSlug === 'tech' ? 'smart-tech' :
+    catIdOrSlug === 'fitness' ? 'fitness-hydration' :
+    catIdOrSlug;
+
+  // Direct match on category or categorySlug
+  if (
+    product.category === targetCategory || 
+    product.categorySlug === targetSlug || 
+    product.category === catIdOrSlug || 
+    product.categorySlug === catIdOrSlug
+  ) {
+    return true;
+  }
+
+  // Fallback keyword heuristics for resilient matching
+  const text = `${product.title || ''} ${product.titleKa || ''} ${product.category || ''}`.toLowerCase();
+  if (targetCategory === 'drinkware') {
+    return text.includes('bottle') || text.includes('drinkware') || text.includes('aquaminder') || text.includes('hydration') || text.includes('ბოთლ') || text.includes('camelbak') || text.includes('owala');
+  }
+  if (targetCategory === 'gaming') {
+    return text.includes('g309') || text.includes('lightspeed') || text.includes('pro x') || text.includes('superlight') || text.includes('superstrike') || text.includes('mouse') || text.includes('headset') || text.includes('gaming');
+  }
+  if (targetCategory === 'wearables') {
+    return text.includes('band') || text.includes('whoop') || text.includes('hume') || text.includes('watch') || text.includes('სამაჯურ') || text.includes('tracker');
+  }
+  if (targetCategory === 'audio') {
+    return text.includes('mic') || text.includes('microphone') || text.includes('podmic') || text.includes('audio') || text.includes('მიკროფონ') || text.includes('speaker') || text.includes('z207');
+  }
+  if (targetCategory === 'tech') {
+    return (!text.includes('collagen') && !text.includes('vitamin') && !text.includes('magnesium') && !text.includes('fish oil')) && (text.includes('cam') || text.includes('camera') || text.includes('black box') || text.includes('ember') || text.includes('smart mug') || text.includes('charger') || text.includes('dongle'));
+  }
+  if (targetCategory === 'fitness') {
+    return text.includes('collagen') || text.includes('protein') || text.includes('nutricost') || text.includes('კოლაგენ') || text.includes('vitamin') || text.includes('omega') || text.includes('magnesium') || text.includes('serum');
+  }
+
+  return false;
+};
+
+// 2. Strict Mock Catalog containing exactly 24 unique products with realistic e-commerce data
 export const SAMPLE_MOCK_PRODUCTS: CategoryProductItem[] = [
-  // Smart Hydration
+  // 1. Smart Hydration (9 products)
   {
-    id: 'prod-mock-hydra-01',
-    name: 'Owala FreeSip 32oz Stainless Steel Bottle – Sugar Plum',
-    title: 'Owala FreeSip 32oz Stainless Steel Bottle – Sugar Plum',
-    titleKa: 'Owala FreeSip 32oz უჟანგავი ფოლადის ჭკვიანი ბოთლი',
+    id: 'prod-1789156058368-ilikcwu',
+    name: 'Owala 32oz FreeSip Stainless Steel Water Bottle – Sugar Plum Fairy-2026 Gift',
+    title: 'Owala 32oz FreeSip Stainless Steel Water Bottle – Sugar Plum Fairy-2026 Gift',
+    titleKa: 'Owala 32oz FreeSip უჟანგავი ფოლადის ჭკვიანი ბოთლი – Sugar Plum Fairy',
     price: 59.99,
+    originalPrice: 79.99,
     origPrice: 79.99,
     rating: 4.9,
     reviewsCount: 142,
-    image: '/uploads/prod-prod-1789156058368-ilikcwu-1791484970770-tnkra.webp',
-    categorySlug: 'smart-hydration',
     category: 'drinkware',
+    categorySlug: 'smart-hydration',
+    image: '/uploads/prod-prod-1789156058368-ilikcwu-1791484970770-tnkra.webp',
+    images: ['/uploads/prod-prod-1789156058368-ilikcwu-1791484970770-tnkra.webp'],
     inStock: true,
     stock: 14,
     badge: 'Best Seller',
-    description: 'Triple-layer insulated stainless steel with built-in patented FreeSip straw and push-button lid.',
-    descriptionKa: 'სამშრიანი თერმოიზოლირებული ფოლადი ინტეგრირებული FreeSip ჩალითა და ღილაკიანი თავსახურით.',
+    isDeal: true,
+    description: 'Triple-layer insulated stainless steel with built-in patented FreeSip straw and leak-proof push-button lid. Keeps drinks cold for 24 hours.',
+    descriptionKa: 'სამშრიანი თერმოიზოლირებული ფოლადი ინტეგრირებული FreeSip ჩალითა და ჰერმეტული ღილაკიანი თავსახურით. ინარჩუნებს სიცივეს 24 საათის განმავლობაში.',
   },
   {
-    id: 'prod-mock-hydra-02',
-    name: 'CamelBak Podium Steel 22oz Insulated Bike Bottle',
-    title: 'CamelBak Podium Steel 22oz Insulated Bike Bottle',
-    titleKa: 'CamelBak Podium Steel 22oz ველოსიპედის თერმო ბოთლი',
-    price: 34.99,
-    origPrice: 44.99,
+    id: 'prod-1789138699002-hmxeg6s',
+    name: 'Owala 32oz FreeSip Stainless Steel Water Bottle – Pink Ribbon Toile-2026 Gift',
+    title: 'Owala 32oz FreeSip Stainless Steel Water Bottle – Pink Ribbon Toile-2026 Gift',
+    titleKa: 'Owala 32oz FreeSip უჟანგავი ფოლადის ბოთლი – Pink Ribbon Toile',
+    price: 79.00,
+    originalPrice: 99.00,
+    origPrice: 99.00,
     rating: 4.8,
-    reviewsCount: 89,
-    image: '/uploads/prod-prod-1788723082932-0-1788783606115-hf96t.jpg',
-    categorySlug: 'smart-hydration',
+    reviewsCount: 98,
     category: 'drinkware',
+    categorySlug: 'smart-hydration',
+    image: '/uploads/prod-prod-1789138699002-hmxeg6s-1791484975450-a4hz5.webp',
+    images: ['/uploads/prod-prod-1789138699002-hmxeg6s-1791484975450-a4hz5.webp'],
     inStock: true,
-    stock: 8,
-    badge: 'Popular',
-    description: 'High-flow self-sealing Jet Valve cap prevents leaks and spills during high-intensity workouts.',
-    descriptionKa: 'თვითჩაკეტვადი Jet Valve სარქველი იცავს დაღვრისგან მაღალინტენსიური ვარჯიშის დროს.',
+    stock: 11,
+    badge: 'Limited Edition',
+    isDeal: true,
+    description: 'Collector edition Pink Ribbon Toile insulated flask with patented 2-in-1 FreeSip spout and push-button carry loop.',
+    descriptionKa: 'საკოლექციო გამოცემა Pink Ribbon Toile თერმო-ფლაკონი დაპატენტებული 2-ერთში FreeSip ჩალითა და მოსახერხებელი საკიდით.',
   },
-
-  // Pro Gaming
   {
-    id: 'prod-mock-game-01',
-    name: 'Logitech G309 LIGHTSPEED Wireless Gaming Mouse',
-    title: 'Logitech G309 LIGHTSPEED Wireless Gaming Mouse',
-    titleKa: 'Logitech G309 LIGHTSPEED უსადენო გეიმინგ მაუსი',
-    price: 79.99,
-    origPrice: 99.99,
+    id: 'prod-1789138614222-4evc5wn',
+    name: 'Owala FreeSip 32 oz Weekender Color Drop Insulated Stainless Steel Water Bottle',
+    title: 'Owala FreeSip 32 oz Weekender Color Drop Insulated Stainless Steel Water Bottle',
+    titleKa: 'Owala FreeSip 32 oz Weekender Color Drop უჟანგავი ფოლადის ბოთლი',
+    price: 79.00,
+    originalPrice: 99.00,
+    origPrice: 99.00,
     rating: 4.9,
-    reviewsCount: 218,
-    image: '/uploads/prod-prod-1788775639253-0-1788783603595-8i6m1.jpg',
-    categorySlug: 'pro-gaming',
-    category: 'gaming',
-    inStock: true,
-    stock: 12,
-    badge: 'Top Pick',
-    description: 'HERO 25K precision sensor with LIGHTFORCE optical-mechanical hybrid switches.',
-    descriptionKa: 'HERO 25K ზუსტი სენსორი და ჰიბრიდული ოპტიკურ-მექანიკური LIGHTFORCE სვიჩები.',
-  },
-  {
-    id: 'prod-mock-game-02',
-    name: 'Logitech G PRO X Superlight Precision Wireless Mouse',
-    title: 'Logitech G PRO X Superlight Precision Wireless Mouse',
-    titleKa: 'Logitech G PRO X Superlight უსადენო მაუსი',
-    price: 149.99,
-    origPrice: 169.99,
-    rating: 5.0,
-    reviewsCount: 310,
-    image: '/uploads/prod-prod-1788777425106-0-1788783603009-v0hay.jpg',
-    categorySlug: 'pro-gaming',
-    category: 'gaming',
-    inStock: true,
-    stock: 6,
-    badge: 'Pro Choice',
-    description: 'Engineered in collaboration with the world’s top esports pros. Weighs under 63 grams.',
-    descriptionKa: 'შექმნილი მსოფლიოს წამყვან კიბერსპორტსმენებთან ერთად. იწონის 63 გრამზე ნაკლებს.',
-  },
-
-  // Smart Wearables
-  {
-    id: 'prod-mock-wear-01',
-    name: 'The Hume Band 2.0 Precision Biometric Tracker',
-    title: 'The Hume Band 2.0 Precision Biometric Tracker',
-    titleKa: 'The Hume Band 2.0 ბიომეტრიული ჯანმრთელობის სამაჯური',
-    price: 299.00,
-    origPrice: 359.00,
-    rating: 4.8,
-    reviewsCount: 95,
-    image: '/uploads/prod-prod-1788722861679-1791484976722-uxgrk.webp',
-    categorySlug: 'smart-wearables',
-    category: 'wearables',
+    reviewsCount: 175,
+    category: 'drinkware',
+    categorySlug: 'smart-hydration',
+    image: '/uploads/prod-prod-1789138614222-4evc5wn-1791484976094-8atkd.webp',
+    images: ['/uploads/prod-prod-1789138614222-4evc5wn-1791484976094-8atkd.webp'],
     inStock: true,
     stock: 9,
-    badge: 'New Gen',
-    description: 'Continuous biometric skin temperature, heart rate variability, and sleep stage analysis.',
-    descriptionKa: 'კანის ტემპერატურის, გულისცემის ვარიაბელობისა და ძილის ფაზების უწყვეტი ანალიზი.',
-  },
-
-  // Studio & Audio
-  {
-    id: 'prod-mock-audio-01',
-    name: 'Audio-Technica AT2020USB-XP Cardioid Condenser Microphone',
-    title: 'Audio-Technica AT2020USB-XP Cardioid Condenser Microphone',
-    titleKa: 'Audio-Technica AT2020USB-XP სტუდიური კონდენსატორული მიკროფონი',
-    price: 169.00,
-    origPrice: 199.00,
-    rating: 4.9,
-    reviewsCount: 167,
-    image: '/uploads/prod-prod-1788724361112-0-1788783604832-64q55.jpg',
-    categorySlug: 'studio-audio',
-    category: 'audio',
-    inStock: true,
-    stock: 7,
-    badge: 'Studio Grade',
-    description: 'High-resolution A/D converter with 24-bit/96 kHz sampling rate for pristine voice clarity.',
-    descriptionKa: 'მაღალი რეზოლუციის 24-bit/96 kHz აუდიო კონვერტერი იდეალურად სუფთა ხმის ჩასაწერად.',
+    badge: 'Color Drop',
+    isDeal: true,
+    description: 'Vibrant Color Drop Weekender edition with double-wall vacuum insulation keeping ice cold for up to 24 hours.',
+    descriptionKa: 'ორიგინალური Color Drop Weekender გამოშვება ორმაგი ვაკუუმ-იზოლაციით ყინულის 24 საათამდე შესანარჩუნებლად.',
   },
   {
-    id: 'prod-mock-audio-02',
-    name: 'Logitech Z207 Multi-Device Stereo Bluetooth Speakers',
-    title: 'Logitech Z207 Multi-Device Stereo Bluetooth Speakers',
-    titleKa: 'Logitech Z207 მულტი-მოწყობილობის სტერეო სპიკერები',
-    price: 49.99,
-    origPrice: 64.99,
+    id: 'prod-1788724519740',
+    name: 'Aquaminder Drink Reminder Smart Water Bottle 600ml',
+    title: 'Aquaminder Drink Reminder Smart Water Bottle 600ml',
+    titleKa: 'Aquaminder Drink Reminder ჭკვიანი წყლის ბოთლი 600მლ',
+    price: 50.00,
+    originalPrice: 79.00,
+    origPrice: 79.00,
     rating: 4.7,
     reviewsCount: 84,
+    category: 'drinkware',
+    categorySlug: 'smart-hydration',
     image: '/uploads/prod-prod-1788724519740-0-1788783604196-f2ye4.jpg',
-    categorySlug: 'studio-audio',
-    category: 'audio',
+    images: ['/uploads/prod-prod-1788724519740-0-1788783604196-f2ye4.jpg'],
     inStock: true,
     stock: 15,
-    description: 'Rich stereo sound for desk setups with Logitech Easy-Switch to alternate between audio sources.',
-    descriptionKa: 'სუფთა სტერეო ჟღერადობა Easy-Switch ფუნქციით მოწყობილობებს შორის მარტივად გადასართავად.',
+    badge: 'Smart Reminder',
+    isDeal: true,
+    description: 'Built-in smart glow timer blinks every hour to remind you to hydrate regularly throughout your workday or gym session.',
+    descriptionKa: 'ჩაშენებული ჭკვიანი მანათობელი ტაიმერი ციმციმებს ყოველ საათში და შეგახსენებთ წყლის რეგულარულ მიღებას.',
+  },
+  {
+    id: 'prod-1788723441741',
+    name: 'Smart Drinkware Bottle with Sporty Sipper Lid',
+    title: 'Smart Drinkware Bottle with Sporty Sipper Lid',
+    titleKa: 'სპორტული ჭკვიანი თერმო ბოთლი Sipper თავსახურით',
+    price: 39.00,
+    originalPrice: 69.00,
+    origPrice: 69.00,
+    rating: 4.8,
+    reviewsCount: 63,
+    category: 'drinkware',
+    categorySlug: 'smart-hydration',
+    image: '/uploads/prod-prod-1788723441741-0-1788783605340-uanc4.jpg',
+    images: ['/uploads/prod-prod-1788723441741-0-1788783605340-uanc4.jpg'],
+    inStock: true,
+    stock: 20,
+    badge: 'Save 43%',
+    isDeal: true,
+    description: 'Rugged double-wall matte insulated stainless steel bottle with ergonomic handle and one-click rapid flow sipper lid.',
+    descriptionKa: 'მტკიცე ორკედლიანი მქრქალი ფოლადის ბოთლი ერგონომიული სახელურითა და ერთი დაჭერით გახსნადი სპორტული თავსახურით.',
+  },
+  {
+    id: 'prod-1788723082932',
+    name: 'CamelBak Podium Steel Insulated Stainless Steel Bike Water Bottle',
+    title: 'CamelBak Podium Steel Insulated Stainless Steel Bike Water Bottle',
+    titleKa: 'CamelBak Podium Steel უჟანგავი ფოლადის ველო ბოთლი',
+    price: 55.00,
+    originalPrice: 89.00,
+    origPrice: 89.00,
+    rating: 4.9,
+    reviewsCount: 112,
+    category: 'drinkware',
+    categorySlug: 'smart-hydration',
+    image: '/uploads/prod-prod-1788723082932-0-1788783606115-hf96t.jpg',
+    images: ['/uploads/prod-prod-1788723082932-0-1788783606115-hf96t.jpg'],
+    inStock: true,
+    stock: 16,
+    badge: 'Pro Cyclist',
+    isDeal: true,
+    description: 'High-flow self-sealing Jet Valve delivers more liquid per squeeze with zero leaks. Built tough for road and gravel rides.',
+    descriptionKa: 'თვითჩაკეტვადი Jet Valve სარქველი გამორიცხავს დაღვრას და უზრუნველყოფს წყლის სწრაფ ნაკადს ველოსიპედით მგზავრობისას.',
+  },
+  {
+    id: 'prod-1788877210563',
+    name: 'Smart Water Bottle: 32 oz Hydration Tracker with APP',
+    title: 'Smart Water Bottle: 32 oz Hydration Tracker with APP',
+    titleKa: 'Smart Water Bottle: 32 oz ჭკვიანი ჰიდრატაციის ტრეკერი აპლიკაციით',
+    price: 69.00,
+    originalPrice: 99.00,
+    origPrice: 99.00,
+    rating: 4.8,
+    reviewsCount: 129,
+    category: 'drinkware',
+    categorySlug: 'smart-hydration',
+    image: '/uploads/prod-prod-1788877210563-1791484977367-b4v1d.webp',
+    images: ['/uploads/prod-prod-1788877210563-1791484977367-b4v1d.webp'],
+    inStock: true,
+    stock: 12,
+    badge: 'App Sync',
+    isDeal: true,
+    description: 'Real-time Bluetooth synchronization logs every sip to Apple Health and Google Fit with illuminated daily goal completion ring.',
+    descriptionKa: 'Bluetooth სინქრონიზაცია Apple Health-თან და Google Fit-თან. ანათებს დღიური წყლის მიზნის მიღწევისას.',
+  },
+  {
+    id: 'prod-1788877024412',
+    name: 'Vita Smart Water Bottle 24 oz',
+    title: 'Vita Smart Water Bottle 24 oz',
+    titleKa: 'Vita Smart Water Bottle 24 oz ჭკვიანი თერმო ბოთლი',
+    price: 69.00,
+    originalPrice: 99.00,
+    origPrice: 99.00,
+    rating: 4.7,
+    reviewsCount: 76,
+    category: 'drinkware',
+    categorySlug: 'smart-hydration',
+    image: '/uploads/prod-prod-1788877024412-1791484978021-2xf9f.webp',
+    images: ['/uploads/prod-prod-1788877024412-1791484978021-2xf9f.webp'],
+    inStock: true,
+    stock: 17,
+    badge: 'Trending',
+    isDeal: true,
+    description: 'Sleek stainless steel body with integrated touch LCD temperature sensor cap displaying liquid temperature in real time.',
+    descriptionKa: 'დახვეწილი უჟანგავი ფოლადის კორპუსი სენსორული LCD ეკრანით, რომელიც აჩვენებს სითხის ზუსტ ტემპერატურას რეალურ დროში.',
+  },
+  {
+    id: 'prod-1788775639253',
+    name: 'Smart Water Bottle with LED Reminder & Temp Sensor',
+    title: 'Smart Water Bottle with LED Reminder & Temp Sensor',
+    titleKa: 'ჭკვიანი თერმო ბოთლი LED შეხსენებითა და სენსორით',
+    price: 65.00,
+    originalPrice: 99.00,
+    origPrice: 99.00,
+    rating: 4.8,
+    reviewsCount: 91,
+    category: 'drinkware',
+    categorySlug: 'smart-hydration',
+    image: '/uploads/prod-prod-1788775639253-0-1788783603595-8i6m1.jpg',
+    images: ['/uploads/prod-prod-1788775639253-0-1788783603595-8i6m1.jpg'],
+    inStock: true,
+    stock: 15,
+    badge: 'Smart LED',
+    isDeal: true,
+    description: 'Interactive LED touch ring notifies you when water temperature is too hot, lukewarm, or cold while vibrating on schedule.',
+    descriptionKa: 'ინტერაქტიული LED სენსორული რგოლი გიჩვენებთ ტემპერატურას და ვიბრაციით შეგახსენებთ წყლის დროულ მიღებას.',
   },
 
-  // Smart Tech
+  // 2. Pro Gaming (3 products)
   {
-    id: 'prod-mock-tech-01',
-    name: 'Ember Temperature Control Smart Mug 2, 14 Oz',
-    title: 'Ember Temperature Control Smart Mug 2, 14 Oz',
-    titleKa: 'Ember Smart Mug 2 ჭკვიანი თერმო-ჭიქა 14 Oz',
+    id: 'prod-1788876872896',
+    name: 'G309 LIGHTSPEED Wireless Gaming Mouse - Genshin Impact Edition',
+    title: 'G309 LIGHTSPEED Wireless Gaming Mouse - Genshin Impact Edition',
+    titleKa: 'G309 LIGHTSPEED უსადენო გეიმინგ მაუსი - Genshin Impact Edition',
+    price: 119.00,
+    originalPrice: 149.00,
+    origPrice: 149.00,
+    rating: 4.9,
+    reviewsCount: 218,
+    category: 'gaming',
+    categorySlug: 'pro-gaming',
+    image: '/uploads/prod-prod-1788876872896-1791484978720-p4f3i.webp',
+    images: ['/uploads/prod-prod-1788876872896-1791484978720-p4f3i.webp'],
+    inStock: true,
+    stock: 10,
+    badge: 'Esports Edition',
+    isDeal: true,
+    description: 'Equipped with HERO 25K gaming sensor, dual wireless connectivity (LIGHTSPEED + Bluetooth), and LIGHTFORCE hybrid switches.',
+    descriptionKa: 'აღჭურვილია HERO 25K გეიმინგ სენსორით, ორმაგი უსადენო კავშირითა და LIGHTFORCE ჰიბრიდული ოპტიკურ-მექანიკური სვიჩებით.',
+  },
+  {
+    id: 'prod-1788787675363',
+    name: 'PRO X2 SUPERSTRIKE Wireless Gaming Headset',
+    title: 'PRO X2 SUPERSTRIKE Wireless Gaming Headset',
+    titleKa: 'PRO X2 SUPERSTRIKE უსადენო გეიმინგ ყურსასმენი',
+    price: 220.00,
+    originalPrice: 260.00,
+    origPrice: 260.00,
+    rating: 4.9,
+    reviewsCount: 156,
+    category: 'gaming',
+    categorySlug: 'pro-gaming',
+    image: '/uploads/prod-prod-1788787675363-0-1788788713941-z2li5.jpg',
+    images: ['/uploads/prod-prod-1788787675363-0-1788788713941-z2li5.jpg'],
+    inStock: true,
+    stock: 8,
+    badge: 'Pro Choice',
+    isDeal: true,
+    description: '50mm Graphene drivers deliver uncompromising spatial audio precision with up to 50 hours of battery life on a single charge.',
+    descriptionKa: '50მმ გრაფენის დრაივერები უზრუნველყოფს მაქსიმალურ სივრცით სიზუსტეს თამაშში და 50 საათამდე უწყვეტ მუშაობას.',
+  },
+  {
+    id: 'prod-1788785750636',
+    name: 'PRO X SUPERLIGHT 2 Ultra-Lightweight Wireless Gaming Mouse',
+    title: 'PRO X SUPERLIGHT 2 Ultra-Lightweight Wireless Gaming Mouse',
+    titleKa: 'PRO X SUPERLIGHT 2 ულტრამსუბუქი უსადენო გეიმინგ მაუსი',
+    price: 199.00,
+    originalPrice: 249.00,
+    origPrice: 249.00,
+    rating: 5.0,
+    reviewsCount: 310,
+    category: 'gaming',
+    categorySlug: 'pro-gaming',
+    image: '/uploads/prod-prod-1788785750636-0-1788785751962-zjv0m.jpg',
+    images: ['/uploads/prod-prod-1788785750636-0-1788785751962-zjv0m.jpg'],
+    inStock: true,
+    stock: 6,
+    badge: 'Esports Gold',
+    isDeal: true,
+    description: 'Sub-60g competitive esports mouse featuring 2K/4K polling rate support, PTFE feet, and HERO 2 sensor precision.',
+    descriptionKa: '60 გრამზე ნაკლები წონის კიბერსპორტული მაუსი 2K/4K polling rate-ით, PTFE სრიალა ძირითა და HERO 2 სენსორით.',
+  },
+
+  // 3. Smart Wearables (2 products)
+  {
+    id: 'prod-1788724361112',
+    name: 'SportFlex Whoop Band - Dash Edition',
+    title: 'SportFlex Whoop Band - Dash Edition',
+    titleKa: 'SportFlex Whoop Band - Dash სმარტ სამაჯური',
+    price: 79.00,
+    originalPrice: 99.00,
+    origPrice: 99.00,
+    rating: 4.8,
+    reviewsCount: 95,
+    category: 'wearables',
+    categorySlug: 'smart-wearables',
+    image: '/uploads/prod-prod-1788724361112-0-1788783604832-64q55.jpg',
+    images: ['/uploads/prod-prod-1788724361112-0-1788783604832-64q55.jpg'],
+    inStock: true,
+    stock: 14,
+    badge: 'Fitness Pro',
+    isDeal: true,
+    description: 'Breathable sweat-wicking braided elastane band with secure titanium clasp designed for high-strain training sessions.',
+    descriptionKa: 'ჰაერგამტარი და ოფლგამძლე ელასტიური სამაჯური ტიტანის ჩამკეტით, შექმნილი ინტენსიური ვარჯიშებისთვის.',
+  },
+  {
+    id: 'prod-1788722861679',
+    name: 'The Hume Band 2.0 Precision Biometric Tracker',
+    title: 'The Hume Band 2.0 Precision Biometric Tracker',
+    titleKa: 'The Hume Band 2.0 ბიომეტრიული ჯანმრთელობის ტრეკერი',
+    price: 299.00,
+    originalPrice: 359.00,
+    origPrice: 359.00,
+    rating: 4.9,
+    reviewsCount: 140,
+    category: 'wearables',
+    categorySlug: 'smart-wearables',
+    image: '/uploads/prod-prod-1788722861679-1791484976722-uxgrk.webp',
+    images: ['/uploads/prod-prod-1788722861679-1791484976722-uxgrk.webp'],
+    inStock: true,
+    stock: 7,
+    badge: 'Flagship',
+    isDeal: true,
+    description: 'Next-gen screenless health band tracking heart rate variability, skin temperature, deep recovery, and metabolic stress 24/7.',
+    descriptionKa: 'ეკრანგარეშე პრემიუმ სამაჯური 24/7 რეჟიმში აკონტროლებს გულისცემის ვარიაბელობას, კანის ტემპერატურასა და აღდგენის ხარისხს.',
+  },
+
+  // 4. Studio & Audio (1 product)
+  {
+    id: 'prod-1788722508271',
+    name: 'Rode PodMic USB Black Broadcast Microphone with SC27 Cable & Boom Arm',
+    title: 'Rode PodMic USB Black Broadcast Microphone with SC27 Cable & Boom Arm',
+    titleKa: 'Rode PodMic USB სტუდიური სამაუწყებლო მიკროფონი საკიდით',
+    price: 279.00,
+    originalPrice: 299.00,
+    origPrice: 299.00,
+    rating: 5.0,
+    reviewsCount: 188,
+    category: 'audio',
+    categorySlug: 'studio-audio',
+    image: '/uploads/prod-prod-1788722508271-0-1788783608231-rbxub.jpg',
+    images: ['/uploads/prod-prod-1788722508271-0-1788783608231-rbxub.jpg'],
+    inStock: true,
+    stock: 5,
+    badge: 'Studio Reference',
+    isDeal: true,
+    description: 'Broadcast-grade dynamic microphone with XLR and USB-C connectivity, built-in APHEX DSP processing, and zero-latency monitoring.',
+    descriptionKa: 'სამაუწყებლო ხარისხის დინამიკური მიკროფონი XLR და USB-C კავშირით, ჩაშენებული APHEX DSP აუდიო პროცესორით.',
+  },
+
+  // 5. Smart Tech (3 products)
+  {
+    id: 'prod-1789155706235-izasbyx',
+    name: 'Ember Temperature Control Smart Mug 2, 14 Oz - White',
+    title: 'Ember Temperature Control Smart Mug 2, 14 Oz - White',
+    titleKa: 'Ember Smart Mug 2 ჭკვიანი თერმო-ჭიქა 14 Oz - თეთრი',
     price: 99.99,
+    originalPrice: 129.99,
     origPrice: 129.99,
     rating: 4.9,
     reviewsCount: 230,
-    image: '/uploads/prod-prod-1789155706235-izasbyx-1791484971386-329gk.webp',
-    categorySlug: 'smart-tech',
     category: 'tech',
+    categorySlug: 'smart-tech',
+    image: '/uploads/prod-prod-1789155706235-izasbyx-1791484971386-329gk.webp',
+    images: ['/uploads/prod-prod-1789155706235-izasbyx-1791484971386-329gk.webp'],
     inStock: true,
     stock: 10,
     badge: 'Hot Deal',
-    description: 'Keep your drink perfectly hot between 120°F and 145°F with 80-minute battery life.',
-    descriptionKa: 'ინარჩუნებს სასმელის ტემპერატურას 120°F-დან 145°F-მდე 80 წუთის განმავლობაში.',
+    isDeal: true,
+    description: 'Designed for home or office, Ember Mug 2 allows you to set your exact drinking temperature (120°F - 145°F) with app control and 80-minute battery life.',
+    descriptionKa: 'ჭკვიანი თერმო-ჭიქა გაძლევთ საშუალებას დააყენოთ სასურველი ტემპერატურა (120°F - 145°F) მობილური აპლიკაციით. ელემენტის ხანგრძლივობა: 80 წუთი.',
   },
   {
-    id: 'prod-mock-tech-02',
-    name: 'Car Black Box Front and Interior 4K Double Lens Dash Cam',
-    title: 'Car Black Box Front and Interior 4K Double Lens Dash Cam',
-    titleKa: 'ავტო კამერა 4K წინა და შიდა ჩაწერით',
-    price: 119.99,
-    origPrice: 149.99,
-    rating: 4.8,
-    reviewsCount: 76,
-    image: '/uploads/prod-prod-1788722697137-0-1788783607687-fwr3e.jpg',
-    categorySlug: 'smart-tech',
+    id: 'prod-1789138804362-0ilsgso',
+    name: 'Ember Temperature Control Smart Mug 2, 14 Oz - Matte Black',
+    title: 'Ember Temperature Control Smart Mug 2, 14 Oz - Matte Black',
+    titleKa: 'Ember Smart Mug 2 ჭკვიანი თერმო-ჭიქა 14 Oz - მქრქალი შავი',
+    price: 99.00,
+    originalPrice: 129.00,
+    origPrice: 129.00,
+    rating: 4.9,
+    reviewsCount: 194,
     category: 'tech',
+    categorySlug: 'smart-tech',
+    image: '/uploads/prod-prod-1789138804362-0ilsgso-1791484974773-lr3qo.webp',
+    images: ['/uploads/prod-prod-1789138804362-0ilsgso-1791484974773-lr3qo.webp'],
     inStock: true,
-    stock: 5,
+    stock: 8,
+    badge: 'Top Rated',
+    isDeal: true,
+    description: 'Matte black finish with precision heating sensors. Keeps tea and coffee at your exact customized drinking temperature.',
+    descriptionKa: 'პრემიუმ მქრქალი შავი დიზაინი ტემპერატურის ზუსტი სენსორებით. ინარჩუნებს ყავასა და ჩაის თქვენთვის სასურველ ტემპერატურაზე.',
+  },
+  {
+    id: 'prod-1788722697137',
+    name: 'Car Black Box Front and Interior Double Lens Dash Cam 4K',
+    title: 'Car Black Box Front and Interior Double Lens Dash Cam 4K',
+    titleKa: 'Car Black Box 4K ორმაგი ლინზის ავტო ვიდეორეგისტრატორი',
+    price: 79.00,
+    originalPrice: 99.00,
+    origPrice: 99.00,
+    rating: 4.8,
+    reviewsCount: 115,
+    category: 'tech',
+    categorySlug: 'smart-tech',
+    image: '/uploads/prod-prod-1788722697137-0-1788783607687-fwr3e.jpg',
+    images: ['/uploads/prod-prod-1788722697137-0-1788783607687-fwr3e.jpg'],
+    inStock: true,
+    stock: 13,
     badge: 'Security',
-    description: 'Ultra HD 4K front and 1080p cabin infrared night-vision dual channel recording.',
-    descriptionKa: 'Ultra HD 4K წინა და 1080p სალონის ინფრაწითელი ღამის ხედვის ვიდეორეგისტრატორი.',
+    isDeal: true,
+    description: 'Ultra HD 4K front road recording paired with 1080p interior cabin infrared night vision and automatic G-sensor collision lock.',
+    descriptionKa: 'Ultra HD 4K წინა ხედვისა და 1080p სალონის ინფრაწითელი ღამის ხედვის ორმაგი კამერა ავტომატური G-სენსორით.',
   },
 
-  // Fitness & Hydration
+  // 6. Fitness & Hydration (6 products)
   {
-    id: 'prod-mock-fit-01',
-    name: 'Swanson Ultra Highest Potency Vitamin D3 Softgels, 250mcg',
-    title: 'Swanson Ultra Highest Potency Vitamin D3 Softgels, 250mcg',
-    titleKa: 'Swanson Vitamin D3 უმაღლესი კონცენტრაციის კაფსულები',
-    price: 18.99,
-    origPrice: 24.99,
+    id: 'prod-1789155168687-cjhtzu4',
+    name: 'Swanson Triple Magnesium Complex Powder 400 mg 8 oz',
+    title: 'Swanson Triple Magnesium Complex Powder 400 mg 8 oz',
+    titleKa: 'Swanson სამმაგი მაგნიუმის კომპლექსი ფხვნილი 400 მგ 8 უნცია',
+    price: 44.99,
+    originalPrice: 59.99,
+    origPrice: 59.99,
     rating: 4.9,
-    reviewsCount: 112,
-    image: '/uploads/prod-prod-1789154372786-fyldxaj-1791484973452-89c4z.webp',
-    categorySlug: 'fitness-hydration',
+    reviewsCount: 164,
     category: 'fitness',
+    categorySlug: 'fitness-hydration',
+    image: '/uploads/prod-prod-1789155168687-cjhtzu4-1791484972041-xd8oa.webp',
+    images: ['/uploads/prod-prod-1789155168687-cjhtzu4-1791484972041-xd8oa.webp'],
     inStock: true,
-    stock: 20,
-    badge: 'Wellness',
-    description: 'Daily bone strength, calcium absorption, and immune support.',
-    descriptionKa: 'ძვლების სიძლიერის, კალციუმის შეწოვისა და იმუნიტეტის ყოველდღიური მხარდაჭერა.',
+    stock: 18,
+    badge: 'Essential',
+    isDeal: true,
+    description: 'Comprehensive blend from three distinct sources (oxide, citrate, aspartate) for optimal absorbability, relaxation, and muscle support.',
+    descriptionKa: 'სამი განსხვავებული წყაროსგან შემდგარი კომპლექსი მაქსიმალური შეწოვისთვის, კუნთების რელაქსაციისა და ენერგიის მხარდასაჭერად.',
   },
   {
-    id: 'prod-mock-fit-02',
-    name: 'Swanson High Concentrate Omega-3 Fish Oil 680mg',
-    title: 'Swanson High Concentrate Omega-3 Fish Oil 680mg',
-    titleKa: 'Swanson Omega-3 თევზის ქონი 680მგ',
-    price: 22.99,
-    origPrice: 28.99,
+    id: 'prod-1789154824924-h5n6wq0',
+    name: 'Swanson High Concentrate Omega-3 Fish Oil - 680 mg (120 Softgels)',
+    title: 'Swanson High Concentrate Omega-3 Fish Oil - 680 mg (120 Softgels)',
+    titleKa: 'Swanson ომეგა-3 მაღალი კონცენტრაციის თევზის ქონი 680 მგ',
+    price: 35.99,
+    originalPrice: 39.99,
+    origPrice: 39.99,
     rating: 4.8,
-    reviewsCount: 94,
-    image: '/uploads/prod-prod-1789154824924-h5n6wq0-1791484972744-43tne.webp',
-    categorySlug: 'fitness-hydration',
+    reviewsCount: 142,
     category: 'fitness',
+    categorySlug: 'fitness-hydration',
+    image: '/uploads/prod-prod-1789154824924-h5n6wq0-1791484972744-43tne.webp',
+    images: ['/uploads/prod-prod-1789154824924-h5n6wq0-1791484972744-43tne.webp'],
     inStock: true,
-    stock: 16,
-    description: 'Molecularly distilled pure Omega-3 fatty acids for cardiovascular and joint health.',
-    descriptionKa: 'მოლეკულურად გასუფთავებული Omega-3 გულ-სისხლძარღვთა და სახსრების ჯანმრთელობისთვის.',
+    stock: 22,
+    badge: 'Popular',
+    isDeal: true,
+    description: 'Molecularly distilled fish oil delivering 680 mg EPA + DHA per serving with zero fishy aftertaste. Supports heart, brain, and joint health.',
+    descriptionKa: 'მოლეკულურად გასუფთავებული ომეგა-3, 680 მგ EPA + DHA ყოველ ულუფაში. მხარს უჭერს გულის, ტვინისა და სახსრების ჯანმრთელობას.',
+  },
+  {
+    id: 'prod-1789154372786-fyldxaj',
+    name: 'Swanson Highest Potency Vitamin D3 Softgels, 250 mcg (250 Sgels)',
+    title: 'Swanson Highest Potency Vitamin D3 Softgels, 250 mcg (250 Sgels)',
+    titleKa: 'Swanson ვიტამინი D3 უმაღლესი კონცენტრაცია 250 მკგ',
+    price: 29.99,
+    originalPrice: 39.98,
+    origPrice: 39.98,
+    rating: 4.9,
+    reviewsCount: 188,
+    category: 'fitness',
+    categorySlug: 'fitness-hydration',
+    image: '/uploads/prod-prod-1789154372786-fyldxaj-1791484973452-89c4z.webp',
+    images: ['/uploads/prod-prod-1789154372786-fyldxaj-1791484973452-89c4z.webp'],
+    inStock: true,
+    stock: 30,
+    badge: 'Immune Boost',
+    isDeal: true,
+    description: 'Highest potency vitamin D3 for strong bones, healthy immune function, and optimal calcium absorption.',
+    descriptionKa: 'უმაღლესი კონცენტრაციის D3 ვიტამინი ძვლების სიძლიერის, იმუნიტეტისა და კალციუმის სრულყოფილი შეწოვისთვის.',
+  },
+  {
+    id: 'prod-1789153418419-mz6ptx2',
+    name: 'Avene Hyaluron Activ B3 Concentrated Plumping Serum 30ml',
+    title: 'Avene Hyaluron Activ B3 Concentrated Plumping Serum 30ml',
+    titleKa: 'Avene Hyaluron Activ B3 კონცენტრირებული გამამკვრივებელი შრატი 30მლ',
+    price: 59.00,
+    originalPrice: 77.00,
+    origPrice: 77.00,
+    rating: 4.8,
+    reviewsCount: 82,
+    category: 'fitness',
+    categorySlug: 'fitness-hydration',
+    image: '/uploads/prod-prod-1789153418419-mz6ptx2-1791484974136-8gm50.webp',
+    images: ['/uploads/prod-prod-1789153418419-mz6ptx2-1791484974136-8gm50.webp'],
+    inStock: true,
+    stock: 12,
+    badge: 'Derm Approved',
+    isDeal: true,
+    description: 'Contains pure Hyaluronic Acid and 6% Niacinamide to stimulate cells, firm skin, and smooth wrinkles after just 15 days.',
+    descriptionKa: 'შეიცავს სუფთა ჰიალურონის მჟავასა და 6% ნიაცინამიდს კანის რეგენერაციის, ელასტიურობისა და ნაოჭების შემცირებისთვის.',
+  },
+  {
+    id: 'prod-1788777272471',
+    name: 'Ancient Nutrition Multi Collagen Protein Powder 16oz',
+    title: 'Ancient Nutrition Multi Collagen Protein Powder 16oz',
+    titleKa: 'Ancient Nutrition მულტი-კოლაგენის ცილა 16 უნცია',
+    price: 79.00,
+    originalPrice: 99.00,
+    origPrice: 99.00,
+    rating: 4.9,
+    reviewsCount: 205,
+    category: 'fitness',
+    categorySlug: 'fitness-hydration',
+    image: '/uploads/prod-prod-1788777272471-0-1788783602771-bvf0k.jpg',
+    images: ['/uploads/prod-prod-1788777272471-0-1788783602771-bvf0k.jpg'],
+    inStock: true,
+    stock: 14,
+    badge: 'Top Seller',
+    isDeal: true,
+    description: 'Features 10 unique collagen types from 4 food sources to support joints, skin elasticity, hair growth, and digestive gut lining.',
+    descriptionKa: 'შეიცავს 10 უნიკალურ კოლაგენის ტიპს 4 საკვები წყაროდან სახსრების, კანის, თმისა და კუჭ-ნაწლავის გასაჯანსაღებლად.',
+  },
+  {
+    id: 'prod-1788777425106',
+    name: 'Nutricost Marine Collagen Powder Wild Caught Fish 8 oz',
+    title: 'Nutricost Marine Collagen Powder Wild Caught Fish 8 oz',
+    titleKa: 'Nutricost ზღვის კოლაგენის ფხვნილი 8 უნცია',
+    price: 59.00,
+    originalPrice: 79.00,
+    origPrice: 79.00,
+    rating: 4.8,
+    reviewsCount: 137,
+    category: 'fitness',
+    categorySlug: 'fitness-hydration',
+    image: '/uploads/prod-prod-1788777425106-0-1788783603009-v0hay.jpg',
+    images: ['/uploads/prod-prod-1788777425106-0-1788783603009-v0hay.jpg'],
+    inStock: true,
+    stock: 19,
+    badge: 'Pure Marine',
+    isDeal: true,
+    description: 'Wild-caught hydrolysed fish peptides offering highest bioavailability for radiant skin hydration, joint comfort, and nails.',
+    descriptionKa: 'ველური თევზის ჰიდროლიზებული ზღვის კოლაგენის პეპტიდები კანის ღრმა ჰიდრატაციისა და სახსრების ჯანმრთელობისთვის.',
   },
 ];
