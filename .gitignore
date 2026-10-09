@@ -6,6 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
-!public/uploads/
-!data/uploads/
+/public/uploads/
+/data/uploads/
 

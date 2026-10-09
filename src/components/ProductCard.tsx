@@ -2,15 +2,14 @@ import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Star, ShoppingCart, Eye, Check, Heart, Link as LinkIcon, Play } from 'lucide-react';
-import { handleImageError, DEFAULT_PRODUCT_IMAGE, getCleanProductImage } from '../utils/imageFallback';
-import { getProductImageUrl } from '../utils/productImages';
+import { handleImageError, DEFAULT_PRODUCT_IMAGE, getImageUrl } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
 
 const getCardImageSrc = (product: Product): string => {
   const raw = product.image || (Array.isArray(product.images) && product.images[0]) || '';
-  return getProductImageUrl(raw);
+  return getImageUrl(raw);
 };
 
 interface ProductCardProps {

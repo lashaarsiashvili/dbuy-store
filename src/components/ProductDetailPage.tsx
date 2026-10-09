@@ -2,8 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product } from '../types';
 import { getProductFeatures } from '../utils/productFeatures';
-import { handleImageError, getCleanProductImage, resolveUploadUrl } from '../utils/imageFallback';
-import { resolveProductImage } from '../utils/productImages';
+import { handleImageError, getCleanProductImage, resolveUploadUrl, getImageUrl } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
@@ -132,7 +131,7 @@ export const ProductDetailPage: React.FC = () => {
 
   const cleanMainImg = getCleanProductImage(product);
   const rawList = parsedImages.length > 0 ? parsedImages : [cleanMainImg];
-  const galleryImages: string[] = rawList.map(img => typeof img === 'string' ? resolveProductImage(img) : cleanMainImg);
+  const galleryImages: string[] = rawList.map(img => typeof img === 'string' ? getImageUrl(img) : cleanMainImg);
 
   const currentImage = galleryImages[activeImageIndex] || cleanMainImg;
 
