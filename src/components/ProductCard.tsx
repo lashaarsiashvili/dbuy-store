@@ -2,32 +2,13 @@ import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Star, ShoppingCart, Eye, Check, Heart, Link as LinkIcon, Play } from 'lucide-react';
-import { handleImageError, DEFAULT_PRODUCT_IMAGE } from '../utils/imageFallback';
+import { handleImageError, DEFAULT_PRODUCT_IMAGE, getCleanProductImage } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
-import { initialProducts } from '../data/initialProducts';
 
 const resolveProductImage = (product: Product): string => {
-  const match = initialProducts.find(p => p.id === product.id);
-
-  let img = (product as any).imageUrl || product.image;
-  
-  if (typeof img === 'string') {
-    img = img.trim();
-  }
-
-  // Always use initialProducts fresh image if available for this product ID
-  if (match && match.image) {
-    return match.image;
-  }
-
-  // If img is missing, null, broken /uploads/ path, or placeholder
-  if (!img || img === '' || img.includes('/uploads/') || img.toLowerCase().includes('placeholder') || img.includes('uxgrk')) {
-    return '';
-  }
-
-  return img;
+  return product.image || '';
 };
 
 interface ProductCardProps {

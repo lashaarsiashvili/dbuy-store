@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { getProductFeatures } from '../utils/productFeatures';
-import { handleImageError } from '../utils/imageFallback';
+import { handleImageError, getCleanProductImage } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { analytics } from './AdminAnalyticsDashboard';
@@ -56,12 +56,12 @@ export const QuickViewModal: React.FC = () => {
   const displayTitle = getProductTitle(quickViewProduct, language);
   const displayDesc = getProductDescription(quickViewProduct, language);
 
-  // Build full gallery of images for this product
-  const galleryImages: string[] = (quickViewProduct.images && Array.isArray(quickViewProduct.images) && quickViewProduct.images.length > 0)
+  const cleanMainImg = getCleanProductImage(quickViewProduct);
+  const galleryImages: string[] = (quickViewProduct.images && Array.isArray(quickViewProduct.images) && quickViewProduct.images.length > 0 && !quickViewProduct.images[0].includes('/uploads/'))
     ? quickViewProduct.images
-    : (quickViewProduct.image ? [quickViewProduct.image] : []);
+    : [cleanMainImg];
 
-  const currentImage = galleryImages[activeImageIndex] || quickViewProduct.image;
+  const currentImage = galleryImages[activeImageIndex] || cleanMainImg;
 
   const handleNextImage = () => {
     setActiveImageIndex((prev) => (prev + 1) % galleryImages.length);

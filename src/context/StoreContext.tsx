@@ -831,13 +831,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const freshTitle = freshTitleMap.get(p.id);
 
       const rawImg = typeof p.image === 'string' ? p.image.trim() : '';
-
-      // If the image is a local broken /uploads/ path, placeholder, or Hume band fallback, force initialProduct image
-      const validImage = (freshImg || (!rawImg || rawImg.includes('/uploads/') || rawImg.toLowerCase().includes('placeholder') || rawImg.includes('uxgrk')))
-        ? (freshImg || rawImg || initialProducts[0].image)
-        : rawImg;
-
-      const validImages = freshImgs && freshImgs.length > 0 ? freshImgs : [validImage];
+      const validImage = freshImg || sanitizeImageUrl(rawImg) || (initialProducts[0] ? initialProducts[0].image : '');
+      const validImages = freshImgs || (Array.isArray(p.images) && p.images.length > 0 
+        ? p.images.map(img => sanitizeImageUrl(img))
+        : [validImage]);
 
       uniqueMap.set(p.id, {
         ...p,
