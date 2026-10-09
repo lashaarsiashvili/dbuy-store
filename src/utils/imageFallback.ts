@@ -2,6 +2,7 @@ import React from 'react';
 import { getImageBackupIDB } from './imageStorage';
 import { initialProducts } from '../data/initialProducts';
 import { Product } from '../types';
+import { resolveProductImage } from './productImages';
 
 // Build a fast lookup map from our fresh initialProducts
 const directImageMap = new Map<string, string>(
@@ -29,7 +30,7 @@ export const DEFAULT_PRODUCT_IMAGE =
 
 export const resolveUploadUrl = (url: string | null | undefined): string => {
   if (!url || typeof url !== 'string') return '';
-  return url.trim();
+  return resolveProductImage(url);
 };
 
 export const getCleanProductImage = (product: Product | any): string => {

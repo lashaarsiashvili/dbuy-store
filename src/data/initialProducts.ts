@@ -28,7 +28,8 @@ export const initialProducts: Product[] = [
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20"
+    "updated_at": "2026-10-09 16:47:20",
+    "views": 4
   },
   {
     "id": "prod-1789155168687-cjhtzu4",
@@ -165,7 +166,7 @@ export const initialProducts: Product[] = [
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
     "updated_at": "2026-10-09 16:47:20",
-    "views": 4
+    "views": 6
   },
   {
     "id": "prod-1789138699002-hmxeg6s",
@@ -656,6 +657,6 @@ export const initialProducts: Product[] = [
     "isDeal": true,
     "created_at": "2026-10-09 16:47:19",
     "updated_at": "2026-10-09 16:47:19",
-    "views": 4
+    "views": 6
   }
 ];

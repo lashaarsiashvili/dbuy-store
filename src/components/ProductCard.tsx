@@ -3,12 +3,14 @@ import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Star, ShoppingCart, Eye, Check, Heart, Link as LinkIcon, Play } from 'lucide-react';
 import { handleImageError, DEFAULT_PRODUCT_IMAGE, getCleanProductImage } from '../utils/imageFallback';
+import { resolveProductImage } from '../utils/productImages';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
 
-const resolveProductImage = (product: Product): string => {
-  return product.image || (Array.isArray(product.images) && product.images[0]) || '';
+const getCardImageSrc = (product: Product): string => {
+  const raw = product.image || (Array.isArray(product.images) && product.images[0]) || '';
+  return resolveProductImage(raw);
 };
 
 interface ProductCardProps {
@@ -131,7 +133,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
         onMouseLeave={() => setIsHovered(false)}
       >
         {(() => {
-          const imageSrc = resolveProductImage(product);
+          const imageSrc = getCardImageSrc(product);
           
           if (!imageSrc || imageSrc === '') {
             return (
