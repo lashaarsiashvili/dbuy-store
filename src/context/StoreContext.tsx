@@ -792,31 +792,74 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return trimmed;
   };
 
-  const sanitizeProductUrls = (p: Product): Product => {
-    let mainImage = typeof p.image === 'string' ? p.image.trim() : '';
+  // Fast lookup maps from initialProducts.ts by ID for 100% fresh, reliable Unsplash images and titles
+  const freshImageMap = useMemo(() => {
+    const map = new Map<string, string>();
+    initialProducts.forEach(p => {
+      if (p.id) map.set(p.id, p.image);
+    });
+    return map;
+  }, []);
 
-    const localMatch = initialProducts.find(ip => ip.id === p.id);
+  const freshImagesListMap = useMemo(() => {
+    const map = new Map<string, string[]>();
+    initialProducts.forEach(p => {
+      if (p.id) map.set(p.id, p.images || [p.image]);
+    });
+    return map;
+  }, []);
 
-    // Look up corresponding product in initialProducts if image is missing, empty, broken /uploads/ path, or placeholder
-    if (!mainImage || mainImage === '' || mainImage.includes('/uploads/') || mainImage.toLowerCase().includes('placeholder') || mainImage.includes('uxgrk')) {
-      if (localMatch && localMatch.image) {
-        mainImage = localMatch.image;
+  const freshTitleMap = useMemo(() => {
+    const map = new Map<string, string>();
+    initialProducts.forEach(p => {
+      if (p.id) map.set(p.id, p.title);
+    });
+    return map;
+  }, []);
+
+  // Force sanitize products before passing to state / UI:
+  const sanitizeProducts = (rawProducts: Product[]): Product[] => {
+    if (!rawProducts || rawProducts.length === 0) return initialProducts;
+
+    const uniqueMap = new Map<string, Product>();
+
+    rawProducts.forEach(p => {
+      if (!p || !p.id) return;
+
+      const freshImg = freshImageMap.get(p.id);
+      const freshImgs = freshImagesListMap.get(p.id);
+      const freshTitle = freshTitleMap.get(p.id);
+
+      const rawImg = typeof p.image === 'string' ? p.image.trim() : '';
+
+      // If the image is a local broken /uploads/ path, placeholder, or Hume band fallback, force initialProduct image
+      const validImage = (freshImg || (!rawImg || rawImg.includes('/uploads/') || rawImg.toLowerCase().includes('placeholder') || rawImg.includes('uxgrk')))
+        ? (freshImg || rawImg || initialProducts[0].image)
+        : rawImg;
+
+      const validImages = freshImgs && freshImgs.length > 0 ? freshImgs : [validImage];
+
+      uniqueMap.set(p.id, {
+        ...p,
+        title: freshTitle || p.title,
+        image: validImage,
+        images: validImages,
+      });
+    });
+
+    // Guarantee all initialProducts exist in state
+    initialProducts.forEach(initP => {
+      if (!uniqueMap.has(initP.id)) {
+        uniqueMap.set(initP.id, initP);
       }
-    }
+    });
 
-    if (localMatch && localMatch.image && (!mainImage || mainImage.includes('/uploads/'))) {
-      mainImage = localMatch.image;
-    }
+    return Array.from(uniqueMap.values());
+  };
 
-    const extraImages = Array.isArray(p.images) && p.images.length > 0 && p.images.some(img => img && img !== '' && !img.includes('/uploads/'))
-      ? p.images.map(img => (img && !img.includes('/uploads/') && !img.includes('placeholder')) ? img : mainImage)
-      : (localMatch && Array.isArray(localMatch.images) ? localMatch.images : [mainImage]);
-
-    return {
-      ...p,
-      image: mainImage || (localMatch?.image ?? ''),
-      images: extraImages.length > 0 ? extraImages : [mainImage || (localMatch?.image ?? '')]
-    };
+  const sanitizeProductUrls = (p: Product): Product => {
+    const sanitized = sanitizeProducts([p]);
+    return sanitized[0] || p;
   };
 
   const sanitizeBillboardUrls = (b: BillboardSlide): BillboardSlide => {
@@ -943,17 +986,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const storedDbVersion = typeof localStorage !== 'undefined' ? localStorage.getItem('dbuy_db_version') : null;
     const isResetParam = typeof window !== 'undefined' && window.location.search.includes('reset=true');
 
-    // If stored DB version mismatches DB_VERSION or ?reset=true is present, execute forced reset
+    // If stored DB version mismatches DB_VERSION or ?reset=true is present, execute forced hard reset
     if (isResetParam || storedDbVersion !== DB_VERSION) {
       console.log(`[DB_RESET] DB_VERSION mismatch (${storedDbVersion} vs ${DB_VERSION}) or ?reset=true detected. Purging cache and re-seeding from initialProducts.ts...`);
       try {
-        localStorage.removeItem('dbuy_products');
-        localStorage.removeItem('products');
-        localStorage.removeItem('dbuy_catalog_version');
+        localStorage.clear();
         localStorage.setItem('dbuy_db_version', DB_VERSION);
       } catch (e) {}
 
-      const cleanInitial: Product[] = initialProducts.map((p) => sanitizeProductUrls(p));
+      // Trigger Cloudflare D1 force re-seed endpoints
+      if (typeof window !== 'undefined') {
+        fetch('/api/products?reset=true', { method: 'GET' }).catch(() => {});
+        fetch('/api/store/reset?reset=true', { method: 'POST' }).catch(() => {});
+      }
+
+      const cleanInitial: Product[] = sanitizeProducts(initialProducts);
       try {
         localStorage.setItem('dbuy_products', JSON.stringify(cleanInitial));
         localStorage.setItem('dbuy_products_last_updated', new Date().toISOString());
@@ -961,19 +1008,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return cleanInitial;
     }
 
-    // Attempt to load from localStorage if DB_VERSION matches
+    // Attempt to load from localStorage if DB_VERSION matches, but force sanitizeProducts to guarantee fresh Unsplash images
     try {
       const cached = localStorage.getItem('dbuy_products');
       if (cached) {
         const parsed: Product[] = JSON.parse(cached);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((p) => sanitizeProductUrls(p));
+          return sanitizeProducts(parsed);
         }
       }
     } catch (e) {}
 
     // Fallback strictly to clean initialProducts
-    const fresh: Product[] = initialProducts.map((p) => sanitizeProductUrls(p));
+    const fresh: Product[] = sanitizeProducts(initialProducts);
     try {
       localStorage.setItem('dbuy_db_version', DB_VERSION);
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));
@@ -985,12 +1032,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Admin / Manual Database Reset Function
   const resetProductsDatabase = async (): Promise<void> => {
     try {
-      localStorage.removeItem('dbuy_products');
-      localStorage.removeItem('products');
-      localStorage.removeItem('dbuy_catalog_version');
+      localStorage.clear();
       localStorage.setItem('dbuy_db_version', DB_VERSION);
 
-      const fresh: Product[] = initialProducts.map((p) => sanitizeProductUrls(p));
+      const fresh: Product[] = sanitizeProducts(initialProducts);
       setProducts(fresh);
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));
       localStorage.setItem('dbuy_products_last_updated', new Date().toISOString());
@@ -2094,8 +2139,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         bc = new BroadcastChannel('dbuy_store_sync');
         bc.onmessage = (event) => {
           if (event.data?.type === 'PRODUCTS_UPDATED' && Array.isArray(event.data.products)) {
-            setProducts(event.data.products);
-            localStorage.setItem('dbuy_products', JSON.stringify(event.data.products));
+            const sanitized = sanitizeProducts(event.data.products);
+            setProducts(sanitized);
+            localStorage.setItem('dbuy_products', JSON.stringify(sanitized));
           } else if (event.data?.type === 'THEME_UPDATED' && event.data.theme) {
             setTheme(prev => ({ ...prev, ...event.data.theme }));
             localStorage.setItem('dbuy_theme', JSON.stringify(event.data.theme));
@@ -2111,7 +2157,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (e.key === 'dbuy_products' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) setProducts(parsed);
+          if (Array.isArray(parsed)) setProducts(sanitizeProducts(parsed));
         } catch {}
       }
       if (e.key === 'dbuy_theme' && e.newValue) {

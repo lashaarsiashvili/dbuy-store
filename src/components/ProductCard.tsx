@@ -9,27 +9,22 @@ import { getProductTitle } from '../utils/productLanguage';
 import { initialProducts } from '../data/initialProducts';
 
 const resolveProductImage = (product: Product): string => {
+  const match = initialProducts.find(p => p.id === product.id);
+
   let img = (product as any).imageUrl || product.image;
   
   if (typeof img === 'string') {
     img = img.trim();
   }
 
-  // If img is missing, null, or placeholder, attempt lookup in initialProducts
-  if (!img || img === '' || img === '/uploads/placeholder.jpg' || img.toLowerCase().includes('placeholder')) {
-    const match = initialProducts.find(p => p.id === product.id);
-    if (match && match.image) {
-      return match.image;
-    }
-    return '';
+  // Always use initialProducts fresh image if available for this product ID
+  if (match && match.image) {
+    return match.image;
   }
 
-  // If img points to broken legacy /uploads/ path, map to initialProducts URL if matched
-  if (img.includes('/uploads/')) {
-    const match = initialProducts.find(p => p.id === product.id);
-    if (match && match.image) {
-      return match.image;
-    }
+  // If img is missing, null, broken /uploads/ path, or placeholder
+  if (!img || img === '' || img.includes('/uploads/') || img.toLowerCase().includes('placeholder') || img.includes('uxgrk')) {
+    return '';
   }
 
   return img;
