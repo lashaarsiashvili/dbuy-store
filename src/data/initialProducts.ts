@@ -1,6 +1,4 @@
-import { Product } from '../types';
-
-export const DB_VERSION = "2026_v4_clean_urls";
+import { Product } from "../types";
 
 export const initialProducts: Product[] = [
   {
@@ -16,9 +14,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 142,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789156058368-ilikcwu-1791484970770-tnkra.webp",
     "images": [
-      "https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789156058368-ilikcwu-1791484970770-tnkra.webp"
     ],
     "stock": 14,
     "badge": "Best Seller",
@@ -39,9 +37,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 230,
     "category": "tech",
     "categorySlug": "smart-tech",
-    "image": "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789155706235-izasbyx-1791484971386-329gk.webp",
     "images": [
-      "https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789155706235-izasbyx-1791484971386-329gk.webp"
     ],
     "stock": 10,
     "badge": "Hot Deal",
@@ -62,9 +60,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 164,
     "category": "fitness",
     "categorySlug": "fitness-hydration",
-    "image": "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789155168687-cjhtzu4-1791484972041-xd8oa.webp",
     "images": [
-      "https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789155168687-cjhtzu4-1791484972041-xd8oa.webp"
     ],
     "stock": 18,
     "badge": "Essential",
@@ -85,9 +83,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 142,
     "category": "fitness",
     "categorySlug": "fitness-hydration",
-    "image": "https://images.unsplash.com/photo-1577401239170-897942555fb3?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789154824924-h5n6wq0-1791484972744-43tne.webp",
     "images": [
-      "https://images.unsplash.com/photo-1577401239170-897942555fb3?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789154824924-h5n6wq0-1791484972744-43tne.webp"
     ],
     "stock": 22,
     "badge": "Popular",
@@ -108,9 +106,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 188,
     "category": "fitness",
     "categorySlug": "fitness-hydration",
-    "image": "https://images.unsplash.com/photo-1550572017-edd951aa8f72?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789154372786-fyldxaj-1791484973452-89c4z.webp",
     "images": [
-      "https://images.unsplash.com/photo-1550572017-edd951aa8f72?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789154372786-fyldxaj-1791484973452-89c4z.webp"
     ],
     "stock": 30,
     "badge": "Immune Boost",
@@ -131,9 +129,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 82,
     "category": "fitness",
     "categorySlug": "fitness-hydration",
-    "image": "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789153418419-mz6ptx2-1791484974136-8gm50.webp",
     "images": [
-      "https://images.unsplash.com/photo-1620916566398-39f1143ab7be?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789153418419-mz6ptx2-1791484974136-8gm50.webp"
     ],
     "stock": 12,
     "badge": "Derm Approved",
@@ -154,9 +152,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 194,
     "category": "tech",
     "categorySlug": "smart-tech",
-    "image": "https://images.unsplash.com/photo-1577937927133-66ef06acdf18?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789138804362-0ilsgso-1791484974773-lr3qo.webp",
     "images": [
-      "https://images.unsplash.com/photo-1577937927133-66ef06acdf18?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789138804362-0ilsgso-1791484974773-lr3qo.webp"
     ],
     "stock": 8,
     "badge": "Top Rated",
@@ -177,9 +175,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 98,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789138699002-hmxeg6s-1791484975450-a4hz5.webp",
     "images": [
-      "https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789138699002-hmxeg6s-1791484975450-a4hz5.webp"
     ],
     "stock": 11,
     "badge": "Limited Edition",
@@ -200,9 +198,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 175,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1589365278144-c9e705f843ba?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1789138614222-4evc5wn-1791484976094-8atkd.webp",
     "images": [
-      "https://images.unsplash.com/photo-1589365278144-c9e705f843ba?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1789138614222-4evc5wn-1791484976094-8atkd.webp"
     ],
     "stock": 9,
     "badge": "Color Drop",
@@ -223,9 +221,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 84,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788724519740-0-1788783604196-f2ye4.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1544816155-12df9643f363?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788724519740-0-1788783604196-f2ye4.jpg"
     ],
     "stock": 15,
     "badge": "Smart Reminder",
@@ -246,9 +244,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 95,
     "category": "wearables",
     "categorySlug": "smart-wearables",
-    "image": "https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788724361112-0-1788783604832-64q55.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788724361112-0-1788783604832-64q55.jpg"
     ],
     "stock": 14,
     "badge": "Fitness Pro",
@@ -269,9 +267,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 63,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1570535381861-1254394e1d71?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788723441741-0-1788783605340-uanc4.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1570535381861-1254394e1d71?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788723441741-0-1788783605340-uanc4.jpg"
     ],
     "stock": 20,
     "badge": "Save 43%",
@@ -292,9 +290,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 112,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788723082932-0-1788783606115-hf96t.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1556905055-8f358a7a47b2?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788723082932-0-1788783606115-hf96t.jpg"
     ],
     "stock": 16,
     "badge": "Pro Cyclist",
@@ -315,9 +313,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 140,
     "category": "wearables",
     "categorySlug": "smart-wearables",
-    "image": "https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788722861679-1791484976722-uxgrk.webp",
     "images": [
-      "https://images.unsplash.com/photo-1508685096489-7aacd43bd3b1?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788722861679-1791484976722-uxgrk.webp"
     ],
     "stock": 7,
     "badge": "Flagship",
@@ -338,9 +336,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 115,
     "category": "tech",
     "categorySlug": "smart-tech",
-    "image": "https://images.unsplash.com/photo-1508974239320-0a029497e820?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788722697137-0-1788783607687-fwr3e.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1508974239320-0a029497e820?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788722697137-0-1788783607687-fwr3e.jpg"
     ],
     "stock": 13,
     "badge": "Security",
@@ -361,9 +359,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 129,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788877210563-1791484977367-b4v1d.webp",
     "images": [
-      "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788877210563-1791484977367-b4v1d.webp"
     ],
     "stock": 12,
     "badge": "App Sync",
@@ -384,9 +382,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 76,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788877024412-1791484978021-2xf9f.webp",
     "images": [
-      "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788877024412-1791484978021-2xf9f.webp"
     ],
     "stock": 17,
     "badge": "Trending",
@@ -407,9 +405,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 218,
     "category": "gaming",
     "categorySlug": "pro-gaming",
-    "image": "https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788876872896-1791484978720-p4f3i.webp",
     "images": [
-      "https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788876872896-1791484978720-p4f3i.webp"
     ],
     "stock": 10,
     "badge": "Esports Edition",
@@ -430,9 +428,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 156,
     "category": "gaming",
     "categorySlug": "pro-gaming",
-    "image": "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788787675363-0-1788788713941-z2li5.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1546435770-a3e426bf472b?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788787675363-0-1788788713941-z2li5.jpg"
     ],
     "stock": 8,
     "badge": "Pro Choice",
@@ -453,9 +451,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 310,
     "category": "gaming",
     "categorySlug": "pro-gaming",
-    "image": "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788785750636-0-1788785751962-zjv0m.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788785750636-0-1788785751962-zjv0m.jpg"
     ],
     "stock": 6,
     "badge": "Esports Gold",
@@ -476,9 +474,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 205,
     "category": "fitness",
     "categorySlug": "fitness-hydration",
-    "image": "https://images.unsplash.com/photo-1593095948071-474c5cc2989d?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788777272471-0-1788783602771-bvf0k.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1593095948071-474c5cc2989d?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788777272471-0-1788783602771-bvf0k.jpg"
     ],
     "stock": 14,
     "badge": "Top Seller",
@@ -499,9 +497,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 137,
     "category": "fitness",
     "categorySlug": "fitness-hydration",
-    "image": "https://images.unsplash.com/photo-1512069772995-ec65ed45afd6?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788777425106-0-1788783603009-v0hay.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1512069772995-ec65ed45afd6?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788777425106-0-1788783603009-v0hay.jpg"
     ],
     "stock": 19,
     "badge": "Pure Marine",
@@ -522,9 +520,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 91,
     "category": "drinkware",
     "categorySlug": "smart-hydration",
-    "image": "https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788775639253-0-1788783603595-8i6m1.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1523362628745-0c100150b504?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788775639253-0-1788783603595-8i6m1.jpg"
     ],
     "stock": 15,
     "badge": "Smart LED",
@@ -545,9 +543,9 @@ export const initialProducts: Product[] = [
     "reviewsCount": 188,
     "category": "audio",
     "categorySlug": "studio-audio",
-    "image": "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=1000&q=80",
+    "image": "/uploads/prod-prod-1788722508271-0-1788783608231-rbxub.jpg",
     "images": [
-      "https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=1000&q=80"
+      "/uploads/prod-prod-1788722508271-0-1788783608231-rbxub.jpg"
     ],
     "stock": 5,
     "badge": "Studio Reference",
