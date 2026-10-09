@@ -1,11 +1,10 @@
 import { initialProducts } from '../data/initialProducts';
-import { getCleanProductImage } from './imageFallback';
+import { getCleanProductImage, DEFAULT_PRODUCT_IMAGE } from './imageFallback';
 import { Product } from '../types';
 
 /**
  * Image Resolver Service for DBUY Store.
- * Guarantees that any product image path (whether relative /uploads/, broken local path,
- * or legacy fallback) resolves directly to a clean, reliable, working image URL.
+ * Guarantees that any product image path resolves directly to the exact image URL.
  */
 
 // Direct ID lookup map
@@ -19,12 +18,15 @@ const idToImageMap = new Map<string, string>(
  */
 export const resolveProductImageUrl = (productOrUrl: Product | string | null | undefined): string => {
   if (!productOrUrl) {
-    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1000&q=80';
+    return DEFAULT_PRODUCT_IMAGE;
   }
 
   // If a full Product object is passed
   if (typeof productOrUrl === 'object') {
     const product = productOrUrl as Product;
+    if (product.image && typeof product.image === 'string' && product.image.trim() !== '') {
+      return product.image.trim();
+    }
     if (product.id && idToImageMap.has(product.id)) {
       return idToImageMap.get(product.id)!;
     }
@@ -33,10 +35,8 @@ export const resolveProductImageUrl = (productOrUrl: Product | string | null | u
 
   // If a string URL or path is passed
   const url = String(productOrUrl).trim();
-
-  // If missing or contains broken /uploads/ path or placeholder/uxgrk
-  if (!url || url.includes('/uploads/') || url.toLowerCase().includes('placeholder') || url.includes('uxgrk')) {
-    return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1000&q=80';
+  if (!url) {
+    return DEFAULT_PRODUCT_IMAGE;
   }
 
   return url;

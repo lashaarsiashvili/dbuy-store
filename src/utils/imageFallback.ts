@@ -24,30 +24,25 @@ const categoryFallbacks: Record<string, string> = {
   'wearables': 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=800&q=80',
 };
 
-export const getCleanProductImage = (product: Product | any): string => {
-  if (!product) return 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
+export const DEFAULT_PRODUCT_IMAGE =
+  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600" fill="none"><rect width="600" height="600" fill="%23f8fafc"/><rect x="16" y="16" width="568" height="568" rx="24" stroke="%23e2e8f0" stroke-width="4" stroke-dasharray="12 12"/><path d="M190 380l70-70 90 90 60-60 100 100H90l100-60z" fill="%23cbd5e1"/><circle cx="210" cy="220" r="36" fill="%2394a3b8"/></svg>';
 
-  // 1. If direct match exists in initialProducts map, ALWAYS use that fresh Unsplash URL
+export const getCleanProductImage = (product: Product | any): string => {
+  if (!product) return DEFAULT_PRODUCT_IMAGE;
+
+  // 1. Check direct image property on product
+  const rawImg = product.image || product.imageUrl || (Array.isArray(product.images) && product.images[0]);
+  if (rawImg && typeof rawImg === 'string' && rawImg.trim() !== '') {
+    return rawImg.trim();
+  }
+
+  // 2. Check direct match from initialProducts
   if (product.id && directImageMap.has(product.id)) {
     return directImageMap.get(product.id)!;
   }
 
-  const rawImg = product.image || product.imageUrl;
-
-  // 2. If product image is missing, empty, points to broken /uploads/ folder, or contains placeholder/uxgrk:
-  if (!rawImg || typeof rawImg !== 'string' || rawImg.includes('/uploads/') || rawImg.toLowerCase().includes('placeholder') || rawImg.includes('uxgrk')) {
-    const catSlug = product.categorySlug || product.category || '';
-    return categoryFallbacks[catSlug] || 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
-  }
-
-  return rawImg;
+  return DEFAULT_PRODUCT_IMAGE;
 };
-
-/**
- * Clean, neutral SVG placeholder for products without an image or when an image fails to load.
- */
-export const DEFAULT_PRODUCT_IMAGE =
-  'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600" fill="none"><rect width="600" height="600" fill="%23f8fafc"/><rect x="16" y="16" width="568" height="568" rx="24" stroke="%23e2e8f0" stroke-width="4" stroke-dasharray="12 12"/><path d="M190 380l70-70 90 90 60-60 100 100H90l100-60z" fill="%23cbd5e1"/><circle cx="210" cy="220" r="36" fill="%2394a3b8"/></svg>';
 
 /**
  * Universal self-healing error handler for product images.

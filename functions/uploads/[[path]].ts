@@ -10,65 +10,50 @@ type PagesFunction<Env = any> = (context: {
   params: { path?: string[] };
 }) => Promise<Response> | Response;
 
-// Default category fallback images
-const CATEGORY_FALLBACK_URLS: Record<string, string> = {
-  'drinkware': 'https://images.unsplash.com/photo-1602143407151-7111542de6e8?auto=format&fit=crop&w=1000&q=80',
-  'tech': 'https://images.unsplash.com/photo-1514432324607-a09d9b4aefdd?auto=format&fit=crop&w=1000&q=80',
-  'fitness': 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?auto=format&fit=crop&w=1000&q=80',
-  'gaming': 'https://images.unsplash.com/photo-1527864550417-7fd91fc51a46?auto=format&fit=crop&w=1000&q=80',
-  'audio': 'https://images.unsplash.com/photo-1590602847861-f357a9332bbc?auto=format&fit=crop&w=1000&q=80',
-  'wearables': 'https://images.unsplash.com/photo-1575311373937-040b8e1fd5b6?auto=format&fit=crop&w=1000&q=80',
-};
-
-const DEFAULT_IMAGE_URL = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=1000&q=80';
+const NEUTRAL_SVG_PLACEHOLDER = `<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600" fill="none"><rect width="600" height="600" fill="#f8fafc"/><rect x="16" y="16" width="568" height="568" rx="24" stroke="#e2e8f0" stroke-width="4" stroke-dasharray="12 12"/><path d="M190 380l70-70 90 90 60-60 100 100H90l100-60z" fill="#cbd5e1"/><circle cx="210" cy="220" r="36" fill="#94a3b8"/></svg>`;
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request } = context;
   const url = new URL(request.url);
   const pathname = url.pathname.toLowerCase();
 
-  // Try to match the filename to a product ID
+  // Try to match the filename to a product in initialProducts
   let targetImageUrl = '';
 
   for (const product of initialProducts) {
     if (product.id && pathname.includes(product.id.toLowerCase())) {
-      targetImageUrl = product.image;
+      if (product.image && product.image.startsWith('http')) {
+        targetImageUrl = product.image;
+      }
       break;
     }
   }
 
-  // Heuristic category keyword matching
-  if (!targetImageUrl) {
-    if (pathname.includes('owala') || pathname.includes('bottle') || pathname.includes('drinkware') || pathname.includes('mug') || pathname.includes('ember') || pathname.includes('aquaminder')) {
-      targetImageUrl = CATEGORY_FALLBACK_URLS['drinkware'];
-    } else if (pathname.includes('gaming') || pathname.includes('mouse') || pathname.includes('headset') || pathname.includes('g309') || pathname.includes('superlight') || pathname.includes('superstrike')) {
-      targetImageUrl = CATEGORY_FALLBACK_URLS['gaming'];
-    } else if (pathname.includes('swanson') || pathname.includes('collagen') || pathname.includes('magnesium') || pathname.includes('omega') || pathname.includes('vitamin') || pathname.includes('avene') || pathname.includes('serum')) {
-      targetImageUrl = CATEGORY_FALLBACK_URLS['fitness'];
-    } else if (pathname.includes('whoop') || pathname.includes('hume') || pathname.includes('band') || pathname.includes('wearable')) {
-      targetImageUrl = CATEGORY_FALLBACK_URLS['wearables'];
-    } else if (pathname.includes('mic') || pathname.includes('podmic') || pathname.includes('rode') || pathname.includes('audio')) {
-      targetImageUrl = CATEGORY_FALLBACK_URLS['audio'];
-    } else {
-      targetImageUrl = DEFAULT_IMAGE_URL;
+  // If a valid HTTP target URL exists, fetch and serve it
+  if (targetImageUrl) {
+    try {
+      const imgResponse = await fetch(targetImageUrl, { cache: 'force-cache' });
+      if (imgResponse.ok) {
+        const headers = new Headers(imgResponse.headers);
+        headers.set('Access-Control-Allow-Origin', '*');
+        headers.set('Cache-Control', 'public, max-age=31536000, immutable');
+        return new Response(imgResponse.body, {
+          status: 200,
+          headers,
+        });
+      }
+    } catch (err) {
+      // ignore
     }
   }
 
-  // Fetch the target image and return it with proper headers
-  try {
-    const imgResponse = await fetch(targetImageUrl, { cache: 'force-cache' });
-    if (imgResponse.ok) {
-      const headers = new Headers(imgResponse.headers);
-      headers.set('Access-Control-Allow-Origin', '*');
-      headers.set('Cache-Control', 'public, max-age=31536000, immutable');
-      return new Response(imgResponse.body, {
-        status: 200,
-        headers,
-      });
-    }
-  } catch (err) {
-    // Fallback to 302 redirect
-  }
-
-  return Response.redirect(targetImageUrl, 302);
+  // Neutral SVG fallback for missing uploads
+  return new Response(NEUTRAL_SVG_PLACEHOLDER, {
+    status: 200,
+    headers: {
+      'Content-Type': 'image/svg+xml',
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  });
 };
