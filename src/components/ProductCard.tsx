@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { Star, ShoppingCart, Eye, Check, Heart, Share2, Link as LinkIcon, Play, Video } from 'lucide-react';
-import { handleImageError } from '../utils/imageFallback';
+import { Star, ShoppingCart, Eye, Check, Heart, Link as LinkIcon, Play } from 'lucide-react';
+import { handleImageError, DEFAULT_PRODUCT_IMAGE } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
+import { initialProducts } from '../data/initialProducts';
 
 const resolveProductImage = (product: Product): string => {
   let img = (product as any).imageUrl || product.image;
@@ -14,9 +15,21 @@ const resolveProductImage = (product: Product): string => {
     img = img.trim();
   }
 
-  // If img is missing, null, or placeholder, return empty string so it falls back to neutral SVG placeholder
+  // If img is missing, null, or placeholder, attempt lookup in initialProducts
   if (!img || img === '' || img === '/uploads/placeholder.jpg' || img.toLowerCase().includes('placeholder')) {
+    const match = initialProducts.find(p => p.id === product.id);
+    if (match && match.image) {
+      return match.image;
+    }
     return '';
+  }
+
+  // If img points to broken legacy /uploads/ path, map to initialProducts URL if matched
+  if (img.includes('/uploads/')) {
+    const match = initialProducts.find(p => p.id === product.id);
+    if (match && match.image) {
+      return match.image;
+    }
   }
 
   return img;
@@ -164,7 +177,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
-                onError={(e) => handleImageError(e)}
+                onError={(e) => handleImageError(e, DEFAULT_PRODUCT_IMAGE)}
               />
             );
           }
@@ -176,12 +189,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
-              onError={(e) => handleImageError(e)}
+              fallbackSrc={DEFAULT_PRODUCT_IMAGE}
+              onError={(e) => handleImageError(e, DEFAULT_PRODUCT_IMAGE)}
             />
           );
         })()}
 
-        {/* YouTube Video Hover Preview Overlay (smooth CSS fade transition on mouseenter / mouseleave) */}
+        {/* YouTube Video Hover Preview Overlay */}
         {youtubeId && (
           <div 
             className={`youtube-hover-preview absolute inset-0 w-full h-full z-15 overflow-hidden transition-all duration-500 ease-in-out pointer-events-none bg-black ${
@@ -270,7 +284,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
             </span>
           </div>
 
-          {/* Add to Cart Button with Pulse & Checkmark Pop Feedback */}
+          {/* Add to Cart Button */}
           <button
             onClick={handleAddToCart}
             disabled={product.stock <= 0}

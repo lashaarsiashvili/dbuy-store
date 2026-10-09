@@ -793,33 +793,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const sanitizeProductUrls = (p: Product): Product => {
-    let mainImage = sanitizeImageUrl(p.image);
+    let mainImage = typeof p.image === 'string' ? p.image.trim() : '';
 
-    // Look up the corresponding product in local initialProducts by ID if fetched image is null/empty/placeholder
-    if (!mainImage || mainImage === '' || mainImage === '/uploads/placeholder.jpg') {
-      const localMatch = initialProducts.find(ip => ip.id === p.id);
-      if (localMatch && localMatch.image && localMatch.image !== '') {
-        mainImage = sanitizeImageUrl(localMatch.image);
+    const localMatch = initialProducts.find(ip => ip.id === p.id);
+
+    // Look up corresponding product in initialProducts if image is missing, empty, broken /uploads/ path, or placeholder
+    if (!mainImage || mainImage === '' || mainImage.includes('/uploads/') || mainImage.toLowerCase().includes('placeholder') || mainImage.includes('uxgrk')) {
+      if (localMatch && localMatch.image) {
+        mainImage = localMatch.image;
       }
     }
 
-    const extraImages = Array.isArray(p.images) && p.images.length > 0 && p.images.some(img => img && img !== '')
-      ? p.images.map(img => sanitizeImageUrl(img))
-      : (mainImage ? [mainImage] : []);
-
-    // Also fallback individual extra images to local initialProducts if empty
-    let finalExtraImages = extraImages;
-    if (finalExtraImages.length === 0 || (finalExtraImages.length === 1 && finalExtraImages[0] === '/uploads/placeholder.jpg')) {
-      const localMatch = initialProducts.find(ip => ip.id === p.id);
-      if (localMatch && Array.isArray(localMatch.images) && localMatch.images.length > 0) {
-        finalExtraImages = localMatch.images.map(img => sanitizeImageUrl(img));
-      }
+    if (localMatch && localMatch.image && (!mainImage || mainImage.includes('/uploads/'))) {
+      mainImage = localMatch.image;
     }
+
+    const extraImages = Array.isArray(p.images) && p.images.length > 0 && p.images.some(img => img && img !== '' && !img.includes('/uploads/'))
+      ? p.images.map(img => (img && !img.includes('/uploads/') && !img.includes('placeholder')) ? img : mainImage)
+      : (localMatch && Array.isArray(localMatch.images) ? localMatch.images : [mainImage]);
 
     return {
       ...p,
-      image: mainImage || '/uploads/placeholder.jpg',
-      images: finalExtraImages.length > 0 ? finalExtraImages : [mainImage || '/uploads/placeholder.jpg']
+      image: mainImage || (localMatch?.image ?? ''),
+      images: extraImages.length > 0 ? extraImages : [mainImage || (localMatch?.image ?? '')]
     };
   };
 
