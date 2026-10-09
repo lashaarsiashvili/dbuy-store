@@ -446,26 +446,26 @@ export const CategoryBrowse: React.FC = () => {
     <section className="relative py-3 sm:py-5 bg-[#0b0f19] text-white overflow-hidden select-none">
       <div className="relative max-w-7xl mx-auto px-2 sm:px-4 lg:px-8">
         
-        {/* Swipeable horizontal row on Mobile, 8-column grid on Tablet & Desktop */}
-        <div className="flex sm:grid sm:grid-cols-8 gap-2.5 xs:gap-3 sm:gap-1.5 md:gap-3 lg:gap-4 overflow-x-auto sm:overflow-visible scrollbar-none pb-1 sm:pb-0 px-1 sm:px-0 scroll-smooth snap-x snap-mandatory items-start justify-start sm:justify-items-center">
-          {categoryCards.map((card, index) => {
+        {/* 2-row Grid on Mobile (4 columns x 2 rows), 8-column Grid on Tablet & Desktop */}
+        <div className="grid grid-cols-4 sm:grid-cols-8 gap-x-1.5 xs:gap-x-2 sm:gap-x-2 md:gap-x-3 lg:gap-x-4 gap-y-3 sm:gap-y-0 items-start justify-items-center w-full">
+          {categoryCards.map((card) => {
             const isSelected = selectedCategory === card.id;
             const PhotoComponent = card.photoComponent;
 
             return (
-              <ScrollReveal key={card.id} delay={index * 15} className="shrink-0 snap-center sm:shrink sm:w-full flex justify-center">
+              <div key={card.id} className="w-full flex justify-center">
                 <button
                   type="button"
                   onClick={() => handleCategoryClick(card.id)}
-                  className="group flex flex-col items-center cursor-pointer focus:outline-none w-[72px] xs:w-[82px] sm:w-full max-w-[80px] xs:max-w-[88px] sm:max-w-[72px] md:max-w-[90px] lg:max-w-[110px] touch-manipulation min-h-[44px]"
+                  className="group flex flex-col items-center cursor-pointer focus:outline-none w-full max-w-[84px] xs:max-w-[92px] sm:max-w-[72px] md:max-w-[90px] lg:max-w-[110px] touch-manipulation min-h-[44px]"
                 >
                   {/* Outer Frame with category-circle-icon styling + glowing ring */}
-                  <div className="relative shrink-0">
+                  <div className="relative shrink-0 flex justify-center">
                     <div 
-                      className={`category-circle-icon relative w-11 h-11 xs:w-13 xs:h-13 sm:w-12 sm:h-12 md:w-15 md:h-15 lg:w-18 lg:h-18 xl:w-20 xl:h-20 rounded-full overflow-hidden transition-all duration-300 transform group-hover:-translate-y-1 ${
+                      className={`category-circle-icon relative w-11 h-11 xs:w-13 xs:h-13 sm:w-12 sm:h-12 md:w-15 md:h-15 lg:w-18 lg:h-18 xl:w-20 xl:h-20 rounded-full overflow-hidden transition-all duration-300 transform sm:group-hover:-translate-y-1 ${
                         isSelected
                           ? 'border-[1.5px] border-sky-300 shadow-[0_0_15px_rgba(56,189,248,0.8),inset_0_0_8px_rgba(56,189,248,0.4)]'
-                          : 'border-[1.5px] border-white/20 shadow-[0_0_10px_rgba(56,189,248,0.3),inset_0_0_6px_rgba(56,189,248,0.2)] hover:border-sky-300 hover:shadow-[0_0_18px_rgba(56,189,248,0.6)]'
+                          : 'border-[1.5px] border-white/20 shadow-[0_0_10px_rgba(56,189,248,0.3),inset_0_0_6px_rgba(56,189,248,0.2)] sm:hover:border-sky-300 sm:hover:shadow-[0_0_18px_rgba(56,189,248,0.6)]'
                       }`}
                     >
                       {/* Studio Commercial Photography Component */}
@@ -487,9 +487,9 @@ export const CategoryBrowse: React.FC = () => {
                     )}
                   </div>
 
-                  {/* Title Below Circle */}
-                  <div className="mt-1 text-center w-full px-0.5 flex flex-col items-center">
-                    <h3 className={`text-[10px] xs:text-[11px] sm:text-[10px] md:text-[11px] lg:text-xs font-medium leading-tight tracking-tight text-center text-balance w-full flex items-center justify-center min-h-[26px] xs:min-h-[28px] sm:min-h-[28px] md:min-h-[30px] transition-colors ${
+                  {/* Title Below Circle - Fixed uniform height for 1 and 2 line titles to eliminate vertical jitter */}
+                  <div className="mt-1.5 text-center w-full px-0.5 flex flex-col items-center justify-center h-8 xs:h-9 sm:h-8 md:h-9">
+                    <h3 className={`text-[10px] xs:text-[11px] sm:text-[10px] md:text-[11px] lg:text-xs font-medium leading-tight tracking-tight text-center text-balance w-full flex items-center justify-center transition-colors ${
                       isSelected ? 'text-sky-400 font-semibold' : 'text-slate-100 group-hover:text-sky-300'
                     }`}>
                       {isKa ? card.titleKa : card.titleEn}
@@ -497,16 +497,9 @@ export const CategoryBrowse: React.FC = () => {
                   </div>
 
                 </button>
-              </ScrollReveal>
+              </div>
             );
           })}
-        </div>
-
-        {/* Mobile Swipe Hint */}
-        <div className="flex sm:hidden justify-center items-center space-x-1 pt-1 opacity-70">
-          <span className="text-[10px] font-semibold text-sky-400/90 tracking-wide">
-            {isKa ? 'გაასრიალეთ მეტის სანახავად →' : 'Swipe to explore all →'}
-          </span>
         </div>
 
       </div>
