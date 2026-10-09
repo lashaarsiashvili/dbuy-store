@@ -4,6 +4,7 @@ import { Category, Currency, Language } from '../types';
 import { BrandLogo } from './BrandLogo';
 import { LanguageSelector } from './LanguageSelector';
 import { ChangePasswordModal } from './ChangePasswordModal';
+import { AmazonCategoryTopNav } from './AmazonCategoryTopNav';
 import { 
   Search, 
   ShoppingCart, 
@@ -27,6 +28,7 @@ export const Header: React.FC = () => {
     t,
     currentPage,
     setCurrentPage,
+    navigateToCategory,
     language,
     setLanguage,
     currency,
@@ -67,10 +69,7 @@ export const Header: React.FC = () => {
   }, []);
 
   const handleCategorySelect = (cat: Category) => {
-    setSelectedCategory(cat);
-    if (currentPage !== 'home') {
-      setCurrentPage('home');
-    }
+    navigateToCategory(cat);
   };
 
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -414,6 +413,9 @@ export const Header: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* 4. Amazon-like Horizontal Category Navigation Bar (Home view only, unmounted on dedicated Category and sub-pages) */}
+      {currentPage === 'home' && <AmazonCategoryTopNav />}
 
       <ChangePasswordModal
         isOpen={isChangePasswordOpen}

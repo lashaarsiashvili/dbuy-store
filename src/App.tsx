@@ -17,6 +17,7 @@ import { ContactPage } from './components/ContactPage';
 import { GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPages';
 import { MyOrdersPage } from './components/MyOrdersPage';
 import { ProductDetailPage } from './components/ProductDetailPage';
+import { CategoryPage } from './components/CategoryPage';
 import { VerifiedDeliveriesPage } from './components/VerifiedDeliveriesPage';
 import { AdsGallery } from './components/AdsGallery';
 import { ToastContainer } from './components/ToastContainer';
@@ -65,6 +66,7 @@ const MainLayout: React.FC = () => {
     if (currentPage !== 'admin') {
       const pageNames: Record<string, string> = {
         home: 'Storefront (Home)',
+        category: 'Category Browse Page',
         product: 'Product Detail Page',
         about: 'About Us Page',
         contact: 'Contact Us Page',
@@ -72,6 +74,7 @@ const MainLayout: React.FC = () => {
         returns: 'Returns Policy',
         privacy: 'Privacy Policy',
         'my-orders': 'My Orders Page',
+        deliveries: 'Verified Deliveries Page',
         campaigns: 'Tbilisi Ad Campaigns',
       };
       recordVisit(pageNames[currentPage] || currentPage);
@@ -120,7 +123,7 @@ const MainLayout: React.FC = () => {
     };
 
     // Determine values based on current page and selected category
-    if (currentPage === 'home') {
+    if (currentPage === 'home' || currentPage === 'category') {
       if (selectedCategory && selectedCategory !== 'all') {
         const categoryLabelsEn: Record<string, string> = {
           tech: 'Smart Tech Accessories',
@@ -302,6 +305,7 @@ const MainLayout: React.FC = () => {
           </>
         )}
 
+        {currentPage === 'category' && <CategoryPage />}
         {currentPage === 'product' && <ProductDetailPage />}
         {currentPage === 'about' && <AboutPage />}
         {currentPage === 'contact' && <ContactPage />}

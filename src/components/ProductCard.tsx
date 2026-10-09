@@ -6,7 +6,6 @@ import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
-import { initialProducts } from '../data/initialProducts';
 
 const resolveProductImage = (product: Product): string => {
   let img = (product as any).imageUrl || product.image;
@@ -15,43 +14,8 @@ const resolveProductImage = (product: Product): string => {
     img = img.trim();
   }
 
-  let parsedImages: string[] = [];
-  if (Array.isArray(product.images)) {
-    parsedImages = product.images;
-  } else if (typeof product.images === 'string') {
-    try {
-      parsedImages = JSON.parse(product.images);
-    } catch (e) {}
-  }
-
-  const firstExtraImage = parsedImages[0] || '';
-
-  // If img is null, undefined, empty, or generic fallback placeholder
-  if (!img || img === '' || img === '/uploads/placeholder.jpg' || img.includes('hume') || img.includes('placeholder')) {
-    // 1. Search in local initialProducts by ID
-    const localMatch = initialProducts.find(ip => ip.id === product.id);
-    if (localMatch && localMatch.image && localMatch.image.trim() !== '') {
-      return localMatch.image.trim();
-    }
-
-    // 2. Search in local initialProducts by name keywords match
-    const productNameLower = (product.title || product.name || '').toLowerCase().trim();
-    if (productNameLower) {
-      const keywordMatch = initialProducts.find(ip => {
-        const titleLower = (ip.title || ip.name || '').toLowerCase();
-        return titleLower && (titleLower.includes(productNameLower) || productNameLower.includes(titleLower));
-      });
-      if (keywordMatch && keywordMatch.image && keywordMatch.image.trim() !== '') {
-        return keywordMatch.image.trim();
-      }
-    }
-
-    // 3. Fallback to first parsed extra image if valid and not hume / placeholder
-    if (firstExtraImage && firstExtraImage !== '' && !firstExtraImage.includes('hume') && !firstExtraImage.includes('placeholder')) {
-      return firstExtraImage;
-    }
-
-    // 4. Return empty string so that the renderer falls back to our neutral SVG placeholder!
+  // If img is missing, null, or placeholder, return empty string so it falls back to neutral SVG placeholder
+  if (!img || img === '' || img === '/uploads/placeholder.jpg' || img.toLowerCase().includes('placeholder')) {
     return '';
   }
 

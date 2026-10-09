@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Category } from '../types';
+import { categoryIdToSlug } from '../data/categoryNavigationData';
 import { ChevronRight, Check } from 'lucide-react';
 import { ScrollReveal } from './ScrollReveal';
 
@@ -332,6 +333,7 @@ export const CategoryBrowse: React.FC = () => {
     products, 
     selectedCategory, 
     setSelectedCategory, 
+    navigateToCategory,
     language,
     t
   } = useStore();
@@ -419,11 +421,7 @@ export const CategoryBrowse: React.FC = () => {
   }, [products, language, t]);
 
   const handleCategoryClick = (catId: Category) => {
-    setSelectedCategory(catId);
-    const elem = document.getElementById('products');
-    if (elem) {
-      elem.scrollIntoView({ behavior: 'smooth' });
-    }
+    navigateToCategory(catId);
   };
 
   return (

@@ -19,6 +19,7 @@ import {
 import { initialProducts } from '../data/initialProducts';
 import productsData from '../data/products.json';
 import { initialBillboards } from '../data/initialBillboards';
+import { categoryIdToSlug, slugToCategoryId } from '../data/categoryNavigationData';
 import { translations } from '../data/translations';
 import { getSavedLanguage, getTranslation, changeLanguage } from '../utils/i18n';
 import { loadImageBackupsIDB, preloadProductImages } from '../utils/imageStorage';
@@ -53,6 +54,7 @@ interface StoreContextType {
   setCurrentPage: (page: PageView) => void;
   activeProductId: string | null;
   navigateToProduct: (productId: string) => void;
+  navigateToCategory: (categorySlugOrId: string) => void;
   getProductUrl: (productId: string) => string;
   copyProductUrl: (productId: string) => void;
   shareProduct: (product: Product) => void;
@@ -275,9 +277,26 @@ const parseRouteFromLocation = (
   pathname: string,
   secretSlug?: string,
   isUserAdmin?: boolean
-): { page: PageView; productId: string | null; isCloaked?: boolean } => {
+): { page: PageView; productId: string | null; categorySlug?: string | null; isCloaked?: boolean } => {
   const clean = pathname.replace(/^\/+|\/+$/g, '');
   const lower = clean.toLowerCase();
+
+  // Category view route (/category/:slug, /categories/:slug, or /category)
+  if (lower.startsWith('category/') || lower.startsWith('categories/') || lower === 'category' || lower === 'categories') {
+    const segments = clean.split('/');
+    const rawCat = segments[1] ? decodeURIComponent(segments[1]) : 'all';
+    return { page: 'category', productId: null, categorySlug: rawCat };
+  }
+
+  // Handle URL query parameter ?category=... on home route
+  if (typeof window !== 'undefined' && window.location.search && (!clean || lower === 'home')) {
+    const searchParams = new URLSearchParams(window.location.search);
+    const catQuery = searchParams.get('category');
+    if (catQuery) {
+      return { page: 'category', productId: null, categorySlug: catQuery };
+    }
+  }
+
   if (!clean || lower === 'home') {
     return { page: 'home', productId: null };
   }
@@ -438,6 +457,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const route = parseRouteFromLocation(window.location.pathname, adminSecretSlug);
       setCurrentPageState(route.page);
       setActiveProductId(route.productId);
+      if (route.categorySlug) {
+        setSelectedCategory(slugToCategoryId(route.categorySlug));
+      }
       if (route.isCloaked) {
         addToast(
           language === 'ka' 
@@ -457,6 +479,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let targetPath = '/';
     if (page === 'home') {
       targetPath = '/';
+      setActiveProductId(null);
+    } else if (page === 'category') {
+      const slug = categoryIdToSlug(selectedCategory || 'all');
+      targetPath = slug === 'all' || slug === 'explore-all' ? '/category/all' : `/category/${encodeURIComponent(slug)}`;
       setActiveProductId(null);
     } else if (page === 'product') {
       if (activeProductId) {
@@ -478,6 +504,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
       window.history.pushState({ page, productId: activeProductId }, '', targetPath);
     }
+  };
+
+  const navigateToCategory = (catSlugOrId: string) => {
+    const slug = categoryIdToSlug(catSlugOrId);
+    const catId = slugToCategoryId(catSlugOrId);
+    setSelectedCategory(catId);
+    setCurrentPageState('category');
+    setActiveProductId(null);
+    const targetPath = slug === 'all' || slug === 'explore-all' ? '/category/all' : `/category/${encodeURIComponent(slug)}`;
+    if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
+      window.history.pushState({ page: 'category', categorySlug: slug }, '', targetPath);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const navigateToProduct = (productId: string) => {
@@ -1198,7 +1237,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   // Filters & Sorting
-  const [selectedCategory, setSelectedCategory] = useState<Category>('all');
+  const [selectedCategory, setSelectedCategory] = useState<Category>(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const catParam = params.get('category');
+      if (catParam) {
+        return catParam === 'pro-gaming' ? 'gaming' :
+               catParam === 'smart-hydration' ? 'drinkware' :
+               catParam === 'smart-wearables' ? 'wearables' :
+               catParam === 'studio-audio' ? 'audio' :
+               catParam === 'smart-tech' ? 'tech' :
+               catParam === 'fitness-hydration' ? 'fitness' :
+               catParam === 'daily-deals' ? 'deals' :
+               catParam === 'explore-all' ? 'all' : catParam;
+      }
+      if (window.location.pathname.startsWith('/category/')) {
+        const pathCat = window.location.pathname.replace('/category/', '').split('/')[0];
+        if (pathCat) {
+          return pathCat === 'pro-gaming' ? 'gaming' :
+                 pathCat === 'smart-hydration' ? 'drinkware' :
+                 pathCat === 'smart-wearables' ? 'wearables' :
+                 pathCat === 'studio-audio' ? 'audio' :
+                 pathCat === 'smart-tech' ? 'tech' :
+                 pathCat === 'fitness-hydration' ? 'fitness' :
+                 pathCat === 'daily-deals' ? 'deals' :
+                 pathCat === 'explore-all' ? 'all' : pathCat;
+        }
+      }
+    }
+    return 'all';
+  });
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('featured');
 
@@ -1699,6 +1767,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (d.lastUpdated) {
           lastSyncTimestampRef.current = d.lastUpdated;
         }
+        // Products background syncing disabled to prevent overwriting static products.json with null-image database rows
+        /*
         if (Array.isArray(d.products) && d.products.length > 0) {
           setProducts(prevProducts => {
             // Never wipe out local products if server returns empty list
@@ -1737,6 +1807,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return sanitized;
           });
         }
+        */
         if (d.registeredUsers && typeof d.registeredUsers === 'object') {
           localStorage.setItem('dbuy_registered_users', JSON.stringify(d.registeredUsers));
           setRegisteredUsers(mapRegisteredUsersList(d.registeredUsers));
@@ -2579,6 +2650,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setCurrentPage,
         activeProductId,
         navigateToProduct,
+        navigateToCategory,
         getProductUrl,
         copyProductUrl,
         shareProduct,
