@@ -21,7 +21,12 @@ export const ProductGrid: React.FC = () => {
 
   // Filter and sort products
   const filteredProducts = useMemo(() => {
-    return products.filter(product => {
+    // Filter Out Products Without Real Images in UI
+    const visibleProducts = (products || []).filter(
+      (p) => p.image && p.image.trim() !== '' && !p.image.toLowerCase().includes('placeholder')
+    );
+
+    return visibleProducts.filter(product => {
       // Category filter
       if (selectedCategory === 'deals') {
         if (!product.isDeal && !product.badge?.toLowerCase().includes('deal') && !product.origPrice) {
@@ -75,6 +80,7 @@ export const ProductGrid: React.FC = () => {
         }
       }
 
+      // Final match validation
       return true;
     }).sort((a, b) => {
       if (sortOption === 'price-low') {
@@ -122,7 +128,7 @@ export const ProductGrid: React.FC = () => {
                   : t('products.title')}
               </h2>
               <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 font-medium mt-1">
-                {t('products.showing', { count: filteredProducts.length })}
+                {isKa ? `ნაჩვენებია ${filteredProducts.length} პროდუქტი` : `Showing ${filteredProducts.length} products`}
                 {searchQuery && ` for "${searchQuery}"`}
               </p>
             </div>

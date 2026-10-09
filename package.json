@@ -18,7 +18,9 @@
     "enrich-d1-products": "tsx scripts/enrich-products-d1-gemini.ts",
     "fetch-products": "tsx scripts/fetch-products.ts",
     "sync-d1-to-local": "tsx scripts/sync-d1-to-local.ts",
-    "delete-products-list": "tsx scripts/delete-products-list.ts"
+    "delete-products-list": "tsx scripts/delete-products-list.ts",
+    "push-local-to-d1": "tsx scripts/push-local-to-d1-api.ts",
+    "delete-no-image-products": "tsx scripts/delete-no-image-products.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

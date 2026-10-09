@@ -116,6 +116,20 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
         </svg>
       )}
 
+      {code === 'fr' && (
+        // French Flag (Tricolore)
+        <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
+          <clipPath id="fr-circle">
+            <circle cx="30" cy="30" r="30" />
+          </clipPath>
+          <g clipPath="url(#fr-circle)">
+            <rect x="0" y="0" width="20" height="60" fill="#002395" />
+            <rect x="20" y="0" width="20" height="60" fill="#ffffff" />
+            <rect x="40" y="0" width="20" height="60" fill="#ED2939" />
+          </g>
+        </svg>
+      )}
+
       {code === 'zh' && (
         // Chinese Flag
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
@@ -141,12 +155,12 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
 };
 
 export const languagesList: LanguageOption[] = [
-  { code: 'ka', shortLabel: 'GEO', fullLabel: 'ქართული' },
   { code: 'en', shortLabel: 'ENG', fullLabel: 'English' },
+  { code: 'ka', shortLabel: 'GEO', fullLabel: 'ქართული' },
+  { code: 'ru', shortLabel: 'RUS', fullLabel: 'Русский' },
+  { code: 'fr', shortLabel: 'FRA', fullLabel: 'Français' },
   { code: 'de', shortLabel: 'GER', fullLabel: 'Deutsch' },
   { code: 'es', shortLabel: 'ESP', fullLabel: 'Español' },
-  { code: 'ru', shortLabel: 'RUS', fullLabel: 'Русский' },
-  { code: 'zh', shortLabel: 'CHN', fullLabel: '中文' },
 ];
 
 export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ variant = 'light' }) => {

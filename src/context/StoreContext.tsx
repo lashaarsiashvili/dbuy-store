@@ -17,6 +17,7 @@ import {
   BillboardSlide
 } from '../types';
 import { initialProducts } from '../data/initialProducts';
+import productsData from '../data/products.json';
 import { initialBillboards } from '../data/initialBillboards';
 import { translations } from '../data/translations';
 import { getSavedLanguage, getTranslation, changeLanguage } from '../utils/i18n';
@@ -901,23 +902,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(`Billboard auto-rotation set to ${val} seconds (${Math.round(val/60*10)/10}m)`, 'info');
   };
 
-  // Products - Durable persistence: relies on localStorage or falls back to initialProducts
+  // Products - Durable persistence: strictly loads from the static products.json file
   const CURRENT_CATALOG_VERSION = 'dbuy_cat_v33_d1_exact_clean';
 
   const [products, setProducts] = useState<Product[]>(() => {
-    try {
-      const savedVersion = localStorage.getItem('dbuy_catalog_version');
-      const saved = localStorage.getItem('dbuy_products');
-      if (savedVersion === CURRENT_CATALOG_VERSION && saved !== null) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length >= 24) {
-          return parsed.map(sanitizeProductUrls);
-        }
-      }
-    } catch (e) {
-      console.error('Error initializing products state:', e);
-    }
-    const fresh: Product[] = initialProducts.map(sanitizeProductUrls);
+    const fresh: Product[] = (productsData as Product[]).map(sanitizeProductUrls);
     try {
       localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));

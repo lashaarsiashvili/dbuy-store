@@ -6,6 +6,57 @@ import { handleImageError } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
+import { initialProducts } from '../data/initialProducts';
+
+const resolveProductImage = (product: Product): string => {
+  let img = (product as any).imageUrl || product.image;
+  
+  if (typeof img === 'string') {
+    img = img.trim();
+  }
+
+  let parsedImages: string[] = [];
+  if (Array.isArray(product.images)) {
+    parsedImages = product.images;
+  } else if (typeof product.images === 'string') {
+    try {
+      parsedImages = JSON.parse(product.images);
+    } catch (e) {}
+  }
+
+  const firstExtraImage = parsedImages[0] || '';
+
+  // If img is null, undefined, empty, or generic fallback placeholder
+  if (!img || img === '' || img === '/uploads/placeholder.jpg' || img.includes('hume') || img.includes('placeholder')) {
+    // 1. Search in local initialProducts by ID
+    const localMatch = initialProducts.find(ip => ip.id === product.id);
+    if (localMatch && localMatch.image && localMatch.image.trim() !== '') {
+      return localMatch.image.trim();
+    }
+
+    // 2. Search in local initialProducts by name keywords match
+    const productNameLower = (product.title || product.name || '').toLowerCase().trim();
+    if (productNameLower) {
+      const keywordMatch = initialProducts.find(ip => {
+        const titleLower = (ip.title || ip.name || '').toLowerCase();
+        return titleLower && (titleLower.includes(productNameLower) || productNameLower.includes(titleLower));
+      });
+      if (keywordMatch && keywordMatch.image && keywordMatch.image.trim() !== '') {
+        return keywordMatch.image.trim();
+      }
+    }
+
+    // 3. Fallback to first parsed extra image if valid and not hume / placeholder
+    if (firstExtraImage && firstExtraImage !== '' && !firstExtraImage.includes('hume') && !firstExtraImage.includes('placeholder')) {
+      return firstExtraImage;
+    }
+
+    // 4. Return empty string so that the renderer falls back to our neutral SVG placeholder!
+    return '';
+  }
+
+  return img;
+};
 
 interface ProductCardProps {
   product: Product;
@@ -127,17 +178,19 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
         onMouseLeave={() => setIsHovered(false)}
       >
         {(() => {
-          let parsedImages: string[] = [];
-          if (Array.isArray(product.images)) {
-            parsedImages = product.images;
-          } else if (typeof product.images === 'string') {
-            try {
-              parsedImages = JSON.parse(product.images);
-            } catch (e) {
-              parsedImages = [];
-            }
+          const imageSrc = resolveProductImage(product);
+          
+          if (!imageSrc || imageSrc === '') {
+            return (
+              <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-300 dark:text-slate-700 p-6 border-b border-slate-100 dark:border-slate-800/50">
+                <svg className="w-12 h-12 stroke-[1.2] mb-2 text-slate-400 dark:text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25M9 12.25L21 7.5m-18 0l12 4.75" />
+                </svg>
+                <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400 dark:text-slate-500">No Image Available</span>
+              </div>
+            );
           }
-          const imageSrc = (product as any).imageUrl || product.image || parsedImages[0] || '';
+
           if (imageSrc.startsWith('data:image/')) {
             return (
               <img
