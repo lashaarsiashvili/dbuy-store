@@ -27,18 +27,27 @@ const categoryFallbacks: Record<string, string> = {
 export const DEFAULT_PRODUCT_IMAGE =
   'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="600" height="600" viewBox="0 0 600 600" fill="none"><rect width="600" height="600" fill="%23f8fafc"/><rect x="16" y="16" width="568" height="568" rx="24" stroke="%23e2e8f0" stroke-width="4" stroke-dasharray="12 12"/><path d="M190 380l70-70 90 90 60-60 100 100H90l100-60z" fill="%23cbd5e1"/><circle cx="210" cy="220" r="36" fill="%2394a3b8"/></svg>';
 
+export const resolveUploadUrl = (url: string | null | undefined): string => {
+  if (!url || typeof url !== 'string') return '';
+  const trimmed = url.trim();
+  if (trimmed.startsWith('/uploads/')) {
+    return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data${trimmed}`;
+  }
+  return trimmed;
+};
+
 export const getCleanProductImage = (product: Product | any): string => {
   if (!product) return DEFAULT_PRODUCT_IMAGE;
 
   // 1. Check direct image property on product
   const rawImg = product.image || product.imageUrl || (Array.isArray(product.images) && product.images[0]);
   if (rawImg && typeof rawImg === 'string' && rawImg.trim() !== '') {
-    return rawImg.trim();
+    return resolveUploadUrl(rawImg);
   }
 
   // 2. Check direct match from initialProducts
   if (product.id && directImageMap.has(product.id)) {
-    return directImageMap.get(product.id)!;
+    return resolveUploadUrl(directImageMap.get(product.id)!);
   }
 
   return DEFAULT_PRODUCT_IMAGE;

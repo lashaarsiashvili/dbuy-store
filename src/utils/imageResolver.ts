@@ -1,6 +1,8 @@
 import { initialProducts } from '../data/initialProducts';
-import { getCleanProductImage, DEFAULT_PRODUCT_IMAGE } from './imageFallback';
+import { getCleanProductImage, DEFAULT_PRODUCT_IMAGE, resolveUploadUrl } from './imageFallback';
 import { Product } from '../types';
+
+export { resolveUploadUrl };
 
 /**
  * Image Resolver Service for DBUY Store.
@@ -25,10 +27,10 @@ export const resolveProductImageUrl = (productOrUrl: Product | string | null | u
   if (typeof productOrUrl === 'object') {
     const product = productOrUrl as Product;
     if (product.image && typeof product.image === 'string' && product.image.trim() !== '') {
-      return product.image.trim();
+      return resolveUploadUrl(product.image);
     }
     if (product.id && idToImageMap.has(product.id)) {
-      return idToImageMap.get(product.id)!;
+      return resolveUploadUrl(idToImageMap.get(product.id)!);
     }
     return getCleanProductImage(product);
   }
@@ -39,7 +41,7 @@ export const resolveProductImageUrl = (productOrUrl: Product | string | null | u
     return DEFAULT_PRODUCT_IMAGE;
   }
 
-  return url;
+  return resolveUploadUrl(url);
 };
 
 export default resolveProductImageUrl;
