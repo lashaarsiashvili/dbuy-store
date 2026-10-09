@@ -1,4 +1,4 @@
-import { initialProducts } from '../../../src/data/initialProducts';
+import { initialProducts, DB_VERSION } from '../../../src/data/initialProducts';
 import { initialBillboards } from '../../../src/data/initialBillboards';
 
 // Declare Cloudflare D1 local types for tsc compiler
@@ -10,6 +10,8 @@ interface D1Database {
       all<T = any>(): Promise<{ results: T[] }>;
     };
     all<T = any>(): Promise<{ results: T[] }>;
+    first<T = any>(colName?: string): Promise<T | null>;
+    run(): Promise<any>;
   };
   exec(query: string): Promise<any>;
 }
@@ -106,16 +108,28 @@ async function loadFullProducts(db: D1Database, rawProducts: any[]): Promise<any
   return parseAndFallbackProducts(rawProducts);
 }
 
-// Ensure D1 products table exists and only seed if completely empty
-async function ensureD1ProductsSeeded(db: D1Database): Promise<void> {
+// Ensure D1 products table exists and seed/reset when DB_VERSION mismatches or forceReset is requested
+async function ensureD1ProductsSeeded(db: D1Database, forceReset = false): Promise<void> {
   try {
+    const currentDbVersion = await dbGet(db, 'db_version');
     const { results } = await db.prepare('SELECT id FROM products LIMIT 1').all();
-    // If products already exist in D1, NEVER overwrite or repair user data!
-    if (results && results.length > 0) {
+    const hasProducts = results && results.length > 0;
+
+    // Skip re-seeding only if products exist, version matches, and no forced reset requested
+    if (!forceReset && currentDbVersion === DB_VERSION && hasProducts) {
       return;
     }
 
-    // Only seed on first-ever deployment if completely empty
+    console.log(`[DB-RESET] Reseeding D1 database from initialProducts.ts (DB_VERSION: ${DB_VERSION}, forceReset: ${forceReset}, previousVersion: ${currentDbVersion})...`);
+
+    // Force clear existing outdated or duplicated products in D1
+    try {
+      await db.prepare('DELETE FROM products').run();
+    } catch (e) {
+      console.warn('Notice: Could not clear products table:', e);
+    }
+
+    // Populate strictly with clean products from initialProducts.ts
     for (const item of initialProducts) {
       const primaryImage = item.image || (item.images && item.images[0]) || '';
       const imagesJson = JSON.stringify(item.images || (primaryImage ? [primaryImage] : []));
@@ -129,13 +143,26 @@ async function ensureD1ProductsSeeded(db: D1Database): Promise<void> {
       const stock = item.stock || 0;
 
       await db.prepare(`
-        INSERT INTO products (id, name, description, price, original_price, image, images, category, stock, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(id) DO NOTHING
+        INSERT INTO products (id, name, name_ka, description, description_ka, price, original_price, image, images, category, stock, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+          name = excluded.name,
+          name_ka = excluded.name_ka,
+          description = excluded.description,
+          description_ka = excluded.description_ka,
+          price = excluded.price,
+          original_price = excluded.original_price,
+          image = excluded.image,
+          images = excluded.images,
+          category = excluded.category,
+          stock = excluded.stock,
+          updated_at = CURRENT_TIMESTAMP
       `).bind(
         item.id,
         name,
+        nameKa,
         description,
+        descriptionKa,
         price,
         originalPrice,
         primaryImage,
@@ -143,21 +170,12 @@ async function ensureD1ProductsSeeded(db: D1Database): Promise<void> {
         category,
         stock
       ).run();
-
-      try {
-        await db.prepare(`
-          UPDATE products SET
-            name_ka = CASE WHEN name_ka IS NULL OR name_ka = '' THEN ? ELSE name_ka END,
-            description_ka = CASE WHEN description_ka IS NULL OR description_ka = '' THEN ? ELSE description_ka END
-          WHERE id = ?
-        `).bind(nameKa, descriptionKa, item.id).run();
-      } catch (e) {}
     }
 
-    const existingKv = await dbGet(db, 'products');
-    if (!existingKv) {
-      await dbPut(db, 'products', JSON.stringify(initialProducts));
-    }
+    await dbPut(db, 'products', JSON.stringify(initialProducts));
+    await dbPut(db, 'db_version', DB_VERSION);
+    await dbPut(db, 'last_updated', new Date().toISOString());
+    console.log(`[DB-RESET] Successfully updated D1 database to DB_VERSION ${DB_VERSION} with ${initialProducts.length} clean products.`);
   } catch (err) {
     console.error('ensureD1ProductsSeeded error:', err);
   }
@@ -223,11 +241,23 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   // --- ROUTER HANDLERS ---
+  const isResetRequested = url.searchParams.get('reset') === 'true' || path.endsWith('/reset');
+  if (isResetRequested) {
+    await ensureD1ProductsSeeded(db, true);
+    if (path.endsWith('/reset')) {
+      return jsonResponse({
+        success: true,
+        message: `Database successfully re-seeded from initialProducts.ts (DB_VERSION: ${DB_VERSION})`,
+        dbVersion: DB_VERSION,
+        products: initialProducts,
+      });
+    }
+  }
 
   // 1. GET: Sync or products data fetch
   if (request.method === 'GET') {
     if (path.endsWith('/sync')) {
-      await ensureD1ProductsSeeded(db);
+      await ensureD1ProductsSeeded(db, isResetRequested);
 
       const clientSince = url.searchParams.get('since');
       const lastUpdated = await dbGet(db, 'last_updated') || '';

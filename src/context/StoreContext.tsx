@@ -16,7 +16,7 @@ import {
   DailyStat,
   BillboardSlide
 } from '../types';
-import { initialProducts } from '../data/initialProducts';
+import { initialProducts, DB_VERSION } from '../data/initialProducts';
 import productsData from '../data/products.json';
 import { initialBillboards } from '../data/initialBillboards';
 import { categoryIdToSlug, slugToCategoryId } from '../data/categoryNavigationData';
@@ -84,6 +84,7 @@ interface StoreContextType {
   publishProductGlobally: (id: string) => Promise<boolean>;
   deleteProduct: (id: string) => void;
   clearAllProducts: () => void;
+  resetProductsDatabase: () => Promise<void>;
   incrementProductViews: (productId: string) => Promise<void>;
 
   // Wishlist
@@ -941,28 +942,81 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(`Billboard auto-rotation set to ${val} seconds (${Math.round(val/60*10)/10}m)`, 'info');
   };
 
-  // Products - Durable persistence: strictly loads from the static products.json file (24 unique products)
-  const CURRENT_CATALOG_VERSION = 'dbuy_cat_v34_dedup_24_clean';
-
+  // Products - DB Versioning & Forced Reset Mechanism
   const [products, setProducts] = useState<Product[]>(() => {
-    const rawList: Product[] = Array.isArray(productsData) ? (productsData as Product[]) : [];
-    const validWithImages = rawList.filter(
-      (p) => p.image && p.image.trim() !== '' && !p.image.toLowerCase().includes('placeholder')
-    );
-    const uniqueMap = new Map<string, Product>();
-    validWithImages.forEach((p) => {
-      if (!uniqueMap.has(p.id)) {
-        uniqueMap.set(p.id, sanitizeProductUrls(p));
-      }
-    });
-    const fresh: Product[] = Array.from(uniqueMap.values());
+    const storedDbVersion = typeof localStorage !== 'undefined' ? localStorage.getItem('dbuy_db_version') : null;
+    const isResetParam = typeof window !== 'undefined' && window.location.search.includes('reset=true');
+
+    // If stored DB version mismatches DB_VERSION or ?reset=true is present, execute forced reset
+    if (isResetParam || storedDbVersion !== DB_VERSION) {
+      console.log(`[DB_RESET] DB_VERSION mismatch (${storedDbVersion} vs ${DB_VERSION}) or ?reset=true detected. Purging cache and re-seeding from initialProducts.ts...`);
+      try {
+        localStorage.removeItem('dbuy_products');
+        localStorage.removeItem('products');
+        localStorage.removeItem('dbuy_catalog_version');
+        localStorage.setItem('dbuy_db_version', DB_VERSION);
+      } catch (e) {}
+
+      const cleanInitial: Product[] = initialProducts.map((p) => sanitizeProductUrls(p));
+      try {
+        localStorage.setItem('dbuy_products', JSON.stringify(cleanInitial));
+        localStorage.setItem('dbuy_products_last_updated', new Date().toISOString());
+      } catch (e) {}
+      return cleanInitial;
+    }
+
+    // Attempt to load from localStorage if DB_VERSION matches
     try {
-      localStorage.setItem('dbuy_catalog_version', CURRENT_CATALOG_VERSION);
+      const cached = localStorage.getItem('dbuy_products');
+      if (cached) {
+        const parsed: Product[] = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((p) => sanitizeProductUrls(p));
+        }
+      }
+    } catch (e) {}
+
+    // Fallback strictly to clean initialProducts
+    const fresh: Product[] = initialProducts.map((p) => sanitizeProductUrls(p));
+    try {
+      localStorage.setItem('dbuy_db_version', DB_VERSION);
       localStorage.setItem('dbuy_products', JSON.stringify(fresh));
       localStorage.setItem('dbuy_products_last_updated', new Date().toISOString());
     } catch (e) {}
     return fresh;
   });
+
+  // Admin / Manual Database Reset Function
+  const resetProductsDatabase = async (): Promise<void> => {
+    try {
+      localStorage.removeItem('dbuy_products');
+      localStorage.removeItem('products');
+      localStorage.removeItem('dbuy_catalog_version');
+      localStorage.setItem('dbuy_db_version', DB_VERSION);
+
+      const fresh: Product[] = initialProducts.map((p) => sanitizeProductUrls(p));
+      setProducts(fresh);
+      localStorage.setItem('dbuy_products', JSON.stringify(fresh));
+      localStorage.setItem('dbuy_products_last_updated', new Date().toISOString());
+
+      await Promise.all([
+        fetch('/api/store/reset?reset=true', { method: 'POST' }).catch(() => {}),
+        fetch('/api/products?reset=true', { method: 'GET' }).catch(() => {})
+      ]);
+
+      addToast(language === 'ka' ? 'მონაცემთა ბაზა წარმატებით განახლდა!' : 'Database reset to clean initial products!', 'success');
+    } catch (err) {
+      console.error('Error resetting product database:', err);
+    }
+  };
+
+  // On mount: if reset=true query param is present, purge cloud D1 database as well
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.search.includes('reset=true')) {
+      fetch('/api/store/reset?reset=true', { method: 'POST' }).catch(() => {});
+      fetch('/api/products?reset=true', { method: 'GET' }).catch(() => {});
+    }
+  }, []);
 
   // Pre-cache product images to IndexedDB and RAM cache to prevent image loss during re-renders or state updates
   useEffect(() => {
@@ -2684,6 +2738,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         publishProductGlobally,
         deleteProduct,
         clearAllProducts,
+        resetProductsDatabase,
         incrementProductViews,
         wishlist,
         toggleWishlist,

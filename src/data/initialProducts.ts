@@ -1,4 +1,6 @@
-import { Product } from "../types";
+import { Product } from '../types';
+
+export const DB_VERSION = "2026_v2_clean";
 
 export const initialProducts: Product[] = [
   {

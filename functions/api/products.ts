@@ -7,6 +7,8 @@
  * and returns the data as { success: true, products: [...] }.
  */
 
+import { initialProducts, DB_VERSION } from '../../src/data/initialProducts';
+
 export interface Env {
   DB: {
     prepare(query: string): {
@@ -43,7 +45,7 @@ const CORS_HEADERS = {
  * 3. Logs any potential errors to the console
  * 4. Returns the data as { success: true, products: [...] }
  */
-export async function handleProductsGet(env: Env): Promise<Response> {
+export async function handleProductsGet(env: Env, request?: Request): Promise<Response> {
   // 1. Strictly validate the Cloudflare D1 env.DB connection
   if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
     const errorMsg = 'Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid';
@@ -59,6 +61,42 @@ export async function handleProductsGet(env: Env): Promise<Response> {
         headers: CORS_HEADERS,
       }
     );
+  }
+
+  // Check reset flag and DB version
+  try {
+    const url = request ? new URL(request.url) : null;
+    const forceReset = url ? url.searchParams.get('reset') === 'true' : false;
+    const currentDbVersion = await dbGet(env.DB, 'db_version');
+
+    if (forceReset || currentDbVersion !== DB_VERSION) {
+      console.log(`[D1 /api/products] Re-seeding database from initialProducts.ts (DB_VERSION: ${DB_VERSION})...`);
+      try {
+        await env.DB.prepare('DELETE FROM products').run();
+      } catch (e) {}
+
+      for (const item of initialProducts) {
+        const primaryImage = item.image || (item.images && item.images[0]) || '';
+        const imagesJson = JSON.stringify(item.images || (primaryImage ? [primaryImage] : []));
+        const name = (item as any).name || item.title || '';
+        const nameKa = item.titleKa || (item as any).name_ka || '';
+        const description = item.description || '';
+        const descriptionKa = item.descriptionKa || (item as any).description_ka || '';
+        const price = item.price || 0;
+        const originalPrice = item.origPrice !== undefined && item.origPrice !== null ? Number(item.origPrice) : ((item as any).original_price !== undefined && (item as any).original_price !== null ? Number((item as any).original_price) : null);
+        const category = item.category || '';
+        const stock = item.stock || 0;
+
+        await env.DB.prepare(`
+          INSERT INTO products (id, name, name_ka, description, description_ka, price, original_price, image, images, category, stock, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).bind(item.id, name, nameKa, description, descriptionKa, price, originalPrice, primaryImage, imagesJson, category, stock).run();
+      }
+
+      await env.DB.prepare('INSERT OR REPLACE INTO store_kv (key, value) VALUES (?, ?)').bind('db_version', DB_VERSION).run();
+    }
+  } catch (resetErr) {
+    console.warn('[D1 /api/products] Version check / reset warning:', resetErr);
   }
 
   // 2. Ensures a clean SELECT * FROM products query and logs any potential errors
@@ -175,7 +213,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   if (request.method === 'GET') {
-    return handleProductsGet(env);
+    return handleProductsGet(env, request);
   }
 
   if (request.method === 'DELETE') {
@@ -196,7 +234,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
 // Method-specific Cloudflare Pages Function exports
 export const onRequestGet: PagesFunction<Env> = async (context) => {
-  return handleProductsGet(context.env);
+  return handleProductsGet(context.env, context.request);
 };
 
 export const onRequestDelete: PagesFunction<Env> = async (context) => {

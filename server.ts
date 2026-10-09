@@ -7,7 +7,7 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
-import { initialProducts } from './src/data/initialProducts';
+import { initialProducts, DB_VERSION } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 import { buildCustomerOrderEmail, buildAdminOrderAlertEmail } from './src/utils/orderEmailTemplates';
 
@@ -305,7 +305,7 @@ function syncCatalogToInitialProducts(products: any[]): void {
   try {
     const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
     if (Array.isArray(products)) {
-      const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(products, null, 2)};\n`;
+      const fileContent = `import { Product } from '../types';\n\nexport const DB_VERSION = "2026_v2_clean";\n\nexport const initialProducts: Product[] = ${JSON.stringify(products, null, 2)};\n`;
       fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
       console.log(`[SOURCE-SYNC] Auto-persisted ${products.length} products to src/data/initialProducts.ts`);
     }
@@ -395,10 +395,13 @@ function initStoreDatabase(): StoreDatabase {
     console.error('Error reading CODE_BACKUP_FILE:', err);
   }
 
-  // 3. Strict single source of truth - NEVER union-merge with default catalog!
-  // Preserves deletions, edits, and additions permanently.
+  // 3. Strict single source of truth - DB_VERSION check enforces clean initialProducts re-seed
   let products: any[] = [];
-  if (Array.isArray(fileProducts) && fileProducts.length >= 24) {
+  const loadedDbVersion = (loadedDb as any)?.dbVersion;
+  if (loadedDbVersion !== DB_VERSION) {
+    console.log(`[SERVER-DB] DB_VERSION mismatch (${loadedDbVersion} vs ${DB_VERSION}). Re-seeding strictly from initialProducts.ts...`);
+    products = initialProducts;
+  } else if (Array.isArray(fileProducts) && fileProducts.length >= 24) {
     products = fileProducts;
   } else if (Array.isArray(backupProducts) && backupProducts.length >= 24) {
     products = backupProducts;
@@ -442,6 +445,7 @@ function initStoreDatabase(): StoreDatabase {
     uploadsMap,
     lastUpdated: loadedDb?.lastUpdated || new Date().toISOString(),
   };
+  (initialDb as any).dbVersion = DB_VERSION;
 
   (initialDb as any).smtpConfig = (loadedDb as any)?.smtpConfig?.pass
     ? { ...defaultSmtpConfig, ...(loadedDb as any).smtpConfig }

@@ -131,6 +131,8 @@ function syncCatalog() {
 
     const tsContent = `import { Product } from '../types';
 
+export const DB_VERSION = "2026_v2_clean";
+
 export const initialProducts: Product[] = ${JSON.stringify(db.products, null, 2)};
 `;
     fs.writeFileSync(productsOut, tsContent);
