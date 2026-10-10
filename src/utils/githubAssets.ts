@@ -17,26 +17,13 @@ export function normalizeSlug(text: string): string {
 
 export function resolveAssetUrl(rawPath: string | null | undefined): string {
   if (!rawPath || typeof rawPath !== 'string') return '';
-
-  // 1. If it's already an absolute URL, return as-is
-  if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
-    return rawPath;
+  const trimmed = rawPath.trim();
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    return trimmed;
   }
-
-  // 2. Trim whitespace and slashes
-  let clean = rawPath.trim().replace(/^\/+|\/+$/g, '');
-
-  // 3. Normalize path to point strictly inside data/uploads/
-  if (clean.startsWith('data/uploads/')) {
-    // Correct format
-  } else if (clean.startsWith('uploads/')) {
-    clean = 'data/' + clean;
-  } else {
-    clean = 'data/uploads/' + clean;
-  }
-
-  // 4. Return direct GitHub raw CDN link
-  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/${clean}`;
+  const filename = trimmed.replace(/^(\/)?(data\/)?(uploads\/)?/, '');
+  if (!filename) return '';
+  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/${filename}`;
 }
 
 export function getImageUrl(path: string | null | undefined): string {
