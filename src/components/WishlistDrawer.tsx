@@ -1,6 +1,7 @@
 import React from 'react';
 import { useStore } from '../context/StoreContext';
 import { CachedImage } from './CachedImage';
+import { getProductImage } from '../utils/imageResolver';
 import { 
   X, 
   Trash2, 
@@ -116,7 +117,7 @@ export const WishlistDrawer: React.FC = () => {
                     parsedImages = [];
                   }
                 }
-                const imageSrc = product.image || parsedImages[0] || '';
+                const imageSrc = getProductImage(product);
 
                 return (
                   <div

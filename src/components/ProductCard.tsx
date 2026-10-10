@@ -2,14 +2,13 @@ import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Star, ShoppingCart, Eye, Check, Heart, Link as LinkIcon, Play } from 'lucide-react';
-import { getImageUrl } from '../utils/imageFallback';
+import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
 
 const getCardImageSrc = (product: Product): string => {
-  const raw = product.image || (Array.isArray(product.images) && product.images[0]) || '';
-  return getImageUrl(raw);
+  return getProductImage(product);
 };
 
 interface ProductCardProps {
@@ -131,43 +130,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {(() => {
-          const imageSrc = getCardImageSrc(product);
-          
-          if (!imageSrc || imageSrc === '') {
-            return (
-              <div className="absolute inset-0 w-full h-full flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-slate-300 dark:text-slate-700 p-6 border-b border-slate-100 dark:border-slate-800/50">
-                <svg className="w-12 h-12 stroke-[1.2] mb-2 text-slate-400 dark:text-slate-600" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 7.5l-9-5.25L3 7.5m18 0l-9 5.25m9-5.25v9l-9 5.25M3 7.5l9 5.25M3 7.5v9l9 5.25M9 12.25L21 7.5m-18 0l12 4.75" />
-                </svg>
-                <span className="text-[9px] uppercase font-extrabold tracking-wider text-slate-400 dark:text-slate-500">No Image Available</span>
-              </div>
-            );
-          }
-
-          if (imageSrc.startsWith('data:image/')) {
-            return (
-              <img
-                src={imageSrc}
-                alt={displayTitle}
-                className="product-card-img absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500 transform-gpu will-change-transform"
-                loading="lazy"
-                decoding="async"
-                referrerPolicy="no-referrer"
-              />
-            );
-          }
-          return (
-            <CachedImage
-              src={imageSrc}
-              alt={displayTitle}
-              className="product-card-img absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500 transform-gpu will-change-transform"
-              loading="lazy"
-              decoding="async"
-              referrerPolicy="no-referrer"
-            />
-          );
-        })()}
+        <CachedImage
+          src={getCardImageSrc(product)}
+          alt={displayTitle}
+          className="product-card-img absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500 transform-gpu will-change-transform"
+          loading="lazy"
+          decoding="async"
+          referrerPolicy="no-referrer"
+        />
 
         {/* YouTube Video Hover Preview Overlay */}
         {youtubeId && (

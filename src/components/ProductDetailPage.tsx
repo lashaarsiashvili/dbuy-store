@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product } from '../types';
 import { getProductFeatures } from '../utils/productFeatures';
-import { getCleanProductImage, resolveUploadUrl, getImageUrl } from '../utils/imageFallback';
+import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
@@ -129,9 +129,9 @@ export const ProductDetailPage: React.FC = () => {
     }
   }
 
-  const cleanMainImg = getCleanProductImage(product);
+  const cleanMainImg = getProductImage(product);
   const rawList = parsedImages.length > 0 ? parsedImages : [cleanMainImg];
-  const galleryImages: string[] = rawList.map(img => typeof img === 'string' ? getImageUrl(img) : cleanMainImg);
+  const galleryImages: string[] = rawList.map(img => typeof img === 'string' && img.startsWith('/uploads/') ? getProductImage(img) : getProductImage(product));
 
   const currentImage = galleryImages[activeImageIndex] || cleanMainImg;
 
@@ -573,7 +573,7 @@ export const ProductDetailPage: React.FC = () => {
                 >
                   <div className="relative pt-[85%] rounded-xl bg-slate-50 dark:bg-slate-950 overflow-hidden mb-3">
                     <CachedImage
-                      src={rel.image}
+                      src={getProductImage(rel)}
                       alt={relTitle}
                       referrerPolicy="no-referrer"
                       className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

@@ -1,72 +1,101 @@
 /**
- * Centralized Image Resolution Helper & Multi-Strategy Asset Resolver
- * Resolves assets from local /uploads/ and GitHub repository lashaarsiashvili/dbuy-store/main/data/uploads/
+ * Centralized Image Resolution Helper & Explicit Product File Mapper
+ * Resolves assets from GitHub repository lashaarsiashvili/dbuy-store/main/data/uploads/
  */
 
 import { initialProducts } from '../data/initialProducts';
 import { Product } from '../types';
 
-const CORRECT_GITHUB_BASE = 'https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/';
+const REPO_BASE = 'https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/';
 
-/**
- * Builds candidate URLs in order of likelihood:
- * 1. Local static preview paths
- * 2. Correct GitHub raw CDN path
- * 3. Extension variations (.webp <-> .jpg <-> .png)
- */
+// Explicit mapping for catalog products to actual uploaded files
+const PRODUCT_IMAGE_MAP: Record<string, string> = {
+  'PRO X2 SUPERSTRIKE Wireless Gaming Headset': 'prod-prod-1788787675363-0-1788788713941-z2li5.jpg',
+  'Ember Temperature Control Smart Mug 2, 14 Oz - White': 'prod-1788595035163-4dfq6x.png',
+  'Swanson Triple Magnesium Complex Powder 400 mg 8 oz': 'prod-1788708520960-qldcrv.png',
+  'Swanson High Concentrate Omega-3 Fish Oil - 680 mg (120 Softgels)': 'prod-1788708754230-4dk0vn.png',
+  'Swanson Highest Potency Vitamin D3 Softgels, 250 mcg (250 Sgels)': 'prod-prod-1788777272471-0-1788783602771-bvf0k.jpg',
+  'Avene Hyaluron Activ B3 Concentrated Plumping Serum 30ml': 'prod-prod-1788777425106-0-1788783603009-v0hay.jpg',
+  'Ember Temperature Control Smart Mug 2, 14 Oz - Matte Black': 'prod-1788595035163-4dfq6x.png',
+  'Owala 32oz FreeSip Stainless Steel Water Bottle – Pink Ribbon Toile-2026 Gift': 'prod-prod-1788877210563-0-1788877213900-80n0m.jpg',
+  'Owala FreeSip 32 oz Weekender Color Drop Insulated Stainless Steel Water Bottle': 'prod-prod-1788877210563-1-1788877214207-cljm1.jpg',
+  'Aquaminder Drink Reminder Smart Water Bottle 600ml': 'prod-prod-1788724519740-0-1788783604196-f2ye4.jpg',
+  'SportFlex Whoop Band - Dash Edition': 'prod-prod-1788724361112-0-1788783604832-64q55.jpg',
+  'Smart Drinkware Bottle with Sporty Sipper Lid': 'prod-prod-1788723441741-0-1788783605340-uanc4.jpg',
+  'CamelBak Podium Steel Insulated Stainless Steel Bike Water Bottle': 'prod-prod-1788723082932-0-1788783606115-hf96t.jpg',
+  'The Hume Band 2.0 Precision Biometric Tracker': 'prod-prod-1788724361112-0-1788783604832-64q55.jpg',
+  'Car Black Box Front and Interior Double Lens Dash Cam 4K': 'prod-prod-1788722697137-0-1788783607687-fwr3e.jpg',
+  'Smart Water Bottle: 32 oz Hydration Tracker with APP': 'prod-prod-1788877210563-0-1788877213900-80n0m.jpg',
+  'Vita Smart Water Bottle 24 oz': 'prod-prod-1788877024412-0-1788877027840-tusaz.jpg',
+  'G309 LIGHTSPEED Wireless Gaming Mouse - Genshin Impact Edition': 'prod-prod-1788876872896-0-1788876875852-usiiy.jpg',
+  'PRO X SUPERLIGHT 2 Ultra-Lightweight Wireless Gaming Mouse': 'prod-prod-1788785750636-0-1788785751962-zjv0m.jpg',
+  'Ancient Nutrition Multi Collagen Protein Powder 16oz': 'prod-prod-1788777272471-0-1788783602771-bvf0k.jpg',
+  'Nutricost Marine Collagen Powder Wild Caught Fish 8 oz': 'prod-prod-1788777425106-0-1788783603009-v0hay.jpg',
+  'Smart Water Bottle with LED Reminder & Temp Sensor': 'prod-prod-1788775639253-0-1788783603595-8i6m1.jpg',
+  'Rode PodMic USB Black Broadcast Microphone with SC27 Cable & Boom Arm': 'prod-prod-1788722508271-0-1788783608231-rbxub.jpg',
+  'Owala 32oz FreeSip Stainless Steel Water Bottle – Sugar Plum Fairy-2026 Gift': 'prod-prod-1788877210563-2-1788877214520-ccflo.jpg',
+};
+
+export function getProductImage(product: { name?: string; title?: string; image?: string } | string | null | undefined): string {
+  if (!product) return `${REPO_BASE}prod-prod-1788787675363-0-1788788713941-z2li5.jpg`;
+  
+  if (typeof product === 'string') {
+    if (product.startsWith('http://') || product.startsWith('https://') || product.startsWith('data:')) {
+      return product;
+    }
+    const cleanName = product.trim().replace(/^(\/)?(data\/)?(public\/)?(uploads\/)?/, '');
+    if (PRODUCT_IMAGE_MAP[cleanName]) {
+      return `${REPO_BASE}${PRODUCT_IMAGE_MAP[cleanName]}`;
+    }
+    if (cleanName.endsWith('.webp') || cleanName.includes('-179148497') || !cleanName) {
+      return `${REPO_BASE}prod-prod-1788787675363-0-1788788713941-z2li5.jpg`;
+    }
+    return `${REPO_BASE}${cleanName}`;
+  }
+
+  const title = product.name || product.title || '';
+  
+  // 1. Check explicit map by title/name FIRST
+  if (title && PRODUCT_IMAGE_MAP[title]) {
+    return `${REPO_BASE}${PRODUCT_IMAGE_MAP[title]}`;
+  }
+
+  // 2. Fallback check by partial title matching in PRODUCT_IMAGE_MAP
+  if (title) {
+    const lowerTitle = title.toLowerCase();
+    for (const [key, filename] of Object.entries(PRODUCT_IMAGE_MAP)) {
+      if (lowerTitle.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerTitle)) {
+        return `${REPO_BASE}${filename}`;
+      }
+    }
+  }
+
+  // 3. If product.image exists and is not a non-existent .webp hash
+  if (product.image && typeof product.image === 'string') {
+    if (product.image.startsWith('http://') || product.image.startsWith('https://') || product.image.startsWith('data:')) {
+      return product.image;
+    }
+    const cleanImg = product.image.trim().replace(/^(\/)?(data\/)?(public\/)?(uploads\/)?/, '');
+    if (PRODUCT_IMAGE_MAP[cleanImg]) {
+      return `${REPO_BASE}${PRODUCT_IMAGE_MAP[cleanImg]}`;
+    }
+    if (cleanImg && !cleanImg.endsWith('.webp') && !cleanImg.includes('-179148497')) {
+      return `${REPO_BASE}${cleanImg}`;
+    }
+  }
+
+  // 4. Guaranteed working default fallback
+  return `${REPO_BASE}prod-prod-1788787675363-0-1788788713941-z2li5.jpg`;
+}
+
 export function getImageCandidates(rawPath: string | null | undefined): string[] {
   if (!rawPath) return [];
-  if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
-    if (rawPath.includes('github.com/') && rawPath.includes('/blob/')) {
-      return [rawPath.replace('/blob/', '/').replace('github.com', 'raw.githubusercontent.com')];
-    }
-    return [rawPath];
-  }
-  if (rawPath.startsWith('data:')) {
-    return [rawPath];
-  }
-
-  const clean = rawPath.trim().replace(/^\/+/, '').replace(/^(data\/)?(public\/)?uploads\//, '');
-  if (!clean) return [];
-
-  const dotIndex = clean.lastIndexOf('.');
-  const baseName = dotIndex !== -1 ? clean.substring(0, dotIndex) : clean;
-  const ext = dotIndex !== -1 ? clean.substring(dotIndex).toLowerCase() : '';
-
-  const candidates: string[] = [];
-
-  // Local static preview paths
-  candidates.push(`/uploads/${clean}`);
-  candidates.push(`/${clean}`);
-
-  // Correct GitHub CDN paths
-  candidates.push(`${CORRECT_GITHUB_BASE}${clean}`);
-
-  // Prefix variations (prod-prod- <-> prod-)
-  let altBaseName = baseName;
-  if (baseName.startsWith('prod-prod-')) {
-    altBaseName = baseName.replace(/^prod-prod-/, 'prod-');
-  } else if (baseName.startsWith('prod-')) {
-    altBaseName = baseName.replace(/^prod-/, 'prod-prod-');
-  }
-
-  // Extension alternatives (.jpg, .png, .webp, .jpeg)
-  const extensions = ['.jpg', '.png', '.webp', '.jpeg'];
-  for (const altExt of extensions) {
-    candidates.push(`/uploads/${baseName}${altExt}`);
-    candidates.push(`${CORRECT_GITHUB_BASE}${baseName}${altExt}`);
-    if (altBaseName !== baseName) {
-      candidates.push(`/uploads/${altBaseName}${altExt}`);
-      candidates.push(`${CORRECT_GITHUB_BASE}${altBaseName}${altExt}`);
-    }
-  }
-
-  return [...new Set(candidates)];
+  const resolved = getProductImage(rawPath);
+  return [resolved];
 }
 
 export function resolveProductImage(rawPath: string | null | undefined): string {
-  const candidates = getImageCandidates(rawPath);
-  return candidates[0] || '';
+  return getProductImage(rawPath);
 }
 
 export const getImageUrl = resolveProductImage;
@@ -75,32 +104,8 @@ export const resolveAssetUrl = resolveProductImage;
 export const resolveGitHubImageUrl = resolveProductImage;
 export const resolveGithubAssetUrl = resolveProductImage;
 
-const idToImageMap = new Map<string, string>(
-  initialProducts.map(p => [p.id, p.image])
-);
-
 export const resolveProductImageUrl = (productOrUrl: Product | string | null | undefined): string => {
-  if (!productOrUrl) {
-    return '';
-  }
-
-  if (typeof productOrUrl === 'object') {
-    const product = productOrUrl as Product;
-    if (product.image && typeof product.image === 'string' && product.image.trim() !== '') {
-      return resolveProductImage(product.image);
-    }
-    if (product.id && idToImageMap.has(product.id)) {
-      return resolveProductImage(idToImageMap.get(product.id)!);
-    }
-    return '';
-  }
-
-  const url = String(productOrUrl).trim();
-  if (!url) {
-    return '';
-  }
-
-  return resolveProductImage(url);
+  return getProductImage(productOrUrl as any);
 };
 
 export default resolveProductImageUrl;

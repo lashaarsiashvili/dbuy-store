@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { getProductFeatures } from '../utils/productFeatures';
-import { getCleanProductImage } from '../utils/imageFallback';
+import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { analytics } from './AdminAnalyticsDashboard';
@@ -56,7 +56,7 @@ export const QuickViewModal: React.FC = () => {
   const displayTitle = getProductTitle(quickViewProduct, language);
   const displayDesc = getProductDescription(quickViewProduct, language);
 
-  const cleanMainImg = getCleanProductImage(quickViewProduct);
+  const cleanMainImg = getProductImage(quickViewProduct);
   const galleryImages: string[] = (quickViewProduct.images && Array.isArray(quickViewProduct.images) && quickViewProduct.images.length > 0 && !quickViewProduct.images[0].includes('/uploads/'))
     ? quickViewProduct.images
     : [cleanMainImg];
