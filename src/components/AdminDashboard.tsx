@@ -13,6 +13,7 @@ import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
 
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
+import { compressImageForUpload } from '../utils/imageUpload';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -773,58 +774,8 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
-  const readImageAsBase64 = (file: File, maxW = 1200, maxH = 1200): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (typeof event.target?.result !== 'string') {
-          reject(new Error('Failed to read file as Data URL'));
-          return;
-        }
-
-        const img = new Image();
-        img.onload = () => {
-          try {
-            const canvas = document.createElement('canvas');
-            let width = img.width;
-            let height = img.height;
-
-            if (width > height) {
-              if (width > maxW) {
-                height = Math.round((height * maxW) / width);
-                width = maxW;
-              }
-            } else {
-              if (height > maxH) {
-                width = Math.round((width * maxH) / height);
-                height = maxH;
-              }
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-              reject(new Error('Failed to get 2D context from canvas'));
-              return;
-            }
-
-            ctx.drawImage(img, 0, 0, width, height);
-
-            // Convert using image/jpeg, 0.85 quality as requested
-            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-            resolve(dataUrl);
-          } catch (err) {
-            reject(err);
-          }
-        };
-        img.onerror = (err) => reject(err);
-        img.src = event.target.result;
-      };
-      reader.onerror = (error) => reject(error);
-      reader.readAsDataURL(file);
-    });
+  const readImageAsBase64 = (file: File, maxW = 800, maxH = 800): Promise<string> => {
+    return compressImageForUpload(file, Math.min(maxW, maxH), 0.78);
   };
 
   const processImageFiles = (files: FileList | File[]) => {
@@ -843,11 +794,11 @@ export const AdminDashboard: React.FC = () => {
     filesToProcess.forEach(async (file) => {
       if (!file.type.startsWith('image/')) return;
       try {
-        const base64Data = await readImageAsBase64(file);
+        const base64Data = await compressImageForUpload(file, 800, 0.78);
         appendProdImage(base64Data, file.name);
       } catch (err) {
-        console.error('Error reading product image file:', err);
-        addToast(isKa ? 'შეცდომა სურათის წაკითხვისას' : 'Error reading image file', 'error');
+        console.error('Error compressing product image file:', err);
+        addToast(isKa ? 'შეცდომა სურათის დამუშავებისას' : 'Error compressing image file', 'error');
       }
     });
   };

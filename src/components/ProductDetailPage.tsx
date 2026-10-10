@@ -131,7 +131,7 @@ export const ProductDetailPage: React.FC = () => {
 
   const cleanMainImg = getProductImage(product);
   const rawList = parsedImages.length > 0 ? parsedImages : [cleanMainImg];
-  const galleryImages: string[] = rawList.map(img => typeof img === 'string' && img.startsWith('/uploads/') ? getProductImage(img) : getProductImage(product));
+  const galleryImages: string[] = rawList.map(img => getProductImage(img));
 
   const currentImage = galleryImages[activeImageIndex] || cleanMainImg;
 

@@ -58,6 +58,97 @@ CREATE INDEX IF NOT EXISTS idx_products_slug ON products (slug);
 CREATE INDEX IF NOT EXISTS idx_products_active ON products (is_active);
 `;
 
+export async function handleProductsPost(env: Env, request: Request): Promise<Response> {
+  if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Cloudflare D1 database connection unavailable' }),
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+
+  try {
+    if (typeof env.DB.exec === 'function') {
+      await env.DB.exec(CREATE_TABLE_SQL);
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN image TEXT;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN images_json TEXT;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN title_ka TEXT;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN orig_price REAL;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN badge TEXT;'); } catch (e) {}
+    }
+
+    const body: any = await request.json().catch(() => null);
+    if (!body) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Invalid JSON payload' }),
+        { status: 400, headers: CORS_HEADERS }
+      );
+    }
+
+    const rawList = Array.isArray(body) ? body : (Array.isArray(body.products) ? body.products : [body]);
+
+    for (const item of rawList) {
+      if (!item || typeof item !== 'object') continue;
+      const id = String(item.id || `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
+      const title = item.title || item.titleKa || 'Product';
+      const titleKa = item.titleKa || item.title_ka || '';
+      const slug = item.customSlug ? normalizeSlug(item.customSlug) : (normalizeSlug(title) || id);
+      const description = item.description || item.descriptionKa || '';
+      const descriptionKa = item.descriptionKa || item.description_ka || '';
+      const price = Number(item.price) || 0.00;
+      const origPrice = item.origPrice ? Number(item.origPrice) : null;
+      const currency = item.currency || 'USD';
+      
+      const imagesArr = Array.isArray(item.images) && item.images.length > 0 
+        ? item.images 
+        : (item.image ? [item.image] : []);
+      const primaryImage = imagesArr[0] || item.image || '';
+      const imagesJson = JSON.stringify(imagesArr);
+
+      const category = item.category || 'general';
+      const stock = Number(item.stock) || 0;
+      const badge = item.badge || '';
+      const isActive = item.is_active !== undefined ? Number(item.is_active) : 1;
+
+      await env.DB.prepare(`
+        INSERT INTO products (id, slug, title, title_ka, description, description_ka, price, orig_price, currency, image, image_path, images_json, category, stock, badge, is_active, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(id) DO UPDATE SET
+          slug = excluded.slug,
+          title = excluded.title,
+          title_ka = excluded.title_ka,
+          description = excluded.description,
+          description_ka = excluded.description_ka,
+          price = excluded.price,
+          orig_price = excluded.orig_price,
+          currency = excluded.currency,
+          image = excluded.image,
+          image_path = excluded.image_path,
+          images_json = excluded.images_json,
+          category = excluded.category,
+          stock = excluded.stock,
+          badge = excluded.badge,
+          is_active = excluded.is_active,
+          updated_at = CURRENT_TIMESTAMP
+      `).bind(
+        id, slug, title, titleKa, description, descriptionKa, price, origPrice, currency,
+        primaryImage, primaryImage, imagesJson, category, stock, badge, isActive
+      ).run();
+    }
+
+    return new Response(
+      JSON.stringify({ success: true, count: rawList.length }),
+      { status: 200, headers: CORS_HEADERS }
+    );
+  } catch (error: any) {
+    console.error('[Cloudflare D1 /api/products POST] Query error:', error);
+    return new Response(
+      JSON.stringify({ success: false, error: error?.message || 'Failed to save products in D1' }),
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+}
+
 export async function handleProductsGet(env: Env, request?: Request): Promise<Response> {
   if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
     const errorMsg = 'Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid';
@@ -72,6 +163,12 @@ export async function handleProductsGet(env: Env, request?: Request): Promise<Re
     // Ensure table structure exists
     if (typeof env.DB.exec === 'function') {
       await env.DB.exec(CREATE_TABLE_SQL);
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN image TEXT;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN images_json TEXT;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN title_ka TEXT;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN orig_price REAL;'); } catch (e) {}
+      try { await env.DB.exec('ALTER TABLE products ADD COLUMN badge TEXT;'); } catch (e) {}
     }
 
     const url = request ? new URL(request.url) : null;
@@ -89,32 +186,65 @@ export async function handleProductsGet(env: Env, request?: Request): Promise<Re
 
       for (const item of initialProducts) {
         const title = item.title || item.titleKa || 'Product';
+        const titleKa = item.titleKa || '';
         const slug = item.customSlug ? normalizeSlug(item.customSlug) : normalizeSlug(title) || `prod-${item.id}`;
         const description = item.description || item.descriptionKa || '';
+        const descriptionKa = item.descriptionKa || '';
         const price = Number(item.price) || 0.00;
+        const origPrice = item.origPrice ? Number(item.origPrice) : null;
         const currency = 'USD';
         const rawImg = item.image || (Array.isArray(item.images) && item.images[0]) || '';
-        const imagePath = resolveGithubAssetUrl(rawImg);
+        const imagePath = (rawImg.startsWith('data:') || rawImg.startsWith('http')) ? rawImg : resolveGithubAssetUrl(rawImg);
+        const imagesJson = JSON.stringify(Array.isArray(item.images) ? item.images : [imagePath]);
         const category = item.category || 'general';
         const stock = Number(item.stock) || 10;
+        const badge = item.badge || '';
         const isActive = 1;
 
         // Use prepared statements with parameter binding against SQL injection
         await env.DB.prepare(`
-          INSERT OR REPLACE INTO products (slug, title, description, price, currency, image_path, category, stock, is_active, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        `).bind(slug, title, description, price, currency, imagePath, category, stock, isActive).run();
+          INSERT OR REPLACE INTO products (id, slug, title, title_ka, description, description_ka, price, orig_price, currency, image, image_path, images_json, category, stock, badge, is_active, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `).bind(String(item.id), slug, title, titleKa, description, descriptionKa, price, origPrice, currency, imagePath, imagePath, imagesJson, category, stock, badge, isActive).run();
       }
     }
 
     // Retrieve active products with parameterized query
     const { results } = await env.DB.prepare('SELECT * FROM products WHERE is_active = 1 ORDER BY id DESC').all();
-    const products = Array.isArray(results) ? results.map(p => ({
-      ...p,
-      image: p.image_path || resolveGithubAssetUrl(p.image_path),
-      imageUrl: p.image_path || resolveGithubAssetUrl(p.image_path),
-      images: [p.image_path || resolveGithubAssetUrl(p.image_path)]
-    })) : [];
+    const products = Array.isArray(results) ? results.map(p => {
+      let imagesArr: string[] = [];
+      if (p.images_json) {
+        try { imagesArr = JSON.parse(p.images_json); } catch (e) {}
+      }
+      if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
+        imagesArr = (p.image || p.image_path) ? [p.image || p.image_path] : [];
+      }
+
+      const primaryImg = p.image || p.image_path || imagesArr[0] || '';
+      const resolvedPrimary = (primaryImg.startsWith('data:') || primaryImg.startsWith('http'))
+        ? primaryImg
+        : resolveGithubAssetUrl(primaryImg);
+
+      const resolvedImages = imagesArr.map((img: string) =>
+        (img && (img.startsWith('data:') || img.startsWith('http'))) ? img : resolveGithubAssetUrl(img)
+      );
+
+      return {
+        ...p,
+        id: String(p.id),
+        title: p.title,
+        titleKa: p.title_ka || p.title,
+        customSlug: p.slug,
+        description: p.description,
+        descriptionKa: p.description_ka,
+        price: p.price,
+        origPrice: p.orig_price,
+        badge: p.badge,
+        image: resolvedPrimary,
+        imageUrl: resolvedPrimary,
+        images: resolvedImages.length > 0 ? resolvedImages : [resolvedPrimary],
+      };
+    }) : [];
 
     return new Response(
       JSON.stringify({ success: true, products }),
@@ -138,6 +268,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   if (request.method === 'GET') {
     return handleProductsGet(env, request);
+  }
+
+  if (request.method === 'POST') {
+    return handleProductsPost(env, request);
   }
 
   return new Response(
