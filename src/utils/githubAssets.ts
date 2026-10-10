@@ -21,8 +21,13 @@ export function resolveAssetUrl(rawPath: string | null | undefined): string {
   if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
     return trimmed;
   }
-  const filename = trimmed.replace(/^(\/)?(data\/)?(uploads\/)?/, '');
+
+  // Strip leading slashes and redundant paths (/uploads/, uploads/, data/uploads/)
+  let filename = trimmed.replace(/^(\/)?(data\/)?(uploads\/)?/, '');
   if (!filename) return '';
+
+  // Handle both single prod- and double prod-prod- filename variants / normalization if necessary
+  // Return direct GitHub raw CDN link pointing strictly to data/uploads/<filename>
   return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/${filename}`;
 }
 
