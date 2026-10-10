@@ -1,10 +1,8 @@
 /**
  * api/products.ts
  *
- * Handler to fetch product records from Cloudflare D1 database.
- * Strictly validates the Cloudflare D1 env.DB connection, ensures a clean
- * 'SELECT * FROM products' query, logs potential errors to the console,
- * and returns the data as { success: true, products: [...] }.
+ * Handler to fetch product records from Cloudflare D1 database
+ * and dynamically normalize image URLs targeting data/uploads/.
  */
 
 export interface Env {
@@ -27,13 +25,20 @@ export const CORS_HEADERS = {
   'Content-Type': 'application/json',
 };
 
+const GITHUB_REPO_BASE = 'https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/';
+
 /**
- * Retrieves all products from the Cloudflare D1 database using env.DB.prepare().
- * Strictly validates the DB connection and executes a clean 'SELECT * FROM products'.
- *
- * @param env - The Cloudflare environment bindings containing env.DB
- * @returns Array of product rows from the D1 database
+ * სურათის ფარდობითი გზის გარდაქმნა პირდაპირ GitHub Raw URL-ად
  */
+function normalizeImageUrl(path: string | null | undefined): string {
+  if (!path || typeof path !== 'string') return '';
+  if (path.startsWith('http://') || path.startsWith('https://')) return path;
+
+  // მოვაცილოთ დახრილი ხაზები და საქაღალდის პრეფიქსები, რომ დაგვრჩეს მხოლოდ სუფთა ფაილის სახელი
+  const filename = path.trim().replace(/^\/+/, '').replace(/^(data\/)?uploads\//, '');
+  return `${GITHUB_REPO_BASE}${filename}`;
+}
+
 export async function getProductsFromD1(env: Env): Promise<any[]> {
   if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
     const errorMsg = 'Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid';
@@ -43,23 +48,37 @@ export async function getProductsFromD1(env: Env): Promise<any[]> {
 
   try {
     const { results } = await env.DB.prepare('SELECT * FROM products').all();
-    return Array.isArray(results) ? results : [];
+    const rows = Array.isArray(results) ? results : [];
+
+    // სურათების ველების გარდაქმნა სრულ URL-ად
+    return rows.map((product: any) => {
+      let formattedImages = product.images;
+
+      // თუ images ველი JSON სტრინგია, გავპარსოთ
+      if (typeof product.images === 'string') {
+        try {
+          const parsed = JSON.parse(product.images);
+          formattedImages = Array.isArray(parsed) ? parsed.map(normalizeImageUrl) : normalizeImageUrl(product.images);
+        } catch {
+          formattedImages = normalizeImageUrl(product.images);
+        }
+      } else if (Array.isArray(product.images)) {
+        formattedImages = product.images.map(normalizeImageUrl);
+      }
+
+      return {
+        ...product,
+        image: normalizeImageUrl(product.image),
+        images: formattedImages,
+      };
+    });
   } catch (err: any) {
     console.error('[Cloudflare D1 /api/products] Error executing "SELECT * FROM products" query:', err);
     throw err;
   }
 }
 
-/**
- * Route handler function for GET /api/products
- * Fetches products from Cloudflare D1 and returns them formatted as { success: true, products: [...] }.
- *
- * @param request - Incoming HTTP Request
- * @param env - Cloudflare Environment bindings containing env.DB
- * @returns Response with JSON-encoded { success: true, products: [...] }
- */
 export async function handleProductsRoute(request: Request, env: Env): Promise<Response> {
-  // Handle CORS preflight options
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
@@ -71,37 +90,20 @@ export async function handleProductsRoute(request: Request, env: Env): Promise<R
     );
   }
 
-  // 1. Strictly validate the Cloudflare D1 env.DB connection
   if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
     const errorMsg = 'Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid';
     console.error(`[Cloudflare D1 /api/products] Connection Validation Error: ${errorMsg}`);
     return new Response(
-      JSON.stringify({
-        success: false,
-        error: errorMsg,
-        products: [],
-      }),
-      {
-        status: 500,
-        headers: CORS_HEADERS,
-      }
+      JSON.stringify({ success: false, error: errorMsg, products: [] }),
+      { status: 500, headers: CORS_HEADERS }
     );
   }
 
-  // 2. Ensure clean SELECT * FROM products query and log any potential errors
   try {
     const products = await getProductsFromD1(env);
-
-    // 3. Return data formatted as { success: true, products: [...] }
     return new Response(
-      JSON.stringify({
-        success: true,
-        products,
-      }),
-      {
-        status: 200,
-        headers: CORS_HEADERS,
-      }
+      JSON.stringify({ success: true, products }),
+      { status: 200, headers: CORS_HEADERS }
     );
   } catch (err: any) {
     console.error('[Cloudflare D1 /api/products] Error executing "SELECT * FROM products":', err);
@@ -111,22 +113,17 @@ export async function handleProductsRoute(request: Request, env: Env): Promise<R
         error: err?.message || 'Database query error while retrieving products',
         products: [],
       }),
-      {
-        status: 500,
-        headers: CORS_HEADERS,
-      }
+      { status: 500, headers: CORS_HEADERS }
     );
   }
 }
 
-// Cloudflare Workers fetch handler export
 export default {
   async fetch(request: Request, env: Env): Promise<Response> {
     return handleProductsRoute(request, env);
   },
 };
 
-// Cloudflare Pages Functions route handler export
 export async function onRequest(context: { request: Request; env: Env }): Promise<Response> {
   return handleProductsRoute(context.request, context.env);
 }
