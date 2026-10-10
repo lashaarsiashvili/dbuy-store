@@ -1,7 +1,6 @@
 /**
  * GitHub Asset & Slug Resolution Utilities
- * Strictly resolves product and billboard assets to direct raw GitHub CDN links:
- * https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/<clean>
+ * Implements getProductImageUrl and asset routing for production.
  */
 
 export const ASSET_BASE_URL = "https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main";
@@ -17,37 +16,30 @@ export function normalizeSlug(text: string): string {
 }
 
 /**
- * Exact resolution logic matching database values (/uploads/...) with GitHub storage (data/uploads/):
+ * Frontend helper to resolve product and billboard image URLs to local /uploads/...
+ * serving files straight from public/uploads/ in production.
  */
+export function getProductImageUrl(imagePath: string | undefined | null): string {
+  if (!imagePath) return '/placeholder.webp';
+  
+  // If already absolute URL, return as-is
+  if (imagePath.startsWith('http://') || imagePath.startsWith('https://') || imagePath.startsWith('data:')) {
+    return imagePath;
+  }
+  
+  // Normalize path to always start with /uploads/
+  let clean = imagePath.replace(/^\/+/, '');
+  if (clean.startsWith('data/uploads/')) {
+    clean = clean.replace(/^data\//, '');
+  } else if (!clean.startsWith('uploads/')) {
+    clean = 'uploads/' + clean;
+  }
+  
+  return '/' + clean;
+}
+
 export function resolveImageUrl(path: string | undefined | null): string {
-  if (!path || typeof path !== 'string') return '';
-  const trimmed = path.trim();
-  if (!trimmed) return '';
-
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    if (trimmed.includes('github.com/') && trimmed.includes('/blob/')) {
-      return trimmed.replace('/blob/', '/').replace('github.com', 'raw.githubusercontent.com');
-    }
-    return trimmed;
-  }
-  if (trimmed.startsWith('data:')) {
-    return trimmed;
-  }
-  
-  // Clean leading slashes
-  let clean = trimmed.replace(/^\/+/, '');
-  
-  // Remove accidental duplicate prefixes
-  clean = clean.replace(/^(data\/uploads\/)+/, 'data/uploads/');
-
-  // If the path starts with "uploads/" instead of "data/uploads/", prepend "data/"
-  if (clean.startsWith('uploads/')) {
-    clean = 'data/' + clean;
-  } else if (!clean.startsWith('data/')) {
-    clean = 'data/uploads/' + clean;
-  }
-  
-  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/${clean}`;
+  return getProductImageUrl(path);
 }
 
 export function resolveGitHubImageUrl(
@@ -56,9 +48,9 @@ export function resolveGitHubImageUrl(
   _repo = "dbuy-store", 
   _branch = "main"
 ): string {
-  return resolveImageUrl(imagePath);
+  return getProductImageUrl(imagePath);
 }
 
 export function resolveGithubAssetUrl(path: string | undefined | null): string {
-  return resolveImageUrl(path);
+  return getProductImageUrl(path);
 }
