@@ -991,23 +991,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  // On mount: fetch live products from Cloudflare D1 database endpoint (/api/products)
+  // On mount & focus: fetch live products from Cloudflare D1 database endpoint (/api/products)
   useEffect(() => {
-    fetch('/api/products')
-      .then(res => res.json())
-      .then(data => {
-        if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
-          setProducts(data.products);
-        }
+    const fetchLiveProducts = () => {
+      fetch(`/api/products?_t=${Date.now()}`, {
+        cache: 'no-store',
+        headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
       })
-      .catch(err => {
-        console.warn('Could not load products from /api/products:', err);
-      });
+        .then(res => res.json())
+        .then(data => {
+          if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
+            setProducts(data.products);
+            try {
+              localStorage.setItem('dbuy_products', JSON.stringify(data.products));
+              localStorage.setItem('dbuy_products_last_updated', new Date().toISOString());
+            } catch (e) {}
+          }
+        })
+        .catch(err => {
+          console.warn('Could not load products from /api/products:', err);
+        });
+    };
+
+    fetchLiveProducts();
+
+    const handleFocus = () => {
+      fetchLiveProducts();
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('focus', handleFocus);
+    }
 
     if (typeof window !== 'undefined' && window.location.search.includes('reset=true')) {
       fetch('/api/store/reset?reset=true', { method: 'POST' }).catch(() => {});
       fetch('/api/products?reset=true', { method: 'GET' }).catch(() => {});
     }
+
+    return () => {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('focus', handleFocus);
+      }
+    };
   }, []);
 
   // Pre-cache product images to IndexedDB and RAM cache to prevent image loss during re-renders or state updates
@@ -1834,37 +1859,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (d.lastUpdated) {
           lastSyncTimestampRef.current = d.lastUpdated;
         }
-        // Products background syncing disabled to prevent overwriting static products.json with null-image database rows
-        /*
         if (Array.isArray(d.products) && d.products.length > 0) {
           setProducts(prevProducts => {
-            // Never wipe out local products if server returns empty list
             if (d.products.length === 0 && prevProducts.length > 0) {
               return prevProducts;
             }
 
-            const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 60000;
-            const localLastUpdated = localStorage.getItem('dbuy_products_last_updated') || '0';
-            const serverLastUpdated = d.lastUpdated || '0';
-            const isLocalNewer = new Date(localLastUpdated).getTime() > new Date(serverLastUpdated).getTime();
-
-            // If user updated locally, or local has more products, preserve local and re-sync
-            if (recentlyUpdatedLocally || isLocalNewer || prevProducts.length > d.products.length || isAdmin) {
-              if (prevProducts.length > d.products.length) {
-                setTimeout(() => {
-                  saveProducts(prevProducts);
-                }, 500);
-              }
+            const recentlyUpdatedLocally = (Date.now() - lastLocalProductUpdateRef.current) < 15000;
+            if (recentlyUpdatedLocally) {
               return prevProducts;
             }
 
-            // Merge: ensure any local product not present on server is never deleted unless explicit
-            const serverIds = new Set(d.products.map((p: any) => p.id));
-            const localOnlyProducts = prevProducts.filter(p => !serverIds.has(p.id));
-            const merged = [...localOnlyProducts, ...d.products];
-
-            // Adopt authoritative server products catalog
-            const sanitized = merged.map(sanitizeProductUrls);
+            const sanitized = d.products.map(sanitizeProductUrls);
             try {
               localStorage.setItem('dbuy_products', JSON.stringify(sanitized));
               if (d.lastUpdated) {
@@ -1874,7 +1880,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             return sanitized;
           });
         }
-        */
         if (d.registeredUsers && typeof d.registeredUsers === 'object') {
           localStorage.setItem('dbuy_registered_users', JSON.stringify(d.registeredUsers));
           setRegisteredUsers(mapRegisteredUsersList(d.registeredUsers));

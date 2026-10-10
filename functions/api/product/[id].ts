@@ -22,6 +22,9 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Content-Type': 'application/json',
+  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+  'Pragma': 'no-cache',
+  'Expires': '0',
 };
 
 const ASSET_BASE_URL = "https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/public";
