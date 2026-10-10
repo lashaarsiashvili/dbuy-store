@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { getProductFeatures } from '../utils/productFeatures';
-import { handleImageError, getCleanProductImage } from '../utils/imageFallback';
+import { getCleanProductImage } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { analytics } from './AdminAnalyticsDashboard';

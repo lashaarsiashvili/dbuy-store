@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { Product } from '../types';
 import { getProductFeatures } from '../utils/productFeatures';
-import { handleImageError, getCleanProductImage, resolveUploadUrl, getImageUrl } from '../utils/imageFallback';
+import { getCleanProductImage, resolveUploadUrl, getImageUrl } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ProductPaymentModule } from './ProductPaymentModule';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';

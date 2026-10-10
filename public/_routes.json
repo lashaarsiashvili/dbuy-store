@@ -1,10 +1,5 @@
 {
   "version": 1,
   "include": ["/*"],
-  "exclude": [
-    "/uploads/*",
-    "/images/*",
-    "/assets/*",
-    "/favicon.ico"
-  ]
+  "exclude": ["/uploads/*", "/favicon.ico", "/*.png", "/*.jpg", "/*.jpeg", "/*.webp", "/*.svg"]
 }

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { Star, ShoppingCart, Eye, Check, Heart, Link as LinkIcon, Play } from 'lucide-react';
-import { handleImageError, DEFAULT_PRODUCT_IMAGE, getImageUrl } from '../utils/imageFallback';
+import { getImageUrl } from '../utils/imageFallback';
 import { CachedImage } from './CachedImage';
 import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
@@ -154,7 +154,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
                 loading="lazy"
                 decoding="async"
                 referrerPolicy="no-referrer"
-                onError={(e) => handleImageError(e, DEFAULT_PRODUCT_IMAGE)}
               />
             );
           }
@@ -166,8 +165,6 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
               loading="lazy"
               decoding="async"
               referrerPolicy="no-referrer"
-              fallbackSrc={DEFAULT_PRODUCT_IMAGE}
-              onError={(e) => handleImageError(e, DEFAULT_PRODUCT_IMAGE)}
             />
           );
         })()}

@@ -4,7 +4,6 @@ import { smartApiFetch } from '../lib/api';
 import { Product, Order, BillboardSlide, LogoOptionId } from '../types';
 import { generateProductFeatures, isGeorgianText } from '../utils/productFeatures';
 import { generateProductAdCopy } from '../utils/adCopyGenerator';
-import { handleImageError } from '../utils/imageFallback';
 import { saveImageBackupIDB } from '../utils/imageStorage';
 import { CachedImage } from './CachedImage';
 import { AdminAnalytics } from './AdminAnalytics';

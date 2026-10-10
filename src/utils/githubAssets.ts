@@ -1,6 +1,6 @@
 /**
  * GitHub Asset & Slug Resolution Utilities
- * Implements getProductImageUrl and asset routing for production.
+ * Implements resolveAssetUrl and asset routing for production.
  */
 
 export const ASSET_BASE_URL = "https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main";
@@ -15,31 +15,40 @@ export function normalizeSlug(text: string): string {
     .replace(/-+/g, '-');
 }
 
-/**
- * Frontend helper to resolve product and billboard image URLs to local /uploads/...
- * serving files straight from public/uploads/ in production.
- */
-export function getProductImageUrl(imagePath: string | undefined | null): string {
-  if (!imagePath) return '/placeholder.webp';
-  
-  // If already absolute URL, return as-is
-  if (imagePath.startsWith('http://') || imagePath.startsWith('https://') || imagePath.startsWith('data:')) {
-    return imagePath;
+export function resolveAssetUrl(rawPath: string | null | undefined): string {
+  if (!rawPath || typeof rawPath !== 'string') return '';
+
+  // 1. If it's already an absolute URL, return as-is
+  if (rawPath.startsWith('http://') || rawPath.startsWith('https://')) {
+    return rawPath;
   }
-  
-  // Normalize path to always start with /uploads/
-  let clean = imagePath.replace(/^\/+/, '');
+
+  // 2. Trim whitespace and slashes
+  let clean = rawPath.trim().replace(/^\/+|\/+$/g, '');
+
+  // 3. Normalize path to point strictly inside data/uploads/
   if (clean.startsWith('data/uploads/')) {
-    clean = clean.replace(/^data\//, '');
-  } else if (!clean.startsWith('uploads/')) {
-    clean = 'uploads/' + clean;
+    // Correct format
+  } else if (clean.startsWith('uploads/')) {
+    clean = 'data/' + clean;
+  } else {
+    clean = 'data/uploads/' + clean;
   }
-  
-  return '/' + clean;
+
+  // 4. Return direct GitHub raw CDN link
+  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/${clean}`;
+}
+
+export function getImageUrl(path: string | null | undefined): string {
+  return resolveAssetUrl(path);
+}
+
+export function getProductImageUrl(imagePath: string | undefined | null): string {
+  return resolveAssetUrl(imagePath);
 }
 
 export function resolveImageUrl(path: string | undefined | null): string {
-  return getProductImageUrl(path);
+  return resolveAssetUrl(path);
 }
 
 export function resolveGitHubImageUrl(
@@ -48,9 +57,9 @@ export function resolveGitHubImageUrl(
   _repo = "dbuy-store", 
   _branch = "main"
 ): string {
-  return getProductImageUrl(imagePath);
+  return resolveAssetUrl(imagePath);
 }
 
 export function resolveGithubAssetUrl(path: string | undefined | null): string {
-  return getProductImageUrl(path);
+  return resolveAssetUrl(path);
 }

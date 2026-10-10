@@ -38,7 +38,6 @@ import {
   CloudflareLiveVisitor
 } from '../services/cloudflareAnalyticsService';
 import { CachedImage } from './CachedImage';
-import { handleImageError } from '../utils/imageFallback';
 import { getProductTitle } from '../utils/productLanguage';
 
 export const AdminAnalytics: React.FC = () => {
@@ -1147,7 +1146,6 @@ export const AdminAnalytics: React.FC = () => {
                           src={p.image}
                           alt={p.title}
                           className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                          onError={handleImageError}
                         />
                       </div>
 
