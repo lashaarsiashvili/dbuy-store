@@ -16,8 +16,10 @@
     "category": "tech",
     "stock": 10,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/517c5L0X4HL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/517c5L0X4HL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -41,8 +43,10 @@
     "category": "fitness",
     "stock": 18,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/71I6fV-J18L._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/71I6fV-J18L._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -66,8 +70,10 @@
     "category": "fitness",
     "stock": 22,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/71Nn7wW4H+L._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/71Nn7wW4H+L._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -91,8 +97,10 @@
     "category": "fitness",
     "stock": 30,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/71uB+E2v7mL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/71uB+E2v7mL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -116,8 +124,10 @@
     "category": "fitness",
     "stock": 12,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61k8wD2aIOL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61k8wD2aIOL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -141,8 +151,10 @@
     "category": "tech",
     "stock": 8,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/51rPzTqFf5L._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/51rPzTqFf5L._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -166,8 +178,10 @@
     "category": "drinkware",
     "stock": 11,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61MhY+wR27L._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61MhY+wR27L._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -191,8 +205,10 @@
     "category": "drinkware",
     "stock": 9,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61S1aB+YjGL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61S1aB+YjGL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -216,8 +232,10 @@
     "category": "drinkware",
     "stock": 15,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61WfQyv9V-L._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61WfQyv9V-L._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -241,8 +259,10 @@
     "category": "wearables",
     "stock": 14,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61rRkG7oP+L._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61rRkG7oP+L._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -266,8 +286,10 @@
     "category": "drinkware",
     "stock": 20,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61Z7a7vU7KL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61Z7a7vU7KL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -291,8 +313,10 @@
     "category": "drinkware",
     "stock": 16,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61c8kX1u5GL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61c8kX1u5GL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -316,8 +340,10 @@
     "category": "wearables",
     "stock": 7,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61T0fR2D5VL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61T0fR2D5VL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -341,8 +367,10 @@
     "category": "tech",
     "stock": 13,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/71u9sW4jQEL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/71u9sW4jQEL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -366,8 +394,10 @@
     "category": "drinkware",
     "stock": 12,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61N+Vb6qUmL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61N+Vb6qUmL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -391,8 +421,10 @@
     "category": "drinkware",
     "stock": 17,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/51H3fN2hA0L._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/51H3fN2hA0L._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -416,8 +448,10 @@
     "category": "gaming",
     "stock": 10,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61NqKz5bVYL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61NqKz5bVYL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -441,8 +475,10 @@
     "category": "gaming",
     "stock": 8,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61qG5z0U5iL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61qG5z0U5iL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -466,8 +502,10 @@
     "category": "gaming",
     "stock": 6,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/51f8iU8J-zL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/51f8iU8J-zL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -491,8 +529,10 @@
     "category": "fitness",
     "stock": 14,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/71YyP9fLqHL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/71YyP9fLqHL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -516,8 +556,10 @@
     "category": "fitness",
     "stock": 19,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61tHk3lY9KL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61tHk3lY9KL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -541,8 +583,10 @@
     "category": "drinkware",
     "stock": 15,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61N+Vb6qUmL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61N+Vb6qUmL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -566,8 +610,10 @@
     "category": "audio",
     "stock": 5,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61o3N1VzHlL._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61o3N1VzHlL._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -591,8 +637,10 @@
     "category": "drinkware",
     "stock": 14,
     "badge": "New",
-    "image": "",
-    "images": [],
+    "image": "https://m.media-amazon.com/images/I/61aW2kFqV-L._AC_SL1500_.jpg",
+    "images": [
+      "https://m.media-amazon.com/images/I/61aW2kFqV-L._AC_SL1500_.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
