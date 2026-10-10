@@ -130,14 +130,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <CachedImage
-          src={getCardImageSrc(product)}
-          alt={displayTitle}
-          className="product-card-img absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500 transform-gpu will-change-transform"
-          loading="lazy"
-          decoding="async"
-          referrerPolicy="no-referrer"
-        />
+        {getCardImageSrc(product) ? (
+          <CachedImage
+            src={getCardImageSrc(product)}
+            alt={displayTitle}
+            className="product-card-img absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500 transform-gpu will-change-transform"
+            loading="lazy"
+            decoding="async"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <div className="absolute inset-0 w-full h-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center text-slate-400 dark:text-slate-500 text-xs font-medium">
+            Ready for upload
+          </div>
+        )}
 
         {/* YouTube Video Hover Preview Overlay */}
         {youtubeId && (

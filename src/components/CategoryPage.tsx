@@ -52,19 +52,15 @@ export const CategoryPage: React.FC = () => {
     inStockOnly: false,
   });
 
-  // Strict Deduplication: Guarantees authentic catalog with strictly unique 24 products
+  // Strict Deduplication: Guarantees authentic catalog with strictly unique products
   const allAvailableProducts = useMemo(() => {
     const sourceList = Array.isArray(products) && products.length > 0
       ? products
       : (productsData as Product[]);
 
-    const validWithImages = sourceList.filter(
-      (p) => p.image && p.image.trim() !== '' && !p.image.toLowerCase().includes('placeholder')
-    );
-
     // Strict deduplication by unique `id`
     const uniqueMap = new Map<string, Product>();
-    validWithImages.forEach((p) => {
+    sourceList.forEach((p) => {
       if (!uniqueMap.has(p.id)) {
         uniqueMap.set(p.id, p);
       }

@@ -99,18 +99,14 @@ export const ProductGrid: React.FC = () => {
     }
   }, [selectedCategory]);
 
-  // Strict Deduplication: Guarantees authentic catalog with strictly unique 24 products
+  // Strict Deduplication: Guarantees authentic catalog with strictly unique products
   const allAvailableProducts = useMemo(() => {
     const sourceList = Array.isArray(products) && products.length > 0
       ? products
       : (productsData as Product[]);
 
-    const validWithImages = sourceList.filter(
-      (p) => p.image && p.image.trim() !== '' && !p.image.toLowerCase().includes('placeholder')
-    );
-
     // Deduplicate products by their unique `id`
-    const uniqueProducts: Product[] = Array.from(new Map<string, Product>(validWithImages.map((p) => [p.id, p])).values());
+    const uniqueProducts: Product[] = Array.from(new Map<string, Product>(sourceList.map((p) => [p.id, p])).values());
 
     return uniqueProducts;
   }, [products]);

@@ -37,55 +37,30 @@ const PRODUCT_IMAGE_MAP: Record<string, string> = {
 };
 
 export function getProductImage(product: { name?: string; title?: string; image?: string } | string | null | undefined): string {
-  if (!product) return `${REPO_BASE}prod-prod-1788787675363-0-1788788713941-z2li5.jpg`;
+  if (!product) return '';
   
   if (typeof product === 'string') {
+    if (!product.trim()) return '';
     if (product.startsWith('http://') || product.startsWith('https://') || product.startsWith('data:')) {
       return product;
     }
     const cleanName = product.trim().replace(/^(\/)?(data\/)?(public\/)?(uploads\/)?/, '');
-    if (PRODUCT_IMAGE_MAP[cleanName]) {
-      return `${REPO_BASE}${PRODUCT_IMAGE_MAP[cleanName]}`;
-    }
-    if (cleanName.endsWith('.webp') || cleanName.includes('-179148497') || !cleanName) {
-      return `${REPO_BASE}prod-prod-1788787675363-0-1788788713941-z2li5.jpg`;
-    }
+    if (!cleanName) return '';
     return `${REPO_BASE}${cleanName}`;
   }
 
-  const title = product.name || product.title || '';
-  
-  // 1. Check explicit map by title/name FIRST
-  if (title && PRODUCT_IMAGE_MAP[title]) {
-    return `${REPO_BASE}${PRODUCT_IMAGE_MAP[title]}`;
+  const rawImg = product.image;
+  if (!rawImg || typeof rawImg !== 'string' || !rawImg.trim()) {
+    return '';
   }
 
-  // 2. Fallback check by partial title matching in PRODUCT_IMAGE_MAP
-  if (title) {
-    const lowerTitle = title.toLowerCase();
-    for (const [key, filename] of Object.entries(PRODUCT_IMAGE_MAP)) {
-      if (lowerTitle.includes(key.toLowerCase()) || key.toLowerCase().includes(lowerTitle)) {
-        return `${REPO_BASE}${filename}`;
-      }
-    }
+  if (rawImg.startsWith('http://') || rawImg.startsWith('https://') || rawImg.startsWith('data:')) {
+    return rawImg;
   }
 
-  // 3. If product.image exists and is not a non-existent .webp hash
-  if (product.image && typeof product.image === 'string') {
-    if (product.image.startsWith('http://') || product.image.startsWith('https://') || product.image.startsWith('data:')) {
-      return product.image;
-    }
-    const cleanImg = product.image.trim().replace(/^(\/)?(data\/)?(public\/)?(uploads\/)?/, '');
-    if (PRODUCT_IMAGE_MAP[cleanImg]) {
-      return `${REPO_BASE}${PRODUCT_IMAGE_MAP[cleanImg]}`;
-    }
-    if (cleanImg && !cleanImg.endsWith('.webp') && !cleanImg.includes('-179148497')) {
-      return `${REPO_BASE}${cleanImg}`;
-    }
-  }
-
-  // 4. Guaranteed working default fallback
-  return `${REPO_BASE}prod-prod-1788787675363-0-1788788713941-z2li5.jpg`;
+  const cleanImg = rawImg.trim().replace(/^(\/)?(data\/)?(public\/)?(uploads\/)?/, '');
+  if (!cleanImg) return '';
+  return `${REPO_BASE}${cleanImg}`;
 }
 
 export function getImageCandidates(rawPath: string | null | undefined): string[] {

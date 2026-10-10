@@ -20,16 +20,14 @@ export const initialProducts: Product[] = [
     "category": "tech",
     "stock": 10,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789155706235-izasbyx-1791484971386-329gk.webp",
-    "images": [
-      "/uploads/prod-prod-1789155706235-izasbyx-1791484971386-329gk.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
     "updated_at": "2026-10-09 16:47:20",
-    "views": 4
+    "views": 10
   },
   {
     "id": "prod-1789155168687-cjhtzu4",
@@ -48,10 +46,8 @@ export const initialProducts: Product[] = [
     "category": "fitness",
     "stock": 18,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789155168687-cjhtzu4-1791484972041-xd8oa.webp",
-    "images": [
-      "/uploads/prod-prod-1789155168687-cjhtzu4-1791484972041-xd8oa.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -75,10 +71,8 @@ export const initialProducts: Product[] = [
     "category": "fitness",
     "stock": 22,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789154824924-h5n6wq0-1791484972744-43tne.webp",
-    "images": [
-      "/uploads/prod-prod-1789154824924-h5n6wq0-1791484972744-43tne.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -102,10 +96,8 @@ export const initialProducts: Product[] = [
     "category": "fitness",
     "stock": 30,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789154372786-fyldxaj-1791484973452-89c4z.webp",
-    "images": [
-      "/uploads/prod-prod-1789154372786-fyldxaj-1791484973452-89c4z.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -130,10 +122,8 @@ export const initialProducts: Product[] = [
     "category": "fitness",
     "stock": 12,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789153418419-mz6ptx2-1791484974136-8gm50.webp",
-    "images": [
-      "/uploads/prod-prod-1789153418419-mz6ptx2-1791484974136-8gm50.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -157,16 +147,13 @@ export const initialProducts: Product[] = [
     "category": "tech",
     "stock": 8,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789138804362-0ilsgso-1791484974773-lr3qo.webp",
-    "images": [
-      "/uploads/prod-prod-1789138804362-0ilsgso-1791484974773-lr3qo.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20",
-    "views": 6
+    "updated_at": "2026-10-09 16:47:20"
   },
   {
     "id": "prod-1789138699002-hmxeg6s",
@@ -185,16 +172,14 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 11,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789138699002-hmxeg6s-1791484975450-a4hz5.webp",
-    "images": [
-      "/uploads/prod-prod-1789138699002-hmxeg6s-1791484975450-a4hz5.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
     "updated_at": "2026-10-09 16:47:20",
-    "views": 2
+    "views": 6
   },
   {
     "id": "prod-1789138614222-4evc5wn",
@@ -213,10 +198,8 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 9,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789138614222-4evc5wn-1791484976094-8atkd.webp",
-    "images": [
-      "/uploads/prod-prod-1789138614222-4evc5wn-1791484976094-8atkd.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -241,16 +224,14 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 15,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788724519740-0-1788783604196-f2ye4.jpg",
-    "images": [
-      "/uploads/prod-prod-1788724519740-0-1788783604196-f2ye4.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
     "updated_at": "2026-10-09 16:47:20",
-    "views": 2
+    "views": 6
   },
   {
     "id": "prod-1788724361112",
@@ -269,10 +250,8 @@ export const initialProducts: Product[] = [
     "category": "wearables",
     "stock": 14,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788724361112-0-1788783604832-64q55.jpg",
-    "images": [
-      "/uploads/prod-prod-1788724361112-0-1788783604832-64q55.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -297,10 +276,8 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 20,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788723441741-0-1788783605340-uanc4.jpg",
-    "images": [
-      "/uploads/prod-prod-1788723441741-0-1788783605340-uanc4.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -324,10 +301,8 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 16,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788723082932-0-1788783606115-hf96t.jpg",
-    "images": [
-      "/uploads/prod-prod-1788723082932-0-1788783606115-hf96t.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -351,10 +326,8 @@ export const initialProducts: Product[] = [
     "category": "wearables",
     "stock": 7,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788722861679-1791484976722-uxgrk.webp",
-    "images": [
-      "/uploads/prod-prod-1788722861679-1791484976722-uxgrk.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -378,10 +351,8 @@ export const initialProducts: Product[] = [
     "category": "tech",
     "stock": 13,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788722697137-0-1788783607687-fwr3e.jpg",
-    "images": [
-      "/uploads/prod-prod-1788722697137-0-1788783607687-fwr3e.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -405,10 +376,8 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 12,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788877210563-1791484977367-b4v1d.webp",
-    "images": [
-      "/uploads/prod-prod-1788877210563-1791484977367-b4v1d.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -432,10 +401,8 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 17,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788877024412-1791484978021-2xf9f.webp",
-    "images": [
-      "/uploads/prod-prod-1788877024412-1791484978021-2xf9f.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -459,10 +426,8 @@ export const initialProducts: Product[] = [
     "category": "gaming",
     "stock": 10,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788876872896-1791484978720-p4f3i.webp",
-    "images": [
-      "/uploads/prod-prod-1788876872896-1791484978720-p4f3i.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -486,15 +451,14 @@ export const initialProducts: Product[] = [
     "category": "gaming",
     "stock": 8,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788787675363-0-1788788713941-z2li5.jpg",
-    "images": [
-      "/uploads/prod-prod-1788787675363-0-1788788713941-z2li5.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:20",
-    "updated_at": "2026-10-09 16:47:20"
+    "updated_at": "2026-10-09 16:47:20",
+    "views": 8
   },
   {
     "id": "prod-1788785750636",
@@ -513,10 +477,8 @@ export const initialProducts: Product[] = [
     "category": "gaming",
     "stock": 6,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788785750636-0-1788785751962-zjv0m.jpg",
-    "images": [
-      "/uploads/prod-prod-1788785750636-0-1788785751962-zjv0m.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -540,10 +502,8 @@ export const initialProducts: Product[] = [
     "category": "fitness",
     "stock": 14,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788777272471-0-1788783602771-bvf0k.jpg",
-    "images": [
-      "/uploads/prod-prod-1788777272471-0-1788783602771-bvf0k.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -567,10 +527,8 @@ export const initialProducts: Product[] = [
     "category": "fitness",
     "stock": 19,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788777425106-0-1788783603009-v0hay.jpg",
-    "images": [
-      "/uploads/prod-prod-1788777425106-0-1788783603009-v0hay.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -594,10 +552,8 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 15,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788775639253-0-1788783603595-8i6m1.jpg",
-    "images": [
-      "/uploads/prod-prod-1788775639253-0-1788783603595-8i6m1.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -621,10 +577,8 @@ export const initialProducts: Product[] = [
     "category": "audio",
     "stock": 5,
     "badge": "New",
-    "image": "/uploads/prod-prod-1788722508271-0-1788783608231-rbxub.jpg",
-    "images": [
-      "/uploads/prod-prod-1788722508271-0-1788783608231-rbxub.jpg"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -648,15 +602,13 @@ export const initialProducts: Product[] = [
     "category": "drinkware",
     "stock": 14,
     "badge": "New",
-    "image": "/uploads/prod-prod-1789156058368-ilikcwu-1791484970770-tnkra.webp",
-    "images": [
-      "/uploads/prod-prod-1789156058368-ilikcwu-1791484970770-tnkra.webp"
-    ],
+    "image": "",
+    "images": [],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
     "created_at": "2026-10-09 16:47:19",
     "updated_at": "2026-10-09 16:47:19",
-    "views": 10
+    "views": 4
   }
 ];

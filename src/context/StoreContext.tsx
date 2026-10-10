@@ -792,71 +792,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return trimmed;
   };
 
-  // Fast lookup maps from initialProducts.ts by ID for 100% fresh, reliable Unsplash images and titles
-  const freshImageMap = useMemo(() => {
-    const map = new Map<string, string>();
-    initialProducts.forEach(p => {
-      if (p.id) map.set(p.id, p.image);
-    });
-    return map;
-  }, []);
-
-  const freshImagesListMap = useMemo(() => {
-    const map = new Map<string, string[]>();
-    initialProducts.forEach(p => {
-      if (p.id) map.set(p.id, p.images || [p.image]);
-    });
-    return map;
-  }, []);
-
-  const freshTitleMap = useMemo(() => {
-    const map = new Map<string, string>();
-    initialProducts.forEach(p => {
-      if (p.id) map.set(p.id, p.title);
-    });
-    return map;
-  }, []);
-
-  // Force sanitize products before passing to state / UI:
+  // Immutability Contract: Render product data verbatim as provided by the database (Cloudflare D1 /api/products)
   const sanitizeProducts = (rawProducts: Product[]): Product[] => {
-    if (!rawProducts || rawProducts.length === 0) return initialProducts;
-
-    const uniqueMap = new Map<string, Product>();
-
-    rawProducts.forEach(p => {
-      if (!p || !p.id) return;
-
-      const freshImg = freshImageMap.get(p.id);
-      const freshImgs = freshImagesListMap.get(p.id);
-      const freshTitle = freshTitleMap.get(p.id);
-
-      const rawImg = typeof p.image === 'string' ? p.image.trim() : '';
-      const validImage = freshImg || sanitizeImageUrl(rawImg) || (initialProducts[0] ? initialProducts[0].image : '');
-      const validImages = freshImgs || (Array.isArray(p.images) && p.images.length > 0 
-        ? p.images.map(img => sanitizeImageUrl(img))
-        : [validImage]);
-
-      uniqueMap.set(p.id, {
-        ...p,
-        title: freshTitle || p.title,
-        image: validImage,
-        images: validImages,
-      });
-    });
-
-    // Guarantee all initialProducts exist in state
-    initialProducts.forEach(initP => {
-      if (!uniqueMap.has(initP.id)) {
-        uniqueMap.set(initP.id, initP);
-      }
-    });
-
-    return Array.from(uniqueMap.values());
+    if (!rawProducts || !Array.isArray(rawProducts) || rawProducts.length === 0) return initialProducts;
+    return rawProducts;
   };
 
   const sanitizeProductUrls = (p: Product): Product => {
-    const sanitized = sanitizeProducts([p]);
-    return sanitized[0] || p;
+    return p;
   };
 
   const sanitizeBillboardUrls = (b: BillboardSlide): BillboardSlide => {
@@ -1048,8 +991,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  // On mount: if reset=true query param is present, purge cloud D1 database as well
+  // On mount: fetch live products from Cloudflare D1 database endpoint (/api/products)
   useEffect(() => {
+    fetch('/api/products')
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
+          setProducts(data.products);
+        }
+      })
+      .catch(err => {
+        console.warn('Could not load products from /api/products:', err);
+      });
+
     if (typeof window !== 'undefined' && window.location.search.includes('reset=true')) {
       fetch('/api/store/reset?reset=true', { method: 'POST' }).catch(() => {});
       fetch('/api/products?reset=true', { method: 'GET' }).catch(() => {});

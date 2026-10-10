@@ -242,12 +242,18 @@ export const ProductDetailPage: React.FC = () => {
         <div className="lg:col-span-6 xl:col-span-6 space-y-4">
           <div className="relative w-full pt-[85%] sm:pt-[80%] rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-sm">
             {/* Main Image */}
-            <CachedImage
-              src={currentImage}
-              alt={displayTitle}
-              referrerPolicy="no-referrer"
-              className="absolute inset-0 w-full h-full object-contain p-4 sm:p-6 transition-all duration-300"
-            />
+            {currentImage ? (
+              <CachedImage
+                src={currentImage}
+                alt={displayTitle}
+                referrerPolicy="no-referrer"
+                className="absolute inset-0 w-full h-full object-contain p-4 sm:p-6 transition-all duration-300"
+              />
+            ) : (
+              <div className="absolute inset-0 w-full h-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center text-slate-400 dark:text-slate-500 text-xs font-medium">
+                Ready for upload
+              </div>
+            )}
 
             {/* Badge */}
             {product.badge && (
