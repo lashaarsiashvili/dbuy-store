@@ -1,7 +1,9 @@
 /**
  * GitHub Asset & Slug Resolution Utilities
- * Implements resolveAssetUrl and asset routing for production.
+ * Re-exports and implements resolveAssetUrl using resolveProductImage.
  */
+
+import { resolveProductImage } from './imageResolver';
 
 export const ASSET_BASE_URL = "https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main";
 
@@ -16,31 +18,19 @@ export function normalizeSlug(text: string): string {
 }
 
 export function resolveAssetUrl(rawPath: string | null | undefined): string {
-  if (!rawPath || typeof rawPath !== 'string') return '';
-  const trimmed = rawPath.trim();
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    return trimmed;
-  }
-
-  // Strip leading slashes and redundant paths (/uploads/, uploads/, data/uploads/)
-  let filename = trimmed.replace(/^(\/)?(data\/)?(uploads\/)?/, '');
-  if (!filename) return '';
-
-  // Handle both single prod- and double prod-prod- filename variants / normalization if necessary
-  // Return direct GitHub raw CDN link pointing strictly to data/uploads/<filename>
-  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/${filename}`;
+  return resolveProductImage(rawPath);
 }
 
 export function getImageUrl(path: string | null | undefined): string {
-  return resolveAssetUrl(path);
+  return resolveProductImage(path);
 }
 
 export function getProductImageUrl(imagePath: string | undefined | null): string {
-  return resolveAssetUrl(imagePath);
+  return resolveProductImage(imagePath);
 }
 
 export function resolveImageUrl(path: string | undefined | null): string {
-  return resolveAssetUrl(path);
+  return resolveProductImage(path);
 }
 
 export function resolveGitHubImageUrl(
@@ -49,9 +39,9 @@ export function resolveGitHubImageUrl(
   _repo = "dbuy-store", 
   _branch = "main"
 ): string {
-  return resolveAssetUrl(imagePath);
+  return resolveProductImage(imagePath);
 }
 
 export function resolveGithubAssetUrl(path: string | undefined | null): string {
-  return resolveAssetUrl(path);
+  return resolveProductImage(path);
 }

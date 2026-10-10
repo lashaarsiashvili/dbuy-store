@@ -26,15 +26,9 @@ function resolveImageUrl(path) {
   }
   
   let clean = trimmed.replace(/^\/+/, '');
-  clean = clean.replace(/^(data\/uploads\/)+/, 'data/uploads/');
-
-  if (clean.startsWith('uploads/')) {
-    clean = 'data/' + clean;
-  } else if (!clean.startsWith('data/')) {
-    clean = 'data/uploads/' + clean;
-  }
+  clean = clean.replace(/^(data\/)?(public\/)?uploads\//, '');
   
-  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/${clean}`;
+  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/${clean}`;
 }
 
 export default {
