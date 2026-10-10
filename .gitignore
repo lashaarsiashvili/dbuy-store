@@ -7,7 +7,9 @@ coverage/
 .env*
 !.env.example
 !data/uploads/
-public/uploads/
+!data/uploads/*
+!public/uploads/
+!public/uploads/*
 
 
 
