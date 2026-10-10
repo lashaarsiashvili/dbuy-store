@@ -549,6 +549,19 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           }
         }
 
+        // Prune deleted products from D1 relational products table
+        try {
+          const activeIds = sanitizedProducts.map(p => String(p.id)).filter(Boolean);
+          if (activeIds.length > 0) {
+            const placeholders = activeIds.map(() => '?').join(',');
+            await db.prepare(`DELETE FROM products WHERE id NOT IN (${placeholders})`).bind(...activeIds).run();
+          } else {
+            await db.prepare('DELETE FROM products').run();
+          }
+        } catch (pruneErr) {
+          console.error('Relational DB product pruning error:', pruneErr);
+        }
+
         await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
         await dbPut(db, 'last_updated', lastUpdatedNew);
 

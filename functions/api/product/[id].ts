@@ -19,7 +19,7 @@ export interface Env {
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization',
   'Content-Type': 'application/json',
 };
@@ -47,7 +47,7 @@ export const onRequest = async (context: {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  if (request.method !== 'GET') {
+  if (request.method !== 'GET' && request.method !== 'DELETE') {
     return new Response(
       JSON.stringify({ success: false, error: `Method ${request.method} Not Allowed` }),
       { status: 405, headers: CORS_HEADERS }
@@ -80,6 +80,27 @@ export const onRequest = async (context: {
 
   const decodedId = decodeURIComponent(rawId).trim();
   const normalizedSlug = normalizeSlug(decodedId);
+
+  if (request.method === 'DELETE') {
+    try {
+      const res = await env.DB.prepare(
+        "DELETE FROM products WHERE id = ? OR slug = ?"
+      )
+        .bind(decodedId, normalizedSlug)
+        .run();
+
+      return new Response(
+        JSON.stringify({ success: true, deleted: decodedId, result: res }),
+        { status: 200, headers: CORS_HEADERS }
+      );
+    } catch (err: any) {
+      console.error('[Cloudflare D1 /api/product DELETE] Query error:', err);
+      return new Response(
+        JSON.stringify({ success: false, error: err?.message || 'Database deletion error' }),
+        { status: 500, headers: CORS_HEADERS }
+      );
+    }
+  }
 
   try {
     // Strictly use prepared statement with parameter binding against SQL injection

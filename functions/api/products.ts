@@ -86,10 +86,12 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
     }
 
     const rawList = Array.isArray(body) ? body : (Array.isArray(body.products) ? body.products : [body]);
+    const activeIds: string[] = [];
 
     for (const item of rawList) {
       if (!item || typeof item !== 'object') continue;
       const id = String(item.id || `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
+      activeIds.push(id);
       const title = item.title || item.titleKa || 'Product';
       const titleKa = item.titleKa || item.title_ka || '';
       const slug = item.customSlug ? normalizeSlug(item.customSlug) : (normalizeSlug(title) || id);
@@ -134,6 +136,14 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
         id, slug, title, titleKa, description, descriptionKa, price, origPrice, currency,
         primaryImage, primaryImage, imagesJson, category, stock, badge, isActive
       ).run();
+    }
+
+    // Explicitly delete products from D1 that are no longer present in the updated products payload
+    if (activeIds.length > 0) {
+      const placeholders = activeIds.map(() => '?').join(',');
+      await env.DB.prepare(`DELETE FROM products WHERE id NOT IN (${placeholders})`).bind(...activeIds).run();
+    } else if (Array.isArray(body) && body.length === 0) {
+      await env.DB.prepare('DELETE FROM products').run();
     }
 
     return new Response(
@@ -259,6 +269,47 @@ export async function handleProductsGet(env: Env, request?: Request): Promise<Re
   }
 }
 
+export async function handleProductsDelete(env: Env, request: Request): Promise<Response> {
+  if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
+    return new Response(
+      JSON.stringify({ success: false, error: 'Cloudflare D1 database connection unavailable' }),
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+
+  try {
+    const url = new URL(request.url);
+    let id = url.searchParams.get('id') || url.searchParams.get('productId') || '';
+
+    if (!id && request.headers.get('content-type')?.includes('application/json')) {
+      const body: any = await request.json().catch(() => null);
+      if (body) {
+        id = body.id || body.productId || '';
+      }
+    }
+
+    if (!id) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Product ID is required for deletion' }),
+        { status: 400, headers: CORS_HEADERS }
+      );
+    }
+
+    const res = await env.DB.prepare('DELETE FROM products WHERE id = ? OR slug = ?').bind(id, id).run();
+
+    return new Response(
+      JSON.stringify({ success: true, deletedId: id, result: res }),
+      { status: 200, headers: CORS_HEADERS }
+    );
+  } catch (error: any) {
+    console.error('[Cloudflare D1 /api/products DELETE] Error:', error);
+    return new Response(
+      JSON.stringify({ success: false, error: error?.message || 'Failed to delete product from D1' }),
+      { status: 500, headers: CORS_HEADERS }
+    );
+  }
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
 
@@ -274,6 +325,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return handleProductsPost(env, request);
   }
 
+  if (request.method === 'DELETE') {
+    return handleProductsDelete(env, request);
+  }
+
   return new Response(
     JSON.stringify({ success: false, error: `Method ${request.method} Not Allowed` }),
     { status: 405, headers: CORS_HEADERS }
@@ -282,6 +337,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   return handleProductsGet(context.env, context.request);
+};
+
+export const onRequestDelete: PagesFunction<Env> = async (context) => {
+  return handleProductsDelete(context.env, context.request);
 };
 
 export const onRequestOptions: PagesFunction<Env> = async () => {

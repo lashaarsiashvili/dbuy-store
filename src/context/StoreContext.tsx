@@ -1237,6 +1237,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const deleted = products.find(p => p.id === id);
     const newProducts = products.filter(p => p.id !== id);
     setProducts(newProducts);
+
+    // Explicit HTTP DELETE to Cloudflare D1 API endpoints
+    try {
+      await Promise.all([
+        fetch(`/api/products?id=${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {}),
+        fetch(`/api/product/${encodeURIComponent(id)}`, { method: 'DELETE' }).catch(() => {}),
+      ]);
+    } catch (e) {
+      console.warn('Direct D1 product deletion request notice:', e);
+    }
+
     await saveProducts(newProducts);
     addToast(
       language === 'ka' 
