@@ -4,10 +4,6 @@
  * backed by Cloudflare D1 SQL database and GitHub asset image resolution.
  */
 
-const DEFAULT_GH_USER = "lashaarsiashvili";
-const DEFAULT_GH_REPO = "dbuy-store";
-const DEFAULT_GH_BRANCH = "main";
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
@@ -15,19 +11,30 @@ const corsHeaders = {
   "Content-Type": "application/json; charset=utf-8",
 };
 
-function resolveGitHubImageUrl(
-  imagePath, 
-  owner, 
-  repo, 
-  branch = "main"
-) {
-  if (!imagePath || typeof imagePath !== 'string') return '';
-  const trimmed = imagePath.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+function resolveImageUrl(path) {
+  if (!path || typeof path !== 'string') return '';
+  const trimmed = path.trim();
+  if (!trimmed) return '';
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    if (trimmed.includes('github.com/') && trimmed.includes('/blob/')) {
+      return trimmed.replace('/blob/', '/').replace('github.com', 'raw.githubusercontent.com');
+    }
     return trimmed;
   }
-  const cleanPath = trimmed.replace(/^\/+/, "");
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`;
+  if (trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  
+  let clean = trimmed.replace(/^\/+/, '');
+  clean = clean.replace(/^(data\/uploads\/)+/, 'data/uploads/');
+
+  if (clean.startsWith('uploads/')) {
+    clean = 'data/' + clean;
+  } else if (!clean.startsWith('data/')) {
+    clean = 'data/uploads/' + clean;
+  }
+  
+  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/${clean}`;
 }
 
 export default {
@@ -38,10 +45,6 @@ export default {
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
-
-    const ghUser = env.GITHUB_USER || DEFAULT_GH_USER;
-    const ghRepo = env.GITHUB_REPO || DEFAULT_GH_REPO;
-    const ghBranch = env.GITHUB_BRANCH || DEFAULT_GH_BRANCH;
 
     if (!env || !env.DB || typeof env.DB.prepare !== "function") {
       return new Response(
@@ -57,13 +60,28 @@ export default {
           "SELECT * FROM products WHERE is_active = 1 ORDER BY created_at DESC"
         ).all();
 
-        const data = (results || []).map((p) => ({
-          ...p,
-          image_url: resolveGitHubImageUrl(p.image_path || p.image, ghUser, ghRepo, ghBranch),
-          image: resolveGitHubImageUrl(p.image_path || p.image, ghUser, ghRepo, ghBranch),
-        }));
+        const data = (results || []).map((p) => {
+          const imgUrl = resolveImageUrl(p.image_path || p.image);
+          let imgs = [imgUrl];
+          if (p.images) {
+            try {
+              const parsed = typeof p.images === 'string' ? JSON.parse(p.images) : p.images;
+              if (Array.isArray(parsed)) {
+                imgs = parsed.map((i) => resolveImageUrl(i));
+              }
+            } catch {
+              imgs = [imgUrl];
+            }
+          }
+          return {
+            ...p,
+            image_url: imgUrl,
+            image: imgUrl,
+            images: imgs,
+          };
+        });
 
-        return new Response(JSON.stringify({ success: true, count: data.length, data }), {
+        return new Response(JSON.stringify({ success: true, count: data.length, data, products: data }), {
           status: 200,
           headers: corsHeaders,
         });
@@ -86,7 +104,17 @@ export default {
           });
         }
 
-        const resolvedUrl = resolveGitHubImageUrl(product.image_path || product.image, ghUser, ghRepo, ghBranch);
+        const resolvedUrl = resolveImageUrl(product.image_path || product.image);
+        let resolvedImgs = [resolvedUrl];
+        if (product.images) {
+          try {
+            const parsed = typeof product.images === 'string' ? JSON.parse(product.images) : product.images;
+            if (Array.isArray(parsed)) {
+              resolvedImgs = parsed.map((i) => resolveImageUrl(i));
+            }
+          } catch {}
+        }
+
         return new Response(
           JSON.stringify({
             success: true,
@@ -94,6 +122,7 @@ export default {
               ...product,
               image_url: resolvedUrl,
               image: resolvedUrl,
+              images: resolvedImgs,
             },
           }),
           { status: 200, headers: corsHeaders }

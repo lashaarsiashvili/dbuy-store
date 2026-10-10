@@ -1,15 +1,11 @@
 /**
  * GitHub Asset & Slug Resolution Utilities
- * Strictly implements centralized ASSET_BASE_URL raw GitHub links,
- * URL slug normalization, and parameter-bound query patterns.
+ * Strictly resolves product and billboard assets to direct raw GitHub CDN links:
+ * https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/<clean>
  */
 
-export const ASSET_BASE_URL = "https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/public";
+export const ASSET_BASE_URL = "https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main";
 
-/**
- * Normalizes a URL slug: lowercase, hyphen-separated, trimmed.
- * Supports alphanumeric and Georgian Unicode characters.
- */
 export function normalizeSlug(text: string): string {
   if (!text) return '';
   return String(text)
@@ -21,28 +17,48 @@ export function normalizeSlug(text: string): string {
 }
 
 /**
- * Resolves a GitHub image URL given an image path, repository owner, repo, and branch.
+ * Exact resolution logic matching database values (/uploads/...) with GitHub storage (data/uploads/):
  */
-export function resolveGitHubImageUrl(
-  imagePath: string, 
-  owner: string, 
-  repo: string, 
-  branch = "main"
-): string {
-  if (!imagePath || typeof imagePath !== 'string') return '';
-  const trimmed = imagePath.trim();
-  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+export function resolveImageUrl(path: string | undefined | null): string {
+  if (!path || typeof path !== 'string') return '';
+  const trimmed = path.trim();
+  if (!trimmed) return '';
+
+  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+    if (trimmed.includes('github.com/') && trimmed.includes('/blob/')) {
+      return trimmed.replace('/blob/', '/').replace('github.com', 'raw.githubusercontent.com');
+    }
     return trimmed;
   }
-  const cleanPath = trimmed.replace(/^\/+/, "");
-  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`;
+  if (trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  
+  // Clean leading slashes
+  let clean = trimmed.replace(/^\/+/, '');
+  
+  // Remove accidental duplicate prefixes
+  clean = clean.replace(/^(data\/uploads\/)+/, 'data/uploads/');
+
+  // If the path starts with "uploads/" instead of "data/uploads/", prepend "data/"
+  if (clean.startsWith('uploads/')) {
+    clean = 'data/' + clean;
+  } else if (!clean.startsWith('data/')) {
+    clean = 'data/uploads/' + clean;
+  }
+  
+  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/${clean}`;
 }
 
-/**
- * Resolves any relative asset path or filename to a direct, publicly accessible
- * raw GitHub URL using dbuystore repository details.
- */
+export function resolveGitHubImageUrl(
+  imagePath: string, 
+  _owner = "lashaarsiashvili", 
+  _repo = "dbuy-store", 
+  _branch = "main"
+): string {
+  return resolveImageUrl(imagePath);
+}
+
 export function resolveGithubAssetUrl(path: string | undefined | null): string {
-  if (!path || typeof path !== 'string') return '';
-  return resolveGitHubImageUrl(path, "lashaarsiashvili", "dbuy-store", "main");
+  return resolveImageUrl(path);
 }
