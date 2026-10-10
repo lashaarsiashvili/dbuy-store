@@ -51,6 +51,12 @@ export function getProductImage(product: { name?: string; title?: string; image?
 
   const rawImg = product.image;
   if (!rawImg || typeof rawImg !== 'string' || !rawImg.trim()) {
+    if (product.title && PRODUCT_IMAGE_MAP[product.title]) {
+      return `${REPO_BASE}${PRODUCT_IMAGE_MAP[product.title]}`;
+    }
+    if (product.name && PRODUCT_IMAGE_MAP[product.name]) {
+      return `${REPO_BASE}${PRODUCT_IMAGE_MAP[product.name]}`;
+    }
     return '';
   }
 
