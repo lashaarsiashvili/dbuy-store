@@ -1,121 +1,114 @@
-// cloudflare-worker.js
+/**
+ * cloudflare-worker.js
+ * Production-ready Cloudflare Worker handling API routes for products
+ * backed by Cloudflare D1 SQL database and GitHub asset image resolution.
+ */
+
+const DEFAULT_GH_USER = "lashaarsiashvili";
+const DEFAULT_GH_REPO = "dbuy-store";
+const DEFAULT_GH_BRANCH = "main";
+
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization",
+  "Content-Type": "application/json; charset=utf-8",
+};
+
+function resolveGitHubImageUrl(
+  imagePath, 
+  owner, 
+  repo, 
+  branch = "main"
+) {
+  if (!imagePath || typeof imagePath !== 'string') return '';
+  const trimmed = imagePath.trim();
+  if (trimmed.startsWith("http://") || trimmed.startsWith("https://") || trimmed.startsWith("data:")) {
+    return trimmed;
+  }
+  const cleanPath = trimmed.replace(/^\/+/, "");
+  return `https://raw.githubusercontent.com/${owner}/${repo}/${branch}/${cleanPath}`;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
-    const corsHeaders = {
-      "Access-Control-Allow-Origin": "*",
-      "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-      "Access-Control-Allow-Headers": "Content-Type, Authorization",
-    };
+    const { pathname } = url;
 
     if (request.method === "OPTIONS") {
       return new Response(null, { headers: corsHeaders });
     }
 
-    const KV_KEY = "SITE_PRODUCTS_LIST";
+    const ghUser = env.GITHUB_USER || DEFAULT_GH_USER;
+    const ghRepo = env.GITHUB_REPO || DEFAULT_GH_REPO;
+    const ghBranch = env.GITHUB_BRANCH || DEFAULT_GH_BRANCH;
 
-    // 1. პროდუქტების წამოღება Cloudflare D1 ბაზიდან (env.DB)
-    if (url.pathname === "/api/products" && request.method === "GET") {
-      // Strictly validate Cloudflare D1 env.DB connection
-      if (!env || !env.DB || typeof env.DB.prepare !== "function") {
-        console.error("[Cloudflare D1 /api/products] Connection Validation Error: env.DB connection is missing or invalid");
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: "Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid",
-            products: [],
-          }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+    if (!env || !env.DB || typeof env.DB.prepare !== "function") {
+      return new Response(
+        JSON.stringify({ success: false, error: "Cloudflare D1 database connection unavailable" }),
+        { status: 500, headers: corsHeaders }
+      );
+    }
+
+    try {
+      // GET /api/products -> List all active items
+      if (pathname === "/api/products" && request.method === "GET") {
+        const { results } = await env.DB.prepare(
+          "SELECT * FROM products WHERE is_active = 1 ORDER BY created_at DESC"
+        ).all();
+
+        const data = (results || []).map((p) => ({
+          ...p,
+          image_url: resolveGitHubImageUrl(p.image_path || p.image, ghUser, ghRepo, ghBranch),
+          image: resolveGitHubImageUrl(p.image_path || p.image, ghUser, ghRepo, ghBranch),
+        }));
+
+        return new Response(JSON.stringify({ success: true, count: data.length, data }), {
+          status: 200,
+          headers: corsHeaders,
+        });
       }
 
-      try {
-        const { results } = await env.DB.prepare("SELECT * FROM products").all();
-        const products = Array.isArray(results) ? results : [];
+      // GET /api/products/:identifier -> Fetch single item by slug or numeric ID
+      const match = pathname.match(/^\/api\/products\/([a-zA-Z0-9_-]+)$/);
+      if (match && request.method === "GET") {
+        const idOrSlug = match[1];
+        const product = await env.DB.prepare(
+          "SELECT * FROM products WHERE (slug = ? OR id = ?) AND is_active = 1 LIMIT 1"
+        )
+          .bind(idOrSlug, idOrSlug)
+          .first();
 
+        if (!product) {
+          return new Response(JSON.stringify({ success: false, error: "Product not found" }), {
+            status: 404,
+            headers: corsHeaders,
+          });
+        }
+
+        const resolvedUrl = resolveGitHubImageUrl(product.image_path || product.image, ghUser, ghRepo, ghBranch);
         return new Response(
           JSON.stringify({
             success: true,
-            products,
+            data: {
+              ...product,
+              image_url: resolvedUrl,
+              image: resolvedUrl,
+            },
           }),
-          {
-            status: 200,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
-        );
-      } catch (err) {
-        console.error("[Cloudflare D1 /api/products] Error executing \"SELECT * FROM products\" query:", err);
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: err?.message || "Database query error while retrieving products",
-            products: [],
-          }),
-          {
-            status: 500,
-            headers: { ...corsHeaders, "Content-Type": "application/json" },
-          }
+          { status: 200, headers: corsHeaders }
         );
       }
+
+      return new Response(JSON.stringify({ success: false, error: "Not Found" }), {
+        status: 404,
+        headers: corsHeaders,
+      });
+    } catch (err) {
+      return new Response(JSON.stringify({ success: false, error: err?.message || "Server Error" }), {
+        status: 500,
+        headers: corsHeaders,
+      });
     }
-
-    // 2. ადმინიდან ცვლილებების შენახვა (დამატება/განახლება/წაშლა)
-    if (url.pathname === "/api/products" && request.method === "POST") {
-      try {
-        const body = await request.json();
-        let list = [];
-        if (Array.isArray(body)) {
-          list = body;
-        } else if (body && body.id) {
-          const currentData = await env.PRODUCTS_KV.get(KV_KEY, { type: "json" });
-          const existing = Array.isArray(currentData) ? currentData : [];
-          const idx = existing.findIndex((p) => p.id === body.id);
-          if (idx >= 0) {
-            existing[idx] = { ...existing[idx], ...body };
-          } else {
-            existing.unshift(body);
-          }
-          list = existing;
-        }
-        
-        await env.PRODUCTS_KV.put(KV_KEY, JSON.stringify(list));
-
-        return new Response(
-          JSON.stringify({ success: true, message: "Products updated successfully in Cloudflare KV", products: list }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ success: false, error: err.message }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    // 3. პროდუქტის წაშლა
-    if (url.pathname === "/api/products" && request.method === "DELETE") {
-      try {
-        const id = url.searchParams.get("id");
-        if (!id) {
-          return new Response(JSON.stringify({ success: false, error: "Product ID is required" }), { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-        }
-        const currentData = await env.PRODUCTS_KV.get(KV_KEY, { type: "json" });
-        const existing = Array.isArray(currentData) ? currentData : [];
-        const filtered = existing.filter((p) => p.id !== id);
-        await env.PRODUCTS_KV.put(KV_KEY, JSON.stringify(filtered));
-
-        return new Response(
-          JSON.stringify({ success: true, message: "Product deleted from Cloudflare KV", products: filtered }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } catch (err) {
-        return new Response(
-          JSON.stringify({ success: false, error: err.message }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-    }
-
-    return new Response("Not Found", { status: 404, headers: corsHeaders });
   },
 };
