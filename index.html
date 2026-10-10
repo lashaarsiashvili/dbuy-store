@@ -224,18 +224,29 @@
     </script>
     <title>DBUY Store — Quality Tech, Fitness & Everyday Essentials</title>
     <meta name="description" content="Premium e-commerce storefront for tech, fitness, and everyday carry essentials." />
-    <!-- Error resilience script for 3rd-party cross-origin SDKs -->
+    <!-- Error resilience script for 3rd-party cross-origin SDKs & dev server WebSockets -->
     <script>
       window.onerror = function(message, source, lineno, colno, error) {
-        if (message === 'Script error.' || !source || (typeof message === 'string' && message.toLowerCase().indexOf('script error') !== -1)) {
+        var str = String(message || '').toLowerCase();
+        if (
+          str.indexOf('script error') !== -1 ||
+          str.indexOf('websocket') !== -1 ||
+          str.indexOf('failed to connect to websocket') !== -1 ||
+          !source
+        ) {
           return true;
         }
         return false;
       };
       window.addEventListener('unhandledrejection', function(event) {
         if (event && event.reason) {
-          var str = String(event.reason.message || event.reason);
-          if (str.indexOf('Script error') !== -1) {
+          var str = String(event.reason.message || event.reason || '').toLowerCase();
+          if (
+            str.indexOf('script error') !== -1 ||
+            str.indexOf('websocket') !== -1 ||
+            str.indexOf('failed to connect to websocket') !== -1 ||
+            str.indexOf('websocket closed without opened') !== -1
+          ) {
             event.preventDefault();
           }
         }
