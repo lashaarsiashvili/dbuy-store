@@ -5,7 +5,7 @@
 
 import { resolveProductImage } from './imageResolver';
 
-export const ASSET_BASE_URL = "https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main";
+export const ASSET_BASE_URL = "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products";
 
 export function normalizeSlug(text: string): string {
   if (!text) return '';

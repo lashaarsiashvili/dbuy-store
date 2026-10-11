@@ -225,6 +225,9 @@ async function ensureD1ProductsSeeded(db: D1Database, forceReset = false): Promi
   }
 }
 
+import { handleMigrateImages } from '../migrate-images';
+// ... existing imports
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -232,6 +235,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { headers: CORS_HEADERS });
+  }
+
+  // Add migration endpoint
+  if (path.endsWith('/migrate-images')) {
+    return handleMigrateImages(env);
   }
 
   const db = env.DB;

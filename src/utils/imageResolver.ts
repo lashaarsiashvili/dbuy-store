@@ -6,7 +6,7 @@
 import { initialProducts } from '../data/initialProducts';
 import { Product } from '../types';
 
-const REPO_BASE = 'https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/';
+const REPO_BASE = 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/';
 
 // Explicit mapping for catalog products to actual uploaded files
 const PRODUCT_IMAGE_MAP: Record<string, string> = {
