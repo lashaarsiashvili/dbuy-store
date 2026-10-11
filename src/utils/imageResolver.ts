@@ -61,6 +61,7 @@ export function getProductImage(product: { name?: string; title?: string; image?
   }
 
   if (rawImg.startsWith('http://') || rawImg.startsWith('https://') || rawImg.startsWith('data:')) {
+    // If it's already an absolute URL (including R2), return it directly
     return rawImg;
   }
 

@@ -65,6 +65,8 @@ async function ensureProductsTable(env: Env) {
     await env.DB.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN orig_price REAL;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN badge TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN is_published_globally INTEGER DEFAULT 0;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN published_at TEXT;');
   } catch (e) {}
 }
 
@@ -147,10 +149,12 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
       const stock = Number(item.stock) || 0;
       const badge = item.badge || '';
       const isActive = item.is_active !== undefined ? Number(item.is_active) : 1;
+      const isPublishedGlobally = item.isPublishedGlobally ? 1 : 0;
+      const publishedAt = item.publishedAt || null;
 
       await env.DB.prepare(`
-        INSERT INTO products (id, slug, title, title_ka, description, description_ka, price, orig_price, currency, image, image_path, images, images_json, category, stock, badge, is_active, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO products (id, slug, title, title_ka, description, description_ka, price, orig_price, currency, image, image_path, images, images_json, category, stock, badge, is_active, is_published_globally, published_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
           slug = excluded.slug,
           title = excluded.title,
@@ -168,10 +172,12 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
           stock = excluded.stock,
           badge = excluded.badge,
           is_active = excluded.is_active,
+          is_published_globally = excluded.is_published_globally,
+          published_at = excluded.published_at,
           updated_at = CURRENT_TIMESTAMP
       `).bind(
         id, slug, title, titleKa, description, descriptionKa, price, origPrice, currency,
-        primaryImage, primaryImage, imagesJson, imagesJson, category, stock, badge, isActive
+        primaryImage, primaryImage, imagesJson, imagesJson, category, stock, badge, isActive, isPublishedGlobally, publishedAt
       ).run();
     }
 

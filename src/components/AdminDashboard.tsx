@@ -1275,21 +1275,6 @@ export const AdminDashboard: React.FC = () => {
       } else {
         success = await addProduct(productPayload);
       }
-
-      try {
-        await fetch('/api/products', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Admin-Slug': adminSlug,
-            'Authorization': `Bearer ${adminSlug}`,
-            'x-admin-key': adminSlug
-          },
-          body: JSON.stringify(productPayload),
-        });
-      } catch (syncErr) {
-        console.warn('Direct POST /api/products backup warning:', syncErr);
-      }
     } catch (err: any) {
       console.error('Error in handleSaveProduct:', err);
       alert('Save failed: ' + err.message);

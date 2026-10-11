@@ -1013,26 +1013,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         });
     };
 
+    // Fetch immediately to ensure D1 is the source of truth
     fetchLiveProducts();
-
-    const handleFocus = () => {
-      fetchLiveProducts();
-    };
-
-    if (typeof window !== 'undefined') {
-      window.addEventListener('focus', handleFocus);
-    }
-
-    if (typeof window !== 'undefined' && window.location.search.includes('reset=true')) {
-      fetch('/api/store/reset?reset=true', { method: 'POST' }).catch(() => {});
-      fetch('/api/products?reset=true', { method: 'GET' }).catch(() => {});
-    }
-
-    return () => {
-      if (typeof window !== 'undefined') {
-        window.removeEventListener('focus', handleFocus);
-      }
-    };
   }, []);
 
   // Pre-cache product images to IndexedDB and RAM cache to prevent image loss during re-renders or state updates
