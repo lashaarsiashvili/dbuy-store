@@ -21,7 +21,7 @@
     "delete-products-list": "tsx scripts/delete-products-list.ts",
     "push-local-to-d1": "tsx scripts/push-local-to-d1-api.ts",
     "delete-no-image-products": "tsx scripts/delete-no-image-products.ts",
-    "migrate-d1-to-r2": "tsx scripts/migrate-d1-to-r2.ts"
+    "migrate-d1-to-r2": "tsx migrate-d1-to-r2.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1149.0",
