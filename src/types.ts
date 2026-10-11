@@ -114,6 +114,8 @@ export interface BillboardSlide {
   subtitle: string;
   subtitleKa?: string;
   image: string; // Featured high-res product photo
+  image_position_y?: number; // Vertical focal point percentage (0% to 100%)
+  imagePositionY?: number; // Alias for vertical focal point percentage
   bgImage?: string; // Optional ambient background pattern/photo
   bgGradient: string; // e.g. "from-slate-950 via-slate-900 to-indigo-950"
   accentColor?: string; // e.g. "blue" | "indigo" | "amber" | "emerald" | "rose"

@@ -516,6 +516,32 @@ export const AdminDashboard: React.FC = () => {
   const [billboardImageMode, setBillboardImageMode] = useState<'upload' | 'url'>('url');
   const billboardFileInputRef = useRef<HTMLInputElement>(null);
 
+  // Drag-to-Pan Logic for Hero Banner Image Focal Point (object-position Y)
+  const [isDraggingImage, setIsDraggingImage] = useState(false);
+  const [dragStartY, setDragStartY] = useState(0);
+  const [dragStartPosY, setDragStartPosY] = useState(50);
+  const imagePreviewContainerRef = useRef<HTMLDivElement>(null);
+
+  const handleImageDragStart = (clientY: number) => {
+    if (!billboardForm.image) return;
+    setIsDraggingImage(true);
+    setDragStartY(clientY);
+    setDragStartPosY(billboardForm.image_position_y ?? 50);
+  };
+
+  const handleImageDragMove = (clientY: number) => {
+    if (!isDraggingImage || !imagePreviewContainerRef.current) return;
+    const deltaY = clientY - dragStartY;
+    const containerHeight = imagePreviewContainerRef.current.clientHeight || 220;
+    const newPosY = dragStartPosY - (deltaY / containerHeight) * 100;
+    const clampedPos = Math.min(100, Math.max(0, Math.round(newPosY)));
+    setBillboardForm(prev => ({ ...prev, image_position_y: clampedPos }));
+  };
+
+  const handleImageDragEnd = () => {
+    setIsDraggingImage(false);
+  };
+
   // Quick Full-Width Hero Slider Upload Form State (User Admin Panel)
   const [quickSlideTitle, setQuickSlideTitle] = useState('');
   const [quickSlideDesc, setQuickSlideDesc] = useState('');
@@ -616,6 +642,7 @@ export const AdminDashboard: React.FC = () => {
     subtitle: '',
     subtitleKa: '',
     image: '',
+    image_position_y: 50,
     bgImage: '',
     bgGradient: 'from-slate-950 via-indigo-950 to-slate-900',
     badge: 'Featured Deal',
@@ -647,6 +674,7 @@ export const AdminDashboard: React.FC = () => {
       subtitle: 'Discover high quality gear tailored for modern everyday convenience.',
       subtitleKa: 'აღმოაჩინეთ უმაღლესი ხარისხის პროდუქტები თქვენი ყოველდღიური კომფორტისთვის.',
       image: products[0]?.image || 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?auto=format&fit=crop&w=1200&q=80',
+      image_position_y: 50,
       bgImage: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=1920&q=80',
       bgGradient: 'from-slate-950 via-indigo-950 to-slate-900',
       badge: 'Featured Deal • 2026',
@@ -671,6 +699,7 @@ export const AdminDashboard: React.FC = () => {
       subtitle: slide.subtitle,
       subtitleKa: slide.subtitleKa || '',
       image: slide.image,
+      image_position_y: slide.image_position_y ?? slide.imagePositionY ?? 50,
       bgImage: slide.bgImage || '',
       bgGradient: slide.bgGradient || 'from-slate-950 via-indigo-950 to-slate-900',
       badge: slide.badge || '',
@@ -4441,18 +4470,118 @@ export const AdminDashboard: React.FC = () => {
                   />
                 )}
 
-                {/* Live Image Preview Card */}
+                {/* Interactive Drag-to-Pan Image Preview Canvas */}
                 {billboardForm.image && (
-                  <div className="p-3 bg-slate-900 rounded-2xl border border-slate-800 flex items-center space-x-4">
-                    <CachedImage
-                      src={billboardForm.image}
-                      alt="Preview"
-                      className="w-20 h-20 rounded-xl object-cover bg-slate-950 border border-slate-700 shrink-0"
-                    />
-                    <div className="text-xs text-white min-w-0">
-                      <p className="font-bold text-blue-400 truncate">{isKa ? 'სურათის გადახედვა:' : 'Image Preview:'}</p>
-                      <p className="text-[11px] text-slate-300 truncate">{billboardForm.title || (isKa ? 'სათაური არ არის შეყვანილი' : 'No title entered')}</p>
-                      <p className="text-[10px] text-slate-400 mt-1 font-mono truncate">{billboardForm.image}</p>
+                  <div className="space-y-2 pt-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-800 flex items-center space-x-1.5">
+                        <Eye className="w-4 h-4 text-blue-600" />
+                        <span>{isKa ? 'სურათის პოზიცია & ცოცხალი გადახედვა (Focal Point)' : 'Image Focal Point & Live Interactive Preview'}</span>
+                      </span>
+                      <span className="text-[11px] font-mono font-bold bg-blue-50 text-blue-700 px-2.5 py-0.5 rounded-full border border-blue-200">
+                        {isKa ? `ვერტიკალური პოზიცია: ${billboardForm.image_position_y ?? 50}%` : `Vertical Position: ${billboardForm.image_position_y ?? 50}%`}
+                      </span>
+                    </div>
+
+                    <div
+                      ref={imagePreviewContainerRef}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        handleImageDragStart(e.clientY);
+                      }}
+                      onMouseMove={(e) => {
+                        handleImageDragMove(e.clientY);
+                      }}
+                      onMouseUp={handleImageDragEnd}
+                      onMouseLeave={handleImageDragEnd}
+                      onTouchStart={(e) => {
+                        if (e.touches.length > 0) {
+                          handleImageDragStart(e.touches[0].clientY);
+                        }
+                      }}
+                      onTouchMove={(e) => {
+                        if (e.touches.length > 0) {
+                          handleImageDragMove(e.touches[0].clientY);
+                        }
+                      }}
+                      onTouchEnd={handleImageDragEnd}
+                      className={`relative w-full h-56 rounded-2xl overflow-hidden bg-slate-950 border-2 select-none transition-colors ${
+                        isDraggingImage
+                          ? 'cursor-grabbing border-blue-500 ring-4 ring-blue-500/20'
+                          : 'cursor-grab border-slate-700 hover:border-blue-400'
+                      }`}
+                    >
+                      <CachedImage
+                        src={billboardForm.image}
+                        alt="Billboard Live Focal Preview"
+                        className="w-full h-full object-cover pointer-events-none transition-none"
+                        style={{
+                          objectPosition: `center ${billboardForm.image_position_y ?? 50}%`
+                        }}
+                      />
+
+                      {/* Semi-transparent Overlay Badge */}
+                      <div className="absolute inset-0 bg-black/20 pointer-events-none flex items-center justify-center">
+                        <div className={`px-4 py-2 rounded-full backdrop-blur-md border text-xs font-bold transition-all shadow-lg flex items-center space-x-2 ${
+                          isDraggingImage
+                            ? 'bg-blue-600/90 text-white border-blue-300 scale-105'
+                            : 'bg-black/60 text-white border-white/30 hover:bg-black/80'
+                        }`}>
+                          <span className="text-base leading-none">↕</span>
+                          <span>
+                            {isDraggingImage
+                              ? (isKa ? 'გადააადგილეთ...' : 'Dragging...')
+                              : (isKa ? '↕ Drag to reposition (გადააადგილეთ)' : '↕ Drag to reposition')}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Live Badge in Top-Left */}
+                      <div className="absolute top-3 left-3 bg-black/70 backdrop-blur-md px-3 py-1 rounded-xl text-[11px] font-mono font-bold text-white border border-white/20 shadow-md pointer-events-none">
+                        Y: {billboardForm.image_position_y ?? 50}%
+                      </div>
+                    </div>
+
+                    {/* Quick Focal Presets */}
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px] text-slate-500">
+                        {isKa ? 'სწრაფი პოზიციონირება:' : 'Quick Focal Presets:'}
+                      </span>
+                      <div className="flex items-center space-x-1.5 text-[11px]">
+                        <button
+                          type="button"
+                          onClick={() => setBillboardForm(prev => ({ ...prev, image_position_y: 0 }))}
+                          className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
+                            (billboardForm.image_position_y ?? 50) === 0
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          {isKa ? 'ზედა (0%)' : 'Top (0%)'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBillboardForm(prev => ({ ...prev, image_position_y: 50 }))}
+                          className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
+                            (billboardForm.image_position_y ?? 50) === 50
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          {isKa ? 'ცენტრი (50%)' : 'Center (50%)'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setBillboardForm(prev => ({ ...prev, image_position_y: 100 }))}
+                          className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
+                            (billboardForm.image_position_y ?? 50) === 100
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                          }`}
+                        >
+                          {isKa ? 'ქვედა (100%)' : 'Bottom (100%)'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}

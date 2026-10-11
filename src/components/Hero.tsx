@@ -143,7 +143,8 @@ export const Hero: React.FC = () => {
                 <CachedImage
                   src={slideImage}
                   alt={slideTitle}
-                  className="w-full h-full object-cover object-center transform transition-transform duration-1000 ease-out"
+                  className="w-full h-full object-cover transform transition-transform duration-1000 ease-out"
+                  style={{ objectPosition: `center ${slide.image_position_y ?? slide.imagePositionY ?? 50}%` }}
                 />
                 {/* Subtle gradient at bottom for high legibility while keeping image crisp and unclipped */}
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950/85 via-slate-950/25 to-transparent pointer-events-none" />
