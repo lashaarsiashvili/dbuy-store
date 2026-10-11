@@ -10,7 +10,7 @@ database_id = "0ccd6b48-b6d5-4cbe-95eb-71a9a32ee1b8"
 
 [[r2_buckets]]
 binding = "R2_BUCKET"
-bucket_name = "products"
+bucket_name = "product-images"
 
 # Optional Cloudflare KV namespace for products list (as used in cloudflare-worker.js)
 # [[kv_namespaces]]
