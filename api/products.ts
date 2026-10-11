@@ -25,18 +25,9 @@ export const CORS_HEADERS = {
   'Content-Type': 'application/json',
 };
 
-const GITHUB_REPO_BASE = 'https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/';
-
-/**
- * სურათის ფარდობითი გზის გარდაქმნა პირდაპირ GitHub Raw URL-ად
- */
 function normalizeImageUrl(path: string | null | undefined): string {
   if (!path || typeof path !== 'string') return '';
-  if (path.startsWith('http://') || path.startsWith('https://')) return path;
-
-  // მოვაცილოთ დახრილი ხაზები და საქაღალდის პრეფიქსები, რომ დაგვრჩეს მხოლოდ სუფთა ფაილის სახელი
-  const filename = path.trim().replace(/^\/+/, '').replace(/^(data\/)?uploads\//, '');
-  return `${GITHUB_REPO_BASE}${filename}`;
+  return path.trim();
 }
 
 export async function getProductsFromD1(env: Env): Promise<any[]> {

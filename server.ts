@@ -579,11 +579,6 @@ async function syncFromRedisOnStartup(): Promise<void> {
 dbInitPromise = (async () => {
   console.log('[STARTUP-SYNC] Starting database synchronization...');
   try {
-    cleanAllStoreProductImageUrls();
-  } catch (err) {
-    console.error('[STARTUP-SYNC] Error normalizing product image URLs on startup:', err);
-  }
-  try {
     await syncFromRedisOnStartup();
   } catch (err) {
     console.error('[STARTUP-SYNC] Error syncing from Redis on startup:', err);

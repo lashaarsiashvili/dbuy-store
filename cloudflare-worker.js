@@ -13,22 +13,7 @@ const corsHeaders = {
 
 function resolveImageUrl(path) {
   if (!path || typeof path !== 'string') return '';
-  const trimmed = path.trim();
-  if (!trimmed) return '';
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
-    if (trimmed.includes('github.com/') && trimmed.includes('/blob/')) {
-      return trimmed.replace('/blob/', '/').replace('github.com', 'raw.githubusercontent.com');
-    }
-    return trimmed;
-  }
-  if (trimmed.startsWith('data:')) {
-    return trimmed;
-  }
-  
-  let clean = trimmed.replace(/^\/+/, '');
-  clean = clean.replace(/^(data\/)?(public\/)?uploads\//, '');
-  
-  return `https://raw.githubusercontent.com/lashaarsiashvili/dbuy-store/main/data/uploads/${clean}`;
+  return path.trim();
 }
 
 export default {

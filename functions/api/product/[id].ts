@@ -120,12 +120,7 @@ export const onRequest = async (context: {
       );
     }
 
-    // Ensure image URLs point to direct GitHub raw asset base URL if relative
     let imageUrl = (product as any).image || (product as any).image_url || '';
-    if (imageUrl && !imageUrl.startsWith('http') && !imageUrl.startsWith('data:')) {
-      const clean = imageUrl.startsWith('/') ? imageUrl.slice(1) : imageUrl;
-      imageUrl = `${ASSET_BASE_URL}/${clean}`;
-    }
 
     const enrichedProduct = {
       ...product,

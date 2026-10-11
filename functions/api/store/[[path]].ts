@@ -1,4 +1,3 @@
-import { initialProducts, DB_VERSION } from '../../../src/data/initialProducts';
 import { initialBillboards } from '../../../src/data/initialBillboards';
 
 // Declare Cloudflare D1 local types for tsc compiler
@@ -152,77 +151,7 @@ async function loadFullProducts(db: D1Database, rawProducts: any[]): Promise<any
   return parseAndFallbackProducts(rawProducts);
 }
 
-// Ensure D1 products table exists and seed/reset ONLY when explicitly requested (forceReset = true)
-async function ensureD1ProductsSeeded(db: D1Database, forceReset = false): Promise<void> {
-  // If not explicitly requested via admin reset, NEVER auto-seed or overwrite D1. D1 is the single source of truth.
-  if (!forceReset) {
-    return;
-  }
-
-  try {
-    console.log(`[DB-RESET] Explicit admin reset requested. Re-seeding D1 database from initialProducts.ts...`);
-
-    // Force clear existing outdated or duplicated products in D1
-    try {
-      await db.prepare('DELETE FROM products').run();
-    } catch (e) {
-      console.warn('Notice: Could not clear products table:', e);
-    }
-
-    // Populate strictly with clean products from initialProducts.ts
-    for (const item of initialProducts) {
-      const primaryImage = item.image || (item.images && item.images[0]) || '';
-      const imagesJson = JSON.stringify(item.images || (primaryImage ? [primaryImage] : []));
-      const name = (item as any).name || item.title || '';
-      const nameKa = item.titleKa || (item as any).name_ka || '';
-      const description = item.description || '';
-      const descriptionKa = item.descriptionKa || (item as any).description_ka || '';
-      const price = item.price || 0;
-      const originalPrice = item.origPrice !== undefined && item.origPrice !== null ? Number(item.origPrice) : ((item as any).original_price !== undefined && (item as any).original_price !== null ? Number((item as any).original_price) : null);
-      const category = item.category || '';
-      const stock = item.stock || 0;
-
-      await db.prepare(`
-        INSERT INTO products (id, name, name_ka, description, description_ka, price, original_price, image, images, category, stock, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(id) DO UPDATE SET
-          name = excluded.name,
-          name_ka = excluded.name_ka,
-          description = excluded.description,
-          description_ka = excluded.description_ka,
-          price = excluded.price,
-          original_price = excluded.original_price,
-          image = excluded.image,
-          images = excluded.images,
-          category = excluded.category,
-          stock = excluded.stock,
-          updated_at = CURRENT_TIMESTAMP
-      `).bind(
-        item.id,
-        name,
-        nameKa,
-        description,
-        descriptionKa,
-        price,
-        originalPrice,
-        primaryImage,
-        imagesJson,
-        category,
-        stock
-      ).run();
-    }
-
-    await dbPut(db, 'products', JSON.stringify(initialProducts));
-    await dbPut(db, 'db_version', DB_VERSION);
-    await dbPut(db, 'last_updated', new Date().toISOString());
-    console.log(`[DB-RESET] Successfully updated D1 database to DB_VERSION ${DB_VERSION} with ${initialProducts.length} clean products.`);
-  } catch (err) {
-    console.error('ensureD1ProductsSeeded error:', err);
-  }
-}
-
 import { handleMigrateImages } from '../migrate-images';
-// ... existing imports
 
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
@@ -275,12 +204,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       console.warn('Column addition warning:', e);
     }
 
-  // --- INITIAL SEEDING (Run only once if D1 is completely empty) ---
-  const existingProductsRes = await db.prepare('SELECT id FROM products LIMIT 1').all();
-  const productsExist = Boolean(existingProductsRes?.results && existingProductsRes.results.length > 0);
-  if (!productsExist) {
-    console.log('[SEED] Initializing empty D1 SQL storage with default database assets...');
-    await dbPut(db, 'products', JSON.stringify(initialProducts));
+  // --- INITIAL STORE_KV SETUP (NO AUTOMATIC PRODUCT SEEDING OR OVERWRITING) ---
+  const existingKvRes = await db.prepare("SELECT value FROM store_kv WHERE key = 'last_updated'").all();
+  const kvExists = Boolean(existingKvRes?.results && existingKvRes.results.length > 0);
+  if (!kvExists) {
+    console.log('[INIT] Initializing store KV configuration...');
     await dbPut(db, 'billboards', JSON.stringify(initialBillboards));
     await dbPut(db, 'billboardIntervalSeconds', '120');
     await dbPut(db, 'adminSecretSlug', 'dashboard');
@@ -301,24 +229,10 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   }
 
   // --- ROUTER HANDLERS ---
-  const isResetRequested = url.searchParams.get('reset') === 'true' || path.endsWith('/reset');
-  if (isResetRequested) {
-    await ensureD1ProductsSeeded(db, true);
-    if (path.endsWith('/reset')) {
-      return jsonResponse({
-        success: true,
-        message: `Database successfully re-seeded from initialProducts.ts (DB_VERSION: ${DB_VERSION})`,
-        dbVersion: DB_VERSION,
-        products: initialProducts,
-      });
-    }
-  }
 
   // 1. GET: Sync or products data fetch
   if (request.method === 'GET') {
     if (path.endsWith('/sync')) {
-      await ensureD1ProductsSeeded(db, isResetRequested);
-
       const clientSince = url.searchParams.get('since');
       const lastUpdated = await dbGet(db, 'last_updated') || '';
 
@@ -330,8 +244,49 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         });
       }
 
-      const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
-      const products = await loadFullProducts(db, rawProducts);
+      let products: any[] = [];
+      try {
+        const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+        if (results && results.length > 0) {
+          products = results.map((row: any) => {
+            let imagesArr: string[] = [];
+            if (row.images) {
+              try {
+                imagesArr = typeof row.images === 'string' ? JSON.parse(row.images) : row.images;
+              } catch (e) {
+                imagesArr = [];
+              }
+            }
+            if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
+              imagesArr = row.image && row.image !== 'null' ? [row.image] : [];
+            }
+            return {
+              id: String(row.id),
+              title: row.name || row.title || '',
+              titleKa: row.name_ka || row.title_ka || '',
+              title_en: row.name || row.title || '',
+              title_ka: row.name_ka || row.title_ka || '',
+              description: row.description || '',
+              descriptionKa: row.description_ka || '',
+              description_en: row.description_en || row.description || '',
+              description_ka: row.description_ka || '',
+              price: Number(row.price) || 0,
+              origPrice: Number(row.original_price) || 0,
+              original_price: Number(row.original_price) || 0,
+              image: imagesArr[0] || row.image || '',
+              images: imagesArr,
+              category: row.category || 'tech',
+              stock: Number(row.stock) || 0,
+            };
+          });
+        }
+      } catch (err) {}
+
+      if (products.length === 0) {
+        const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
+        products = await loadFullProducts(db, rawProducts);
+      }
+
       const theme = JSON.parse(await dbGet(db, 'theme') || '{}');
       const billboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
       const billboardIntervalSeconds = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
@@ -362,8 +317,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }
 
     if (path.endsWith('/products')) {
-      await ensureD1ProductsSeeded(db);
-
       try {
         const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
         if (results && results.length > 0) {
