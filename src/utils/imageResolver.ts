@@ -64,6 +64,10 @@ export function getProductImage(product: { name?: string; title?: string; image?
     return rawImg;
   }
 
+  if (rawImg.startsWith('/uploads/') || rawImg.startsWith('/')) {
+    return rawImg;
+  }
+
   const cleanImg = rawImg.trim().replace(/^(\/)?(data\/)?(public\/)?(uploads\/)?/, '');
   if (!cleanImg) return '';
   return `${REPO_BASE}${cleanImg}`;

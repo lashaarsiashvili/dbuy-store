@@ -130,10 +130,11 @@ function syncCatalog() {
     verifyAndRepairProductImages(db.products, db.billboards || []);
 
     const tsContent = `import { Product } from '../types';
+import productsJson from './products.json';
 
-export const DB_VERSION = "2026_v2_clean";
+export const DB_VERSION = "2026_v5_local_uploads";
 
-export const initialProducts: Product[] = ${JSON.stringify(db.products, null, 2)};
+export const initialProducts: Product[] = productsJson as Product[];
 `;
     fs.writeFileSync(productsOut, tsContent);
     console.log(`Synced ${db.products.length} products & verified all images to initialProducts.ts`);

@@ -42,24 +42,30 @@ const CORS_HEADERS = {
   'Expires': '0',
 };
 
-const CREATE_TABLE_SQL = `
-CREATE TABLE IF NOT EXISTS products (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    slug TEXT NOT NULL UNIQUE,
-    title TEXT NOT NULL,
-    description TEXT,
-    price REAL NOT NULL DEFAULT 0.00,
-    currency TEXT NOT NULL DEFAULT 'USD',
-    image_path TEXT NOT NULL,
-    category TEXT,
-    stock INTEGER NOT NULL DEFAULT 0,
-    is_active INTEGER NOT NULL DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);
-CREATE INDEX IF NOT EXISTS idx_products_slug ON products (slug);
-CREATE INDEX IF NOT EXISTS idx_products_active ON products (is_active);
-`;
+async function ensureProductsTable(env: Env) {
+  if (!env || !env.DB || typeof env.DB.exec !== 'function') return;
+  try {
+    // Try to create table, ignore error if it already exists
+    await env.DB.exec(`CREATE TABLE products (id TEXT PRIMARY KEY, title TEXT)`);
+  } catch (e) {}
+  
+  try {
+    await env.DB.exec('ALTER TABLE products ADD COLUMN slug TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN description TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN price REAL;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN currency TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN image TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN image_path TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN images_json TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN category TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN stock INTEGER;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN is_active INTEGER DEFAULT 1;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN title_ka TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN orig_price REAL;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN badge TEXT;');
+  } catch (e) {}
+}
 
 export async function handleProductsPost(env: Env, request: Request): Promise<Response> {
   if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
@@ -70,15 +76,7 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
   }
 
   try {
-    if (typeof env.DB.exec === 'function') {
-      await env.DB.exec(CREATE_TABLE_SQL);
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN image TEXT;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN images_json TEXT;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN title_ka TEXT;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN orig_price REAL;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN badge TEXT;'); } catch (e) {}
-    }
+    await ensureProductsTable(env);
 
     const body: any = await request.json().catch(() => null);
     if (!body) {
@@ -173,17 +171,7 @@ export async function handleProductsGet(env: Env, request?: Request): Promise<Re
   }
 
   try {
-    // Ensure table structure exists
-    if (typeof env.DB.exec === 'function') {
-      await env.DB.exec(CREATE_TABLE_SQL);
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN image TEXT;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN images_json TEXT;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN title_ka TEXT;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN orig_price REAL;'); } catch (e) {}
-      try { await env.DB.exec('ALTER TABLE products ADD COLUMN badge TEXT;'); } catch (e) {}
-    }
-
+    // await ensureProductsTable(env);
     const url = request ? new URL(request.url) : null;
     const forceReset = url ? url.searchParams.get('reset') === 'true' : false;
 

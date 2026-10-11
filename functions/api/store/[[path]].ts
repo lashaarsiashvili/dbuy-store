@@ -200,22 +200,34 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     }, 500);
   }
 
-  // --- INITIAL SQL TABLE SETUP & BOOTSTRAP ---
-  try {
-    await db.exec('CREATE TABLE IF NOT EXISTS store_kv (key TEXT PRIMARY KEY, value TEXT);');
-    await db.exec('CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, name TEXT NOT NULL, description TEXT, price REAL, original_price REAL, image TEXT, images TEXT, category TEXT, stock INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, updated_at DATETIME DEFAULT CURRENT_TIMESTAMP);');
-    try { await db.exec('ALTER TABLE products ADD COLUMN name_ka TEXT;'); } catch (e) {}
-    try { await db.exec('ALTER TABLE products ADD COLUMN description_en TEXT;'); } catch (e) {}
-    try { await db.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;'); } catch (e) {}
-    try { await db.exec('ALTER TABLE products ADD COLUMN features TEXT;'); } catch (e) {}
-    try { await db.exec('ALTER TABLE products ADD COLUMN features_en TEXT;'); } catch (e) {}
-    try { await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;'); } catch (e) {}
-  } catch (bootstrapErr: any) {
-    return jsonResponse({
-      success: false,
-      error: 'Failed to initialize D1 database schema: ' + (bootstrapErr?.message || bootstrapErr),
-    }, 500);
-  }
+    // --- INITIAL SQL TABLE SETUP & BOOTSTRAP ---
+    try {
+      await db.exec('CREATE TABLE store_kv (key TEXT PRIMARY KEY, value TEXT);');
+      await db.exec('CREATE TABLE products (id TEXT PRIMARY KEY, title TEXT);');
+    } catch (e) {
+      console.warn('Table creation warning:', e);
+    }
+    
+    try {
+      await db.exec('ALTER TABLE products ADD COLUMN name TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN description TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN price REAL;');
+      await db.exec('ALTER TABLE products ADD COLUMN original_price REAL;');
+      await db.exec('ALTER TABLE products ADD COLUMN image TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN images TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN category TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 0;');
+      await db.exec('ALTER TABLE products ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;');
+      await db.exec('ALTER TABLE products ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;');
+      await db.exec('ALTER TABLE products ADD COLUMN name_ka TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN description_en TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN features TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN features_en TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;');
+    } catch (e) {
+      console.warn('Column addition warning:', e);
+    }
 
   // --- INITIAL SEEDING (Run only once if D1 is completely empty) ---
   const existingProductsRes = await db.prepare('SELECT id FROM products LIMIT 1').all();
