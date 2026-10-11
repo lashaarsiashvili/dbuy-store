@@ -58,29 +58,7 @@ export async function uploadImageToR2(
   }
 
   // If multipart endpoint failed, try fallback with JSON dataUrl payload
-  try {
-    const dataUrl = await new Promise<string>((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-
-    for (const endpoint of ['/api/upload', '/api/upload-image']) {
-      try {
-        const response = await fetch(endpoint, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ dataUrl, title: titleOrId, filename }),
-        });
-        const data = (await response.json()) as any;
-        if (data && data.success && data.url) {
-          return data.url;
-        }
-      } catch {}
-    }
-  } catch {}
-
+  // REMOVED: FileReader usage per requirements
   throw lastError || new Error('Image upload to R2 failed');
 }
 
@@ -100,72 +78,65 @@ export const compressAndUploadImage = async (
 
   // Compress to Blob first to avoid uploading oversized raw camera/phone photos
   const compressedBlob = await new Promise<Blob>((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result;
-      if (typeof result !== 'string') {
-        reject(new Error('Failed to read file'));
-        return;
-      }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        let width = img.width;
+        let height = img.height;
 
-      const img = new Image();
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          let width = img.width;
-          let height = img.height;
-
-          if (width > maxDimension || height > maxDimension) {
-            if (width > height) {
-              height = Math.round((height * maxDimension) / width);
-              width = maxDimension;
-            } else {
-              width = Math.round((width * maxDimension) / height);
-              height = maxDimension;
-            }
+        if (width > maxDimension || height > maxDimension) {
+          if (width > height) {
+            height = Math.round((height * maxDimension) / width);
+            width = maxDimension;
+          } else {
+            width = Math.round((width * maxDimension) / height);
+            height = maxDimension;
           }
-
-          canvas.width = Math.max(width, 1);
-          canvas.height = Math.max(height, 1);
-
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            reject(new Error('Failed to create canvas context'));
-            return;
-          }
-
-          ctx.drawImage(img, 0, 0, width, height);
-
-          // Export as WebP with JPEG fallback
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                resolve(blob);
-              } else {
-                canvas.toBlob(
-                  (fallbackBlob) => {
-                    if (fallbackBlob) resolve(fallbackBlob);
-                    else reject(new Error('Failed to create image blob'));
-                  },
-                  'image/jpeg',
-                  quality
-                );
-              }
-            },
-            'image/webp',
-            quality
-          );
-        } catch (err) {
-          reject(err);
         }
-      };
 
-      img.onerror = () => reject(new Error('Failed to load image element'));
-      img.src = result;
+        canvas.width = Math.max(width, 1);
+        canvas.height = Math.max(height, 1);
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error('Failed to create canvas context'));
+          return;
+        }
+
+        ctx.drawImage(img, 0, 0, width, height);
+
+        // Export as WebP with JPEG fallback
+        canvas.toBlob(
+          (blob) => {
+            if (blob) {
+              resolve(blob);
+            } else {
+              canvas.toBlob(
+                (fallbackBlob) => {
+                  if (fallbackBlob) resolve(fallbackBlob);
+                  else reject(new Error('Failed to create image blob'));
+                },
+                'image/jpeg',
+                quality
+              );
+            }
+          },
+          'image/webp',
+          quality
+        );
+      } catch (err) {
+        reject(err);
+      } finally {
+        URL.revokeObjectURL(img.src);
+      }
     };
 
-    reader.onerror = () => reject(new Error('FileReader error'));
-    reader.readAsDataURL(file);
+    img.onerror = () => {
+      URL.revokeObjectURL(img.src);
+      reject(new Error('Failed to load image element'));
+    };
+    img.src = URL.createObjectURL(file);
   });
 
   // Upload compressed binary blob directly to R2

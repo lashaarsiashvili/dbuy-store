@@ -89,26 +89,21 @@ export const saveImageBackupIDB = async (rawUrl: string, base64OrBlob: string | 
   const normKey = normalizeUrlKey(rawUrl);
   if (normKey) keys.add(normKey);
 
-  let dataUrl = typeof base64OrBlob === 'string' ? base64OrBlob : '';
+  let dataUrl: string | Blob;
 
   if (base64OrBlob instanceof Blob) {
-    try {
-      dataUrl = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(base64OrBlob);
-      });
-    } catch (e) {
-      console.warn('[IMAGE-STORAGE] Blob conversion failed:', e);
-      return;
-    }
+    // Store Blob directly
+    dataUrl = base64OrBlob;
+  } else {
+    dataUrl = base64OrBlob;
   }
 
   if (!dataUrl) return;
 
   // Update RAM cache immediately for instant re-render access
-  keys.forEach((k) => memoryImageCache.set(k, dataUrl));
+  // NOTE: If storing Blobs, RAM cache might need to store object URLs instead of data URLs.
+  // For now, let's keep it simple and just store the dataUrl string if provided.
+  keys.forEach((k) => memoryImageCache.set(k, dataUrl as string));
 
   try {
     const db = await getIDB();
