@@ -82,7 +82,7 @@ function verifyAndRepairProductImages(products: any[], billboards: any[]) {
         } else if (!fs.existsSync(dataPath) && fs.existsSync(publicPath)) {
           fs.copyFileSync(publicPath, dataPath);
         }
-        return `/uploads/${filename}`;
+        return `https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/${filename}`;
       }
     }
     return trimmed;

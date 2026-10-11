@@ -926,9 +926,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const storedDbVersion = typeof localStorage !== 'undefined' ? localStorage.getItem('dbuy_db_version') : null;
     const isResetParam = typeof window !== 'undefined' && window.location.search.includes('reset=true');
 
-    // If stored DB version mismatches DB_VERSION or ?reset=true is present, execute forced hard reset
-    if (isResetParam || storedDbVersion !== DB_VERSION) {
-      console.log(`[DB_RESET] DB_VERSION mismatch (${storedDbVersion} vs ${DB_VERSION}) or ?reset=true detected. Purging cache and re-seeding from initialProducts.ts...`);
+    // Execute forced hard reset ONLY if explicit ?reset=true is present in the URL
+    if (isResetParam) {
+      console.log(`[DB_RESET] ?reset=true detected in URL. Purging cache and re-seeding...`);
       try {
         localStorage.clear();
         localStorage.setItem('dbuy_db_version', DB_VERSION);

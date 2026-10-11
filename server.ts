@@ -398,13 +398,9 @@ function initStoreDatabase(): StoreDatabase {
 
   // 3. Strict single source of truth - DB_VERSION check enforces clean initialProducts re-seed
   let products: any[] = [];
-  const loadedDbVersion = (loadedDb as any)?.dbVersion;
-  if (loadedDbVersion !== DB_VERSION) {
-    console.log(`[SERVER-DB] DB_VERSION mismatch (${loadedDbVersion} vs ${DB_VERSION}). Re-seeding strictly from initialProducts.ts...`);
-    products = initialProducts;
-  } else if (Array.isArray(fileProducts) && fileProducts.length >= 24) {
+  if (Array.isArray(fileProducts) && fileProducts.length > 0) {
     products = fileProducts;
-  } else if (Array.isArray(backupProducts) && backupProducts.length >= 24) {
+  } else if (Array.isArray(backupProducts) && backupProducts.length > 0) {
     products = backupProducts;
   } else {
     products = initialProducts;

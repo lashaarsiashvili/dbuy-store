@@ -152,19 +152,15 @@ async function loadFullProducts(db: D1Database, rawProducts: any[]): Promise<any
   return parseAndFallbackProducts(rawProducts);
 }
 
-// Ensure D1 products table exists and seed/reset when DB_VERSION mismatches or forceReset is requested
+// Ensure D1 products table exists and seed/reset ONLY when explicitly requested (forceReset = true)
 async function ensureD1ProductsSeeded(db: D1Database, forceReset = false): Promise<void> {
+  // If not explicitly requested via admin reset, NEVER auto-seed or overwrite D1. D1 is the single source of truth.
+  if (!forceReset) {
+    return;
+  }
+
   try {
-    const currentDbVersion = await dbGet(db, 'db_version');
-    const { results } = await db.prepare('SELECT id FROM products LIMIT 1').all();
-    const hasProducts = results && results.length > 0;
-
-    // Skip re-seeding only if products exist, version matches, and no forced reset requested
-    if (!forceReset && currentDbVersion === DB_VERSION && hasProducts) {
-      return;
-    }
-
-    console.log(`[DB-RESET] Reseeding D1 database from initialProducts.ts (DB_VERSION: ${DB_VERSION}, forceReset: ${forceReset}, previousVersion: ${currentDbVersion})...`);
+    console.log(`[DB-RESET] Explicit admin reset requested. Re-seeding D1 database from initialProducts.ts...`);
 
     // Force clear existing outdated or duplicated products in D1
     try {
