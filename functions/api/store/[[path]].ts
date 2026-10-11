@@ -22,7 +22,7 @@ type PagesFunction<Env = any, Params extends string = any> = (context: {
   params: Record<Params, string>;
 }) => Promise<Response> | Response;
 
-interface Env {
+export interface Env {
   DB?: D1Database;
   STORE_KV?: any;
   KV?: any;

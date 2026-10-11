@@ -1653,8 +1653,8 @@ const handleImageUploadRequest = async (req: express.Request, res: express.Respo
     uploadsMap[safeName] = dataUrl;
     saveUploadsMap();
 
-    const publicUrl = `/uploads/${safeName}`;
-    res.json({ success: true, url: publicUrl });
+    const publicUrl = `https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/${safeName}`;
+    res.json({ success: true, url: publicUrl, urls: [publicUrl] });
   } catch (err: any) {
     console.error('Error processing image upload:', err);
     res.status(500).json({ success: false, error: err?.message || 'Image upload failed' });

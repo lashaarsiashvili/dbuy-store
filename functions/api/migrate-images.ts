@@ -1,5 +1,5 @@
 
-import { Env } from '../api/store/[[path]]';
+import { Env } from './store/[[path]]';
 
 export const handleMigrateImages = async (env: Env): Promise<Response> => {
   if (!env || !env.DB) {

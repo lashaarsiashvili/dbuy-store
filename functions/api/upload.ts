@@ -83,28 +83,72 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   try {
     const contentType = request.headers.get('content-type') || '';
-    let fileBuffer: Uint8Array | null = null;
-    let mimeType = 'image/webp';
-    let originalFilename = 'image.webp';
     let productTitle = '';
 
-    // 1. Handle multipart/form-data (Standard binary upload from browser File input)
+    // Handle multipart/form-data (Standard binary upload from browser File input)
     if (contentType.includes('multipart/form-data')) {
       const formData = await request.formData();
-      const file = formData.get('file') as File | null;
       productTitle = (formData.get('title') as string) || (formData.get('name') as string) || '';
 
-      if (!file) {
+      const fileEntries = formData.getAll('files').concat(formData.getAll('file')).filter((f): f is File => f instanceof File && f.size > 0);
+
+      if (fileEntries.length === 0) {
         return new Response(
           JSON.stringify({ success: false, error: 'No file provided in form-data' }),
           { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
         );
       }
 
-      originalFilename = file.name || 'product.webp';
-      mimeType = file.type || 'image/webp';
-      const arrayBuf = await file.arrayBuffer();
-      fileBuffer = new Uint8Array(arrayBuf);
+      const r2Bucket = env.R2_BUCKET || env.R2 || env.MEDIA_BUCKET || env.BUCKET;
+      if (!r2Bucket || typeof r2Bucket.put !== 'function') {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: 'R2 storage binding "R2_BUCKET" not configured in Cloudflare environment.',
+          }),
+          { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      const uploadedUrls: string[] = [];
+      const uploadedResults = [];
+
+      for (const file of fileEntries.slice(0, 5)) {
+        const originalFilename = file.name || 'product.webp';
+        const mimeType = file.type || 'image/webp';
+        const arrayBuf = await file.arrayBuffer();
+        const fileBuffer = new Uint8Array(arrayBuf);
+
+        const { fileName } = generateCleanFileName(originalFilename, productTitle, mimeType);
+        const objectKey = `products/${fileName}`;
+        const publicUrl = `https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/${fileName}`;
+
+        await r2Bucket.put(objectKey, fileBuffer, {
+          httpMetadata: {
+            contentType: mimeType,
+            cacheControl: 'public, max-age=31536000, immutable',
+          },
+        });
+
+        uploadedUrls.push(publicUrl);
+        uploadedResults.push({
+          url: publicUrl,
+          key: objectKey,
+          filename: fileName,
+          size: fileBuffer.length,
+          mimeType,
+        });
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          url: uploadedUrls[0],
+          urls: uploadedUrls,
+          results: uploadedResults,
+        }),
+        { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
+      );
     } 
     else {
       return new Response(
@@ -112,42 +156,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         { status: 400, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Generate clean filename and object key under products/
-    const { fileName } = generateCleanFileName(originalFilename, productTitle, mimeType);
-    const objectKey = `products/${fileName}`;
-    const publicUrl = `${DEFAULT_PUBLIC_PREFIX}${fileName}`;
-
-    // Upload Target: Native Cloudflare Pages R2 Bucket Binding (env.R2)
-    const r2Bucket = env.R2;
-    if (r2Bucket && typeof r2Bucket.put === 'function') {
-      await r2Bucket.put(objectKey, fileBuffer, {
-        httpMetadata: {
-          contentType: mimeType,
-          cacheControl: 'public, max-age=31536000, immutable',
-        },
-      });
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          url: publicUrl,
-          key: objectKey,
-          filename: fileName,
-          size: fileBuffer.length,
-          mimeType,
-        }),
-        { status: 200, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    return new Response(
-      JSON.stringify({
-        success: false,
-        error: 'R2 storage binding "R2" not configured in Cloudflare environment.',
-      }),
-      { status: 500, headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' } }
-    );
   } catch (err: any) {
     console.error('[Cloudflare Pages /api/upload error]:', err);
     return new Response(
