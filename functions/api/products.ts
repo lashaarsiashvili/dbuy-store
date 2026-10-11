@@ -207,45 +207,6 @@ export async function handleProductsGet(env: Env, request?: Request): Promise<Re
   }
 
   try {
-    // await ensureProductsTable(env);
-    const url = request ? new URL(request.url) : null;
-    const forceReset = url ? url.searchParams.get('reset') === 'true' : false;
-
-    // Check row count or reset flag
-    const countRes = await env.DB.prepare('SELECT COUNT(*) as count FROM products').first<{ count: number }>();
-    const rowCount = countRes ? countRes.count : 0;
-
-    if (forceReset || rowCount === 0) {
-      console.log(`[D1 /api/products] Seeding products into Cloudflare D1 database (${initialProducts.length} items)...`);
-      try {
-        await env.DB.prepare('DELETE FROM products').run();
-      } catch (e) {}
-
-      for (const item of initialProducts) {
-        const title = item.title || item.titleKa || 'Product';
-        const titleKa = item.titleKa || '';
-        const slug = item.customSlug ? normalizeSlug(item.customSlug) : normalizeSlug(title) || `prod-${item.id}`;
-        const description = item.description || item.descriptionKa || '';
-        const descriptionKa = item.descriptionKa || '';
-        const price = Number(item.price) || 0.00;
-        const origPrice = item.origPrice ? Number(item.origPrice) : null;
-        const currency = 'USD';
-        const rawImg = item.image || (Array.isArray(item.images) && item.images[0]) || '';
-        const imagePath = (rawImg.startsWith('data:') || rawImg.startsWith('http')) ? rawImg : resolveGithubAssetUrl(rawImg);
-        const imagesJson = JSON.stringify(Array.isArray(item.images) ? item.images : [imagePath]);
-        const category = item.category || 'general';
-        const stock = Number(item.stock) || 10;
-        const badge = item.badge || '';
-        const isActive = 1;
-
-        // Use prepared statements with parameter binding against SQL injection
-        await env.DB.prepare(`
-          INSERT OR REPLACE INTO products (id, slug, title, title_ka, description, description_ka, price, orig_price, currency, image, image_path, images_json, category, stock, badge, is_active, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        `).bind(String(item.id), slug, title, titleKa, description, descriptionKa, price, origPrice, currency, imagePath, imagePath, imagesJson, category, stock, badge, isActive).run();
-      }
-    }
-
     // Retrieve active products with parameterized query
     const { results } = await env.DB.prepare('SELECT * FROM products WHERE is_active = 1 ORDER BY id DESC').all();
     const products = Array.isArray(results) ? results.map(p => {
@@ -258,13 +219,10 @@ export async function handleProductsGet(env: Env, request?: Request): Promise<Re
       }
 
       const primaryImg = p.image || p.image_path || imagesArr[0] || '';
-      const resolvedPrimary = (primaryImg.startsWith('data:') || primaryImg.startsWith('http'))
-        ? primaryImg
-        : resolveGithubAssetUrl(primaryImg);
-
-      const resolvedImages = imagesArr.map((img: string) =>
-        (img && (img.startsWith('data:') || img.startsWith('http'))) ? img : resolveGithubAssetUrl(img)
-      );
+      
+      // Images are now stored in D1/R2 as permanent public URLs, no resolution needed.
+      const resolvedPrimary = primaryImg;
+      const resolvedImages = imagesArr;
 
       return {
         ...p,
