@@ -70,7 +70,7 @@ export const compressAndUploadImage = async (
   file: File,
   titleOrId?: string,
   maxDimension = 1200,
-  quality = 0.85
+  quality = 0.92
 ): Promise<string> => {
   if (!file || !file.type.startsWith('image/')) {
     throw new Error('Invalid image file');
@@ -151,7 +151,7 @@ export const compressAndUploadImage = async (
 export const compressImageForUpload = async (
   file: File,
   maxDimension = 1200,
-  quality = 0.85
+  quality = 0.92
 ): Promise<string> => {
   return compressAndUploadImage(file, undefined, maxDimension, quality);
 };

@@ -247,6 +247,8 @@ export const ProductDetailPage: React.FC = () => {
                 src={currentImage}
                 alt={displayTitle}
                 referrerPolicy="no-referrer"
+                loading="eager"
+                fetchpriority="high"
                 className="absolute inset-0 w-full h-full object-contain p-4 sm:p-6 transition-all duration-300"
               />
             ) : (
