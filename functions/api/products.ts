@@ -56,6 +56,7 @@ async function ensureProductsTable(env: Env) {
     await env.DB.exec('ALTER TABLE products ADD COLUMN currency TEXT;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN image TEXT;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN image_path TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN images TEXT;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN images_json TEXT;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN category TEXT;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN stock INTEGER;');
@@ -102,11 +103,45 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
       const origPrice = item.origPrice ? Number(item.origPrice) : null;
       const currency = item.currency || 'USD';
       
-      const imagesArr = Array.isArray(item.images) && item.images.length > 0 
+      const rawImagesArr = Array.isArray(item.images) && item.images.length > 0 
         ? item.images 
         : (item.image ? [item.image] : []);
-      const primaryImage = imagesArr[0] || item.image || '';
-      const imagesJson = JSON.stringify(imagesArr);
+
+      const r2Bucket = env.R2_BUCKET || env.MEDIA_BUCKET || env.BUCKET;
+      const cleanImagesArr: string[] = [];
+
+      for (let idx = 0; idx < rawImagesArr.length; idx++) {
+        let imgUrl = String(rawImagesArr[idx] || '').trim();
+        // If image is a base64 string, upload it to R2
+        if (imgUrl.startsWith('data:image/') && r2Bucket && typeof r2Bucket.put === 'function') {
+          try {
+            const match = imgUrl.match(/^data:([a-zA-Z0-9-+/.]+);base64,(.+)$/s);
+            if (match) {
+              const mimeType = match[1];
+              const base64Data = match[2].trim().replace(/\s/g, '');
+              const bin = atob(base64Data);
+              const u8 = new Uint8Array(bin.length);
+              for (let b = 0; b < bin.length; b++) u8[b] = bin.charCodeAt(b);
+              let ext = 'webp';
+              if (mimeType.includes('png')) ext = 'png';
+              else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+              const cleanId = id.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+              const filename = `${cleanId}${idx > 0 ? `-${idx}` : ''}.${ext}`;
+              const key = `products/${filename}`;
+              await r2Bucket.put(key, u8, {
+                httpMetadata: { contentType: mimeType, cacheControl: 'public, max-age=31536000, immutable' }
+              });
+              imgUrl = `https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/${filename}`;
+            }
+          } catch (e) {
+            console.error('Failed to convert base64 to R2 in products.ts:', e);
+          }
+        }
+        if (imgUrl) cleanImagesArr.push(imgUrl);
+      }
+
+      const primaryImage = cleanImagesArr[0] || (typeof item.image === 'string' ? item.image : '');
+      const imagesJson = JSON.stringify(cleanImagesArr.length > 0 ? cleanImagesArr : (primaryImage ? [primaryImage] : []));
 
       const category = item.category || 'general';
       const stock = Number(item.stock) || 0;
@@ -114,8 +149,8 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
       const isActive = item.is_active !== undefined ? Number(item.is_active) : 1;
 
       await env.DB.prepare(`
-        INSERT INTO products (id, slug, title, title_ka, description, description_ka, price, orig_price, currency, image, image_path, images_json, category, stock, badge, is_active, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO products (id, slug, title, title_ka, description, description_ka, price, orig_price, currency, image, image_path, images, images_json, category, stock, badge, is_active, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
           slug = excluded.slug,
           title = excluded.title,
@@ -127,6 +162,7 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
           currency = excluded.currency,
           image = excluded.image,
           image_path = excluded.image_path,
+          images = excluded.images,
           images_json = excluded.images_json,
           category = excluded.category,
           stock = excluded.stock,
@@ -135,7 +171,7 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
           updated_at = CURRENT_TIMESTAMP
       `).bind(
         id, slug, title, titleKa, description, descriptionKa, price, origPrice, currency,
-        primaryImage, primaryImage, imagesJson, category, stock, badge, isActive
+        primaryImage, primaryImage, imagesJson, imagesJson, category, stock, badge, isActive
       ).run();
     }
 

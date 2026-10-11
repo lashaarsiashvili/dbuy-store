@@ -13,7 +13,7 @@ import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
 
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
-import { compressImageForUpload } from '../utils/imageUpload';
+import { compressImageForUpload, uploadImageToR2 } from '../utils/imageUpload';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -524,16 +524,20 @@ export const AdminDashboard: React.FC = () => {
   const [isUploadingQuickSlide, setIsUploadingQuickSlide] = useState(false);
   const quickSlideFileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleQuickSlideImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleQuickSlideImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (uploadEvent) => {
-      if (uploadEvent.target?.result) {
-        setQuickSlideImage(uploadEvent.target.result as string);
-      }
-    };
-    reader.readAsDataURL(file);
+    setIsUploadingQuickSlide(true);
+    try {
+      const r2Url = await uploadImageToR2(file, quickSlideTitle || 'slide');
+      setQuickSlideImage(r2Url);
+      addToast(isKa ? 'სურათი აიტვირთა Cloudflare R2-ში!' : 'Banner image uploaded to Cloudflare R2!', 'success');
+    } catch (err: any) {
+      console.error('Error uploading slide image:', err);
+      addToast(isKa ? 'სურათის ატვირთვის შეცდომა' : 'Error uploading banner image to R2', 'error');
+    } finally {
+      setIsUploadingQuickSlide(false);
+    }
   };
 
   const handleQuickSlideSubmit = async (e: React.FormEvent) => {
@@ -794,11 +798,15 @@ export const AdminDashboard: React.FC = () => {
     filesToProcess.forEach(async (file) => {
       if (!file.type.startsWith('image/')) return;
       try {
-        const base64Data = await compressImageForUpload(file, 800, 0.78);
-        appendProdImage(base64Data, file.name);
+        addToast(
+          isKa ? `იტვირთება „${file.name}“ Cloudflare R2-ში...` : `Uploading "${file.name}" to Cloudflare R2...`,
+          'info'
+        );
+        const r2Url = await uploadImageToR2(file, prodForm.title || prodForm.name || 'product');
+        appendProdImage(r2Url, file.name);
       } catch (err) {
-        console.error('Error compressing product image file:', err);
-        addToast(isKa ? 'შეცდომა სურათის დამუშავებისას' : 'Error compressing image file', 'error');
+        console.error('Error uploading product image to R2:', err);
+        addToast(isKa ? 'შეცდომა სურათის R2-ში ატვირთვისას' : 'Error uploading image to Cloudflare R2', 'error');
       }
     });
   };

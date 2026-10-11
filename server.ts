@@ -5,6 +5,7 @@ import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { initialProducts, DB_VERSION } from './src/data/initialProducts';
@@ -1557,48 +1558,97 @@ Return ONLY a valid JSON object matching this schema without markdown code block
 // ==========================================
 // UPLOAD PRODUCT IMAGE API
 // Saves uploaded/optimized base64 images as disk files
-// Drastically shrinks product JSON and enables UNLIMITED products!
 // ==========================================
-app.post('/api/upload-image', (req, res) => {
+// Cloudflare R2 Product Image Upload API
+// Uploads binary buffers directly to Cloudflare R2 bucket under "products/"
+// ==========================================
+const DEFAULT_R2_PUBLIC_PREFIX = 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/';
+
+const handleImageUploadRequest = async (req: express.Request, res: express.Response) => {
   try {
-    const { dataUrl, filename } = req.body;
+    const { dataUrl, filename, title } = req.body || {};
     if (!dataUrl || typeof dataUrl !== 'string') {
       res.status(400).json({ success: false, error: 'dataUrl is required' });
       return;
     }
 
-    // If it's already a URL (e.g. http, /uploads, etc.), return as is
-    if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://') || dataUrl.startsWith('/uploads/')) {
+    // If it's already an HTTP / R2 URL, return as is
+    if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://')) {
       res.json({ success: true, url: dataUrl });
       return;
     }
 
     // Match base64 data URI pattern
-    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
+    const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/s);
     if (!matches || matches.length !== 3) {
       res.status(400).json({ success: false, error: 'Invalid base64 data format' });
       return;
     }
 
-    const mimeType = matches[1];
-    const base64Data = matches[2];
+    const mimeType = matches[1].toLowerCase();
+    const base64Data = matches[2].trim().replace(/\s/g, '');
     const buffer = Buffer.from(base64Data, 'base64');
 
-    let ext = 'jpg';
+    let ext = 'webp';
     if (mimeType.includes('png')) ext = 'png';
-    else if (mimeType.includes('webp')) ext = 'webp';
+    else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
     else if (mimeType.includes('gif')) ext = 'gif';
+    else if (mimeType.includes('svg')) ext = 'svg';
 
-    // Unique clean safe name
+    const safeTitle = (title ? String(title) : (filename ? String(filename).replace(/\.[^/.]+$/, '') : 'product'))
+      .toLowerCase()
+      .replace(/[^\w\s-]/g, '')
+      .replace(/[\s_-]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'product';
+
     const timestamp = Date.now();
-    const rand = Math.random().toString(36).substring(2, 8);
-    const safeName = `prod-${timestamp}-${rand}.${ext}`;
+    const rand = Math.random().toString(36).substring(2, 7);
+    const safeName = `${safeTitle}-${timestamp}-${rand}.${ext}`;
+    const objectKey = `products/${safeName}`;
 
+    const cfAccountId = process.env.CLOUDFLARE_ACCOUNT_ID || 'ae33acd14aaf2f0ad7bcb1f2e37b71b5';
+    const r2BucketName = process.env.R2_BUCKET_NAME || 'products';
+    const r2AccessKeyId = process.env.R2_ACCESS_KEY_ID;
+    const r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
+    const r2PublicPrefix = (process.env.R2_PUBLIC_URL_PREFIX || DEFAULT_R2_PUBLIC_PREFIX).replace(/\/+$/, '') + '/';
+
+    // 1. If R2 credentials exist, upload directly to Cloudflare R2
+    if (r2AccessKeyId && r2SecretAccessKey) {
+      try {
+        const s3Client = new S3Client({
+          region: 'auto',
+          endpoint: `https://${cfAccountId}.r2.cloudflarestorage.com`,
+          credentials: {
+            accessKeyId: r2AccessKeyId,
+            secretAccessKey: r2SecretAccessKey,
+          },
+        });
+
+        await s3Client.send(
+          new PutObjectCommand({
+            Bucket: r2BucketName,
+            Key: objectKey,
+            Body: buffer,
+            ContentType: mimeType,
+            CacheControl: 'public, max-age=31536000, immutable',
+          })
+        );
+
+        const r2PublicUrl = `${r2PublicPrefix}${safeName}`;
+        console.log(`[R2-UPLOAD] Successfully uploaded product image to R2: ${r2PublicUrl}`);
+        res.json({ success: true, url: r2PublicUrl, key: objectKey });
+        return;
+      } catch (r2Err: any) {
+        console.error('[R2-UPLOAD] Error uploading to R2:', r2Err.message);
+      }
+    }
+
+    // 2. Local fallback if R2 credentials are not set in local environment
     try {
       writeImageToBothDirs(safeName, buffer);
-      console.log(`[IMAGE-UPLOAD] Saved product image physically to disk and public: ${safeName}`);
     } catch (writeErr: any) {
-      console.warn('[IMAGE-UPLOAD] Disk is read-only (Vercel). Keeping image in-memory and Firestore:', writeErr?.message || writeErr);
+      console.warn('[IMAGE-UPLOAD] Disk write error:', writeErr?.message || writeErr);
     }
     uploadsMap[safeName] = dataUrl;
     saveUploadsMap();
@@ -1609,7 +1659,10 @@ app.post('/api/upload-image', (req, res) => {
     console.error('Error processing image upload:', err);
     res.status(500).json({ success: false, error: err?.message || 'Image upload failed' });
   }
-});
+};
+
+app.post('/api/upload', handleImageUploadRequest);
+app.post('/api/upload-image', handleImageUploadRequest);
 
 // POST: Restore uploaded images from client-side backup map (helps survive Cloud Run redeploy/wipe)
 app.post('/api/store/restore-images', (req, res) => {

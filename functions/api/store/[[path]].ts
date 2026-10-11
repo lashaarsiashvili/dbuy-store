@@ -26,6 +26,10 @@ interface Env {
   DB?: D1Database;
   STORE_KV?: any;
   KV?: any;
+  R2_BUCKET?: any;
+  MEDIA_BUCKET?: any;
+  BUCKET?: any;
+  R2_PUBLIC_URL_PREFIX?: string;
   ZOHO_USER?: string;
   ZOHO_PASSWORD?: string;
   ADMIN_EMAIL?: string;
@@ -73,7 +77,45 @@ async function dbPut(db: D1Database, key: string, value: string): Promise<void> 
   }
 }
 
-// Helper: Persist base64 data URIs - modified to just return the raw dataUrl
+// Helper: Convert base64 data URIs to permanent R2 public URLs
+async function persistBase64InR2(r2Bucket: any, dataUrl: string, prefix = 'prod'): Promise<string> {
+  if (!dataUrl || typeof dataUrl !== 'string') return '';
+  const trimmed = dataUrl.trim();
+  if (!trimmed.startsWith('data:image/')) {
+    return trimmed;
+  }
+
+  const defaultPrefix = 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/';
+  try {
+    const match = trimmed.match(/^data:([a-zA-Z0-9-+/.]+);base64,(.+)$/s);
+    if (match) {
+      const mimeType = match[1];
+      const base64Data = match[2].trim().replace(/\s/g, '');
+      const bin = atob(base64Data);
+      const u8 = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+
+      let ext = 'webp';
+      if (mimeType.includes('png')) ext = 'png';
+      else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
+
+      const cleanPrefix = prefix.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
+      const filename = `${cleanPrefix}-${Date.now()}-${Math.random().toString(36).substring(2, 7)}.${ext}`;
+      const key = `products/${filename}`;
+
+      if (r2Bucket && typeof r2Bucket.put === 'function') {
+        await r2Bucket.put(key, u8, {
+          httpMetadata: { contentType: mimeType, cacheControl: 'public, max-age=31536000, immutable' },
+        });
+      }
+      return `${defaultPrefix}${filename}`;
+    }
+  } catch (err) {
+    console.error('persistBase64InR2 error:', err);
+  }
+  return trimmed;
+}
+
 async function persistBase64InD1(db: D1Database, dataUrl: string, prefix = 'prod'): Promise<string> {
   return dataUrl;
 }
@@ -656,6 +698,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const { products, registeredUsers, orders, theme, billboards, billboardIntervalSeconds, adminSecretSlug: newSlug } = await request.json() as any;
 
         if (Array.isArray(products)) {
+          const r2Bucket = env.R2_BUCKET || env.MEDIA_BUCKET || env.BUCKET;
           const sanitizedProducts = [];
           for (const p of products) {
             let imagesArray: string[] = [];
@@ -665,9 +708,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               imagesArray = [p.image];
             }
 
-            // Serialize the images array (JSON.stringify(images)) and write it to the images field/column
-            const imagesStr = JSON.stringify(imagesArray);
-            const primaryImage = imagesArray[0] || p.image || '';
+            const cleanImages: string[] = [];
+            for (let idx = 0; idx < imagesArray.length; idx++) {
+              const cleaned = await persistBase64InR2(r2Bucket, imagesArray[idx], `${p.id}-${idx}`);
+              if (cleaned) cleanImages.push(cleaned);
+            }
+            const primaryImage = cleanImages[0] || (await persistBase64InR2(r2Bucket, p.image || '', p.id));
+            const imagesStr = JSON.stringify(cleanImages.length > 0 ? cleanImages : (primaryImage ? [primaryImage] : []));
 
             sanitizedProducts.push({
               ...p,
@@ -718,10 +765,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
 
         if (Array.isArray(billboards)) {
+          const r2Bucket = env.R2_BUCKET || env.MEDIA_BUCKET || env.BUCKET;
           const sanitizedBillboards = [];
           for (const b of billboards) {
-            const image = b.image ? await persistBase64InD1(db, b.image, 'billboard') : b.image;
-            const bgImage = b.bgImage ? await persistBase64InD1(db, b.bgImage, 'billboard-bg') : b.bgImage;
+            const image = b.image ? await persistBase64InR2(r2Bucket, b.image, 'billboard') : b.image;
+            const bgImage = b.bgImage ? await persistBase64InR2(r2Bucket, b.bgImage, 'billboard-bg') : b.bgImage;
             sanitizedBillboards.push({ ...b, image, bgImage });
           }
           await dbPut(db, 'billboards', JSON.stringify(sanitizedBillboards));
