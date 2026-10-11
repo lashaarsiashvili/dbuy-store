@@ -1163,8 +1163,23 @@ export const AdminDashboard: React.FC = () => {
     const finalImages = validImages.length > 0
       ? validImages
       : [ensurePersistentAbsoluteUrl(prodForm.image || '', defaultStockCover)];
+
+    // Convert any remaining Base64 images to R2 URLs before saving
+    const imagesToSave = await Promise.all(finalImages.map(async (img) => {
+      if (img.startsWith('data:')) {
+        const mimeType = img.match(/^data:([a-zA-Z0-9-+/.]+);base64,/)?.[1] || 'image/webp';
+        const byteCharacters = atob(img.split(',')[1]);
+        const byteNumbers = new Array(byteCharacters.length);
+        for (let i = 0; i < byteCharacters.length; i++) {
+          byteNumbers[i] = byteCharacters.charCodeAt(i);
+        }
+        const blob = new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
+        return await uploadImageToR2(blob, prodForm.title || 'product');
+      }
+      return img;
+    }));
     
-    const finalPrimaryImage = finalImages[0] || defaultStockCover;
+    const finalPrimaryImage = imagesToSave[0] || defaultStockCover;
 
     // Prepare 4 Key Features for English and Georgian
     let finalFeaturesEn = (prodForm.featuresEn || [])
@@ -1232,8 +1247,8 @@ export const AdminDashboard: React.FC = () => {
         origPrice: numOrigPrice,
         stock: numStock,
         badge: prodForm.badge || undefined,
-        image: finalImages[0] || '',
-        images: finalImages,
+        image: imagesToSave[0] || '',
+        images: imagesToSave,
         description: prodForm.description || prodForm.descriptionKa,
         descriptionKa: prodForm.descriptionKa,
         description_en: prodForm.description,
