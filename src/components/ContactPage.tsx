@@ -201,8 +201,7 @@ export const ContactPage: React.FC = () => {
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       {t('contact.form.name')} *
                     </label>
-                    <input
-                      type="text"
+                    <input type="text"
                       required
                       value={form.name ?? ''}
                       onChange={e => setForm({ ...form, name: e.target.value })}
@@ -215,8 +214,7 @@ export const ContactPage: React.FC = () => {
                     <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       {t('contact.form.email')} *
                     </label>
-                    <input
-                      type="email"
+                    <input type="email"
                       required
                       value={form.email ?? ''}
                       onChange={e => setForm({ ...form, email: e.target.value })}
@@ -230,8 +228,7 @@ export const ContactPage: React.FC = () => {
                       <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                         {t('contact.form.order')}
                       </label>
-                      <input
-                        type="text"
+                      <input type="text"
                         value={form.orderNumber ?? ''}
                         onChange={e => setForm({ ...form, orderNumber: e.target.value })}
                         placeholder="e.g. #DBUY-10492"
@@ -359,7 +356,7 @@ export const ContactPage: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => setExpandedMessageId(isExpanded ? null : item.id)}
-                            className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
+                            className="text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
                             title={isExpanded ? 'Collapse' : 'Expand'}
                           >
                             {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
@@ -384,7 +381,7 @@ export const ContactPage: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleCopyMessage(item.id, item.message)}
-                              className="flex items-center space-x-1 text-[11px] text-slate-500 hover:text-slate-700 dark:hover:text-slate-200 cursor-pointer"
+                              className="flex items-center space-x-1 text-[11px] text-slate-500 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 cursor-pointer"
                             >
                               {copiedId === item.id ? (
                                 <>

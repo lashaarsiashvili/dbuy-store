@@ -255,115 +255,95 @@ export const AdminAnalyticsDashboard: React.FC<{ products?: any[] }> = ({ produc
   return (
     <div 
       id="admin-analytics-dashboard-overview"
-      style={{ 
-        padding: '24px', 
-        fontFamily: 'Segoe UI, Roboto, Helvetica, Arial, sans-serif', 
-        color: '#1e293b',
-        backgroundColor: '#ffffff',
-        borderRadius: '16px',
-        border: '1px solid #e2e8f0',
-        boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.05)'
-      }}
+      className="p-6 font-sans text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs"
     >
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <div>
-          <h2 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: '#0f172a' }}>Analytics Overview</h2>
-          <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '13px' }}>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Analytics Overview</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Daily visitor metrics from Cloudflare & local shoppers (excluding admin traffic)
           </p>
         </div>
         <button
           onClick={refreshStats}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#0f172a',
-            color: '#ffffff',
-            border: 'none',
-            borderRadius: '8px',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: 600,
-            transition: 'background-color 0.15s ease'
-          }}
-          onMouseOver={(e) => (e.currentTarget.style.backgroundColor = '#1e293b')}
-          onMouseOut={(e) => (e.currentTarget.style.backgroundColor = '#0f172a')}
+          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
         >
           {loading ? 'Refreshing...' : 'Refresh Data'}
         </button>
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '28px' }}>
-        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-7">
+        <div className="p-5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
             Today's Visits (All Devices)
           </span>
-          <div style={{ fontSize: '32px', fontWeight: 800, marginTop: '8px', color: '#0f172a', lineHeight: 1 }}>
+          <div className="text-3xl font-black mt-2 text-slate-900 dark:text-slate-100 leading-none">
             {stats.todayVisits}
           </div>
-          <span style={{ fontSize: '12px', color: '#10b981', fontWeight: 600, marginTop: '8px', display: 'inline-block' }}>
+          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-semibold mt-2 inline-block">
             Active Sessions
           </span>
         </div>
 
-        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em' }}>
+        <div className="p-5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
             Total Checkout Attempts
           </span>
-          <div style={{ fontSize: '32px', fontWeight: 800, marginTop: '8px', color: '#0f172a', lineHeight: 1 }}>
+          <div className="text-3xl font-black mt-2 text-slate-900 dark:text-slate-100 leading-none">
             {stats.checkoutAttempts}
           </div>
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginTop: '8px', display: 'inline-block' }}>
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-2 inline-block">
             Initiated Payments
           </span>
         </div>
 
-        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '12px', border: '1px solid #e2e8f0' }}>
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.025em' }}>
+        <div className="p-5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
             Cart Additions Total
           </span>
-          <div style={{ fontSize: '32px', fontWeight: 800, marginTop: '8px', color: '#0f172a', lineHeight: 1 }}>
+          <div className="text-3xl font-black mt-2 text-slate-900 dark:text-slate-100 leading-none">
             {Object.values(stats.cartAdditions).reduce((acc: number, curr: number) => acc + (Number(curr) || 0), 0)}
           </div>
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 500, marginTop: '8px', display: 'inline-block' }}>
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-medium mt-2 inline-block">
             Across All Products
           </span>
         </div>
       </div>
 
       {/* Per-Product Add to Cart Table */}
-      <div style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #e2e8f0', overflow: 'hidden' }}>
-        <div style={{ padding: '16px 20px', borderBottom: '1px solid #e2e8f0', background: '#f8fafc' }}>
-          <h3 style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>Cart Additions by Product</h3>
+      <div className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+        <div className="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/80">
+          <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Cart Additions by Product</h3>
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '13px' }}>
+        <div className="overflow-x-auto">
+          <table className="w-full border-collapse text-left text-xs">
             <thead>
-              <tr style={{ background: '#ffffff', color: '#475569', borderBottom: '1px solid #e2e8f0' }}>
-                <th style={{ padding: '12px 20px', fontWeight: 600 }}>Product Name</th>
-                <th style={{ padding: '12px 20px', fontWeight: 600 }}>Product ID</th>
-                <th style={{ padding: '12px 20px', fontWeight: 600, textAlign: 'right' }}>Times Added to Cart</th>
+              <tr className="bg-slate-50/50 dark:bg-slate-800/50 text-slate-700 dark:text-slate-300 border-b border-slate-200 dark:border-slate-800">
+                <th className="p-3 font-semibold">Product Name</th>
+                <th className="p-3 font-semibold">Product ID</th>
+                <th className="p-3 font-semibold text-right">Times Added to Cart</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
               {products.length > 0 ? (
                 products.map((prod) => (
-                  <tr key={prod.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '12px 20px', fontWeight: 600, color: '#0f172a' }}>
+                  <tr key={prod.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 text-slate-900 dark:text-slate-100">
+                    <td className="p-3 font-semibold">
                       {prod.name || prod.title || 'Untitled Item'}
                     </td>
-                    <td style={{ padding: '12px 20px', color: '#64748b', fontFamily: 'monospace', fontSize: '12px' }}>
+                    <td className="p-3 text-slate-500 dark:text-slate-400 font-mono text-[11px]">
                       {prod.id}
                     </td>
-                    <td style={{ padding: '12px 20px', textAlign: 'right', fontWeight: 700, color: '#0f172a' }}>
+                    <td className="p-3 text-right font-bold text-blue-600 dark:text-blue-400">
                       {stats.cartAdditions[String(prod.id)] || 0}
                     </td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td colSpan={3} style={{ padding: '24px 20px', textAlign: 'center', color: '#94a3b8' }}>
+                  <td colSpan={3} className="p-6 text-center text-slate-400 dark:text-slate-500">
                     No products provided or available.
                   </td>
                 </tr>

@@ -19,7 +19,9 @@ import {
   Sparkles, 
   Zap, 
   Heart,
-  CheckCircle2
+  CheckCircle2,
+  ZoomIn,
+  ZoomOut
 } from 'lucide-react';
 
 export const QuickViewModal: React.FC = () => {
@@ -42,10 +44,22 @@ export const QuickViewModal: React.FC = () => {
   const [added, setAdded] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
 
+  // Strictly manual zoom & Lightbox state (Default state is static 1x)
+  const [isZoomOpen, setIsZoomOpen] = useState(false);
+  const [zoomScale, setZoomScale] = useState(1);
+  const [panOffset, setPanOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStartRef = React.useRef({ x: 0, y: 0, panX: 0, panY: 0 });
+  const touchStartRef = React.useRef<{ dist: number; zoom: number; x: number; y: number; panX: number; panY: number } | null>(null);
+
   // Reset active image index whenever a new product is selected
   useEffect(() => {
     setActiveImageIndex(0);
     setQuantity(1);
+    setIsZoomOpen(false);
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+    setIsDragging(false);
     if (quickViewProduct?.id) {
       incrementProductViews(quickViewProduct.id);
     }
@@ -70,6 +84,165 @@ export const QuickViewModal: React.FC = () => {
   const handlePrevImage = () => {
     setActiveImageIndex((prev) => (prev - 1 + galleryImages.length) % galleryImages.length);
   };
+
+  const handleOpenZoom = () => {
+    setIsZoomOpen(true);
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+    setIsDragging(false);
+  };
+
+  const handleCloseZoom = () => {
+    setIsZoomOpen(false);
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+    setIsDragging(false);
+  };
+
+  const handleZoomIn = () => {
+    setZoomScale((prev) => Math.min(3.5, Math.round((prev + 0.35) * 10) / 10));
+  };
+
+  const handleZoomOut = () => {
+    setZoomScale((prev) => {
+      const next = Math.max(1, Math.round((prev - 0.35) * 10) / 10);
+      if (next === 1) setPanOffset({ x: 0, y: 0 });
+      return next;
+    });
+  };
+
+  const handleResetZoom = () => {
+    setZoomScale(1);
+    setPanOffset({ x: 0, y: 0 });
+    setIsDragging(false);
+  };
+
+  const handleToggleDoubleZoom = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (zoomScale > 1.05) {
+      handleResetZoom();
+    } else {
+      setZoomScale(2);
+    }
+  };
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (zoomScale <= 1) return;
+    e.preventDefault();
+    setIsDragging(true);
+    dragStartRef.current = {
+      x: e.clientX,
+      y: e.clientY,
+      panX: panOffset.x,
+      panY: panOffset.y,
+    };
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || zoomScale <= 1) return;
+    const dx = e.clientX - dragStartRef.current.x;
+    const dy = e.clientY - dragStartRef.current.y;
+    const maxPan = 400 * (zoomScale - 1);
+    setPanOffset({
+      x: Math.max(-maxPan, Math.min(maxPan, dragStartRef.current.panX + dx)),
+      y: Math.max(-maxPan, Math.min(maxPan, dragStartRef.current.panY + dy)),
+    });
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const getTouchDistance = (t1: React.Touch, t2: React.Touch) => {
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  };
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      const dist = getTouchDistance(e.touches[0], e.touches[1]);
+      touchStartRef.current = {
+        dist,
+        zoom: zoomScale,
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        panX: panOffset.x,
+        panY: panOffset.y,
+      };
+    } else if (e.touches.length === 1 && zoomScale > 1) {
+      touchStartRef.current = {
+        dist: 0,
+        zoom: zoomScale,
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        panX: panOffset.x,
+        panY: panOffset.y,
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+    if (e.touches.length === 2 && touchStartRef.current.dist > 0) {
+      e.preventDefault();
+      const newDist = getTouchDistance(e.touches[0], e.touches[1]);
+      const scaleFactor = newDist / touchStartRef.current.dist;
+      const newZoom = Math.min(3.5, Math.max(1, touchStartRef.current.zoom * scaleFactor));
+      setZoomScale(Math.round(newZoom * 100) / 100);
+      if (newZoom <= 1.05) {
+        setPanOffset({ x: 0, y: 0 });
+      }
+    } else if (e.touches.length === 1 && zoomScale > 1) {
+      const dx = e.touches[0].clientX - touchStartRef.current.x;
+      const dy = e.touches[0].clientY - touchStartRef.current.y;
+      const maxPan = 400 * (zoomScale - 1);
+      setPanOffset({
+        x: Math.max(-maxPan, Math.min(maxPan, touchStartRef.current.panX + dx)),
+        y: Math.max(-maxPan, Math.min(maxPan, touchStartRef.current.panY + dy)),
+      });
+    }
+  };
+
+  const handleTouchEnd = () => {
+    touchStartRef.current = null;
+  };
+
+  const handleWheel = (e: React.WheelEvent) => {
+    e.stopPropagation();
+    if (e.deltaY < 0) {
+      setZoomScale((z) => Math.min(3.5, Math.round((z + 0.25) * 100) / 100));
+    } else {
+      setZoomScale((z) => {
+        const next = Math.max(1, Math.round((z - 0.25) * 100) / 100);
+        if (next === 1) setPanOffset({ x: 0, y: 0 });
+        return next;
+      });
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isZoomOpen) return;
+      if (e.key === 'Escape') {
+        handleCloseZoom();
+      } else if (e.key === 'ArrowLeft') {
+        handlePrevImage();
+        handleResetZoom();
+      } else if (e.key === 'ArrowRight') {
+        handleNextImage();
+        handleResetZoom();
+      } else if (e.key === '+' || e.key === '=') {
+        handleZoomIn();
+      } else if (e.key === '-' || e.key === '_') {
+        handleZoomOut();
+      } else if (e.key === '0' || e.key.toLowerCase() === 'r') {
+        handleResetZoom();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isZoomOpen, galleryImages.length, zoomScale]);
 
   const handleAdd = () => {
     addToCart(quickViewProduct, quantity);
@@ -110,7 +283,7 @@ export const QuickViewModal: React.FC = () => {
         {/* Close button */}
         <button
           onClick={() => setQuickViewProduct(null)}
-          className="absolute top-4 right-4 p-2.5 rounded-full bg-white/90 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-all shadow-md z-30 cursor-pointer border border-slate-200 dark:border-slate-700"
+          className="absolute top-4 right-4 p-2.5 rounded-full bg-white/90 dark:bg-slate-800/90 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white dark:hover:text-white transition-all shadow-md z-30 cursor-pointer border border-slate-200 dark:border-slate-700"
           aria-label="Close"
         >
           <X className="w-5 h-5" />
@@ -120,14 +293,33 @@ export const QuickViewModal: React.FC = () => {
           {/* Left Column: Interactive Multi-Image Gallery */}
           <div className="lg:col-span-6 bg-slate-50 dark:bg-slate-950 p-5 sm:p-6 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-slate-200/80 dark:border-slate-800">
             <div>
-              {/* Main Featured Active Image with Zoom Frame */}
-              <div className="relative w-full aspect-square sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-center group">
+              {/* Main Featured Active Image with Manual Zoom Trigger */}
+              <div 
+                className="relative w-full aspect-square sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-center cursor-pointer select-none group"
+                onClick={handleOpenZoom}
+                title={language === 'ka' ? 'დააწკაპუნეთ სურათის გასადიდებლად' : 'Click to zoom image'}
+              >
                 <CachedImage
                   src={currentImage}
                   alt={`${displayTitle} - photo ${activeImageIndex + 1}`}
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-cover transition-all duration-300 group-hover:scale-105"
+                  className="w-full h-full object-contain p-2 select-none pointer-events-none"
                 />
+
+                {/* Dedicated Manual Zoom / Magnifying Glass Button */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleOpenZoom();
+                  }}
+                  className="absolute bottom-3 left-3 z-10 px-3 py-1.5 rounded-xl bg-slate-900/85 hover:bg-slate-950 dark:bg-slate-800/90 text-white backdrop-blur-md shadow-md text-xs font-bold flex items-center space-x-1.5 border border-white/10 cursor-pointer transition-transform hover:scale-105 active:scale-95"
+                  title={language === 'ka' ? 'სურათის ხელით გადიდება' : 'Manual Image Zoom'}
+                  aria-label="Manual image zoom"
+                >
+                  <ZoomIn className="w-3.5 h-3.5 text-blue-400" />
+                  <span>{language === 'ka' ? 'გადიდება' : 'Zoom'}</span>
+                </button>
 
                 {/* Badge Overlay */}
                 {quickViewProduct.badge && (
@@ -163,7 +355,7 @@ export const QuickViewModal: React.FC = () => {
                         e.stopPropagation();
                         handlePrevImage();
                       }}
-                      className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 hover:text-slate-900 shadow-md hover:bg-white transition-all opacity-80 hover:opacity-100 cursor-pointer"
+                      className="absolute left-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:text-white shadow-md hover:bg-white transition-all opacity-80 hover:opacity-100 cursor-pointer"
                       aria-label="Previous Image"
                     >
                       <ChevronLeft className="w-5 h-5" />
@@ -173,7 +365,7 @@ export const QuickViewModal: React.FC = () => {
                         e.stopPropagation();
                         handleNextImage();
                       }}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 hover:text-slate-900 shadow-md hover:bg-white transition-all opacity-80 hover:opacity-100 cursor-pointer"
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-2 rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-slate-200 hover:text-slate-900 dark:text-white shadow-md hover:bg-white transition-all opacity-80 hover:opacity-100 cursor-pointer"
                       aria-label="Next Image"
                     >
                       <ChevronRight className="w-5 h-5" />
@@ -367,6 +559,184 @@ export const QuickViewModal: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* Fullscreen Interactive Manual Zoom Lightbox Modal */}
+      {isZoomOpen && (
+        <div 
+          className="fixed inset-0 z-[250] bg-black/95 backdrop-blur-xl flex flex-col justify-between p-3 sm:p-6 select-none animate-fadeIn"
+          onClick={handleCloseZoom}
+        >
+          {/* Top Control Bar */}
+          <div 
+            className="flex items-center justify-between z-20 w-full max-w-7xl mx-auto pb-2"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center space-x-3 text-white">
+              <span className="text-sm font-black tracking-wide truncate max-w-xs sm:max-w-md">
+                {displayTitle}
+              </span>
+              <span className="text-xs bg-white/10 px-2.5 py-1 rounded-full font-mono text-slate-300">
+                {activeImageIndex + 1} / {galleryImages.length}
+              </span>
+            </div>
+
+            {/* Lightbox Controls */}
+            <div className="flex items-center space-x-1.5 sm:space-x-2">
+              <button
+                type="button"
+                onClick={handleZoomOut}
+                disabled={zoomScale <= 1}
+                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-white transition-colors cursor-pointer"
+                title="Zoom Out (-)"
+                aria-label="Zoom Out"
+              >
+                <ZoomOut className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              <span className="text-xs font-mono text-slate-200 min-w-[44px] text-center px-1">
+                {Math.round(zoomScale * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={handleZoomIn}
+                disabled={zoomScale >= 3.5}
+                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-white transition-colors cursor-pointer"
+                title="Zoom In (+)"
+                aria-label="Zoom In"
+              >
+                <ZoomIn className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+              <button
+                type="button"
+                onClick={handleResetZoom}
+                disabled={zoomScale === 1 && panOffset.x === 0 && panOffset.y === 0}
+                className="p-2 sm:p-2.5 rounded-xl bg-white/10 hover:bg-white/20 disabled:opacity-40 disabled:hover:bg-white/10 text-white transition-colors cursor-pointer text-xs font-bold px-3 hidden sm:inline"
+                title="Reset Zoom (0 or R)"
+              >
+                100%
+              </button>
+              <button
+                type="button"
+                onClick={handleCloseZoom}
+                className="p-2 sm:p-2.5 rounded-xl bg-red-600/85 hover:bg-red-600 text-white transition-colors cursor-pointer ml-1 sm:ml-2"
+                title="Close Zoom (Esc)"
+                aria-label="Close Zoom"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Hint bar */}
+          <div className="text-center py-1 text-[11px] text-slate-400 font-medium z-10 pointer-events-none">
+            {zoomScale > 1 ? (
+              <span className="inline-flex items-center space-x-1.5 bg-white/10 px-3 py-1 rounded-full text-slate-200">
+                <span>{language === 'ka' ? 'გადაათრიეთ სურათის დასათვალიერებლად' : 'Drag to pan around zoomed image'}</span>
+                <span>·</span>
+                <span>{language === 'ka' ? 'ორმაგი წკაპი: დაბრუნება' : 'Double click to reset'}</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center space-x-1.5 bg-white/5 px-3 py-1 rounded-full text-slate-400">
+                <span>{language === 'ka' ? 'დააწკაპუნეთ/ორმაგი წკაპი გასადიდებლად, ან pinch მობილურზე' : 'Double click / pinch on mobile to zoom'}</span>
+              </span>
+            )}
+          </div>
+
+          {/* Main Display Area */}
+          <div 
+            className={`relative flex-1 flex items-center justify-center my-2 sm:my-4 overflow-hidden ${
+              zoomScale > 1 ? (isDragging ? 'cursor-grabbing' : 'cursor-grab') : 'cursor-zoom-in'
+            }`}
+            onClick={(e) => e.stopPropagation()}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            onWheel={handleWheel}
+            onDoubleClick={handleToggleDoubleZoom}
+          >
+            {/* Gallery Navigation Arrows */}
+            {galleryImages.length > 1 && (
+              <>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handlePrevImage();
+                    handleResetZoom();
+                  }}
+                  className="absolute left-2 sm:left-6 z-30 p-3 sm:p-4 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 backdrop-blur-md shadow-2xl transition-transform hover:scale-110 active:scale-95 cursor-pointer"
+                  aria-label="Previous image"
+                >
+                  <ChevronLeft className="w-6 h-6 sm:w-8 sm:h-8" />
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleNextImage();
+                    handleResetZoom();
+                  }}
+                  className="absolute right-2 sm:right-6 z-30 p-3 sm:p-4 rounded-full bg-black/60 hover:bg-black/90 text-white border border-white/20 backdrop-blur-md shadow-2xl transition-transform hover:scale-110 active:scale-95 cursor-pointer"
+                  aria-label="Next image"
+                >
+                  <ChevronRight className="w-6 h-6 sm:w-8 sm:h-8" />
+                </button>
+              </>
+            )}
+
+            <div 
+              className="relative max-w-full max-h-[80vh] flex items-center justify-center p-2 select-none"
+              style={{
+                transform: `translate3d(${panOffset.x}px, ${panOffset.y}px, 0) scale(${zoomScale})`,
+                transition: isDragging ? 'none' : 'transform 0.2s cubic-bezier(0.16, 1, 0.3, 1)',
+                transformOrigin: 'center center',
+                touchAction: zoomScale > 1 ? 'none' : 'auto',
+              }}
+            >
+              <CachedImage
+                src={currentImage}
+                alt={displayTitle}
+                referrerPolicy="no-referrer"
+                className="max-w-[90vw] max-h-[75vh] object-contain rounded-xl pointer-events-none select-none"
+                draggable={false}
+              />
+            </div>
+          </div>
+
+          {/* Bottom Thumbnails Strip */}
+          {galleryImages.length > 1 && (
+            <div 
+              className="flex items-center justify-center space-x-3 overflow-x-auto py-2 z-20 w-full max-w-2xl mx-auto"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {galleryImages.map((imgUrl, idx) => (
+                <button
+                  key={`quickview-thumb-${idx}`}
+                  type="button"
+                  onClick={() => {
+                    setActiveImageIndex(idx);
+                    handleResetZoom();
+                  }}
+                  className={`relative w-14 h-14 sm:w-16 sm:h-16 rounded-xl overflow-hidden border-2 transition-all cursor-pointer shrink-0 bg-slate-900 ${
+                    activeImageIndex === idx
+                      ? 'border-blue-500 scale-105 ring-2 ring-blue-500/40 opacity-100'
+                      : 'border-white/20 opacity-50 hover:opacity-100'
+                  }`}
+                >
+                  <CachedImage
+                    src={imgUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 };

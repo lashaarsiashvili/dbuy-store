@@ -515,7 +515,7 @@ export const CheckoutModal: React.FC = () => {
           </div>
           <button
             onClick={step === 3 ? handleFinish : handleClose}
-            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -572,8 +572,7 @@ export const CheckoutModal: React.FC = () => {
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.fullName")} *
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     required
                     value={formData.name}
                     onChange={(e) =>
@@ -588,8 +587,7 @@ export const CheckoutModal: React.FC = () => {
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.email")} *
                   </label>
-                  <input
-                    type="email"
+                  <input type="email"
                     required
                     value={formData.email}
                     onChange={(e) =>
@@ -605,8 +603,7 @@ export const CheckoutModal: React.FC = () => {
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                   {t("checkout.address")} *
                 </label>
-                <input
-                  type="text"
+                <input type="text"
                   required
                   value={formData.address}
                   onChange={(e) =>
@@ -622,8 +619,7 @@ export const CheckoutModal: React.FC = () => {
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.city")} *
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     required
                     value={formData.city}
                     onChange={(e) =>
@@ -637,8 +633,7 @@ export const CheckoutModal: React.FC = () => {
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300 mb-1">
                     {t("checkout.zip")}
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={formData.zip}
                     onChange={(e) =>
                       setFormData({ ...formData, zip: e.target.value })
@@ -803,17 +798,17 @@ export const CheckoutModal: React.FC = () => {
 
               {/* TAB 1: APPLE PAY */}
               {activePaymentMethod === "applepay" && (
-                <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-4">
+                <div className="p-4 bg-slate-50/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center">
                         <AppleLogoIcon className="w-4 h-4 fill-white" />
                       </div>
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                           Apple Pay Express Checkout
                         </h4>
-                        <p className="text-[10px] text-slate-500">
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
                           Biometric Touch ID / Face ID & Apple Wallet
                         </p>
                       </div>
@@ -835,7 +830,7 @@ export const CheckoutModal: React.FC = () => {
 
                   <div className="flex items-center justify-center space-x-4 text-[11px] text-slate-500 font-medium pt-1">
                     <div className="flex items-center space-x-1">
-                      <Fingerprint className="w-3.5 h-3.5 text-slate-600" />
+                      <Fingerprint className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
                       <span>Touch ID / Face ID</span>
                     </div>
                     <span>•</span>
@@ -871,15 +866,15 @@ export const CheckoutModal: React.FC = () => {
 
               {/* TAB 2: GOOGLE PAY (Dev/Test Only) */}
               {isGPayAvailable && activePaymentMethod === "googlepay" && (
-                <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-4">
+                <div className="p-4 bg-slate-50/90 dark:bg-slate-800/90 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center space-x-2">
                       <GooglePayMark className="h-4.5 w-auto" />
                       <div>
-                        <h4 className="text-xs font-bold text-slate-900">
+                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                           Google Pay Express Checkout
                         </h4>
-                        <p className="text-[10px] text-slate-500">
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
                           Google Wallet & Android Device Security
                         </p>
                       </div>
@@ -973,7 +968,7 @@ export const CheckoutModal: React.FC = () => {
               {/* TAB 3: PAYPAL */}
               {activePaymentMethod === "paypal" && (
                 <div className="space-y-3">
-                  <div className="relative min-h-[120px] rounded-2xl p-3 bg-slate-50 border border-slate-200">
+                  <div className="relative min-h-[120px] rounded-2xl p-3 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
                     <PayPalButtons
                       style={{
                         layout: "vertical",
@@ -1003,7 +998,7 @@ export const CheckoutModal: React.FC = () => {
               {false && activePaymentMethod === "card" && (
                 <div className="space-y-4">
                   {/* Official PayPal v6 Hosted Card Fields (Number, Expiry, CVV + 3DS) */}
-                  <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200">
+                  <div className="p-4 bg-slate-50/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800">
                     <PayPalV6CardFields
                       amountUSD={totalAmountUSD}
                       postalCode={formData.zip || "0100"}
@@ -1038,9 +1033,9 @@ export const CheckoutModal: React.FC = () => {
                   </div>
 
                   {/* Alternative Instant PayPal Guest Card Button */}
-                  <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="p-4 bg-slate-50/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-3">
                     <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold text-slate-800">
+                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
                         {language === "ka"
                           ? "სწრაფი გადახდა ბარათით (PayPal Guest Checkout)"
                           : "Fast Card Checkout (PayPal Guest Checkout)"}
@@ -1090,8 +1085,7 @@ export const CheckoutModal: React.FC = () => {
                             ? "ბარათის მფლობელი"
                             : "Cardholder Name"}
                         </label>
-                        <input
-                          type="text"
+                        <input type="text"
                           required
                           value={cardData.name}
                           onChange={(e) =>
@@ -1109,8 +1103,7 @@ export const CheckoutModal: React.FC = () => {
                         <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           {language === "ka" ? "ბარათის ნომერი" : "Card Number"}
                         </label>
-                        <input
-                          type="text"
+                        <input type="text"
                           required
                           maxLength={19}
                           value={cardData.number}
@@ -1131,8 +1124,7 @@ export const CheckoutModal: React.FC = () => {
                           <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             {language === "ka" ? "ვადა" : "Exp Date"}
                           </label>
-                          <input
-                            type="text"
+                          <input type="text"
                             required
                             maxLength={5}
                             value={cardData.expiry}
@@ -1151,8 +1143,7 @@ export const CheckoutModal: React.FC = () => {
                           <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                             CVC / CVV
                           </label>
-                          <input
-                            type="password"
+                          <input type="password"
                             required
                             maxLength={4}
                             value={cardData.cvc}
@@ -1182,8 +1173,7 @@ export const CheckoutModal: React.FC = () => {
                           <span>{language === "ka" ? "SMS / 3D Secure ბანკის კოდი (არასავალდებულო)" : "SMS / 3D Secure Bank Code (Optional)"}</span>
                           <span className="text-[10px] text-blue-600 font-normal">{language === "ka" ? "ბანკის SMS კოდი" : "Bank SMS OTP"}</span>
                         </label>
-                        <input
-                          type="text"
+                        <input type="text"
                           maxLength={8}
                           value={cardData.smsCode}
                           onChange={(e) =>
@@ -1227,7 +1217,7 @@ export const CheckoutModal: React.FC = () => {
                   type="button"
                   onClick={() => setStep(1)}
                   disabled={isProcessingPayment}
-                  className="px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 flex items-center space-x-1 cursor-pointer"
+                  className="px-3 py-2 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-white flex items-center space-x-1 cursor-pointer"
                 >
                   <ArrowLeft className="w-3.5 h-3.5" />
                   <span>{t("checkout.back")}</span>
@@ -1243,36 +1233,36 @@ export const CheckoutModal: React.FC = () => {
           {/* STEP 3: Order Confirmation (Reached ONLY upon real PayPal verification) */}
           {step === 3 && lastPlacedOrder && (
             <div className="text-center py-6 space-y-6">
-              <div className="inline-flex p-3 rounded-full bg-emerald-100 text-emerald-600">
+              <div className="inline-flex p-3 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
                 <CheckCircle2 className="w-10 h-10" />
               </div>
 
               <div className="space-y-1">
-                <h3 className="text-xl font-bold text-slate-900">
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white">
                   {t("checkout.thankYou")}
                 </h3>
-                <p className="text-xs text-slate-500 max-w-sm mx-auto">
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm mx-auto">
                   {t("checkout.successMsg")}
                 </p>
               </div>
 
               {/* Verified Receipt Summary */}
-              <div className="max-w-sm mx-auto bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs text-left space-y-2">
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                  <span className="text-slate-500">
+              <div className="max-w-sm mx-auto bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl p-4 text-xs text-left space-y-2">
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                  <span className="text-slate-500 dark:text-slate-400">
                     {t("checkout.orderNumber")}
                   </span>
-                  <span className="font-mono font-bold text-blue-700">
+                  <span className="font-mono font-bold text-blue-700 dark:text-blue-400">
                     {lastPlacedOrder.id}
                   </span>
                 </div>
 
                 {/* Payment Method Badge */}
-                <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                  <span className="text-slate-500">
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                  <span className="text-slate-500 dark:text-slate-400">
                     {language === "ka" ? "გადახდის მეთოდი" : "Payment Method"}
                   </span>
-                  <div className="flex items-center space-x-1.5 font-semibold text-slate-800">
+                  <div className="flex items-center space-x-1.5 font-semibold text-slate-800 dark:text-slate-200">
                     {lastPlacedOrder.paymentMethod === "googlepay" ? (
                       <GooglePayMark className="h-4 w-auto" />
                     ) : lastPlacedOrder.paymentMethod === "applepay" ? (
@@ -1284,53 +1274,53 @@ export const CheckoutModal: React.FC = () => {
                 </div>
 
                 {lastPlacedOrder.paypalTransactionId && (
-                  <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                    <span className="text-slate-500">
+                  <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                    <span className="text-slate-500 dark:text-slate-400">
                       {t("checkout.transactionId")} (PayPal)
                     </span>
-                    <span className="font-mono text-[11px] font-semibold text-slate-700">
+                    <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                       {lastPlacedOrder.paypalTransactionId}
                     </span>
                   </div>
                 )}
 
                 {lastPlacedOrder.applePayTransactionId && (
-                  <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                    <span className="text-slate-500">
+                  <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                    <span className="text-slate-500 dark:text-slate-400">
                       {t("checkout.transactionId")} (Apple Pay)
                     </span>
-                    <span className="font-mono text-[11px] font-semibold text-slate-700">
+                    <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                       {lastPlacedOrder.applePayTransactionId}
                     </span>
                   </div>
                 )}
 
                 {lastPlacedOrder.googlePayTransactionId && (
-                  <div className="flex justify-between items-center border-b border-slate-200 pb-2">
-                    <span className="text-slate-500">
+                  <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                    <span className="text-slate-500 dark:text-slate-400">
                       {t("checkout.transactionId")} (Google Pay)
                     </span>
-                    <span className="font-mono text-[11px] font-semibold text-slate-700">
+                    <span className="font-mono text-[11px] font-semibold text-slate-700 dark:text-slate-300">
                       {lastPlacedOrder.googlePayTransactionId}
                     </span>
                   </div>
                 )}
 
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">
+                  <span className="text-slate-500 dark:text-slate-400">
                     {t("checkout.estimatedDelivery")}
                   </span>
-                  <span className="font-semibold text-slate-800">
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
                     {t("checkout.days")}
                   </span>
                 </div>
 
                 <div className="flex justify-between items-center">
-                  <span className="text-slate-500">
+                  <span className="text-slate-500 dark:text-slate-400">
                     {t("checkout.trackingNumber")}
                   </span>
                   <div className="flex items-center space-x-1">
-                    <span className="font-mono font-bold text-slate-800">
+                    <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
                       {lastPlacedOrder.trackingNumber}
                     </span>
                     <button
@@ -1343,9 +1333,9 @@ export const CheckoutModal: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex justify-between items-center border-t border-slate-200 pt-2 font-bold text-slate-900">
+                <div className="flex justify-between items-center border-t border-slate-200 dark:border-slate-700 pt-2 font-bold text-slate-900 dark:text-white">
                   <span>{t("checkout.totalToPay")}</span>
-                  <span className="text-blue-600">
+                  <span className="text-blue-600 dark:text-blue-400">
                     {formatPrice(lastPlacedOrder.total)}
                   </span>
                 </div>

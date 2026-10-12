@@ -104,6 +104,13 @@
     border-color: #334155;
   }
 
+  .dark input.bg-transparent,
+  .dark textarea.bg-transparent,
+  .dark select.bg-transparent {
+    background-color: transparent !important;
+    color: inherit;
+  }
+
   /* Form controls with explicit white/light background in dark mode must use dark background with white text */
   .dark input.bg-white,
   .dark textarea.bg-white,
@@ -150,6 +157,37 @@
     box-shadow: 0 0 0px 1000px #1e293b inset !important;
     transition: background-color 5000s ease-in-out 0s !important;
     caret-color: #f8fafc !important;
+  }
+
+  /* High contrast text rules for dark mode */
+  .dark .text-slate-900,
+  .dark .text-slate-800,
+  .dark .text-slate-700,
+  .dark .text-gray-900,
+  .dark .text-gray-800,
+  .dark .text-gray-700 {
+    color: #f8fafc;
+  }
+
+  .dark .text-slate-600,
+  .dark .text-slate-500,
+  .dark .text-gray-600,
+  .dark .text-gray-500 {
+    color: #cbd5e1;
+  }
+
+  .dark .bg-slate-50,
+  .dark .bg-slate-100 {
+    background-color: #0f172a;
+  }
+
+  .dark .bg-white {
+    background-color: #0f172a;
+  }
+
+  .dark .border-slate-100,
+  .dark .border-slate-200 {
+    border-color: #1e293b;
   }
 }
 
@@ -539,12 +577,8 @@ apple-pay-button {
   }
 
   .product-card-root .product-card-img {
-    transition: transform 0.5s cubic-bezier(0.16, 1, 0.3, 1) !important;
-    will-change: transform;
-  }
-
-  .product-card-root:hover .product-card-img {
-    transform: scale(1.08) !important;
+    transition: none !important;
+    transform: none !important;
   }
 }
 

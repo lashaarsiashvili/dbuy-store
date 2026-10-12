@@ -5,73 +5,77 @@ const CORS_HEADERS = {
   'Content-Type': 'application/json',
 };
 
-// In-memory fallback for worker instances
-let memoryAnalytics = {
-  visits: 0,
-  checkouts: 0,
-  cart_data: {} as Record<string, number>,
-  product_views: {} as Record<string, number>,
-  country_visits: {} as Record<string, number>,
-};
-
 export async function onRequestOptions() {
   return new Response(null, { headers: CORS_HEADERS });
 }
 
 export async function onRequestPost(context: any) {
   try {
-    const body = await context.request.json().catch(() => ({}));
-    const { type, productId, country: clientCountry, countryCode: clientCode } = body || {};
-
-    // Get country from Cloudflare Edge headers or client payload
-    const edgeCountryCode = context.request.headers.get('cf-ipcountry') || clientCode || 'GE';
-    const country = clientCountry || (edgeCountryCode === 'GE' ? 'Georgia' : edgeCountryCode);
-
-    // Check if D1 database is available on Cloudflare env
     const db = context.env?.DB;
-    if (db) {
-      try {
-        if (type === 'visit') {
-          await db.prepare('INSERT INTO analytics_events (type, country, created_at) VALUES (?, ?, datetime("now"))')
-            .bind('visit', country).run();
-        } else if (type === 'product_view' && productId) {
-          await db.prepare('INSERT INTO analytics_events (type, product_id, created_at) VALUES (?, ?, datetime("now"))')
-            .bind('product_view', String(productId)).run();
-        } else if (type === 'checkout') {
-          await db.prepare('INSERT INTO analytics_events (type, created_at) VALUES (?, datetime("now"))')
-            .bind('checkout').run();
-        } else if (type === 'cart' && productId) {
-          await db.prepare('INSERT INTO analytics_events (type, product_id, created_at) VALUES (?, ?, datetime("now"))')
-            .bind('cart', String(productId)).run();
-        }
-      } catch (d1Err) {
-        // Fallback to in-memory
+    const body = await context.request.json().catch(() => ({}));
+    
+    const rawPath = body.path || body.pathname || '/';
+    const explicitProductId = body.productId;
+    const userAgent = context.request.headers.get('user-agent') || body.userAgent || '';
+    const ipAddress = context.request.headers.get('cf-connecting-ip') || 
+                      context.request.headers.get('x-forwarded-for') || 
+                      '127.0.0.1';
+
+    // 1. Determine Product ID to increment view count
+    let productIdToIncrement = explicitProductId || null;
+    if (!productIdToIncrement && rawPath) {
+      const productMatch = rawPath.match(/\/(?:product|products|b)\/([^\/]+)/i);
+      if (productMatch && productMatch[1]) {
+        productIdToIncrement = productMatch[1];
       }
     }
 
-    if (type === 'visit') {
-      memoryAnalytics.visits += 1;
-      memoryAnalytics.country_visits[country] = (memoryAnalytics.country_visits[country] || 0) + 1;
-    } else if (type === 'product_view' && productId) {
-      const pid = String(productId);
-      memoryAnalytics.product_views[pid] = (memoryAnalytics.product_views[pid] || 0) + 1;
-    } else if (type === 'checkout') {
-      memoryAnalytics.checkouts += 1;
-    } else if (type === 'cart' && productId) {
-      const pid = String(productId);
-      memoryAnalytics.cart_data[pid] = (memoryAnalytics.cart_data[pid] || 0) + 1;
+    if (db) {
+      // Ensure schema tables/columns exist safely
+      try {
+        await db.exec(`
+          CREATE TABLE IF NOT EXISTS analytics_visits (
+            id TEXT PRIMARY KEY,
+            path TEXT,
+            user_agent TEXT,
+            ip_address TEXT,
+            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+      } catch (e) {}
+
+      try {
+        await db.exec('ALTER TABLE products ADD COLUMN views INTEGER DEFAULT 0;');
+      } catch (e) {}
+
+      // A. Insert row into analytics_visits
+      const visitId = crypto.randomUUID ? crypto.randomUUID() : `v-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
+      await db.prepare('INSERT INTO analytics_visits (id, path, user_agent, ip_address) VALUES (?, ?, ?, ?)')
+        .bind(visitId, String(rawPath), String(userAgent), String(ipAddress))
+        .run();
+
+      // B. Increment product views if a product page was visited
+      if (productIdToIncrement) {
+        await db.prepare('UPDATE products SET views = COALESCE(views, 0) + 1 WHERE id = ? OR customSlug = ?')
+          .bind(String(productIdToIncrement), String(productIdToIncrement))
+          .run();
+      }
     }
 
     return new Response(JSON.stringify({ 
       success: true, 
-      country, 
-      edgeCountryCode 
+      path: rawPath, 
+      productId: productIdToIncrement 
     }), {
       headers: CORS_HEADERS
     });
   } catch (err: any) {
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Track failed' }), {
-      status: 200, // Return 200 to not disturb client UI
+    console.error('Error in POST /api/track:', err);
+    return new Response(JSON.stringify({ 
+      success: false, 
+      error: err?.message || 'Track failed' 
+    }), {
+      status: 200, // Return 200 to keep client UI smooth
       headers: CORS_HEADERS
     });
   }

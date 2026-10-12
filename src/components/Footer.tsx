@@ -37,8 +37,7 @@ export const Footer: React.FC = () => {
 
             <form onSubmit={handleSubscribe} className="flex w-full md:w-auto max-w-md gap-2">
               <div className="relative flex-1">
-                <input
-                  type="email"
+                <input type="email"
                   required
                   value={newsletterEmail ?? ''}
                   onChange={e => setNewsletterEmail(e.target.value)}
@@ -248,7 +247,7 @@ export const Footer: React.FC = () => {
           <div className="flex flex-col items-center sm:items-start gap-1 text-center sm:text-left text-[10px] sm:text-[11px]">
             <div className="flex flex-col sm:flex-row items-center gap-2">
               <span>{t('footer.rights')}</span>
-              <span className="hidden sm:inline text-slate-700">•</span>
+              <span className="hidden sm:inline text-slate-700 dark:text-slate-200">•</span>
               <span className="inline-flex items-center space-x-1 text-emerald-400 font-semibold bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-500/30">
                 <Lock className="w-3 h-3 text-emerald-400" />
                 <span>256-Bit SSL Encrypted & PCI-DSS Compliant</span>

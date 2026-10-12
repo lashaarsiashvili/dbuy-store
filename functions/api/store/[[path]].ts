@@ -55,6 +55,32 @@ function jsonResponse(data: any, status = 200) {
   });
 }
 
+// Security Helper: Hash passwords on server using Web Crypto API (SHA-256)
+async function hashPasswordServer(password: string): Promise<string> {
+  if (!password) return '';
+  if (password.startsWith('h_') || (password.length === 64 && /^[0-9a-f]{64}$/i.test(password))) {
+    return password;
+  }
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + 'dbuy_security_hash_salt_2026_x89');
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  const hex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  return `h_${hex.substring(0, 16)}`;
+}
+
+// Security Helper: Data minimization & sensitive credential stripping
+function sanitizeUsersDict(usersDict: Record<string, any>): Record<string, any> {
+  if (!usersDict || typeof usersDict !== 'object') return {};
+  const clean: Record<string, any> = {};
+  for (const [key, user] of Object.entries(usersDict)) {
+    if (!user || typeof user !== 'object') continue;
+    const { password, passwordHash, passwordSalt, securityToken, ...cleanUser } = user as any;
+    clean[key] = cleanUser;
+  }
+  return clean;
+}
+
 // Helper SQL wrappers to simulate key-value Storage over Cloudflare D1 SQL database
 async function dbGet(db: D1Database, key: string): Promise<string | null> {
   try {
@@ -200,6 +226,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       await db.exec('ALTER TABLE products ADD COLUMN features TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN features_en TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN videos TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN variants TEXT;');
     } catch (e) {
       console.warn('Column addition warning:', e);
     }
@@ -260,6 +288,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
               imagesArr = row.image && row.image !== 'null' ? [row.image] : [];
             }
+            let videosArr: any[] = [];
+            if (row.videos) {
+              try { videosArr = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos; } catch (e) { videosArr = []; }
+            }
+            let variantsArr: any[] = [];
+            if (row.variants) {
+              try { variantsArr = typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants; } catch (e) { variantsArr = []; }
+            }
             return {
               id: String(row.id),
               title: row.name || row.title || '',
@@ -275,8 +311,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               original_price: Number(row.original_price) || 0,
               image: imagesArr[0] || row.image || '',
               images: imagesArr,
+              videos: videosArr,
+              variants: variantsArr,
               category: row.category || 'tech',
               stock: Number(row.stock) || 0,
+              views: Number(row.views) || 0,
             };
           });
         }
@@ -298,7 +337,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
       const isAuthorizedAdmin = clientAdminSlug && clientAdminSlug.trim() === adminSecretSlug.trim();
 
-      const registeredUsers = isAuthorizedAdmin ? JSON.parse(await dbGet(db, 'registered_users') || '{}') : {};
+      const registeredUsers = isAuthorizedAdmin ? sanitizeUsersDict(JSON.parse(await dbGet(db, 'registered_users') || '{}')) : {};
       const orders = isAuthorizedAdmin ? JSON.parse(await dbGet(db, 'orders') || '[]') : [];
 
       return jsonResponse({
@@ -328,6 +367,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
               imagesArr = row.image && row.image !== 'null' ? [row.image] : [];
             }
+            let videosArr: any[] = [];
+            if (row.videos) {
+              try { videosArr = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos; } catch (e) { videosArr = []; }
+            }
+            let variantsArr: any[] = [];
+            if (row.variants) {
+              try { variantsArr = typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants; } catch (e) { variantsArr = []; }
+            }
             return {
               id: row.id,
               title: row.name,
@@ -342,8 +389,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               origPrice: Number(row.original_price) || 0,
               image: imagesArr[0] || row.image || '',
               images: imagesArr,
+              videos: videosArr,
+              variants: variantsArr,
               category: row.category || 'tech',
               stock: Number(row.stock) || 0,
+              views: Number(row.views) || 0,
             };
           });
           return jsonResponse({ success: true, products: formatted });
@@ -398,6 +448,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const registeredUsers = JSON.parse(await dbGet(db, 'registered_users') || '{}');
         const existing = registeredUsers[cleanEmail] || {};
 
+        let finalPasswordHash = passwordHash || '';
+        if (!finalPasswordHash && reqBody.password) {
+          finalPasswordHash = await hashPasswordServer(reqBody.password);
+        } else if (finalPasswordHash) {
+          finalPasswordHash = await hashPasswordServer(finalPasswordHash);
+        }
+
         const updatedUser = {
           ...existing,
           name: name?.trim() || existing.name || 'Customer',
@@ -412,7 +469,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           createdAt: existing.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
           role: (cleanEmail === 'lashaarsiashvili@gmail.com' || existing.role === 'admin') ? 'admin' : 'customer',
-          passwordHash: passwordHash || existing.passwordHash || '',
+          passwordHash: finalPasswordHash,
           passwordSalt: passwordSalt || existing.passwordSalt || '',
         };
 
@@ -421,19 +478,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         await dbPut(db, 'last_updated', lastUpdatedNew);
 
         // Map users list for client response (hide password fields)
-        const usersList = Object.values(registeredUsers).map((u: any) => ({
-          name: u.name,
-          email: u.email,
-          country: u.country,
-          city: u.city,
-          zip: u.zip,
-          address: u.address,
-          phone: u.phone,
-          provider: u.provider || 'email',
-          picture: u.picture,
-          createdAt: u.createdAt,
-          role: u.role,
-        }));
+        const usersList = Object.values(sanitizeUsersDict(registeredUsers));
 
         return jsonResponse({
           success: true,
@@ -475,19 +520,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           await dbPut(db, 'last_updated', lastUpdatedNew);
         }
 
-        const usersList = Object.values(registeredUsers).map((u: any) => ({
-          name: u.name,
-          email: u.email,
-          country: u.country,
-          city: u.city,
-          zip: u.zip,
-          address: u.address,
-          phone: u.phone,
-          provider: u.provider || 'email',
-          picture: u.picture,
-          createdAt: u.createdAt,
-          role: u.role,
-        }));
+        const usersList = Object.values(sanitizeUsersDict(registeredUsers));
 
         return jsonResponse({ success: true, registeredUsers: usersList });
       } catch (err: any) {
@@ -500,8 +533,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const clientAdminSlug = request.headers.get('x-admin-slug') || 
       request.headers.get('x-admin-key') || 
       request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
-    // Bypassed unconditionally to allow free administrative catalog management
-    if (false && (!clientAdminSlug || clientAdminSlug.trim() !== adminSecretSlug.trim())) {
+
+    if (!clientAdminSlug || clientAdminSlug.trim() !== adminSecretSlug.trim()) {
       return jsonResponse({ success: false, error: 'Access Denied: Administrative authority required' }, 403);
     }
 
@@ -540,6 +573,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             const featuresStr = JSON.stringify(Array.isArray(p.features) ? p.features : []);
             const featuresEnStr = JSON.stringify(Array.isArray(p.features_en) ? p.features_en : (Array.isArray(p.featuresEn) ? p.featuresEn : []));
             const featuresKaStr = JSON.stringify(Array.isArray(p.features_ka) ? p.features_ka : (Array.isArray(p.featuresKa) ? p.featuresKa : []));
+            const videosStr = JSON.stringify(Array.isArray(p.videos) ? p.videos : []);
+            const variantsStr = JSON.stringify(Array.isArray(p.variants) ? p.variants : []);
             const price = Number(p.price) || 0;
             const originalPrice = p.origPrice !== undefined && p.origPrice !== null && p.origPrice !== '' ? Number(p.origPrice) : (p.original_price !== undefined && p.original_price !== null && p.original_price !== '' ? Number(p.original_price) : null);
             const category = p.category || '';
@@ -547,15 +582,15 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
             // Try updating first
             const updateRes = await db.prepare(
-              'UPDATE products SET name = ?, name_ka = ?, description = ?, description_en = ?, description_ka = ?, features = ?, features_en = ?, features_ka = ?, price = ?, original_price = ?, image = ?, images = ?, category = ?, stock = ? WHERE id = ?'
-            ).bind(name, nameKa, description, descEn, descKa, featuresStr, featuresEnStr, featuresKaStr, price, originalPrice, primaryImage, imagesStr, category, stock, p.id).run();
+              'UPDATE products SET name = ?, name_ka = ?, description = ?, description_en = ?, description_ka = ?, features = ?, features_en = ?, features_ka = ?, price = ?, original_price = ?, image = ?, images = ?, category = ?, stock = ?, videos = ?, variants = ? WHERE id = ?'
+            ).bind(name, nameKa, description, descEn, descKa, featuresStr, featuresEnStr, featuresKaStr, price, originalPrice, primaryImage, imagesStr, category, stock, videosStr, variantsStr, p.id).run();
 
             const changes = (updateRes as any)?.meta?.changes || 0;
             if (changes === 0) {
               // If product does not exist yet, insert it
               await db.prepare(
-                'INSERT INTO products (id, name, name_ka, description, description_en, description_ka, features, features_en, features_ka, price, original_price, image, images, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
-              ).bind(p.id, name, nameKa, description, descEn, descKa, featuresStr, featuresEnStr, featuresKaStr, price, originalPrice, primaryImage, imagesStr, category, stock).run();
+                'INSERT INTO products (id, name, name_ka, description, description_en, description_ka, features, features_en, features_ka, price, original_price, image, images, category, stock, videos, variants) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'
+              ).bind(p.id, name, nameKa, description, descEn, descKa, featuresStr, featuresEnStr, featuresKaStr, price, originalPrice, primaryImage, imagesStr, category, stock, videosStr, variantsStr).run();
             }
           } catch (relationalDbErr) {
             console.error('Relational DB product persistence error:', relationalDbErr);
@@ -754,7 +789,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           success: true,
           data: {
             products: currentProducts,
-            registeredUsers: currentUsers,
+            registeredUsers: sanitizeUsersDict(currentUsers),
             orders: currentOrders,
             theme: currentTheme,
             billboards: currentBillboards,

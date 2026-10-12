@@ -54,8 +54,8 @@ export function getTranslation(
   try {
     if (!key) return '';
 
-    // Normalize underscore keys (e.g. nav_home -> nav.home, add_to_cart -> product.addToCart)
-    const dotKey = key.includes('_') ? key.replace('_', '.') : key;
+    // Normalize underscore keys (e.g. nav_cat_tech -> nav.cat.tech, add_to_cart -> product.addToCart)
+    const dotKey = key.includes('_') ? key.replace(/_/g, '.') : key;
 
     const primaryDict = translations[lang] || {};
     let text = primaryDict[key] || primaryDict[dotKey];
@@ -111,8 +111,6 @@ export function applyStaticTranslations(root?: ParentNode | Element | null): voi
       } else {
         el.placeholder = text;
       }
-    } else {
-      el.textContent = text;
     }
   });
 

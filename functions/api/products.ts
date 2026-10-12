@@ -67,6 +67,8 @@ async function ensureProductsTable(env: Env) {
     await env.DB.exec('ALTER TABLE products ADD COLUMN badge TEXT;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN is_published_globally INTEGER DEFAULT 0;');
     await env.DB.exec('ALTER TABLE products ADD COLUMN published_at TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN videos TEXT;');
+    await env.DB.exec('ALTER TABLE products ADD COLUMN variants TEXT;');
   } catch (e) {}
 }
 

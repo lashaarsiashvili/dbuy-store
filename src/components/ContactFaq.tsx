@@ -115,8 +115,7 @@ export const ContactFaq: React.FC = () => {
         {/* Search input */}
         <div className="relative">
           <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-          <input
-            type="text"
+          <input type="text"
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             placeholder={isKa ? 'მოძებნეთ შეკითხვა ან თემა...' : 'Search questions or keywords...'}

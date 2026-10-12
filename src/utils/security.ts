@@ -175,6 +175,18 @@ export const hashPasswordSync = (password: string): string => {
 };
 
 /**
+ * Ensures a password input is converted to a cryptographic hash string
+ * Prevents storing or transmitting raw plain-text passwords
+ */
+export const ensureHashedPassword = (passwordOrHash: string): string => {
+  if (!passwordOrHash) return '';
+  if (passwordOrHash.startsWith('h_') || (passwordOrHash.length === 64 && /^[0-9a-f]{64}$/i.test(passwordOrHash))) {
+    return passwordOrHash;
+  }
+  return hashPasswordSync(passwordOrHash);
+};
+
+/**
  * Verify password against stored hash or plaintext fallback
  */
 export const verifyPassword = (enteredPassword: string, storedHashOrPass: string): boolean => {

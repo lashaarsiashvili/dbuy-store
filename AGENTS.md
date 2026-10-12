@@ -1,5 +1,10 @@
 # Project Guidelines & Architecture Memory
 
+## Critical Production Database Safety & Read-Only Policy
+- **STRICT PROHIBITION**: Under absolutely NO circumstances are production databases to be modified, overwritten, dropped, reset, or altered. Product data is stored in Cloudflare D1 (text/descriptions) and Cloudflare R2 (images).
+- **Scope of Changes**: All updates, UI fixes (including dark/light mode adjustments), features, and commits MUST be strictly limited to frontend code and application logic.
+- **FORBIDDEN ACTIONS**: Strictly forbidden from writing, generating, or executing any database migration scripts, deletion commands, purge routines, or schema resets affecting D1 or R2. Treat D1 and R2 data as entirely read-only and permanent.
+
 ## Deployment & Hosting Target
 - **Target Platform**: Cloudflare Pages / Static Site Hosting (e.g. `dbuystore.com`).
 - **Firebase Status**: Completely decoupled (`ENABLE_FIREBASE = false`). Do NOT re-introduce Firebase or create mandatory external backend dependencies for viewing products, browsing, or cart functionality.

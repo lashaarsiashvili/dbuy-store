@@ -23,6 +23,7 @@ import { AdsGallery } from './components/AdsGallery';
 import { ToastContainer } from './components/ToastContainer';
 import { getPayPalV6Instance } from './utils/paypalV6';
 import { analytics } from './components/AdminAnalyticsDashboard';
+import { useAnalytics } from './hooks/useAnalytics';
 
 const LIVE_PAYPAL_CLIENT_ID = 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
 const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || LIVE_PAYPAL_CLIENT_ID;
@@ -38,6 +39,9 @@ const MainLayout: React.FC = () => {
     user, 
     isAdmin 
   } = useStore();
+
+  // Lightweight React storefront tracking hook
+  useAnalytics(typeof window !== 'undefined' ? window.location.pathname : '/', activeProductId);
 
   // Site Visit Analytics Tracking (excluding admin users)
   useEffect(() => {

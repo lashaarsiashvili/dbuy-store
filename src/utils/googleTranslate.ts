@@ -57,7 +57,7 @@ export function setGoogleTranslateCookie(lang: string) {
 /**
  * Programmatically triggers Google Translate to translate into the target language.
  */
-export function triggerGoogleTranslate(lang: string, fallbackReload = true) {
+export function triggerGoogleTranslate(lang: string, fallbackReload = false) {
   if (typeof window === 'undefined') return;
 
   // 1. Set the googtrans cookie
@@ -80,9 +80,7 @@ export function triggerGoogleTranslate(lang: string, fallbackReload = true) {
         el.dispatchEvent(new Event('change', { bubbles: true }));
       } else if (attempts >= 8) {
         clearInterval(interval);
-        if (fallbackReload) {
-          window.location.reload();
-        }
+        // Do not force window.location.reload() — native React i18n handles translations seamlessly
       }
     }, 100);
   }

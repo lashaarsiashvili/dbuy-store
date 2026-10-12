@@ -204,7 +204,7 @@ export const MyOrdersPage: React.FC = () => {
                     </div>
 
                     <div className="text-slate-500 text-[11px]">
-                      {t('orders.deliveringTo')}: <strong className="text-slate-700">{order.address}, {order.city}</strong>
+                      {t('orders.deliveringTo')}: <strong className="text-slate-700 dark:text-slate-200">{order.address}, {order.city}</strong>
                     </div>
                   </div>
 
@@ -224,7 +224,7 @@ export const MyOrdersPage: React.FC = () => {
                         href={`https://t.17track.net/en#nums=${order.trackingNumber}`}
                         target="_blank"
                         rel="noreferrer"
-                        className="px-3 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 font-bold text-xs transition-colors inline-flex items-center space-x-1.5"
+                        className="px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 font-bold text-xs transition-colors inline-flex items-center space-x-1.5"
                       >
                         <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
                         <span>{isKa ? 'თრექინგის შემოწმება' : 'Track Status'}</span>
@@ -239,18 +239,18 @@ export const MyOrdersPage: React.FC = () => {
 
         {/* Delete Confirmation Modal */}
         {orderToDelete && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-xs animate-fadeIn">
-            <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 space-y-5 animate-scaleUp">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 dark:bg-black/70 backdrop-blur-xs animate-fadeIn">
+            <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-md w-full p-6 shadow-2xl border border-slate-100 dark:border-slate-800 space-y-5 animate-scaleUp">
               <div className="flex items-start justify-between">
                 <div className="flex items-center space-x-3">
-                  <div className="p-3 rounded-2xl bg-red-50 text-red-600">
+                  <div className="p-3 rounded-2xl bg-red-50 dark:bg-red-950/60 text-red-600 dark:text-red-400">
                     <AlertTriangle className="w-6 h-6" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-bold text-slate-900">
+                    <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                       {t('orders.deleteConfirm')}
                     </h3>
-                    <p className="text-xs font-mono font-bold text-blue-700">
+                    <p className="text-xs font-mono font-bold text-blue-700 dark:text-blue-400">
                       {orderToDelete}
                     </p>
                   </div>
@@ -258,13 +258,13 @@ export const MyOrdersPage: React.FC = () => {
 
                 <button
                   onClick={() => setOrderToDelete(null)}
-                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                  className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                 >
                   <X className="w-5 h-5" />
                 </button>
               </div>
 
-              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+              <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">
                 {t('orders.deleteConfirmDesc')}
               </p>
 
@@ -272,7 +272,7 @@ export const MyOrdersPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setOrderToDelete(null)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   {t('orders.cancel')}
                 </button>

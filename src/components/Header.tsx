@@ -107,8 +107,7 @@ export const Header: React.FC = () => {
           <div className="flex items-center w-full gap-2 animate-in fade-in duration-200">
             <div className="flex-1 flex items-center border-2 border-blue-600 dark:border-blue-500 rounded-xl bg-white dark:bg-slate-800 px-3 py-1.5 shadow-sm">
               <Search className="w-4 h-4 text-blue-600 dark:text-blue-400 mr-2 shrink-0" />
-              <input
-                type="text"
+              <input type="text"
                 autoFocus
                 value={searchQuery ?? ''}
                 onChange={e => setSearchQuery(e.target.value)}
@@ -118,7 +117,7 @@ export const Header: React.FC = () => {
               {searchQuery && (
                 <button
                   onClick={() => setSearchQuery('')}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                  className="p-1 text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -148,8 +147,7 @@ export const Header: React.FC = () => {
               className="hidden sm:flex flex-1 w-full max-w-2xl items-center border-2 rounded-lg bg-white dark:bg-slate-800 shadow-sm mx-4"
             >
               <div className="relative flex-1 flex items-center h-full">
-                <input
-                  type="text"
+                <input type="text"
                   value={searchQuery ?? ''}
                   onChange={e => setSearchQuery(e.target.value)}
                   placeholder={t('nav.searchPlaceholder')}
@@ -158,7 +156,7 @@ export const Header: React.FC = () => {
                 {searchQuery && (
                   <button
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    className="absolute right-2 p-1 text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200"
                     aria-label="Clear search"
                   >
                     <X className="w-4 h-4" />
@@ -343,7 +341,7 @@ export const Header: React.FC = () => {
               <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
               <span className="whitespace-nowrap">{t('top.dailyDeals')}</span>
             </button>
-            <span className="text-slate-300 dark:text-slate-700">|</span>
+            <span className="text-slate-300 dark:text-slate-700 dark:text-slate-200">|</span>
             <button
               onClick={() => setCurrentPage('contact')}
               className="flex items-center space-x-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-[10px] sm:text-xs"
@@ -395,7 +393,7 @@ export const Header: React.FC = () => {
             {/* Admin Panel Link */}
             {isAdmin && (
               <>
-                <span className="text-slate-200 dark:text-slate-700">|</span>
+                <span className="text-slate-200 dark:text-slate-700 dark:text-slate-200">|</span>
                 <button
                   onClick={() => setCurrentPage('admin')}
                   className={`flex items-center space-x-1 px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer shadow-2xs ${

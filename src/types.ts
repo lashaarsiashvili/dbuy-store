@@ -6,6 +6,25 @@ export type Language = 'en' | 'ka' | 'es' | 'ru' | 'de' | 'fr' | 'zh';
 
 export type PageView = 'home' | 'category' | 'product' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders' | 'deliveries' | 'campaigns';
 
+export interface ProductVideo {
+  id?: string;
+  type: 'youtube' | 'upload';
+  url: string;
+  title?: string;
+  thumbnailUrl?: string;
+}
+
+export interface ProductVariant {
+  id?: string;
+  name: string;
+  nameKa?: string;
+  colorCode?: string;
+  price?: number;
+  origPrice?: number;
+  stock?: number;
+  images: string[];
+}
+
 export interface Product {
   id: string;
   name?: string;
@@ -24,6 +43,8 @@ export interface Product {
   badge?: string;
   image: string;
   images?: string[];
+  videos?: ProductVideo[];
+  variants?: ProductVariant[];
   description: string;
   descriptionKa?: string;
   description_en?: string;

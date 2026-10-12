@@ -341,7 +341,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
           <button
             onClick={onClose}
-            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
             aria-label="Close modal"
           >
             <X className="w-5 h-5" />
@@ -417,7 +417,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                   style === 'sales'
                     ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white'
                 }`}
               >
                 🚀 {language === 'ka' ? 'სრული სარეკლამო' : 'Full Ad Copy'}
@@ -428,7 +428,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                   style === 'story'
                     ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white'
                 }`}
               >
                 ⚡ {language === 'ka' ? 'მოკლე / Story / Reels' : 'Story / Reels'}
@@ -439,7 +439,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all cursor-pointer whitespace-nowrap ${
                   style === 'promo'
                     ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:text-white'
                 }`}
               >
                 🎁 {language === 'ka' ? 'სპეციალური აქცია' : 'Flash Sale'}
@@ -454,7 +454,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                   language === 'ka'
                     ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-100 dark:hover:text-slate-200'
                 }`}
               >
                 🇬🇪 ქართული
@@ -465,7 +465,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 className={`px-2.5 py-1 text-xs font-bold rounded-xl transition-all cursor-pointer ${
                   language === 'en'
                     ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 shadow-xs'
-                    : 'text-slate-500 hover:text-slate-800 dark:hover:text-slate-200'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-100 dark:hover:text-slate-200'
                 }`}
               >
                 🇺🇸 English
@@ -493,7 +493,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
             </div>
 
             <div className="relative">
-              <textarea
+              <textarea 
                 value={caption}
                 onChange={e => setCaption(e.target.value)}
                 rows={9}
@@ -593,7 +593,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                       <span className="font-black text-xs leading-none">
                         {language === 'ka' ? 'Facebook სრული პოსტი' : 'Facebook Full Post'}
                       </span>
-                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-400 text-slate-900 tracking-wide">
+                      <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded-md bg-amber-400 text-slate-900 dark:text-white tracking-wide">
                         {language === 'ka' ? 'ფოტო + ტექსტი' : 'Photo + Text'}
                       </span>
                     </div>

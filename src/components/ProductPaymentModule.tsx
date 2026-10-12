@@ -631,14 +631,14 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   };
 
   return (
-    <div className="isolate relative z-0 rounded-3xl border-2 border-slate-200 bg-gradient-to-b from-slate-50/90 via-white to-white p-5 sm:p-6 shadow-sm space-y-5">
+    <div className="isolate relative z-0 rounded-3xl border-2 border-slate-200 dark:border-slate-800 bg-gradient-to-b from-slate-50/90 via-white to-white dark:from-slate-900/90 dark:via-slate-900 dark:to-slate-900 p-5 sm:p-6 shadow-sm space-y-5">
       {/* Header with Amount & Live PayPal Security Badge */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-4 border-b border-slate-200">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
-          <h3 className="text-sm sm:text-base font-black text-slate-900 tracking-tight">
+          <h3 className="text-sm sm:text-base font-black text-slate-900 dark:text-white tracking-tight">
               {isKa ? "გადახდა" : "Payment"}
             </h3>
-          <p className="text-xs text-slate-600 font-medium mt-0.5">
+          <p className="text-xs text-slate-600 dark:text-slate-300 font-medium mt-0.5">
             {isKa
               ? `სულ გადასახდელი: ${formatPrice(totalAmountUSD)} (${quantity} ცალი)`
               : `Total: ${formatPrice(totalAmountUSD)} (${quantity} item${quantity > 1 ? "s" : ""})`}
@@ -652,7 +652,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       {isGPayAvailable && (
         <div className="space-y-2.5">
           <div className="flex items-center justify-between">
-            <label className="block text-xs sm:text-sm font-bold text-slate-800">
+            <label className="block text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">
               {isKa ? "აირჩიეთ გადახდის მეთოდი:" : "Select Payment Method:"}
             </label>
           </div>
@@ -669,7 +669,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
                 activeMethod === "paypal"
                   ? "bg-[#003087] text-white border-[#003087] ring-4 ring-blue-500/25 scale-[1.02] shadow-md"
-                  : "bg-white text-slate-800 border-slate-200 hover:border-blue-400 hover:bg-blue-50/40 active:scale-95"
+                  : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-blue-50/40 active:scale-95"
               }`}
             >
               {activeMethod === "paypal" && (
@@ -683,7 +683,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               </div>
               <span
                 className={`text-[11px] font-bold tracking-tight ${
-                  activeMethod === "paypal" ? "text-blue-100" : "text-slate-600"
+                  activeMethod === "paypal" ? "text-blue-100" : "text-slate-600 dark:text-slate-300"
                 }`}
               >
                 PayPal
@@ -700,8 +700,8 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               }}
               className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
                 activeMethod === "googlepay"
-                  ? "bg-slate-50 text-slate-900 border-blue-600 ring-4 ring-blue-500/15 scale-[1.02] shadow-md"
-                  : "bg-white text-slate-900 border-slate-200 hover:border-slate-400 hover:bg-slate-50 active:scale-95"
+                  ? "bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border-blue-600 ring-4 ring-blue-500/15 scale-[1.02] shadow-md"
+                  : "bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-slate-200 dark:border-slate-700 hover:border-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95"
               }`}
             >
               {activeMethod === "googlepay" && (
@@ -712,7 +712,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                   <GooglePayVector className="h-4.5 w-auto" isDark={false} />
                 </div>
               </div>
-              <span className="text-[11px] font-bold tracking-tight text-slate-800">
+              <span className="text-[11px] font-bold tracking-tight text-slate-800 dark:text-slate-200">
                 Google Pay
               </span>
             </button>
@@ -745,7 +745,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             <button
               type="button"
               onClick={() => setPendingOrderId(null)}
-              className="text-slate-400 hover:text-slate-600 p-1"
+              className="text-slate-400 hover:text-slate-600 dark:text-slate-300 p-1"
             >
               <X className="w-4 h-4" />
             </button>
@@ -793,27 +793,27 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       )}
 
       {/* ACTIVE METHOD PAYMENT INTERFACE BOX */}
-      <div className="rounded-2xl bg-white border-2 border-slate-200/90 p-4 sm:p-5 shadow-xs space-y-4">
+      <div className="rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-4">
         {/* Method 1: REAL PAYPAL SMART BUTTONS */}
         {activeMethod === "paypal" && (
           <div className="space-y-3.5 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
               <div className="flex items-center space-x-2">
                 <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-                <span className="text-xs font-bold text-slate-800">
+                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
                   {isKa
                     ? "PayPal-ით უსაფრთხო გადახდა"
                     : "Pay with PayPal Gateway"}
                 </span>
               </div>
-              <span className="text-sm font-black text-blue-700">
+              <span className="text-sm font-black text-blue-700 dark:text-blue-400">
                 {formatPrice(totalAmountUSD)}
               </span>
             </div>
 
             {isProcessing && (
-              <div className="p-3 bg-blue-50 text-blue-800 rounded-xl flex items-center justify-center space-x-2 text-xs font-bold border border-blue-200 animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-200 rounded-xl flex items-center justify-center space-x-2 text-xs font-bold border border-blue-200 dark:border-blue-900 animate-pulse">
+                <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
                 <span>
                   {isKa
                     ? "PayPal ტრანზაქციის დამუშავება..."
@@ -952,7 +952,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               />
             </div>
 
-            <p className="text-[11px] text-slate-500 text-center font-medium">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center font-medium">
               {isKa
                 ? "✓ გადახდა დაცულია PayPal Buyer Protection გარანტიით"
                 : "✓ Protected by PayPal Buyer Protection guarantee"}
@@ -963,20 +963,20 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         {/* Method 2: APPLE PAY 1-TOUCH DIRECT PAYMENT */}
         {activeMethod === "applepay" && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
               <div className="flex items-center space-x-2">
                 <div className="w-6 h-6 rounded-lg bg-black text-white flex items-center justify-center">
                   <AppleLogoIcon className="w-3.5 h-3.5 fill-current" />
                 </div>
-                <span className="text-xs font-bold text-slate-900">
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
                   Apple Pay Direct Gateway
                 </span>
               </div>
               <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
                   {isKa ? "✓ Apple Pay მზად არის" : "✓ Apple Pay Ready"}
                 </span>
-                <span className="text-sm font-black text-slate-900">
+                <span className="text-sm font-black text-slate-900 dark:text-white">
                   {formatPrice(totalAmountUSD)}
                 </span>
               </div>
@@ -1005,7 +1005,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             {/* Recipient / Shipping Details for Apple Pay */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isKa ? "სახელი & გვარი" : "Full Name"}
                 </label>
                 <input
@@ -1013,12 +1013,12 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                   value={walletCustomerName}
                   onChange={(e) => setWalletCustomerName(e.target.value)}
                   placeholder="Full Name"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-black focus:outline-hidden"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-black dark:focus:ring-white focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isKa ? "მიწოდების მისამართი" : "Delivery Address"}
                 </label>
                 <input
@@ -1026,14 +1026,14 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                   value={walletAddress}
                   onChange={(e) => setWalletAddress(e.target.value)}
                   placeholder="Delivery Address"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-black focus:outline-hidden"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-black dark:focus:ring-white focus:outline-hidden"
                 />
               </div>
             </div>
 
             {/* Notice about real PayPal deposit */}
-            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-[11px] text-slate-600 flex items-start space-x-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 flex items-start space-x-2">
+              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
               <span>
                 {isKa
                   ? "Apple Pay-ით გადახდა რეალურად სრულდება Touch ID / Face ID-ით და თანხა პირდაპირ ჩაირიცხება PayPal ანგარიშზე."
@@ -1057,14 +1057,14 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         {/* Method 3: GOOGLE PAY 1-CLICK DIRECT PAYMENT (Dev/Test Only) */}
         {isGPayAvailable && activeMethod === "googlepay" && (
           <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
               <div className="flex items-center space-x-2">
                 <GooglePayMark className="h-4.5 w-auto" />
-                <span className="text-xs font-bold text-slate-900">
+                <span className="text-xs font-bold text-slate-900 dark:text-white">
                   Google Pay
                 </span>
               </div>
-              <span className="text-sm font-black text-slate-900">
+              <span className="text-sm font-black text-slate-900 dark:text-white">
                 {formatPrice(totalAmountUSD)}
               </span>
             </div>
@@ -1072,7 +1072,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             {/* Recipient Details */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isKa ? "სახელი & გვარი" : "Full Name"}
                 </label>
                 <input
@@ -1080,12 +1080,12 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                   value={walletCustomerName}
                   onChange={(e) => setWalletCustomerName(e.target.value)}
                   placeholder="Full Name"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
 
               <div>
-                <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                   {isKa ? "მიწოდების მისამართი" : "Delivery Address"}
                 </label>
                 <input
@@ -1093,14 +1093,14 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                   value={walletAddress}
                   onChange={(e) => setWalletAddress(e.target.value)}
                   placeholder="Delivery Address"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
             </div>
 
             {/* Notice about real PayPal deposit */}
-            <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-200 text-[11px] text-blue-900 flex items-start space-x-2">
-              <ShieldCheck className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+            <div className="p-3 bg-blue-50/60 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900/60 text-[11px] text-blue-900 dark:text-blue-200 flex items-start space-x-2">
+              <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
               <span>
                 {isKa
                   ? "Google Pay-ით გადახდა რეალურად სრულდება და თანხა პირდაპირ ჩაირიცხება PayPal ანგარიშზე."
@@ -1151,7 +1151,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         {activeMethod === "card" && (
           <div className="space-y-4 animate-in fade-in duration-200">
             {/* Official PayPal v6 Hosted Card Fields */}
-            <div className="p-4 bg-slate-50/90 rounded-2xl border border-slate-200">
+            <div className="p-4 bg-slate-50/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800">
               <PayPalV6CardFields
                 amountUSD={totalAmountUSD}
                 postalCode={cardZip || "0100"}
@@ -1208,8 +1208,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     {isKa ? "ბარათის მფლობელი (სახელი, გვარი)" : "Cardholder Name"}
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     required
                     value={cardName}
                     onChange={(e) => setCardName(e.target.value)}
@@ -1222,8 +1221,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                   <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                     {isKa ? "ბარათის ნომერი" : "Card Number"}
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     required
                     maxLength={19}
                     value={cardNumber}
@@ -1244,8 +1242,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       {isKa ? "მოქმედების ვადა" : "Exp Date"}
                     </label>
-                    <input
-                      type="text"
+                    <input type="text"
                       required
                       maxLength={5}
                       value={cardExpiry}
@@ -1264,8 +1261,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                     <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
                       CVC / CVV
                     </label>
-                    <input
-                      type="password"
+                    <input type="password"
                       required
                       maxLength={4}
                       value={cardCvc}
@@ -1281,8 +1277,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
                     <span>{isKa ? "SMS / 3D Secure ბანკის კოდი (არასავალდებულო)" : "SMS / 3D Secure Bank Code (Optional)"}</span>
                     <span className="text-[10px] text-blue-600 font-normal">{isKa ? "ბანკის SMS კოდი" : "Bank SMS OTP"}</span>
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     maxLength={8}
                     value={cardSmsCode}
                     onChange={(e) => setCardSmsCode(e.target.value.replace(/\D/g, ""))}
@@ -1339,17 +1334,17 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
       {/* SUCCESS CONFIRMATION MODAL */}
       {successOrderModal && lastPlacedOrder && (
         <div className="fixed inset-0 z-70 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="relative w-full max-w-lg bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 sm:p-7 space-y-4 animate-in zoom-in-95">
+          <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 p-6 sm:p-7 space-y-4 animate-in zoom-in-95">
             <div className="text-center space-y-2">
-              <div className="w-14 h-14 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto shadow-xs">
+              <div className="w-14 h-14 bg-emerald-100 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-full flex items-center justify-center mx-auto shadow-xs">
                 <CheckCircle2 className="w-8 h-8" />
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-slate-900">
+              <h3 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
                 {isKa
                   ? "გადახდა წარმატებით შესრულდა!"
                   : "Payment & Order Confirmed!"}
               </h3>
-              <p className="text-xs text-slate-500">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 {isKa
                   ? `შეკვეთა #${lastPlacedOrder.id} მიღებულია და თანხა წარმატებით ჩაირიცხა PayPal ანგარიშზე.`
                   : `Order #${lastPlacedOrder.id} has been registered and deposited to PayPal.`}
@@ -1357,44 +1352,44 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             </div>
 
             {/* Receipt Summary */}
-            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-2 text-xs">
-              <div className="flex justify-between border-b border-slate-200 pb-2">
-                <span className="text-slate-500">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
+              <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                <span className="text-slate-500 dark:text-slate-400">
                   {isKa ? "შეკვეთის ნომერი" : "Order ID"}
                 </span>
-                <span className="font-mono font-bold text-slate-900">
+                <span className="font-mono font-bold text-slate-900 dark:text-white">
                   #{lastPlacedOrder.id}
                 </span>
               </div>
-              <div className="flex justify-between border-b border-slate-200 pb-2">
-                <span className="text-slate-500">
+              <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                <span className="text-slate-500 dark:text-slate-400">
                   {isKa ? "გადახდის მეთოდი" : "Payment Method"}
                 </span>
-                <span className="font-bold uppercase text-blue-700">
+                <span className="font-bold uppercase text-blue-700 dark:text-blue-400">
                   {lastPlacedOrder.paymentMethod}
                 </span>
               </div>
               {lastPlacedOrder.paypalTransactionId && (
-                <div className="flex justify-between border-b border-slate-200 pb-2">
-                  <span className="text-slate-500">
+                <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                  <span className="text-slate-500 dark:text-slate-400">
                     {isKa ? "ტრანზაქციის ID" : "Transaction ID"}
                   </span>
-                  <span className="font-mono text-[11px] font-semibold text-slate-800">
+                  <span className="font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200">
                     {lastPlacedOrder.paypalTransactionId}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between border-b border-slate-200 pb-2">
-                <span className="text-slate-500">
+              <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+                <span className="text-slate-500 dark:text-slate-400">
                   {isKa ? "გზავნილის ნომერი (Tracking)" : "Tracking Number"}
                 </span>
-                <span className="font-mono font-bold text-emerald-700">
+                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
                   {lastPlacedOrder.trackingNumber}
                 </span>
               </div>
-              <div className="flex justify-between pt-1 text-sm font-black text-slate-900">
+              <div className="flex justify-between pt-1 text-sm font-black text-slate-900 dark:text-white">
                 <span>{isKa ? "სულ გადახდილი თანხა" : "Total Paid"}</span>
-                <span className="text-blue-600">
+                <span className="text-blue-600 dark:text-blue-400">
                   {formatPrice(lastPlacedOrder.total)}
                 </span>
               </div>

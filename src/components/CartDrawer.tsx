@@ -93,7 +93,7 @@ export const CartDrawer: React.FC = () => {
             </div>
             <button
               onClick={() => setIsCartOpen(false)}
-              className="p-2 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="p-2 rounded-full text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
               aria-label="Close cart"
             >
               <X className="w-5 h-5" />
@@ -237,8 +237,7 @@ export const CartDrawer: React.FC = () => {
               <form onSubmit={handleApplyPromo} className="flex space-x-2">
                 <div className="relative flex-1">
                   <Tag className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
+                  <input type="text"
                     value={inputCode ?? ''}
                     onChange={e => setInputCode(e.target.value)}
                     placeholder={t('cart.promoPlaceholder')}

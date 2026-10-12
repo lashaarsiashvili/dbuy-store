@@ -296,7 +296,7 @@ export const CategoryPage: React.FC = () => {
 
             <button
               onClick={() => setFilters({ minRating: 0, priceRange: 'all', inStockOnly: false })}
-              className="text-xs text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline font-semibold ml-2 cursor-pointer"
+              className="text-xs text-slate-500 hover:text-slate-800 dark:text-slate-100 dark:hover:text-slate-200 underline font-semibold ml-2 cursor-pointer"
             >
               {isKa ? 'გასუფთავება' : 'Clear All'}
             </button>
@@ -408,7 +408,7 @@ export const CategoryPage: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsMobileDrawerOpen(false)}
-                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                  className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>

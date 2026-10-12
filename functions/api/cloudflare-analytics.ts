@@ -133,12 +133,12 @@ export async function onRequestPost(context: any) {
 async function handleAnalyticsQuery(context: any, body: any) {
   try {
     const zoneId = body?.zoneId || context.env?.CLOUDFLARE_ZONE_ID || DEFAULT_ZONE_ID;
-    const apiToken = body?.apiToken || context.env?.CLOUDFLARE_API_TOKEN || DEFAULT_API_TOKEN;
+    const apiToken = body?.apiToken || context.env?.CLOUDFLARE_API_TOKEN;
     const daysRequested = Number(body?.days) || 360;
 
-    // Safety checks on zoneId and apiToken
-    if (!zoneId || !apiToken) {
-      return new Response(JSON.stringify(getFallbackBaseline()), { headers: CORS_HEADERS });
+    // Safety checks: If no custom valid token is provided, instantly serve rich baseline data with 200 OK
+    if (!zoneId || !apiToken || apiToken === DEFAULT_API_TOKEN || apiToken.length < 10) {
+      return new Response(JSON.stringify(getFallbackBaseline()), { status: 200, headers: CORS_HEADERS });
     }
 
     const today = new Date();
@@ -218,14 +218,20 @@ async function handleAnalyticsQuery(context: any, body: any) {
           liveEnd,
         },
       }),
+    }).catch((err) => {
+      console.warn('Cloudflare API connection failed:', err?.message || err);
+      return null;
     });
 
-    if (!cfRes.ok) {
-      console.warn(`Cloudflare API HTTP error: ${cfRes.status}`);
+    if (!cfRes || !cfRes.ok) {
+      // Gracefully serve fallback baseline if Cloudflare token is unauthenticated or expired (e.g. 401)
       return new Response(JSON.stringify(getFallbackBaseline()), { headers: CORS_HEADERS });
     }
 
-    const cfJson: any = await cfRes.json();
+    const cfJson: any = await cfRes.json().catch(() => null);
+    if (!cfJson || cfJson.errors || !cfJson.data) {
+      return new Response(JSON.stringify(getFallbackBaseline()), { headers: CORS_HEADERS });
+    }
     const zone = cfJson?.data?.viewer?.zones?.[0];
     const dailyRaw = zone?.httpRequests1dGroups;
     const adaptiveRaw = zone?.httpRequestsAdaptiveGroups;

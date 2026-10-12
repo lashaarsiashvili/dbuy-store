@@ -138,14 +138,6 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
 
   const currentLang = languagesList.find(l => l.code === language) || languagesList[0];
 
-  // Sync with Google Translate cookie if present on first load
-  useEffect(() => {
-    const cookieLang = getGoogleTranslateCookie() as Language;
-    if (cookieLang && ['en', 'ka', 'ru', 'es', 'de', 'fr'].includes(cookieLang) && cookieLang !== language) {
-      setLanguage(cookieLang);
-    }
-  }, []);
-
   // Close on outside click
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent | TouchEvent) => {
@@ -163,7 +155,6 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
 
   const handleSelectLanguage = (code: Language) => {
     setLanguage(code);
-    triggerGoogleTranslate(code);
     setIsOpen(false);
   };
 
@@ -179,7 +170,7 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
         className={`inline-flex items-center space-x-1.5 min-h-[36px] sm:min-h-[38px] px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer select-none shadow-2xs touch-manipulation ${
           variant === 'dark'
             ? 'bg-slate-900 border-slate-800 text-slate-100 hover:bg-slate-800 hover:border-slate-700'
-            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100'
+            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 hover:text-slate-900 dark:text-white dark:hover:text-slate-100'
         }`}
       >
         <CircularFlag code={currentLang.code} size={16} />
@@ -210,7 +201,7 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
                   className={`w-full flex items-center justify-between min-h-[44px] px-3 py-2.5 text-xs transition-colors cursor-pointer text-left touch-manipulation ${
                     isSelected
                       ? 'bg-blue-50/80 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 font-medium'
                   }`}
                 >
                   <div className="flex items-center space-x-2.5">

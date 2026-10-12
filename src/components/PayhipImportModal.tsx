@@ -158,7 +158,7 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/70 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-3xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
+      <div className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 w-full max-w-3xl overflow-hidden my-8 animate-in fade-in zoom-in-95 duration-200">
         
         {/* Header */}
         <div className="p-6 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white flex items-center justify-between">
@@ -189,13 +189,13 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
         </div>
 
         {/* Tab Controls */}
-        <div className="flex border-b border-slate-200 bg-slate-50 px-6 pt-3 space-x-2">
+        <div className="flex border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950 px-6 pt-3 space-x-2">
           <button
             onClick={() => setActiveTab('upload')}
             className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center space-x-1.5 ${
               activeTab === 'upload'
-                ? 'bg-white text-blue-600 border-t border-x border-slate-200 shadow-2xs -mb-px'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border-t border-x border-slate-200 dark:border-slate-800 shadow-2xs -mb-px'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <UploadCloud className="w-3.5 h-3.5" />
@@ -205,8 +205,8 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
             onClick={() => setActiveTab('paste')}
             className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center space-x-1.5 ${
               activeTab === 'paste'
-                ? 'bg-white text-blue-600 border-t border-x border-slate-200 shadow-2xs -mb-px'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-900 text-blue-600 dark:text-blue-400 border-t border-x border-slate-200 dark:border-slate-800 shadow-2xs -mb-px'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <FileText className="w-3.5 h-3.5" />
@@ -216,8 +216,8 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
             onClick={() => setActiveTab('guide')}
             className={`px-4 py-2.5 text-xs font-bold rounded-t-xl transition-all cursor-pointer flex items-center space-x-1.5 ${
               activeTab === 'guide'
-                ? 'bg-white text-indigo-600 border-t border-x border-slate-200 shadow-2xs -mb-px'
-                : 'text-slate-600 hover:text-slate-900'
+                ? 'bg-white dark:bg-slate-900 text-indigo-600 dark:text-indigo-400 border-t border-x border-slate-200 dark:border-slate-800 shadow-2xs -mb-px'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
             }`}
           >
             <HelpCircle className="w-3.5 h-3.5" />
@@ -235,7 +235,7 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
                 ref={fileInputRef}
                 type="file"
                 accept=".csv,.txt,.json"
-                className="hidden"
+                className="hidden dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder-slate-400"
                 onChange={(e) => {
                   if (e.target.files && e.target.files[0]) {
                     handleFileProcess(e.target.files[0]);
@@ -257,7 +257,7 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
                 <div className="w-12 h-12 rounded-2xl bg-blue-100 text-blue-600 flex items-center justify-center mx-auto mb-3">
                   <UploadCloud className="w-6 h-6" />
                 </div>
-                <h4 className="text-sm font-bold text-slate-800 mb-1">
+                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100 mb-1">
                   {fileName ? fileName : (isKa ? 'ჩააგდეთ Payhip CSV ან JSON ფაილი აქ' : 'Drop your Payhip CSV or JSON export here')}
                 </h4>
                 <p className="text-xs text-slate-500 max-w-md mx-auto mb-3">
@@ -265,7 +265,7 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
                     ? 'ან დააჭირეთ ასარჩევად თქვენი კომპიუტერიდან (.csv, .json, .txt)'
                     : 'or click to browse from your computer (.csv, .json, .txt)'}
                 </p>
-                <span className="inline-block px-3 py-1 bg-white text-slate-700 text-[11px] font-semibold rounded-lg border border-slate-200 shadow-2xs">
+                <span className="inline-block px-3 py-1 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-[11px] font-semibold rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
                   {isKa ? 'ფაილის არჩევა' : 'Browse File'}
                 </span>
               </div>
@@ -275,7 +275,7 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
           {/* TAB 2: PASTE TEXT */}
           {activeTab === 'paste' && (
             <div className="space-y-3">
-              <label className="block text-xs font-bold text-slate-700">
+              <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
                 {isKa ? 'ჩასვით CSV ან Payhip ექსპორტის მონაცემები:' : 'Paste CSV or Export Text Here:'}
               </label>
               <textarea
@@ -285,57 +285,57 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
                   processCSV(e.target.value);
                 }}
                 placeholder={`Title,Price,Description,Image URL,Category,Stock\nWireless Gaming Mouse,39.99,High performance gaming mouse,https://images.unsplash.com/...,tech,50\nFitness Hydration Flask,24.99,Double insulated steel bottle,https://images.unsplash.com/...,fitness,100`}
-                className="w-full h-44 p-3.5 text-xs font-mono bg-slate-50 border border-slate-200 rounded-2xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed resize-y"
+                className="w-full h-44 p-3.5 text-xs font-mono bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 border border-slate-200 dark:border-slate-700 rounded-2xl focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed resize-y"
               />
             </div>
           )}
 
           {/* TAB 3: STEP-BY-STEP GUIDE */}
           {activeTab === 'guide' && (
-            <div className="space-y-4 bg-indigo-50/60 p-5 rounded-2xl border border-indigo-100 text-xs text-indigo-950">
-              <h4 className="text-sm font-black text-indigo-900 flex items-center space-x-2">
+            <div className="space-y-4 bg-indigo-50/60 dark:bg-indigo-950/40 p-5 rounded-2xl border border-indigo-100 dark:border-indigo-900/60 text-xs text-indigo-950 dark:text-indigo-200">
+              <h4 className="text-sm font-black text-indigo-900 dark:text-indigo-300 flex items-center space-x-2">
                 <span>💡 {isKa ? 'სად არის ექსპორტის ღილაკი Payhip-ში (ნაბიჯ-ნაბიჯ):' : 'Where to find the Export button in Payhip:'}</span>
               </h4>
               
-              <div className="space-y-3 font-medium text-slate-700">
-                <div className="p-3.5 bg-white rounded-xl border border-indigo-200 space-y-2">
-                  <div className="flex items-center space-x-2 text-indigo-900 font-bold text-xs">
+              <div className="space-y-3 font-medium text-slate-700 dark:text-slate-200">
+                <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800/60 space-y-2">
+                  <div className="flex items-center space-x-2 text-indigo-900 dark:text-indigo-300 font-bold text-xs">
                     <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[11px]">1</span>
                     <span>{isKa ? 'მეთოდი A: „More ▾“ ჩამოსაშლელი ღილაკი' : 'Method A: "More ▾" dropdown'}</span>
                   </div>
-                  <p className="text-xs text-slate-600 leading-relaxed pl-7">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed pl-7">
                     {isKa 
                       ? 'თქვენს Products გვერდზე (სადაც 45 პროდუქტი ჩანს), საძიებო ველის მარჯვნივ მოძებნეთ ღილაკი '
                       : 'On your Products page (showing 45 items), next to Reorder look for the button '}
-                    <strong className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">More ▾</strong>
+                    <strong className="text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">More ▾</strong>
                     {isKa 
                       ? ' („Reorder“-ის გვერდით). დააჭირეთ „More ▾“-ს და ჩამონათვალში აირჩიეთ „Export“ ან „Download CSV“.'
                       : ' and click it to find "Export" / "Download CSV".'}
                   </p>
                 </div>
 
-                <div className="p-3.5 bg-white rounded-xl border border-indigo-200 space-y-2">
-                  <div className="flex items-center space-x-2 text-indigo-900 font-bold text-xs">
+                <div className="p-3.5 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800/60 space-y-2">
+                  <div className="flex items-center space-x-2 text-indigo-900 dark:text-indigo-300 font-bold text-xs">
                     <span className="w-5 h-5 rounded-full bg-indigo-600 text-white flex items-center justify-center text-[11px]">2</span>
                     <span>{isKa ? 'მეთოდი B: Account ▾ მენიუდან' : 'Method B: Via Account ▾ menu'}</span>
                   </div>
-                  <p className="text-xs text-slate-600 leading-relaxed pl-7">
+                  <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed pl-7">
                     {isKa 
                       ? 'ზედა მარჯვენა კუთხეში დააჭირეთ '
                       : 'In the top right corner click '}
-                    <strong className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">Account ▾</strong>
+                    <strong className="text-indigo-700 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-900/60 px-2 py-0.5 rounded border border-indigo-200 dark:border-indigo-800">Account ▾</strong>
                     {isKa 
                       ? ' $\\rightarrow$ Settings $\\rightarrow$ Export Data / Products.'
                       : ' $\\rightarrow$ Settings $\\rightarrow$ Export Data.'}
                   </p>
                 </div>
 
-                <div className="p-3.5 bg-emerald-50 rounded-xl border border-emerald-200 space-y-2">
-                  <div className="flex items-center space-x-2 text-emerald-900 font-bold text-xs">
+                <div className="p-3.5 bg-emerald-50 dark:bg-emerald-950/50 rounded-xl border border-emerald-200 dark:border-emerald-800 space-y-2">
+                  <div className="flex items-center space-x-2 text-emerald-900 dark:text-emerald-300 font-bold text-xs">
                     <span className="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[11px]">3</span>
                     <span>{isKa ? 'მეთოდი C: პირდაპირ მაღაზიის ბმულით (Payhip Storefront)' : 'Method C: Payhip Storefront Link'}</span>
                   </div>
-                  <p className="text-xs text-emerald-800 leading-relaxed pl-7">
+                  <p className="text-xs text-emerald-800 dark:text-emerald-200 leading-relaxed pl-7">
                     {isKa 
                       ? 'თუ ექსპორტი მაინც გაგიჭირდათ, შეგიძლიათ მოგვაწოდოთ თქვენი Payhip მაღაზიის საჯარო ბმული (მაგ: payhip.com/თქვენი_სახელი) ან დააკოპიროთ პროდუქტების ტექსტი და პირდაპირ ჩავაშენებთ თქვენს 45-ივე პროდუქტს მაღაზიაში!'
                       : 'You can also share your public Payhip store URL (e.g. payhip.com/your_store) to directly import all 45 products.'}
@@ -343,8 +343,8 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
                 </div>
               </div>
 
-              <div className="p-3 bg-white rounded-xl border border-indigo-200 mt-2">
-                <p className="text-[11px] text-indigo-800">
+              <div className="p-3 bg-white dark:bg-slate-800 rounded-xl border border-indigo-200 dark:border-indigo-800/60 mt-2">
+                <p className="text-[11px] text-indigo-800 dark:text-indigo-300">
                   ⚡ <strong>{isKa ? 'სურათების ავტომატური სინქრონიზაცია:' : 'Automatic Photo Sync:'}</strong> {isKa ? 'გადმოტანისას ყველა პროდუქტის ორიგინალი ფოტო და ფასი ავტომატურად ჩაიტვირთება.' : 'Photos and prices will sync automatically.'}
                 </p>
               </div>
@@ -353,7 +353,7 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
 
           {/* Error Message */}
           {errorMsg && (
-            <div className="p-3.5 bg-red-50 border border-red-200 rounded-xl text-xs text-red-700 flex items-center space-x-2">
+            <div className="p-3.5 bg-red-50 dark:bg-red-950/60 border border-red-200 dark:border-red-900 rounded-xl text-xs text-red-700 dark:text-red-300 flex items-center space-x-2">
               <AlertCircle className="w-4 h-4 shrink-0 text-red-500" />
               <span>{errorMsg}</span>
             </div>
@@ -363,7 +363,7 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
           {parsedPreview.length > 0 && (
             <div className="space-y-3 pt-2">
               <div className="flex items-center justify-between">
-                <h4 className="text-xs font-bold text-slate-800 flex items-center space-x-1.5">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
                   <CheckCircle2 className="w-4 h-4 text-emerald-500" />
                   <span>
                     {isKa 
@@ -371,14 +371,14 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
                       : `Detected ${parsedPreview.length} Ready Products:`}
                   </span>
                 </h4>
-                <span className="text-[11px] text-slate-500">
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
                   {isKa ? 'გადახედეთ პროდუქტების სიას იმპორტამდე' : 'Preview before inserting'}
                 </span>
               </div>
 
-              <div className="max-h-56 overflow-y-auto border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+              <div className="max-h-56 overflow-y-auto border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden shadow-2xs">
                 <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-100 text-slate-600 font-bold sticky top-0">
+                  <thead className="bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 font-bold sticky top-0">
                     <tr>
                       <th className="p-2.5">Photo</th>
                       <th className="p-2.5">Title</th>
@@ -387,29 +387,29 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
                       <th className="p-2.5">Stock</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 bg-white">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 bg-white dark:bg-slate-900">
                     {parsedPreview.map((p, idx) => (
-                      <tr key={idx} className="hover:bg-slate-50/80">
+                      <tr key={idx} className="hover:bg-slate-50/80 dark:hover:bg-slate-800/80">
                         <td className="p-2">
                           <CachedImage
                             src={p.image}
                             alt={p.title}
-                            className="w-9 h-9 object-cover rounded-lg border border-slate-200"
+                            className="w-9 h-9 object-cover rounded-lg border border-slate-200 dark:border-slate-700"
                           />
                         </td>
-                        <td className="p-2 font-bold text-slate-800 max-w-[180px] truncate" title={p.title}>
+                        <td className="p-2 font-bold text-slate-800 dark:text-slate-100 max-w-[180px] truncate" title={p.title}>
                           {p.title}
                         </td>
                         <td className="p-2">
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 capitalize">
+                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 capitalize">
                             {p.category}
                           </span>
                         </td>
-                        <td className="p-2 font-bold text-emerald-600">
+                        <td className="p-2 font-bold text-emerald-600 dark:text-emerald-400">
                           ${p.price.toFixed(2)}
-                          {p.origPrice && <span className="line-through text-slate-400 text-[10px] ml-1">${p.origPrice.toFixed(2)}</span>}
+                          {p.origPrice && <span className="line-through text-slate-400 dark:text-slate-500 text-[10px] ml-1">${p.origPrice.toFixed(2)}</span>}
                         </td>
-                        <td className="p-2 text-slate-600 font-medium">
+                        <td className="p-2 text-slate-600 dark:text-slate-300 font-medium">
                           {p.stock} pcs
                         </td>
                       </tr>
@@ -419,13 +419,13 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
               </div>
 
               {/* Replace or Append Options */}
-              <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
-                <label className="flex items-center space-x-2.5 text-xs text-slate-700 font-semibold cursor-pointer">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                <label className="flex items-center space-x-2.5 text-xs text-slate-700 dark:text-slate-200 font-semibold cursor-pointer">
                   <input
                     type="checkbox"
                     checked={replaceExisting}
                     onChange={(e) => setReplaceExisting(e.target.checked)}
-                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 cursor-pointer"
+                    className="w-4 h-4 rounded text-blue-600 focus:ring-blue-500 border-slate-300 dark:border-slate-600 cursor-pointer"
                   />
                   <span>
                     {isKa 
@@ -439,11 +439,11 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
         </div>
 
         {/* Footer Actions */}
-        <div className="p-5 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="p-5 bg-slate-50 dark:bg-slate-950 border-t border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row items-center justify-between gap-3">
           <button
             type="button"
             onClick={handleExportExisting}
-            className="text-xs text-slate-600 hover:text-slate-900 font-bold flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-100 transition-colors cursor-pointer w-full sm:w-auto justify-center"
+            className="text-xs text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white font-bold flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors cursor-pointer w-full sm:w-auto justify-center"
             title="Download full backup of current catalog"
           >
             <Download className="w-3.5 h-3.5 text-slate-500" />
@@ -454,7 +454,7 @@ export const PayhipImportModal: React.FC<PayhipImportModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+              className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors cursor-pointer"
             >
               {isKa ? 'დახურვა' : 'Cancel'}
             </button>

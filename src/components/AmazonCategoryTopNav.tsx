@@ -68,6 +68,15 @@ export const AmazonCategoryTopNav: React.FC<AmazonCategoryTopNavProps> = ({
     }
   };
 
+  const getCategoryTitle = (cat: CategoryNavItem) => {
+    if (language === 'ka' && cat.nameKa) return cat.nameKa;
+    if (language === 'ru' && cat.nameRu) return cat.nameRu;
+    if (language === 'es' && cat.nameEs) return cat.nameEs;
+    if (language === 'de' && cat.nameDe) return cat.nameDe;
+    if (language === 'fr' && cat.nameFr) return cat.nameFr;
+    return cat.name;
+  };
+
   return (
     <nav 
       aria-label="Category Navigation"
@@ -79,6 +88,7 @@ export const AmazonCategoryTopNav: React.FC<AmazonCategoryTopNavProps> = ({
           {CATEGORIES_NAV_ITEMS.map((cat) => {
             const isSelected = selectedCategory === cat.id || (selectedCategory === '' && cat.id === 'all');
             const isHotDeal = cat.id === 'deals';
+            const catName = getCategoryTitle(cat);
 
             return (
               <button
@@ -90,7 +100,7 @@ export const AmazonCategoryTopNav: React.FC<AmazonCategoryTopNavProps> = ({
                     ? 'bg-blue-600 text-white font-bold shadow-xs'
                     : 'text-slate-300 hover:text-white hover:bg-slate-800/90'
                 }`}
-                title={isKa ? cat.nameKa : cat.name}
+                title={catName}
               >
                 {/* Category Icon */}
                 <span className={`shrink-0 transition-transform group-hover:scale-110 ${
@@ -105,7 +115,7 @@ export const AmazonCategoryTopNav: React.FC<AmazonCategoryTopNavProps> = ({
 
                 {/* Category Title */}
                 <span className="leading-none text-[11px] sm:text-xs tracking-tight">
-                  {isKa ? cat.nameKa : cat.name}
+                  {catName}
                 </span>
 
                 {/* Hot Deal Sparkle Indicator */}

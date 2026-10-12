@@ -312,7 +312,7 @@ export const AdsGallery: React.FC = () => {
               className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 viewFormat === 'feed'
                   ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-white'
               }`}
             >
               <Monitor className="w-3.5 h-3.5" />
@@ -323,7 +323,7 @@ export const AdsGallery: React.FC = () => {
               className={`flex items-center space-x-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                 viewFormat === 'story'
                   ? 'bg-blue-50 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-white'
               }`}
             >
               <Smartphone className="w-3.5 h-3.5" />
@@ -378,7 +378,7 @@ export const AdsGallery: React.FC = () => {
                         <CachedImage
                           src={ad.image}
                           alt={ad.productName}
-                          className="w-full h-full object-contain filter drop-shadow-2xl group-hover:scale-108 transition-transform duration-500 ease-out"
+                          className="w-full h-full object-contain filter drop-shadow-2xl"
                         />
                       </div>
 
@@ -536,7 +536,7 @@ export const AdsGallery: React.FC = () => {
                         <CachedImage
                           src={ad.image}
                           alt={ad.productName}
-                          className="w-full h-full object-contain filter drop-shadow-2xl group-hover:scale-110 transition-transform duration-500"
+                          className="w-full h-full object-contain filter drop-shadow-2xl"
                         />
                       </div>
                     </div>

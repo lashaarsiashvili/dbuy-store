@@ -1299,6 +1299,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }).catch(() => {});
 
+      // PostHog product view event
+      if (typeof window !== 'undefined' && window.posthog) {
+        const targetProd = products.find(p => p.id === productId);
+        window.posthog.capture('view_item', {
+          product_id: productId,
+          product_title: targetProd?.title || targetProd?.titleKa,
+          price: targetProd?.price,
+        });
+      }
+
       // Notify Cloudflare /track endpoint
       fetch('/api/track', {
         method: 'POST',
@@ -1395,7 +1405,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [promoCode, setPromoCode] = useState('');
   const [promoDiscountPercent, setPromoDiscountPercent] = useState(0);
 
-  const addToCart = (product: Product, quantity = 1) => {
+  const addToCart = (product: Product, quantity = 1, selectedOption?: string) => {
     // Analytics tracking (excluding admin traffic)
     const isCurrentAdmin = Boolean(
       isAdmin ||
@@ -1406,18 +1416,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     );
     analytics.trackAddToCart(product?.id, isCurrentAdmin);
 
+    if (typeof window !== 'undefined' && window.posthog) {
+      window.posthog.capture('add_to_cart', {
+        product_id: product?.id,
+        product_title: product?.title || product?.titleKa,
+        price: product?.price,
+        quantity,
+        selected_option: selectedOption,
+      });
+    }
+
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id);
+      const existing = prev.find(item => item.product.id === product.id && item.selectedOption === selectedOption);
       if (existing) {
         return prev.map(item =>
-          item.product.id === product.id
+          (item.product.id === product.id && item.selectedOption === selectedOption)
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
       }
-      return [...prev, { product, quantity }];
+      return [...prev, { product, quantity, selectedOption }];
     });
-    addToast(`Added ${product.title} to cart!`, 'success');
+    addToast(language === 'ka' ? `დაემატა კალათაში!` : `Added to cart!`, 'success');
   };
 
   const updateCartQuantity = (productId: string, quantity: number) => {
@@ -1595,6 +1615,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(newOrder),
     }).catch(err => console.error('Error syncing order to server:', err));
+
+    if (typeof window !== 'undefined' && window.posthog) {
+      window.posthog.capture('order_placed', {
+        order_id: newOrder.id,
+        total: newOrder.total,
+        currency: newOrder.currency,
+        items_count: newOrder.items.length,
+      });
+    }
 
     // Clear cart after checkout
     setCart([]);
@@ -2217,7 +2246,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       return false;
     }
 
-    if (!existingAccount.password || !verifyPassword(password, existingAccount.password)) {
+    const storedHash = existingAccount.passwordHash || existingAccount.password;
+    if (!storedHash || !verifyPassword(password, storedHash)) {
       addToast(t('toasts.invalidAdminPass'), 'error');
       return false;
     }
@@ -2283,6 +2313,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setUser(loggedUser);
     localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
     setIsAuthModalOpen(false);
+
+    if (typeof window !== 'undefined' && window.posthog) {
+      if (!existing) {
+        window.posthog.capture('user_registered', {
+          email: loggedUser.email,
+          name: loggedUser.name,
+          provider: 'google',
+        });
+      }
+      window.posthog.identify(loggedUser.email, {
+        email: loggedUser.email,
+        name: loggedUser.name,
+      });
+    }
+
     addToast(t('toasts.welcome', { name: loggedUser.name }), 'success');
     return { isComplete: true, user: loggedUser };
   };
@@ -2341,8 +2386,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const registeredMap = getRegisteredUsersMap();
     registeredMap[trimmedEmail] = {
       ...newUser,
-      password: hashedPassword,
+      passwordHash: hashedPassword,
     };
+    delete (registeredMap[trimmedEmail] as any).password;
     localStorage.setItem('dbuy_registered_users', JSON.stringify(registeredMap));
     refreshRegisteredUsers();
 
@@ -2380,6 +2426,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setUser(newUser);
     localStorage.setItem('dbuy_user', JSON.stringify(newUser));
     setIsAuthModalOpen(false);
+
+    if (typeof window !== 'undefined' && window.posthog) {
+      window.posthog.capture('user_registered', {
+        email: newUser.email,
+        name: newUser.name,
+        provider: newUser.provider || 'email',
+        role: newUser.role,
+      });
+      if (newUser.email) {
+        window.posthog.identify(newUser.email, {
+          email: newUser.email,
+          name: newUser.name,
+        });
+      }
+    }
+
     addToast(t('toasts.registered', { name: newUser.name }), 'success');
     return true;
   };

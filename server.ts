@@ -11,6 +11,7 @@ import { GoogleGenAI } from '@google/genai';
 import { initialProducts, DB_VERSION } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 import { buildCustomerOrderEmail, buildAdminOrderAlertEmail } from './src/utils/orderEmailTemplates';
+import { generateSmartOfflineAdCopy } from './src/utils/adCopyGenerator';
 
 dotenv.config();
 
@@ -1710,6 +1711,17 @@ app.post('/api/store/restore-images', (req, res) => {
 // STORE PERSISTENCE & REAL-TIME SYNC API
 // ==========================================
 
+function sanitizeUsersDict(usersDict: Record<string, any>): Record<string, any> {
+  if (!usersDict || typeof usersDict !== 'object') return {};
+  const clean: Record<string, any> = {};
+  for (const [key, user] of Object.entries(usersDict)) {
+    if (!user || typeof user !== 'object') continue;
+    const { password, passwordHash, passwordSalt, securityToken, ...cleanUser } = user as any;
+    clean[key] = cleanUser;
+  }
+  return clean;
+}
+
 // GET full synchronized store data (Products, Users, Orders, Theme, Billboards)
 app.get('/api/store/sync', (req, res) => {
   try {
@@ -1740,7 +1752,7 @@ app.get('/api/store/sync', (req, res) => {
         billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
         lastUpdated: storeDb.lastUpdated,
         // Highly Confidential Data Parameters: Scraped & protected unless properly authorized
-        registeredUsers: isAuthorizedAdmin ? storeDb.registeredUsers : [],
+        registeredUsers: isAuthorizedAdmin ? sanitizeUsersDict(storeDb.registeredUsers) : [],
         orders: isAuthorizedAdmin ? storeDb.orders : [],
         adminSecretSlug: isAuthorizedAdmin ? storeDb.adminSecretSlug : '',
       },
@@ -2044,7 +2056,7 @@ app.post('/api/store/sync', (req, res) => {
       success: true,
       data: {
         products: storeDb.products,
-        registeredUsers: storeDb.registeredUsers,
+        registeredUsers: sanitizeUsersDict(storeDb.registeredUsers),
         orders: storeDb.orders,
         theme: storeDb.theme,
         billboards: storeDb.billboards,
@@ -2772,6 +2784,161 @@ app.post('/paypal-api/checkout/orders/:orderId/capture', async (req, res) => {
     res.json(result);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// ==========================================
+// VISION AI PRODUCT GENERATION ENDPOINT
+// ==========================================
+app.post('/api/generate', async (req, res) => {
+  try {
+    const { image, imageUrl, imageBase64, title } = req.body || {};
+    const targetImage = image || imageUrl || imageBase64;
+
+    let base64Data = '';
+    let mimeType = 'image/jpeg';
+
+    if (targetImage) {
+      if (typeof targetImage === 'string' && targetImage.startsWith('data:')) {
+        const matches = targetImage.match(/^data:(image\/[a-zA-Z+]+);base64,(.+)$/);
+        if (matches) {
+          mimeType = matches[1];
+          base64Data = matches[2];
+        } else {
+          base64Data = targetImage.split(',')[1] || targetImage;
+        }
+      } else if (typeof targetImage === 'string' && (targetImage.startsWith('http://') || targetImage.startsWith('https://'))) {
+        try {
+          const imgResp = await fetch(targetImage);
+          if (imgResp.ok) {
+            const arrayBuf = await imgResp.arrayBuffer();
+            base64Data = Buffer.from(arrayBuf).toString('base64');
+            const contentType = imgResp.headers.get('content-type');
+            if (contentType) mimeType = contentType;
+          }
+        } catch (e) {
+          console.warn('[VISION-AI] Error fetching image URL:', e);
+        }
+      } else if (typeof targetImage === 'string' && (targetImage.startsWith('/uploads/') || targetImage.startsWith('uploads/'))) {
+        const relativePath = targetImage.startsWith('/') ? targetImage.slice(1) : targetImage;
+        const localPath = path.join(process.cwd(), 'public', relativePath);
+        const dataPath = path.join(process.cwd(), 'data', relativePath);
+        if (fs.existsSync(localPath)) {
+          const buf = fs.readFileSync(localPath);
+          base64Data = buf.toString('base64');
+          if (relativePath.endsWith('.png')) mimeType = 'image/png';
+          else if (relativePath.endsWith('.webp')) mimeType = 'image/webp';
+        } else if (fs.existsSync(dataPath)) {
+          const buf = fs.readFileSync(dataPath);
+          base64Data = buf.toString('base64');
+          if (relativePath.endsWith('.png')) mimeType = 'image/png';
+          else if (relativePath.endsWith('.webp')) mimeType = 'image/webp';
+        } else if (uploadsMap[targetImage]) {
+          const raw = uploadsMap[targetImage];
+          base64Data = raw.includes(',') ? raw.split(',')[1] : raw;
+        }
+      }
+    }
+
+    const apiKey = process.env.GEMINI_API_KEY || process.env.VITE_GEMINI_API_KEY;
+
+    if (apiKey && base64Data) {
+      try {
+        const ai = new GoogleGenAI({
+          apiKey,
+          httpOptions: {
+            headers: {
+              'User-Agent': 'aistudio-build',
+            },
+          },
+        });
+
+        const systemPrompt = `Analyze the provided product image. Identify the exact brand, model, and item. Generate a highly detailed, real-world e-commerce product title, a rich SEO-friendly description, and a list of key technical features. Return the result in a structured JSON format with the following keys:
+{
+  "title": "Clear, appealing, professional product title in English",
+  "titleKa": "ზუსტი და მიმზიდველი პროდუქტის სათაური ქართულად",
+  "description": "Rich, highly detailed, real-world e-commerce product description in English",
+  "descriptionKa": "ვრცელი, დეტალური და გაყიდვებზე ორიენტირებული აღწერა ქართულად",
+  "features": ["Key Feature 1 with emoji", "Key Feature 2 with emoji", "Key Feature 3 with emoji", "Key Feature 4 with emoji"],
+  "featuresKa": ["ძირითადი მახასიათებელი 1 ემოჯით", "ძირითადი მახასიათებელი 2 ემოჯით", "ძირითადი მახასიათებელი 3 ემოჯით", "ძირითადი მახასიათებელი 4 ემოჯით"]
+}`;
+
+        const response = await ai.models.generateContent({
+          model: 'gemini-3.8-flash',
+          contents: {
+            parts: [
+              {
+                inlineData: {
+                  mimeType,
+                  data: base64Data,
+                },
+              },
+              {
+                text: systemPrompt + (title ? `\nProduct Title hint/context: ${title}` : ''),
+              },
+            ],
+          },
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
+
+        const responseText = response.text || '';
+        let parsed = null;
+        try {
+          parsed = JSON.parse(responseText);
+        } catch (e) {
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            try {
+              parsed = JSON.parse(jsonMatch[0]);
+            } catch (err) {}
+          }
+        }
+
+        if (parsed) {
+          return res.json({
+            success: true,
+            data: parsed,
+            title: parsed.title,
+            titleKa: parsed.titleKa,
+            description: parsed.description,
+            descriptionKa: parsed.descriptionKa,
+            features: parsed.features || [],
+            featuresKa: parsed.featuresKa || [],
+          });
+        }
+      } catch (geminiErr: any) {
+        console.warn('[VISION-AI-GEMINI-WARN] Gemini Vision call failed:', geminiErr?.message);
+      }
+    }
+
+    // Fallback if no API key or image parsing failed
+    const fallbackCopy = generateSmartOfflineAdCopy({
+      title: title || 'Premium Product',
+      images: targetImage ? [targetImage] : [],
+    });
+
+    res.json({
+      success: true,
+      data: {
+        title: fallbackCopy.titleEn,
+        titleKa: fallbackCopy.titleKa,
+        description: fallbackCopy.descriptionEn,
+        descriptionKa: fallbackCopy.descriptionKa,
+        features: fallbackCopy.featuresEn,
+        featuresKa: fallbackCopy.featuresKa,
+      },
+      title: fallbackCopy.titleEn,
+      titleKa: fallbackCopy.titleKa,
+      description: fallbackCopy.descriptionEn,
+      descriptionKa: fallbackCopy.descriptionKa,
+      features: fallbackCopy.featuresEn,
+      featuresKa: fallbackCopy.featuresKa,
+    });
+  } catch (err: any) {
+    console.error('[VISION-AI-ERROR]', err);
+    res.status(500).json({ success: false, error: err.message || 'Vision AI generation failed' });
   }
 });
 

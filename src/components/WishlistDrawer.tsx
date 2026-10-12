@@ -70,7 +70,7 @@ export const WishlistDrawer: React.FC = () => {
 
             <button
               onClick={() => setIsWishlistOpen(false)}
-              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
               aria-label="Close Wishlist"
             >
               <X className="w-5 h-5" />
@@ -134,7 +134,7 @@ export const WishlistDrawer: React.FC = () => {
                       <CachedImage
                         src={imageSrc}
                         alt={title}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        className="w-full h-full object-cover"
                         referrerPolicy="no-referrer"
                       />
                     </div>
@@ -178,7 +178,7 @@ export const WishlistDrawer: React.FC = () => {
                         </button>
                         <button
                           onClick={() => setQuickViewProduct(product)}
-                          className="px-2.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer"
+                          className="px-2.5 py-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 border border-transparent dark:border-slate-700 rounded-lg font-semibold text-[11px] transition-colors cursor-pointer"
                         >
                           {t('products.quickView')}
                         </button>
@@ -192,7 +192,7 @@ export const WishlistDrawer: React.FC = () => {
 
           {/* Footer Controls */}
           {wishlistProducts.length > 0 && (
-            <div className="p-4 sm:p-6 border-t border-slate-100 bg-slate-50/80 space-y-2.5">
+            <div className="p-4 sm:p-6 border-t border-slate-100 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/90 space-y-2.5">
               <button
                 onClick={handleMoveAllToCart}
                 className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center space-x-2 cursor-pointer"
@@ -202,7 +202,7 @@ export const WishlistDrawer: React.FC = () => {
               </button>
               <button
                 onClick={() => setIsWishlistOpen(false)}
-                className="w-full py-2.5 bg-white hover:bg-slate-100 text-slate-700 font-bold text-xs rounded-xl border border-slate-200 transition-colors cursor-pointer"
+                className="w-full py-2.5 bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-bold text-xs rounded-xl border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
               >
                 {t('checkout.continueShopping')}
               </button>

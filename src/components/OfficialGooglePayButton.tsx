@@ -346,14 +346,14 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
           >
             {loading || isTriggering ? (
               <div className="flex items-center space-x-2.5">
-                <Loader2 className="w-5 h-5 animate-spin text-slate-700" />
-                <span className="text-xs font-semibold tracking-wide text-slate-700">
+                <Loader2 className="w-5 h-5 animate-spin text-slate-700 dark:text-slate-200" />
+                <span className="text-xs font-semibold tracking-wide text-slate-700 dark:text-slate-200">
                   Opening Google Pay Sheet...
                 </span>
               </div>
             ) : (
               <div className="flex items-center justify-center space-x-2 text-center pointer-events-none">
-                <span className="text-sm font-medium leading-none whitespace-nowrap text-slate-900">
+                <span className="text-sm font-medium leading-none whitespace-nowrap text-slate-900 dark:text-white">
                   {buttonType === 'pay' ? 'Pay with' : 'Buy with'}
                 </span>
                 <div className="flex items-center shrink-0">
@@ -376,7 +376,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
           <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
           <span>Google Pay Secure Tokenization</span>
         </div>
-        <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md border border-slate-200">
+        <span className="text-[10px] bg-slate-100 text-slate-700 dark:text-slate-200 font-semibold px-2 py-0.5 rounded-md border border-slate-200">
           TEST MODE
         </span>
       </div>

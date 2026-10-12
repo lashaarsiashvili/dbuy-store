@@ -569,7 +569,7 @@ export const AuthModal: React.FC = () => {
         <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 my-auto">
           <button
             onClick={() => setIsAuthModalOpen(false)}
-            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
@@ -694,8 +694,7 @@ export const AuthModal: React.FC = () => {
                           ? "text-emerald-500 dark:text-emerald-400"
                           : "text-slate-400"
                       }`} />
-                      <input
-                        type="email"
+                      <input type="email"
                         required
                         value={forgotEmail}
                         onMouseDown={() => setIsForgotEmailFocused(true)}
@@ -765,7 +764,7 @@ export const AuthModal: React.FC = () => {
                         setViewMode("auth");
                         setTab("login");
                       }}
-                      className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors inline-flex items-center space-x-1 cursor-pointer"
+                      className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:text-slate-100 dark:hover:text-slate-200 transition-colors inline-flex items-center space-x-1 cursor-pointer"
                     >
                       <ArrowLeft className="w-3.5 h-3.5" />
                       <span>{t("auth.backToSignIn")}</span>
@@ -784,7 +783,7 @@ export const AuthModal: React.FC = () => {
                   className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
                     tab === "login"
                       ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200"
                   }`}
                 >
                   {t("auth.signInTab")}
@@ -795,7 +794,7 @@ export const AuthModal: React.FC = () => {
                   className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
                     tab === "register"
                       ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200"
                   }`}
                 >
                   {t("auth.registerTab")}
@@ -850,8 +849,7 @@ export const AuthModal: React.FC = () => {
                           ? "text-emerald-500 dark:text-emerald-400"
                           : "text-slate-400"
                       }`} />
-                      <input
-                        type="email"
+                      <input type="email"
                         required
                         value={email}
                         onMouseDown={() => setIsLoginEmailFocused(true)}
@@ -920,8 +918,7 @@ export const AuthModal: React.FC = () => {
                           ? "text-emerald-500 dark:text-emerald-400"
                           : "text-slate-400"
                       }`} />
-                      <input
-                        type={showPassword ? "text" : "password"}
+                      <input type={showPassword ? "text" : "password"}
                         required
                         autoComplete="current-password"
                         value={password}
@@ -972,7 +969,7 @@ export const AuthModal: React.FC = () => {
                               setPassword("");
                               markTouched("loginPassword");
                             }}
-                            className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                            className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200 transition-colors cursor-pointer"
                             title={language === "ka" ? "გასუფთავება" : "Clear"}
                           >
                             <X className="w-3.5 h-3.5" />
@@ -981,7 +978,7 @@ export const AuthModal: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => setShowPassword(!showPassword)}
-                          className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                          className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200 transition-colors cursor-pointer"
                           title={
                             showPassword ? "Hide password" : "Show password"
                           }
@@ -1083,8 +1080,7 @@ export const AuthModal: React.FC = () => {
                               ? "text-emerald-500 dark:text-emerald-400"
                               : "text-slate-400"
                           }`} />
-                          <input
-                            type="text"
+                          <input type="text"
                             required
                             value={name}
                             onMouseDown={() => setIsRegNameFocused(true)}
@@ -1141,8 +1137,7 @@ export const AuthModal: React.FC = () => {
                               ? "text-emerald-500 dark:text-emerald-400"
                               : "text-slate-400"
                           }`} />
-                          <input
-                            type="email"
+                          <input type="email"
                             required
                             value={email}
                             onMouseDown={() => setIsRegEmailFocused(true)}
@@ -1200,8 +1195,7 @@ export const AuthModal: React.FC = () => {
                                 ? "text-emerald-500 dark:text-emerald-400"
                                 : "text-slate-400"
                             }`} />
-                            <input
-                              type={showPassword ? "text" : "password"}
+                            <input type={showPassword ? "text" : "password"}
                               required
                               autoComplete="new-password"
                               value={password}
@@ -1253,7 +1247,7 @@ export const AuthModal: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => setShowPassword(!showPassword)}
-                                className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer p-0.5"
+                                className="text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200 cursor-pointer p-0.5"
                               >
                                 {showPassword ? (
                                   <EyeOff className="w-3.5 h-3.5" />
@@ -1283,8 +1277,7 @@ export const AuthModal: React.FC = () => {
                                 ? "text-emerald-500 dark:text-emerald-400"
                                 : "text-slate-400"
                             }`} />
-                            <input
-                              type={showPassword ? "text" : "password"}
+                            <input type={showPassword ? "text" : "password"}
                               required
                               autoComplete="new-password"
                               value={confirmPassword}
@@ -1482,8 +1475,7 @@ export const AuthModal: React.FC = () => {
                                 ? "text-emerald-500 dark:text-emerald-400"
                                 : "text-slate-400"
                             }`} />
-                            <input
-                              type="text"
+                            <input type="text"
                               required
                               value={city}
                               onMouseDown={(e) => {
@@ -1538,8 +1530,7 @@ export const AuthModal: React.FC = () => {
                                 ? "text-emerald-500 dark:text-emerald-400"
                                 : "text-slate-400"
                             }`} />
-                            <input
-                              type="text"
+                            <input type="text"
                               required
                               value={zip}
                               onMouseDown={(e) => {
@@ -1592,8 +1583,7 @@ export const AuthModal: React.FC = () => {
                                 ? "text-emerald-500 dark:text-emerald-400"
                                 : "text-slate-400"
                             }`} />
-                            <input
-                              type="tel"
+                            <input type="tel"
                               value={phone}
                               onMouseDown={(e) => {
                                 (e.target as HTMLInputElement).placeholder = "";
@@ -1646,8 +1636,7 @@ export const AuthModal: React.FC = () => {
                               ? "text-emerald-500 dark:text-emerald-400"
                               : "text-slate-400"
                           }`} />
-                          <input
-                            type="text"
+                          <input type="text"
                             required
                             value={address}
                             onMouseDown={(e) => {

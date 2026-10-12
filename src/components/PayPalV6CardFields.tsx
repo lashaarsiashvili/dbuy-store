@@ -220,7 +220,7 @@ export const PayPalV6CardFields: React.FC<PayPalV6CardFieldsProps> = ({
       <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
         <div className="flex items-center space-x-2">
           <CreditCard className="w-4 h-4 text-blue-600" />
-          <span className="text-xs font-bold text-slate-900">
+          <span className="text-xs font-bold text-slate-900 dark:text-white">
             {isKa
               ? "საბანკო ბარათი (PayPal v6 Card Fields • 3D Secure)"
               : "Credit / Debit Card (PayPal v6 Card Fields • 3DS)"}
@@ -256,35 +256,35 @@ export const PayPalV6CardFields: React.FC<PayPalV6CardFieldsProps> = ({
       {/* Hosted Card Fields Containers */}
       <div className="card-fields-container space-y-3">
         <div>
-          <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+          <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">
             {isKa ? "ბარათის ნომერი" : "Card Number"}
           </label>
           <div
             ref={numberContainerRef}
             id="paypal-card-fields-number"
-            className="w-full h-11 bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-2xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all"
+            className="w-full h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1 shadow-2xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all"
           />
         </div>
 
         <div className="grid grid-cols-2 gap-2.5">
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">
               {isKa ? "ვადა (MM/YY)" : "Exp Date (MM/YY)"}
             </label>
             <div
               ref={expiryContainerRef}
               id="paypal-card-fields-expiry"
-              className="w-full h-11 bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-2xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all"
+              className="w-full h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1 shadow-2xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all"
             />
           </div>
           <div>
-            <label className="block text-[11px] font-semibold text-slate-700 mb-1">
+            <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-200 mb-1">
               CVV / CVC
             </label>
             <div
               ref={cvvContainerRef}
               id="paypal-card-fields-cvv"
-              className="w-full h-11 bg-white border border-slate-200 rounded-xl px-2 py-1 shadow-2xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all"
+              className="w-full h-11 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2 py-1 shadow-2xs focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-blue-500 transition-all"
             />
           </div>
         </div>
@@ -296,7 +296,7 @@ export const PayPalV6CardFields: React.FC<PayPalV6CardFieldsProps> = ({
         type="button"
         onClick={handlePayClick}
         disabled={isProcessing}
-        className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs sm:text-sm flex items-center justify-center space-x-2 transition-all shadow-md active:scale-98 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+        className="w-full h-12 rounded-xl bg-slate-900 dark:bg-blue-600 hover:bg-slate-800 dark:hover:bg-blue-500 text-white font-bold text-xs sm:text-sm flex items-center justify-center space-x-2 transition-all shadow-md active:scale-98 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
       >
         {isProcessing ? (
           <>

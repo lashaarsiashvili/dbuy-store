@@ -171,40 +171,37 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
     : null;
 
   return (
-    <div style={{ marginTop: '48px', borderTop: '1px solid #e2e8f0', paddingTop: '32px', fontFamily: 'sans-serif' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px' }}>
+    <div className="mt-12 border-t border-slate-200 dark:border-slate-800 pt-8 font-sans">
+      <div className="flex justify-between items-center mb-6">
         <div>
-          <h3 style={{ margin: 0, fontSize: '20px', fontWeight: 600, color: '#0f172a' }}>
+          <h3 className="text-xl font-bold text-slate-900 dark:text-slate-100">
             Customer Reviews ({reviews.length})
           </h3>
           {avgRating && (
-            <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>
-              Average Rating: <strong style={{ color: '#eab308' }}>★ {avgRating}</strong> / 5.0
+            <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+              Average Rating: <strong className="text-amber-500 dark:text-amber-400">★ {avgRating}</strong> / 5.0
             </p>
           )}
         </div>
       </div>
 
       {currentUser ? (
-        <form onSubmit={handleReviewSubmit} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '32px' }}>
-          <h4 style={{ margin: '0 0 12px 0', fontSize: '15px', color: '#0f172a' }}>
-            Write a Review as <strong>{currentUser.name || currentUser.email}</strong>
+        <form onSubmit={handleReviewSubmit} className="bg-slate-50 dark:bg-slate-900/90 p-5 rounded-2xl border border-slate-200 dark:border-slate-800 mb-8 space-y-4">
+          <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            Write a Review as <strong className="text-blue-600 dark:text-blue-400">{currentUser.name || currentUser.email}</strong>
           </h4>
           
-          <div style={{ marginBottom: '14px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span style={{ fontSize: '14px', color: '#475569' }}>Rating:</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-300">Rating:</span>
             {[1, 2, 3, 4, 5].map((star) => (
               <span
                 key={star}
                 onMouseEnter={() => setHoveredStar(star)}
                 onMouseLeave={() => setHoveredStar(0)}
                 onClick={() => setRating(star)}
-                style={{
-                  fontSize: '22px',
-                  cursor: 'pointer',
-                  color: star <= (hoveredStar || rating) ? '#f59e0b' : '#cbd5e1',
-                  transition: 'color 0.15s ease'
-                }}
+                className={`text-xl cursor-pointer transition-colors ${
+                  star <= (hoveredStar || rating) ? 'text-amber-500' : 'text-slate-300 dark:text-slate-700'
+                }`}
               >
                 ★
               </span>
@@ -217,60 +214,43 @@ export const ProductReviewsSection: React.FC<ProductReviewsSectionProps> = ({
             placeholder="Share details of your experience..."
             rows={3}
             required
-            style={{
-              width: '100%',
-              padding: '10px 12px',
-              borderRadius: '6px',
-              border: '1px solid #cbd5e1',
-              fontSize: '14px',
-              boxSizing: 'border-box',
-              marginBottom: '12px'
-            }}
+            className="w-full p-3 text-xs bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
           />
 
           <button
             type="submit"
-            style={{
-              padding: '8px 18px',
-              backgroundColor: '#0f172a',
-              color: '#ffffff',
-              border: 'none',
-              borderRadius: '6px',
-              cursor: 'pointer',
-              fontWeight: 500,
-              fontSize: '14px'
-            }}
+            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer shadow-xs"
           >
             Post Review
           </button>
         </form>
       ) : (
-        <div style={{ background: '#f8fafc', padding: '16px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '32px', color: '#64748b', fontSize: '14px' }}>
+        <div className="bg-slate-50 dark:bg-slate-900/90 p-4 rounded-2xl border border-slate-200 dark:border-slate-800 mb-8 text-xs text-slate-600 dark:text-slate-400">
           Only registered and signed-in customers can leave a review.
         </div>
       )}
 
       {/* Reviews Render */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+      <div className="flex flex-col gap-3.5">
         {reviews.length > 0 ? (
           reviews.map((rev) => (
-            <div key={rev.id} style={{ padding: '16px', borderRadius: '8px', border: '1px solid #f1f5f9', background: '#ffffff' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-                <span style={{ fontWeight: 600, fontSize: '14px', color: '#1e293b' }}>{rev.userName}</span>
-                <span style={{ fontSize: '12px', color: '#94a3b8' }}>
+            <div key={rev.id} className="p-4 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-1.5">
+              <div className="flex justify-between items-center">
+                <span className="font-bold text-xs text-slate-900 dark:text-slate-100">{rev.userName}</span>
+                <span className="text-[11px] text-slate-400 dark:text-slate-500">
                   {new Date(rev.createdAt).toLocaleDateString()}
                 </span>
               </div>
-              <div style={{ color: '#f59e0b', fontSize: '14px', marginBottom: '6px' }}>
+              <div className="text-amber-500 text-xs">
                 {'★'.repeat(rev.rating)}{'☆'.repeat(5 - rev.rating)}
               </div>
-              <p style={{ margin: 0, fontSize: '14px', color: '#475569', lineHeight: 1.5 }}>
+              <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed">
                 {rev.comment}
               </p>
             </div>
           ))
         ) : (
-          <p style={{ color: '#94a3b8', fontSize: '14px', margin: 0 }}>No customer reviews yet.</p>
+          <p className="text-xs text-slate-400 dark:text-slate-500">No customer reviews yet.</p>
         )}
       </div>
     </div>
@@ -323,73 +303,64 @@ export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products =
     : reviews.filter((r) => String(r.productId) === String(selectedProduct));
 
   return (
-    <div style={{ padding: '24px', fontFamily: 'sans-serif', color: '#0f172a' }}>
+    <div className="p-6 font-sans text-slate-900 dark:text-slate-100 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-xs">
       {/* Header */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '28px', flexWrap: 'wrap', gap: '12px' }}>
+      <div className="flex justify-between items-center mb-6 flex-wrap gap-3">
         <div>
-          <h2 style={{ margin: 0, fontSize: '24px', fontWeight: 700 }}>Store Performance & Moderation</h2>
-          <p style={{ margin: '4px 0 0 0', color: '#64748b', fontSize: '14px' }}>
+          <h2 className="text-xl font-bold text-slate-900 dark:text-slate-100">Store Performance & Moderation</h2>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Daily visitor metrics from Cloudflare & Customer Feedback Control
           </p>
         </div>
         <button
           onClick={refreshAll}
-          style={{
-            padding: '8px 16px',
-            backgroundColor: '#0f172a',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '13px',
-            fontWeight: 600
-          }}
+          className="px-4 py-2 bg-slate-900 hover:bg-slate-800 dark:bg-blue-600 dark:hover:bg-blue-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
         >
           {loadingStats ? 'Refreshing...' : 'Refresh'}
         </button>
       </div>
 
       {/* KPI Cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px', marginBottom: '32px' }}>
-        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+        <div className="p-5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
             Today's Visits (All Devices)
           </span>
-          <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.todayVisits}</div>
+          <div className="text-3xl font-black mt-2 text-slate-900 dark:text-slate-100">{stats.todayVisits}</div>
         </div>
 
-        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+        <div className="p-5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
             Checkout Attempts
           </span>
-          <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>{stats.checkoutAttempts}</div>
+          <div className="text-3xl font-black mt-2 text-slate-900 dark:text-slate-100">{stats.checkoutAttempts}</div>
         </div>
 
-        <div style={{ padding: '20px', background: '#f8fafc', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-          <span style={{ fontSize: '12px', color: '#64748b', fontWeight: 600, textTransform: 'uppercase' }}>
+        <div className="p-5 bg-slate-50 dark:bg-slate-950 rounded-xl border border-slate-200 dark:border-slate-800">
+          <span className="text-[11px] text-slate-500 dark:text-slate-400 font-bold uppercase tracking-wider">
             Cart Additions Total
           </span>
-          <div style={{ fontSize: '32px', fontWeight: 700, marginTop: '8px' }}>
+          <div className="text-3xl font-black mt-2 text-slate-900 dark:text-slate-100">
             {Object.values(stats.cartAdditions).reduce((a: number, b: number) => a + (Number(b) || 0), 0)}
           </div>
         </div>
       </div>
 
       {/* Product Cart Stats Table (Safe Read-Only) */}
-      <h3 style={{ fontSize: '16px', marginBottom: '12px', fontWeight: 700 }}>Cart Additions by Product</h3>
-      <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflow: 'hidden', marginBottom: '40px' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-          <thead style={{ background: '#f8fafc' }}>
+      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">Cart Additions by Product</h3>
+      <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden mb-8">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300">
             <tr>
-              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Product Name</th>
-              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', textAlign: 'right' }}>Times Added</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Product Name</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-800 text-right">Times Added</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {products.map((p) => (
-              <tr key={p.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                <td style={{ padding: '12px 16px' }}>{p.name || p.title}</td>
-                <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 700 }}>
+              <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 text-slate-900 dark:text-slate-100">
+                <td className="p-3">{p.name || p.title}</td>
+                <td className="p-3 text-right font-bold text-blue-600 dark:text-blue-400">
                   {stats.cartAdditions[String(p.id)] || 0}
                 </td>
               </tr>
@@ -399,12 +370,12 @@ export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products =
       </div>
 
       {/* Reviews Moderation Section */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
-        <h3 style={{ margin: 0, fontSize: '18px', fontWeight: 700 }}>Moderate Customer Reviews</h3>
+      <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
+        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Moderate Customer Reviews</h3>
         <select
           value={selectedProduct}
           onChange={(e) => setSelectedProduct(e.target.value)}
-          style={{ padding: '6px 12px', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '13px' }}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-blue-500 cursor-pointer"
         >
           <option value="ALL">All Products ({reviews.length})</option>
           {products.map((p) => (
@@ -415,40 +386,31 @@ export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products =
         </select>
       </div>
 
-      <div style={{ border: '1px solid #e2e8f0', borderRadius: '8px', overflowX: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '14px' }}>
-          <thead style={{ background: '#f8fafc' }}>
+      <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto">
+        <table className="w-full border-collapse text-left text-xs">
+          <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300">
             <tr>
-              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Date</th>
-              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Product</th>
-              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Author</th>
-              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Rating</th>
-              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0' }}>Comment</th>
-              <th style={{ padding: '12px 16px', borderBottom: '1px solid #e2e8f0', textAlign: 'right' }}>Action</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Date</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Product</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Author</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Rating</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Comment</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-800 text-right">Action</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {filteredReviews.length > 0 ? (
               filteredReviews.map((r) => (
-                <tr key={r.id} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                  <td style={{ padding: '12px 16px', color: '#64748b', whiteSpace: 'nowrap' }}>{new Date(r.createdAt).toLocaleDateString()}</td>
-                  <td style={{ padding: '12px 16px', fontWeight: 500 }}>{r.productName}</td>
-                  <td style={{ padding: '12px 16px' }}>{r.userName}</td>
-                  <td style={{ padding: '12px 16px', color: '#f59e0b', whiteSpace: 'nowrap' }}>{'★'.repeat(r.rating)}</td>
-                  <td style={{ padding: '12px 16px', color: '#475569', maxWidth: '300px' }}>{r.comment}</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'right' }}>
+                <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 text-slate-900 dark:text-slate-100">
+                  <td className="p-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString()}</td>
+                  <td className="p-3 font-semibold">{r.productName}</td>
+                  <td className="p-3">{r.userName}</td>
+                  <td className="p-3 text-amber-500 whitespace-nowrap">{'★'.repeat(r.rating)}</td>
+                  <td className="p-3 text-slate-600 dark:text-slate-300 max-w-[300px]">{r.comment}</td>
+                  <td className="p-3 text-right">
                     <button
                       onClick={() => handleDeleteReview(r.id)}
-                      style={{
-                        padding: '4px 10px',
-                        backgroundColor: '#fee2e2',
-                        color: '#dc2626',
-                        border: '1px solid #fecaca',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: 600
-                      }}
+                      className="px-2.5 py-1 bg-red-50 dark:bg-red-950/60 hover:bg-red-100 dark:hover:bg-red-900 text-red-600 dark:text-red-300 border border-red-200 dark:border-red-800 rounded-md text-xs font-bold transition-colors cursor-pointer"
                     >
                       Delete
                     </button>
@@ -457,7 +419,7 @@ export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products =
               ))
             ) : (
               <tr>
-                <td colSpan={6} style={{ padding: '24px', textAlign: 'center', color: '#94a3b8' }}>
+                <td colSpan={6} className="p-6 text-center text-slate-400 dark:text-slate-500">
                   No reviews to display.
                 </td>
               </tr>

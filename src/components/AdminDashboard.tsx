@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { smartApiFetch } from '../lib/api';
-import { Product, Order, BillboardSlide, LogoOptionId } from '../types';
+import { Product, Order, BillboardSlide, LogoOptionId, ProductVideo, ProductVariant } from '../types';
 import { generateProductFeatures, isGeorgianText } from '../utils/productFeatures';
 import { generateProductAdCopy } from '../utils/adCopyGenerator';
 import { saveImageBackupIDB } from '../utils/imageStorage';
@@ -53,6 +53,8 @@ import {
   Key,
   Truck,
   Navigation,
+  Video,
+  Film,
   Star,
   ArrowLeft,
   ArrowRight,
@@ -436,6 +438,10 @@ export const AdminDashboard: React.FC = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [featuresTab, setFeaturesTab] = useState<'en' | 'ka'>('en');
+  const [newVideoUrl, setNewVideoUrl] = useState('');
+  const [newVideoTitle, setNewVideoTitle] = useState('');
+  const videoFileInputRef = useRef<HTMLInputElement>(null);
+
   const [prodForm, setProdForm] = useState({
     title: '',
     titleKa: '',
@@ -447,12 +453,136 @@ export const AdminDashboard: React.FC = () => {
     badge: '',
     image: '',
     images: [] as string[],
+    videos: [] as ProductVideo[],
+    variants: [] as ProductVariant[],
     description: '',
     descriptionKa: '',
     features: ['', '', '', ''] as string[],
     featuresEn: ['', '', '', ''] as string[],
     featuresKa: ['', '', '', ''] as string[],
   });
+
+  // Global Product Videos Handlers
+  const handleAddYouTubeVideo = () => {
+    if (!newVideoUrl.trim()) return;
+    const url = newVideoUrl.trim();
+    const newVideo: ProductVideo = {
+      id: `vid-${Date.now()}`,
+      type: 'youtube',
+      url,
+      title: newVideoTitle.trim() || 'Product Video',
+    };
+    setProdForm(prev => ({
+      ...prev,
+      videos: [...(prev.videos || []), newVideo],
+    }));
+    setNewVideoUrl('');
+    setNewVideoTitle('');
+    addToast(isKa ? 'YouTube ვიდეო დაემატა!' : 'YouTube video added!', 'success');
+  };
+
+  const handleUploadVideoFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    addToast(isKa ? `იტვირთება ვიდეო „${file.name}“ Cloudflare R2-ში...` : `Uploading video "${file.name}" to Cloudflare R2...`, 'info');
+    try {
+      const r2Url = await uploadImageToR2(file, prodForm.title || 'product-video');
+      const newVideo: ProductVideo = {
+        id: `vid-${Date.now()}`,
+        type: 'upload',
+        url: r2Url,
+        title: file.name,
+      };
+      setProdForm(prev => ({
+        ...prev,
+        videos: [...(prev.videos || []), newVideo],
+      }));
+      addToast(isKa ? 'ვიდეო ფაილი წარმატებით აიტვირთა R2-ში!' : 'Video file uploaded to R2 successfully!', 'success');
+    } catch (err) {
+      console.error('Video upload error:', err);
+      addToast(isKa ? 'შეცდომა ვიდეოს ატვირთვისას' : 'Failed to upload video file', 'error');
+    } finally {
+      e.target.value = '';
+    }
+  };
+
+  const handleRemoveVideo = (index: number) => {
+    setProdForm(prev => ({
+      ...prev,
+      videos: (prev.videos || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  // Color Variants Handlers
+  const handleAddVariant = () => {
+    const newVar: ProductVariant = {
+      id: `var-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      name: 'Black Edition',
+      nameKa: 'შავი ვერსია',
+      colorCode: '#000000',
+      price: Number(prodForm.price) || 0,
+      stock: Number(prodForm.stock) || 10,
+      images: [],
+    };
+    setProdForm(prev => ({
+      ...prev,
+      variants: [...(prev.variants || []), newVar],
+    }));
+    addToast(isKa ? 'ახალი ფერის ვარიანტი დაემატა' : 'Added new color variant', 'info');
+  };
+
+  const handleUpdateVariant = (index: number, fields: Partial<ProductVariant>) => {
+    setProdForm(prev => {
+      const list = [...(prev.variants || [])];
+      if (list[index]) {
+        list[index] = { ...list[index], ...fields };
+      }
+      return { ...prev, variants: list };
+    });
+  };
+
+  const handleRemoveVariant = (index: number) => {
+    setProdForm(prev => ({
+      ...prev,
+      variants: (prev.variants || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  const handleUploadVariantImage = async (variantIndex: number, file: File) => {
+    if (!file.type.startsWith('image/')) return;
+    addToast(isKa ? `იტვირთება „${file.name}“ ფერის ვარიანტისთვის...` : `Uploading "${file.name}" for color variant...`, 'info');
+    try {
+      const r2Url = await uploadImageToR2(file, `variant-${variantIndex}`);
+      setProdForm(prev => {
+        const list = [...(prev.variants || [])];
+        if (list[variantIndex]) {
+          const currentImgs = list[variantIndex].images || [];
+          list[variantIndex] = {
+            ...list[variantIndex],
+            images: [...currentImgs, r2Url],
+          };
+        }
+        return { ...prev, variants: list };
+      });
+      addToast(isKa ? 'სურათი დაემატა ფერის ვარიანტს!' : 'Image added to color variant!', 'success');
+    } catch (err) {
+      console.error('Variant image upload error:', err);
+      addToast(isKa ? 'შეცდომა სურათის ატვირთვისას' : 'Error uploading variant image', 'error');
+    }
+  };
+
+  const handleRemoveVariantImage = (variantIndex: number, imageIndex: number) => {
+    setProdForm(prev => {
+      const list = [...(prev.variants || [])];
+      if (list[variantIndex]) {
+        list[variantIndex] = {
+          ...list[variantIndex],
+          images: (list[variantIndex].images || []).filter((_, i) => i !== imageIndex),
+        };
+      }
+      return { ...prev, variants: list };
+    });
+  };
 
   // Product catalog table search & filter
   const [productSearch, setProductSearch] = useState('');
@@ -1005,6 +1135,90 @@ export const AdminDashboard: React.FC = () => {
     }
   };
 
+  // Vision AI Product Auto-Fill from Image
+  const [isVisionGenerating, setIsVisionGenerating] = useState(false);
+
+  const handleVisionAutoFill = async () => {
+    const primaryImg = prodForm.images[0] || prodForm.image;
+    if (!primaryImg) {
+      addToast(
+        isKa ? 'გთხოვთ ჯერ ატვირთოთ ან აირჩიოთ პროდუქტის სურათი' : 'Please upload or select a primary product image first',
+        'warning'
+      );
+      return;
+    }
+
+    setIsVisionGenerating(true);
+    try {
+      const adminSlug = adminSecretSlug || localStorage.getItem('dbuy_admin_secret_slug') || 'dashboard';
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSlug,
+        },
+        body: JSON.stringify({
+          image: primaryImg,
+          title: prodForm.title || prodForm.titleKa || '',
+        }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Vision AI request failed with status ${res.status}`);
+      }
+
+      const json = await res.json();
+      if (!json.success && !json.data) {
+        throw new Error(json.error || 'Failed to generate product details from image');
+      }
+
+      const result = json.data || json;
+
+      setProdForm(prev => {
+        const titleEn = result.title || prev.title;
+        const titleKa = result.titleKa || prev.titleKa || titleEn;
+        const descEn = result.description || prev.description;
+        const descKa = result.descriptionKa || prev.descriptionKa || descEn;
+        const featsEn = Array.isArray(result.features) && result.features.length > 0
+          ? result.features.slice(0, 4)
+          : prev.featuresEn;
+        const featsKa = Array.isArray(result.featuresKa) && result.featuresKa.length > 0
+          ? result.featuresKa.slice(0, 4)
+          : (Array.isArray(result.features) ? result.features.slice(0, 4) : prev.featuresKa);
+
+        while (featsEn.length < 4) featsEn.push('');
+        while (featsKa.length < 4) featsKa.push('');
+
+        return {
+          ...prev,
+          title: titleEn,
+          titleKa: titleKa,
+          description: descEn,
+          descriptionKa: descKa,
+          featuresEn: featsEn,
+          featuresKa: featsKa,
+          features: isKa ? featsKa : featsEn,
+          customSlug: prev.customSlug || generateProductSlug(titleEn),
+        };
+      });
+
+      addToast(
+        isKa
+          ? '✨ სურათის მიხედვით ავტომატურად შევსებულია სათაური, აღწერა და მახასიათებლები!'
+          : '✨ Title, description, and features auto-filled from image via Vision AI!',
+        'success'
+      );
+    } catch (err: any) {
+      console.error('[VISION-AI-AUTOFILL-ERROR]', err);
+      addToast(
+        isKa ? 'სურათიდან მონაცემების შევსება ვერ მოხერხდა' : 'Failed to auto-fill details from image',
+        'error'
+      );
+    } finally {
+      setIsVisionGenerating(false);
+    }
+  };
+
   const handleAutoGenerateFeatures = (targetLang: 'en' | 'ka' = featuresTab) => {
     if (targetLang === 'en') {
       const generated = generateProductFeatures({
@@ -1099,6 +1313,8 @@ export const AdminDashboard: React.FC = () => {
       badge: '',
       image: '',
       images: [],
+      videos: [],
+      variants: [],
       description: '',
       descriptionKa: '',
       features: ['', '', '', ''],
@@ -1118,6 +1334,20 @@ export const AdminDashboard: React.FC = () => {
     const prodImages = (prod.images && prod.images.length > 0)
       ? prod.images
       : [prod.image];
+
+    let parsedVideos: ProductVideo[] = [];
+    if (Array.isArray(prod.videos)) {
+      parsedVideos = prod.videos;
+    } else if (typeof (prod as any).videos === 'string' && (prod as any).videos.trim()) {
+      try { parsedVideos = JSON.parse((prod as any).videos); } catch(e) {}
+    }
+
+    let parsedVariants: ProductVariant[] = [];
+    if (Array.isArray(prod.variants)) {
+      parsedVariants = prod.variants;
+    } else if (typeof (prod as any).variants === 'string' && (prod as any).variants.trim()) {
+      try { parsedVariants = JSON.parse((prod as any).variants); } catch(e) {}
+    }
 
     const prodFeaturesEn = (prod.features_en && prod.features_en.length >= 3)
       ? [...prod.features_en.slice(0, 4)]
@@ -1162,6 +1392,8 @@ export const AdminDashboard: React.FC = () => {
       badge: prod.badge || '',
       image: prodImages[0] || prod.image,
       images: prodImages,
+      videos: parsedVideos,
+      variants: parsedVariants,
       description: prod.description_en || prod.description,
       descriptionKa: prod.description_ka || prod.descriptionKa || '',
       features: isKa ? prodFeaturesKa : prodFeaturesEn,
@@ -1278,6 +1510,8 @@ export const AdminDashboard: React.FC = () => {
         badge: prodForm.badge || undefined,
         image: imagesToSave[0] || '',
         images: imagesToSave,
+        videos: prodForm.videos || [],
+        variants: prodForm.variants || [],
         description: prodForm.description || prodForm.descriptionKa,
         descriptionKa: prodForm.descriptionKa,
         description_en: prodForm.description,
@@ -1484,8 +1718,7 @@ export const AdminDashboard: React.FC = () => {
               <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                 {isKa ? 'ადმინისტრატორის ელ-ფოსტა' : 'Administrator Email'}
               </label>
-              <input
-                type="email"
+              <input type="email"
                 required
                 autoComplete="username"
                 value={adminEmailInput}
@@ -1503,8 +1736,7 @@ export const AdminDashboard: React.FC = () => {
                 {isKa ? 'ადმინისტრატორის პაროლი' : 'Admin Password'}
               </label>
               <div className="relative">
-                <input
-                  type={showPinPassword ? 'text' : 'password'}
+                <input type={showPinPassword ? 'text' : 'password'}
                   required
                   autoComplete="current-password"
                   value={pinInput ?? ''}
@@ -1534,7 +1766,7 @@ export const AdminDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setPinInput('')}
-                      className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                      className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                       title={isKa ? 'გასუფთავება' : 'Clear'}
                     >
                       <X className="w-3.5 h-3.5" />
@@ -1543,7 +1775,7 @@ export const AdminDashboard: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setShowPinPassword(!showPinPassword)}
-                    className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="p-1 rounded-md text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     title={showPinPassword ? 'Hide password' : 'Show password'}
                   >
                     {showPinPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
@@ -1590,7 +1822,7 @@ export const AdminDashboard: React.FC = () => {
             <div>
               <div className="flex items-center space-x-2">
                 <span className="text-xs font-medium text-slate-400">DBUY</span>
-                <span className="text-slate-600">/</span>
+                <span className="text-slate-600 dark:text-slate-300">/</span>
                 <h1 className="text-sm font-bold text-white tracking-tight">
                   {isKa ? 'ადმინის მართვის ცენტრი' : 'Command Center'}
                 </h1>
@@ -1723,7 +1955,7 @@ export const AdminDashboard: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'analytics'
                 ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <Activity className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1740,7 +1972,7 @@ export const AdminDashboard: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'products'
                 ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1757,7 +1989,7 @@ export const AdminDashboard: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'billboards'
                 ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <Layers className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1774,7 +2006,7 @@ export const AdminDashboard: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'theme'
                 ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <Sparkles className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1786,7 +2018,7 @@ export const AdminDashboard: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'orders'
                 ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <ShoppingBag className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1803,7 +2035,7 @@ export const AdminDashboard: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'users'
                 ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <Users className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1832,7 +2064,7 @@ export const AdminDashboard: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'messages'
                 ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <Mail className="w-4 h-4 text-blue-600 dark:text-blue-400" />
@@ -1849,7 +2081,7 @@ export const AdminDashboard: React.FC = () => {
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'reviews'
                 ? 'bg-white dark:bg-slate-800 text-amber-700 dark:text-amber-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
             }`}
           >
             <Star className="w-4 h-4 text-amber-500 fill-amber-400" />
@@ -1875,7 +2107,7 @@ export const AdminDashboard: React.FC = () => {
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     {isKa ? 'სულ პროდუქტი' : 'Total Listed'}
                   </span>
-                  <p className="text-lg font-black text-slate-900 leading-tight">{products.length}</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-white leading-tight">{products.length}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                   <Package className="w-4 h-4" />
@@ -1915,7 +2147,7 @@ export const AdminDashboard: React.FC = () => {
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     {isKa ? 'მარაგის ჯამი' : 'Inventory Value'}
                   </span>
-                  <p className="text-lg font-black text-slate-900 leading-tight">
+                  <p className="text-lg font-black text-slate-900 dark:text-white leading-tight">
                     {formatPrice(products.reduce((sum, p) => sum + (p.price * (p.stock || 0)), 0))}
                   </p>
                 </div>
@@ -1932,8 +2164,7 @@ export const AdminDashboard: React.FC = () => {
                   {/* Search Input with Clear Button */}
                   <div className="relative flex-1 min-w-[220px]">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                    <input
-                      type="text"
+                    <input type="text"
                       value={productSearch}
                       onChange={e => setProductSearch(e.target.value)}
                       placeholder={isKa ? 'ძიება: სახელი, ID, ბეიჯი...' : 'Search title, ID, badge...'}
@@ -1943,7 +2174,7 @@ export const AdminDashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setProductSearch('')}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 cursor-pointer"
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200 cursor-pointer"
                         title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -2038,7 +2269,7 @@ export const AdminDashboard: React.FC = () => {
                       <tr>
                         <td colSpan={9} className="p-12 text-center text-slate-400">
                           <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                          <p className="font-semibold text-slate-700">
+                          <p className="font-semibold text-slate-700 dark:text-slate-200">
                             {isKa ? 'პროდუქტი ვერ მოიძებნა' : 'No products match your criteria'}
                           </p>
                           <p className="text-xs text-slate-400 mt-1">
@@ -2075,7 +2306,7 @@ export const AdminDashboard: React.FC = () => {
                           </td>
                           <td className="p-4 max-w-xs">
                             <div className="flex items-center space-x-1.5">
-                              <span className="font-bold text-slate-900 line-clamp-1">{prod.title}</span>
+                              <span className="font-bold text-slate-900 dark:text-white line-clamp-1">{prod.title}</span>
                               {prod.isPublishedGlobally && (
                                 <span className="inline-flex items-center space-x-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0" title="Published globally across all devices">
                                   <Globe className="w-2.5 h-2.5 text-emerald-600 animate-pulse" />
@@ -2093,7 +2324,7 @@ export const AdminDashboard: React.FC = () => {
                           <td className="p-4">
                             <div className="flex items-center space-x-1.5">
                               <code 
-                                className="text-[11px] bg-slate-100 px-2 py-1 rounded-md font-mono text-slate-700 select-all max-w-[180px] truncate block cursor-pointer hover:bg-slate-200 transition-colors"
+                                className="text-[11px] bg-slate-100 px-2 py-1 rounded-md font-mono text-slate-700 dark:text-slate-200 select-all max-w-[180px] truncate block cursor-pointer hover:bg-slate-200 transition-colors"
                                 onClick={() => copyProductUrl(prod.id)}
                                 title={getProductUrl(prod.id)}
                               >
@@ -2113,7 +2344,7 @@ export const AdminDashboard: React.FC = () => {
                               {prod.category}
                             </span>
                           </td>
-                          <td className="p-4 font-black text-slate-900">
+                          <td className="p-4 font-black text-slate-900 dark:text-white">
                             {formatPrice(prod.price)}
                             {prod.origPrice && (
                               <span className="text-[10px] text-slate-400 line-through ml-1.5 font-normal">
@@ -2129,7 +2360,7 @@ export const AdminDashboard: React.FC = () => {
                                   const newStock = Math.max(0, prod.stock - 1);
                                   updateProduct({ ...prod, stock: newStock });
                                 }}
-                                className="w-5 h-5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
+                                className="w-5 h-5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
                                 title={isKa ? 'მარაგის შემცირება (-1)' : 'Decrease stock (-1)'}
                               >
                                 -
@@ -2150,7 +2381,7 @@ export const AdminDashboard: React.FC = () => {
                                   const newStock = prod.stock + 1;
                                   updateProduct({ ...prod, stock: newStock });
                                 }}
-                                className="w-5 h-5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
+                                className="w-5 h-5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
                                 title={isKa ? 'მარაგის გაზრდა (+1)' : 'Increase stock (+1)'}
                               >
                                 +
@@ -2159,14 +2390,14 @@ export const AdminDashboard: React.FC = () => {
                           </td>
                           <td className="p-4">
                             {prod.badge ? (
-                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[10px] border border-slate-200">
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:text-slate-200 font-bold text-[10px] border border-slate-200">
                                 {prod.badge}
                               </span>
                             ) : (
                               <span className="text-slate-300 text-[10px]">—</span>
                             )}
                           </td>
-                          <td className="p-4 font-bold text-slate-800">
+                          <td className="p-4 font-bold text-slate-800 dark:text-slate-100">
                             <div className="flex items-center space-x-1">
                               <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                               <span>{prod.views || 0}</span>
@@ -2221,7 +2452,7 @@ export const AdminDashboard: React.FC = () => {
                               </button>
                               <button
                                 onClick={() => handleOpenEditProduct(prod)}
-                                className="p-1.5 rounded-lg text-slate-600 hover:bg-slate-200 transition-colors cursor-pointer"
+                                className="p-1.5 rounded-lg text-slate-600 dark:text-slate-300 hover:bg-slate-200 transition-colors cursor-pointer"
                                 title={isKa ? 'რედაქტირება' : 'Edit Product Details & Images'}
                               >
                                 <Edit3 className="w-4 h-4" />
@@ -2255,7 +2486,7 @@ export const AdminDashboard: React.FC = () => {
                     <span className="p-2 rounded-xl bg-blue-50 text-blue-600 font-bold">
                       <Layers className="w-5 h-5" />
                     </span>
-                    <h3 className="text-lg font-black text-slate-900">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
                       Hero Billboards & Banners Management
                     </h3>
                   </div>
@@ -2279,7 +2510,7 @@ export const AdminDashboard: React.FC = () => {
                         resetBillboards();
                       }
                     }}
-                    className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
+                    className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-semibold text-xs transition-colors flex items-center space-x-1.5 cursor-pointer"
                   >
                     <RotateCcw className="w-3.5 h-3.5" />
                     <span>საწყისზე დაბრუნება</span>
@@ -2294,7 +2525,7 @@ export const AdminDashboard: React.FC = () => {
                     <Clock className="w-5 h-5" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-800">
+                    <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">
                       ავტომატური როტაციის ინტერვალი (Auto-Rotation Timer)
                     </h4>
                     <p className="text-[11px] text-slate-500">
@@ -2320,7 +2551,7 @@ export const AdminDashboard: React.FC = () => {
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                           billboardIntervalSeconds === preset.sec
                             ? 'bg-blue-600 text-white shadow-xs'
-                            : 'text-slate-600 hover:text-slate-900'
+                            : 'text-slate-600 hover:text-slate-900 dark:text-white'
                         }`}
                       >
                         {preset.label}
@@ -2329,8 +2560,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   <div className="flex items-center space-x-1 pl-2">
-                    <input
-                      type="number"
+                    <input type="number"
                       min="10"
                       max="1800"
                       value={billboardIntervalSeconds}
@@ -2406,8 +2636,7 @@ export const AdminDashboard: React.FC = () => {
                   <label htmlFor="slideTitle" className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
                     სათაური:
                   </label>
-                  <input 
-                    type="text" 
+                  <input type="text" 
                     id="slideTitle" 
                     required 
                     value={quickSlideTitle}
@@ -2427,7 +2656,7 @@ export const AdminDashboard: React.FC = () => {
                   <label htmlFor="slideDesc" className="block text-xs font-bold text-slate-300 mb-1.5 uppercase tracking-wider">
                     აღწერა:
                   </label>
-                  <textarea 
+                  <textarea
                     id="slideDesc" 
                     required 
                     rows={3}
@@ -2455,7 +2684,7 @@ export const AdminDashboard: React.FC = () => {
                     required={!quickSlideImage}
                     ref={quickSlideFileInputRef}
                     onChange={handleQuickSlideImageChange}
-                    className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer"
+                    className="w-full text-sm text-slate-400 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-blue-600 file:text-white hover:file:bg-blue-700 cursor-pointer dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder-slate-400"
                     style={{ color: '#fff' }}
                   />
 
@@ -2523,7 +2752,7 @@ export const AdminDashboard: React.FC = () => {
                           <span className="px-2.5 py-1 rounded-lg bg-slate-900 text-white font-mono text-xs font-bold">
                             #{index + 1}
                           </span>
-                          <span className="text-xs font-bold text-slate-700">
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
                             {slide.badge || 'Featured Slide'}
                           </span>
                         </div>
@@ -2537,7 +2766,7 @@ export const AdminDashboard: React.FC = () => {
                             className={`px-2.5 py-1 rounded-lg text-[11px] font-bold cursor-pointer transition-colors ${
                               slide.isActive
                                 ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-200'
-                                : 'bg-slate-200 text-slate-600 hover:bg-slate-300'
+                                : 'bg-slate-200 text-slate-600 dark:text-slate-300 hover:bg-slate-300'
                             }`}
                           >
                             {slide.isActive ? '✓ აქტიურია' : 'გათიშულია'}
@@ -2571,7 +2800,7 @@ export const AdminDashboard: React.FC = () => {
                               <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wider">
                                 {slide.category || 'Featured Product'}
                               </p>
-                              <h4 className="text-sm font-bold text-slate-900 line-clamp-1">
+                              <h4 className="text-sm font-bold text-slate-900 dark:text-white line-clamp-1">
                                 {slide.titleKa || slide.title}
                               </h4>
                               {slide.titleKa && slide.title && (
@@ -2581,7 +2810,7 @@ export const AdminDashboard: React.FC = () => {
                               )}
                             </div>
 
-                            <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                            <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
                               {slide.subtitleKa || slide.subtitle}
                             </p>
 
@@ -2634,7 +2863,7 @@ export const AdminDashboard: React.FC = () => {
         {activeTab === 'theme' && (
           <div className="bg-white rounded-3xl border border-slate-200 shadow-xs p-6 sm:p-8 space-y-6 max-w-4xl">
             <div className="border-b border-slate-100 pb-4">
-              <h3 className="text-lg font-bold text-slate-900">
+              <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                 🎨 Visual Customizer & Global Storefront Settings
               </h3>
               <p className="text-xs text-slate-500 mt-1">
@@ -2647,7 +2876,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="p-5 bg-slate-50 rounded-2xl border border-slate-200 space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900 flex items-center space-x-1.5">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white flex items-center space-x-1.5">
                       <Sparkles className="w-4 h-4 text-purple-600" />
                       <span>DBUY ლოგოს სტილის არჩევა (5 ვარიანტი)</span>
                     </h4>
@@ -2712,7 +2941,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="block text-xs font-bold text-slate-800">
+                    <label className="block text-xs font-bold text-slate-800 dark:text-slate-100">
                       🎨 საიტის ძირითადი ფერი / Brand Theme Color
                     </label>
                     <p className="text-[11px] text-slate-500">
@@ -2721,7 +2950,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div className="flex items-center space-x-2">
                     <span className="w-5 h-5 rounded-full border border-slate-300 shadow-xs" style={{ backgroundColor: themeForm.primaryColor || '#2563eb' }} />
-                    <span className="text-xs font-mono font-bold text-slate-700">{themeForm.primaryColor || '#2563eb'}</span>
+                    <span className="text-xs font-mono font-bold text-slate-700 dark:text-slate-200">{themeForm.primaryColor || '#2563eb'}</span>
                   </div>
                 </div>
 
@@ -2741,8 +2970,8 @@ export const AdminDashboard: React.FC = () => {
                       onClick={() => setThemeForm(prev => ({ ...prev, primaryColor: preset.color }))}
                       className={`px-3 py-1.5 rounded-xl text-xs font-bold flex items-center space-x-2 border transition-all cursor-pointer ${
                         themeForm.primaryColor === preset.color
-                          ? 'border-slate-900 bg-white text-slate-900 shadow-sm ring-2 ring-blue-500/40'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-400'
+                          ? 'border-slate-900 bg-white text-slate-900 dark:text-white shadow-sm ring-2 ring-blue-500/40'
+                          : 'border-slate-200 bg-white text-slate-600 dark:text-slate-300 hover:border-slate-400'
                       }`}
                     >
                       <span className="w-3.5 h-3.5 rounded-full shrink-0 shadow-2xs" style={{ backgroundColor: preset.color }} />
@@ -2752,8 +2981,7 @@ export const AdminDashboard: React.FC = () => {
 
                   <div className="flex items-center space-x-1.5 ml-auto">
                     <span className="text-[11px] text-slate-500 font-semibold">Custom:</span>
-                    <input
-                      type="color"
+                    <input type="color"
                       value={themeForm.primaryColor || '#2563eb'}
                       onChange={e => setThemeForm(prev => ({ ...prev, primaryColor: e.target.value }))}
                       className="w-8 h-8 rounded-lg cursor-pointer border border-slate-300 p-0.5 bg-white"
@@ -2766,7 +2994,7 @@ export const AdminDashboard: React.FC = () => {
               {/* Typography / Font Theme Settings */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-800">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100">
                     🔤 საიტის შრიფტების სტილი / Typography Theme
                   </label>
                   <p className="text-[11px] text-slate-500">
@@ -2788,8 +3016,8 @@ export const AdminDashboard: React.FC = () => {
                       onClick={() => setThemeForm(prev => ({ ...prev, typographyTheme: fontOption.id as any }))}
                       className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
                         themeForm.typographyTheme === fontOption.id
-                          ? 'border-slate-900 bg-white shadow-sm ring-2 ring-blue-500/40 text-slate-900'
-                          : 'border-slate-200 bg-white text-slate-600 hover:border-slate-300'
+                          ? 'border-slate-900 bg-white shadow-sm ring-2 ring-blue-500/40 text-slate-900 dark:text-white'
+                          : 'border-slate-200 bg-white text-slate-600 dark:text-slate-300 hover:border-slate-300'
                       }`}
                     >
                       <span className="text-[13px] font-bold block" style={{ fontFamily: fontOption.font }}>
@@ -2806,10 +3034,10 @@ export const AdminDashboard: React.FC = () => {
               {/* Announcement text & toggle */}
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
                     📢 Top Announcement Banner
                   </label>
-                  <label className="flex items-center space-x-2 text-xs font-semibold text-slate-600 cursor-pointer">
+                  <label className="flex items-center space-x-2 text-xs font-semibold text-slate-600 dark:text-slate-300 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={themeForm.announcementVisible}
@@ -2819,8 +3047,7 @@ export const AdminDashboard: React.FC = () => {
                     <span>ჩართულია (Visible)</span>
                   </label>
                 </div>
-                <input
-                  type="text"
+                <input type="text"
                   value={themeForm.announcementText ?? ''}
                   onChange={e => setThemeForm({ ...themeForm, announcementText: e.target.value })}
                   placeholder="მაგალითად: ⚡ FLASH SALE: მიიღეთ 25% ფასდაკლება..."
@@ -2831,11 +3058,10 @@ export const AdminDashboard: React.FC = () => {
               {/* Hero Title & Subtitle */}
               <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                     🌟 Hero Section Main Headline
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={themeForm.heroTitle ?? ''}
                     onChange={e => setThemeForm({ ...themeForm, heroTitle: e.target.value })}
                     className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
@@ -2843,10 +3069,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                     🌟 Hero Section Subtitle
                   </label>
-                  <textarea
+                  <textarea 
                     rows={2}
                     value={themeForm.heroSubtitle ?? ''}
                     onChange={e => setThemeForm({ ...themeForm, heroSubtitle: e.target.value })}
@@ -2857,16 +3083,15 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Currency Multipliers */}
               <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 space-y-3">
-                <h4 className="text-xs font-bold text-slate-800">
+                <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">
                   💱 Currency Multiplier Rates (Base: 1 USD)
                 </h4>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
                       EUR Rate (€ per $1 USD)
                     </label>
-                    <input
-                      type="number"
+                    <input type="number"
                       step="0.01"
                       value={themeForm.eurRate ?? ''}
                       onChange={e => setThemeForm({ ...themeForm, eurRate: e.target.value === '' ? 0 : Number(e.target.value) })}
@@ -2875,11 +3100,10 @@ export const AdminDashboard: React.FC = () => {
                   </div>
 
                   <div>
-                    <label className="block text-[11px] font-semibold text-slate-600 mb-1">
+                    <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-300 mb-1">
                       GEL Rate (₾ per $1 USD)
                     </label>
-                    <input
-                      type="number"
+                    <input type="number"
                       step="0.01"
                       value={themeForm.gelRate ?? ''}
                       onChange={e => setThemeForm({ ...themeForm, gelRate: e.target.value === '' ? 0 : Number(e.target.value) })}
@@ -2895,13 +3119,13 @@ export const AdminDashboard: React.FC = () => {
                   <div className="flex items-center space-x-3">
                     <InstagramOriginalLogo size="md" />
                     <div>
-                      <h4 className="text-sm font-bold text-slate-900 flex items-center space-x-2">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
                         <span>{isKa ? 'Instagram გვერდის დაკავშირება' : 'Instagram Profile Integration'}</span>
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-pink-100 text-pink-700">
                           {isKa ? 'ოფიციალური ლოგო' : 'Official Logo'}
                         </span>
                       </h4>
-                      <p className="text-[11px] text-slate-600">
+                      <p className="text-[11px] text-slate-600 dark:text-slate-300">
                         {isKa
                           ? 'საიტის ქვედა მარჯვენა კუთხეში (ფუტერში) დასმული Instagram ლოგო პირდაპირ გადაიყვანს მომხმარებელს თქვენს Instagram გვერდზე.'
                           : 'Connect your Instagram profile so visitors clicking the Instagram logo at the bottom-right corner of the store open your profile directly.'}
@@ -2909,7 +3133,7 @@ export const AdminDashboard: React.FC = () => {
                     </div>
                   </div>
 
-                  <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 cursor-pointer self-start sm:self-center shrink-0 bg-white/90 px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs">
+                  <label className="flex items-center space-x-2 text-xs font-bold text-slate-700 dark:text-slate-200 cursor-pointer self-start sm:self-center shrink-0 bg-white/90 px-3 py-1.5 rounded-xl border border-pink-200 shadow-2xs">
                     <input
                       type="checkbox"
                       checked={themeForm.instagramVisible}
@@ -2922,7 +3146,7 @@ export const AdminDashboard: React.FC = () => {
 
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1.5">
                       {isKa ? 'Instagram პროფილის ბმული ან Username' : 'Instagram Profile URL or Username'}
                     </label>
                     <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
@@ -2930,12 +3154,11 @@ export const AdminDashboard: React.FC = () => {
                         <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
                           <Instagram className="w-4 h-4 text-pink-500" />
                         </div>
-                        <input
-                          type="text"
+                        <input type="text"
                           value={themeForm.instagramUrl ?? ''}
                           onChange={e => setThemeForm(prev => ({ ...prev, instagramUrl: e.target.value }))}
                           placeholder={isKa ? "მაგ: https://www.instagram.com/თქვენი_გვერდი ან @თქვენი_გვერდი" : "e.g. https://www.instagram.com/yourprofile or @yourprofile"}
-                          className="w-full pl-10 pr-3.5 py-2.5 text-xs bg-white border border-pink-200 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 focus:outline-hidden text-slate-800 font-mono shadow-2xs"
+                          className="w-full pl-10 pr-3.5 py-2.5 text-xs bg-white border border-pink-200 rounded-xl focus:border-pink-500 focus:ring-2 focus:ring-pink-500/20 focus:outline-hidden text-slate-800 dark:text-slate-100 font-mono shadow-2xs"
                         />
                       </div>
 
@@ -2955,7 +3178,7 @@ export const AdminDashboard: React.FC = () => {
 
                   {/* Real-time formatted preview info & quick save */}
                   <div className="p-3 bg-white/90 rounded-xl border border-pink-200/60 flex flex-col sm:flex-row sm:items-center justify-between text-[11px] gap-2">
-                    <div className="flex items-center space-x-2 text-slate-600 overflow-hidden">
+                    <div className="flex items-center space-x-2 text-slate-600 dark:text-slate-300 overflow-hidden">
                       <span className="font-semibold text-slate-500 shrink-0">{isKa ? 'საბოლოო ბმული:' : 'Resolved URL:'}</span>
                       <code className="text-pink-700 font-mono bg-pink-50 px-2 py-0.5 rounded-md border border-pink-100 text-[11px] truncate">
                         {formatInstagramUrl(themeForm.instagramUrl)}
@@ -2998,7 +3221,7 @@ export const AdminDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={resetTheme}
-                  className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors cursor-pointer"
+                  className="px-4 py-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-semibold text-xs transition-colors cursor-pointer"
                 >
                   Reset Defaults
                 </button>
@@ -3017,7 +3240,7 @@ export const AdminDashboard: React.FC = () => {
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     {isKa ? 'სულ შეკვეთა' : 'Total Orders'}
                   </span>
-                  <p className="text-lg font-black text-slate-900 leading-tight">{orders.length}</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-white leading-tight">{orders.length}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                   <ShoppingBag className="w-4 h-4" />
@@ -3074,8 +3297,7 @@ export const AdminDashboard: React.FC = () => {
                   {/* Search orders */}
                   <div className="relative flex-1 min-w-[220px]">
                     <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3 pointer-events-none" />
-                    <input
-                      type="text"
+                    <input type="text"
                       value={orderSearch}
                       onChange={e => setOrderSearch(e.target.value)}
                       placeholder={isKa ? 'ძიება: ID, მომხმარებელი, იმეილი, ქალაქი...' : 'Search ID, customer, email, city...'}
@@ -3085,7 +3307,7 @@ export const AdminDashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setOrderSearch('')}
-                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 dark:text-slate-300 cursor-pointer"
                         title="Clear search"
                       >
                         <X className="w-3.5 h-3.5" />
@@ -3136,7 +3358,7 @@ export const AdminDashboard: React.FC = () => {
                       <tr>
                         <td colSpan={8} className="p-12 text-center text-slate-400">
                           <ShoppingBag className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                          <p className="font-semibold text-slate-700">
+                          <p className="font-semibold text-slate-700 dark:text-slate-200">
                             {orders.length === 0 
                               ? (isKa ? 'შეკვეთები ჯერ არ არის დაფიქსირებული' : 'No orders recorded yet')
                               : (isKa ? 'შეკვეთები ვერ მოიძებნა მითითებული ფილტრით' : 'No orders match your search criteria')}
@@ -3167,7 +3389,7 @@ export const AdminDashboard: React.FC = () => {
                             )}
                           </td>
                           <td className="p-4">
-                            <div className="font-bold text-slate-900">{order.customerName}</div>
+                            <div className="font-bold text-slate-900 dark:text-white">{order.customerName}</div>
                             <div className="text-[11px] text-slate-500">{order.email}</div>
                             <div className="text-[10px] text-slate-400">{order.city}, {order.country}</div>
                           </td>
@@ -3177,13 +3399,13 @@ export const AdminDashboard: React.FC = () => {
                           <td className="p-4">
                             <div className="space-y-1 max-w-xs">
                               {order.items.map((it, idx) => (
-                                <div key={idx} className="text-[11px] text-slate-700 truncate">
+                                <div key={idx} className="text-[11px] text-slate-700 dark:text-slate-200 truncate">
                                   • <span className="font-semibold">{it.quantity}x</span> {it.title}
                                 </div>
                               ))}
                             </div>
                           </td>
-                          <td className="p-4 font-black text-slate-900 whitespace-nowrap">
+                          <td className="p-4 font-black text-slate-900 dark:text-white whitespace-nowrap">
                             {formatPrice(order.total)}
                           </td>
                           <td className="p-4">
@@ -3209,7 +3431,7 @@ export const AdminDashboard: React.FC = () => {
                           <td className="p-4">
                             <div className="flex flex-col space-y-1">
                               <div className="flex items-center space-x-1.5">
-                                <span className="font-mono text-xs font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
                                   {order.trackingNumber || 'Pending'}
                                 </span>
                               </div>
@@ -3266,7 +3488,7 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     {isKa ? 'სულ რეგისტრირებული' : 'Total Accounts'}
                   </p>
-                  <h3 className="text-xl font-black text-slate-900">{registeredUsers.length}</h3>
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">{registeredUsers.length}</h3>
                 </div>
               </div>
 
@@ -3278,7 +3500,7 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     {isKa ? 'მყიდველები (Customers)' : 'Active Customers'}
                   </p>
-                  <h3 className="text-xl font-black text-slate-900">
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
                     {registeredUsers.filter(u => u.role !== 'admin' && u.email?.toLowerCase().trim() !== 'lashaarsiashvili@gmail.com').length}
                   </h3>
                 </div>
@@ -3292,7 +3514,7 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                     {isKa ? 'ადმინისტრატორი' : 'Admin Accounts'}
                   </p>
-                  <h3 className="text-xl font-black text-slate-900">
+                  <h3 className="text-xl font-black text-slate-900 dark:text-white">
                     {registeredUsers.filter(u => u.role === 'admin' || u.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com').length || 1}
                   </h3>
                 </div>
@@ -3333,8 +3555,7 @@ export const AdminDashboard: React.FC = () => {
               {/* Table Action Bar */}
               <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row items-center justify-between gap-4">
                 <div className="flex items-center space-x-3 w-full sm:w-auto">
-                  <input
-                    type="text"
+                  <input type="text"
                     value={userSearch}
                     onChange={e => setUserSearch(e.target.value)}
                     placeholder={isKa ? 'ძიება: სახელი, ელ-ფოსტა, ქალაქი...' : 'Search: Name, email, city...'}
@@ -3343,7 +3564,7 @@ export const AdminDashboard: React.FC = () => {
                   {userSearch && (
                     <button
                       onClick={() => setUserSearch('')}
-                      className="px-2.5 py-2 text-xs text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                      className="px-2.5 py-2 text-xs text-slate-500 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
                     >
                       {isKa ? 'გასუფთავება' : 'Clear'}
                     </button>
@@ -3380,7 +3601,7 @@ export const AdminDashboard: React.FC = () => {
                       URL.revokeObjectURL(url);
                       addToast(isKa ? 'მომხმარებელთა სია ექსპორტირებულია CSV ფაილში!' : 'Customer list exported to CSV!', 'success');
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
+                    className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold flex items-center space-x-1.5 transition-colors cursor-pointer"
                     title={isKa ? 'მომხმარებელთა სიის გადმოწერა (CSV)' : 'Export Users List to CSV'}
                   >
                     <Download className="w-3.5 h-3.5 text-slate-500" />
@@ -3404,7 +3625,7 @@ export const AdminDashboard: React.FC = () => {
                       <th className="py-3.5 px-4 text-right">{isKa ? 'მოქმედება' : 'Actions'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700 dark:text-slate-200">
                     {registeredUsers
                       .filter(u => {
                         if (!userSearch.trim()) return true;
@@ -3435,7 +3656,7 @@ export const AdminDashboard: React.FC = () => {
                                   {initials}
                                 </div>
                                 <div className="min-w-0">
-                                  <p className="font-bold text-slate-900 truncate">{u.name}</p>
+                                  <p className="font-bold text-slate-900 dark:text-white truncate">{u.name}</p>
                                   {u.phone && <p className="text-[11px] text-slate-400 font-mono">{u.phone}</p>}
                                 </div>
                               </div>
@@ -3444,7 +3665,7 @@ export const AdminDashboard: React.FC = () => {
                             {/* Email */}
                             <td className="py-3.5 px-4">
                               <div className="flex items-center space-x-1.5">
-                                <span className="font-mono text-xs font-semibold text-slate-800 select-all">
+                                <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-100 select-all">
                                   {u.email}
                                 </span>
                                 <button
@@ -3461,7 +3682,7 @@ export const AdminDashboard: React.FC = () => {
                                   {copiedEmail === u.email ? (
                                     <Check className="w-3.5 h-3.5 text-emerald-600" />
                                   ) : (
-                                    <span className="text-[10px] px-1 py-0.5 bg-slate-100 rounded text-slate-600 hover:bg-slate-200">Copy</span>
+                                    <span className="text-[10px] px-1 py-0.5 bg-slate-100 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-200">Copy</span>
                                   )}
                                 </button>
                               </div>
@@ -3469,7 +3690,7 @@ export const AdminDashboard: React.FC = () => {
 
                             {/* Location & Address */}
                             <td className="py-3.5 px-4 max-w-[200px]">
-                              <p className="text-slate-900 font-medium truncate">
+                              <p className="text-slate-900 dark:text-white font-medium truncate">
                                 {[u.city, u.country].filter(Boolean).join(', ') || 'Tbilisi, Georgia'}
                               </p>
                               {u.address && (
@@ -3480,7 +3701,7 @@ export const AdminDashboard: React.FC = () => {
                             </td>
 
                             {/* Registered Date */}
-                            <td className="py-3.5 px-4 text-slate-600 text-xs">
+                            <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300 text-xs">
                               {u.createdAt ? new Date(u.createdAt).toLocaleDateString(language === 'ka' ? 'ka-GE' : 'en-US', {
                                 year: 'numeric',
                                 month: 'short',
@@ -3497,7 +3718,7 @@ export const AdminDashboard: React.FC = () => {
                                   👑 {isKa ? 'ადმინისტრატორი' : 'Admin'}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 dark:text-slate-200 border border-slate-200">
                                   👤 {isKa ? 'მომხმარებელი' : 'Customer'}
                                 </span>
                               )}
@@ -3545,7 +3766,7 @@ export const AdminDashboard: React.FC = () => {
                       <tr>
                         <td colSpan={8} className="py-12 text-center text-slate-400">
                           <Users className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                          <p className="font-bold text-slate-600">
+                          <p className="font-bold text-slate-600 dark:text-slate-300">
                             {isKa ? 'დარეგისტრირებული მომხმარებლები არ მოიძებნა' : 'No registered users found'}
                           </p>
                           <p className="text-xs text-slate-400 mt-1">
@@ -3643,8 +3864,7 @@ export const AdminDashboard: React.FC = () => {
                     <span className="text-xs font-mono text-slate-500 select-none hidden sm:inline">
                       {typeof window !== 'undefined' ? `${window.location.origin}/` : '/'}
                     </span>
-                    <input
-                      type="text"
+                    <input type="text"
                       value={slugInputValue}
                       onChange={e => setSlugInputValue(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ''))}
                       placeholder="e.g. portal-sec-9x8f7"
@@ -3708,7 +3928,7 @@ export const AdminDashboard: React.FC = () => {
                   <Lock className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
                     {isKa ? 'ადმინისტრატორის პაროლის მართვა' : 'Administrator Password Management'}
                   </h3>
                   <p className="text-xs text-slate-500">
@@ -3723,7 +3943,7 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     {isKa ? 'ადმინის ელ-ფოსტა' : 'Admin Email'}
                   </p>
-                  <p className="text-xs font-mono font-bold text-slate-900">{user.email || 'admin@dbuystore.com'}</p>
+                  <p className="text-xs font-mono font-bold text-slate-900 dark:text-white">{user.email || 'admin@dbuystore.com'}</p>
                 </div>
                 <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200">
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
@@ -3737,7 +3957,7 @@ export const AdminDashboard: React.FC = () => {
                   <p className="text-[11px] font-bold text-slate-500 uppercase tracking-wider mb-1">
                     {isKa ? 'პაროლის სტატუსი' : 'Password Status'}
                   </p>
-                  <p className="text-xs font-medium text-slate-700">
+                  <p className="text-xs font-medium text-slate-700 dark:text-slate-200">
                     {isKa ? '🔒 დაცული პაროლი' : '🔒 Protected Password'}
                   </p>
                 </div>
@@ -3749,8 +3969,7 @@ export const AdminDashboard: React.FC = () => {
                   <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                     {isKa ? 'ძველი პაროლი (Current Password) *' : 'Current Password *'}
                   </label>
-                  <input
-                    type="password"
+                  <input type="password"
                     required
                     value={oldPasswordInput}
                     onFocus={e => e.target.select()}
@@ -3766,8 +3985,7 @@ export const AdminDashboard: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       {isKa ? 'ახალი პაროლი (New Password) *' : 'New Password *'}
                     </label>
-                    <input
-                      type="password"
+                    <input type="password"
                       required
                       value={newPasswordInput}
                       onFocus={e => e.target.select()}
@@ -3781,8 +3999,7 @@ export const AdminDashboard: React.FC = () => {
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                       {isKa ? 'გაიმეორეთ ახალი პაროლი *' : 'Confirm New Password *'}
                     </label>
-                    <input
-                      type="password"
+                    <input type="password"
                       required
                       value={confirmPasswordInput}
                       onFocus={e => e.target.select()}
@@ -3813,7 +4030,7 @@ export const AdminDashboard: React.FC = () => {
                   <ShieldCheck className="w-6 h-6" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-900">
+                  <h3 className="text-base font-black text-slate-900 dark:text-white">
                     {isKa ? 'აქტიური უსაფრთხოების მექანიზმები (Security Defenses)' : 'Active Platform Security Defenses'}
                   </h3>
                   <p className="text-xs text-slate-500">
@@ -3828,10 +4045,10 @@ export const AdminDashboard: React.FC = () => {
                     <ShieldCheck className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                       {isKa ? 'ბრუტფორსის (Brute-Force) საწინააღმდეგო ბლოკირება' : 'Anti-Brute Force Protection'}
                     </h4>
-                    <p className="text-[11px] text-slate-600 mt-0.5">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                       {isKa ? 'ავტორიზაციის 5 არასწორი მცდელობის შემდეგ სისტემა ავტომატურად ბლოკავს შემომავალ მოთხოვნებს 60 წამით.' : 'After 5 incorrect authorization attempts, incoming requests are blocked for 60 seconds.'}
                     </p>
                   </div>
@@ -3842,10 +4059,10 @@ export const AdminDashboard: React.FC = () => {
                     <KeyRound className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                       {isKa ? 'უსაფრთხო ავთენტიფიკაცია & პაროლის აღდგენა' : 'Secure Authentication & Password Recovery'}
                     </h4>
-                    <p className="text-[11px] text-slate-600 mt-0.5">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                       {isKa ? 'მომხმარებლის მონაცემები დაცულია დაშიფვრით და პაროლის აღდგენის სისტემით.' : 'User credentials are secured with encryption and recovery verification.'}
                     </p>
                   </div>
@@ -3856,10 +4073,10 @@ export const AdminDashboard: React.FC = () => {
                     <Lock className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                       {isKa ? 'XSS & Script Injection სანიტიზაცია' : 'XSS & Script Injection Sanitization'}
                     </h4>
-                    <p className="text-[11px] text-slate-600 mt-0.5">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                       {isKa ? 'ყველა შეყვანილი მონაცემი (სახელი, მისამართი, ელ-ფოსტა) იფილტრება მავნე კოდის ინექციისგან.' : 'All user input fields (name, address, email) are sanitized against malicious code injections.'}
                     </p>
                   </div>
@@ -3870,10 +4087,10 @@ export const AdminDashboard: React.FC = () => {
                     <ShieldAlert className="w-4 h-4" />
                   </div>
                   <div>
-                    <h4 className="text-xs font-bold text-slate-900">
+                    <h4 className="text-xs font-bold text-slate-900 dark:text-white">
                       {isKa ? 'ადმინ პანელის სრული იზოლაცია' : 'Admin Panel Isolation'}
                     </h4>
-                    <p className="text-[11px] text-slate-600 mt-0.5">
+                    <p className="text-[11px] text-slate-600 dark:text-slate-300 mt-0.5">
                       {isKa ? 'ადმინის მართვის პანელი და ლინკები სრულად დამალულია საიტის გარედან და მოითხოვს ადმინის სესიას.' : 'Admin control panel and routes are isolated and require an active admin session.'}
                     </p>
                   </div>
@@ -3896,7 +4113,7 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <h3 className="text-base font-black text-slate-900">
+                      <h3 className="text-base font-black text-slate-900 dark:text-white">
                         {isKa ? '📧 Zoho Mail (support@dbuystore.com) პარამეტრები' : '📧 Zoho Mail (support@dbuystore.com) Setup'}
                       </h3>
                       <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold border flex items-center space-x-1 ${
@@ -3972,7 +4189,7 @@ export const AdminDashboard: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {/* SMTP Host */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                       {isKa ? 'SMTP სერვერის ჰოსტი (SMTP Host)' : 'SMTP Host'}
                     </label>
                     <select
@@ -3997,8 +4214,7 @@ export const AdminDashboard: React.FC = () => {
                     </select>
 
                     {!['smtppro.zoho.com', 'smtppro.zoho.eu', 'smtp.zoho.com', 'smtp.zoho.eu', 'smtp.gmail.com', 'smtp-relay.brevo.com', 'smtp.resend.com'].includes(smtpForm.host) && (
-                      <input
-                        type="text"
+                      <input type="text"
                         value={smtpForm.host}
                         onChange={e => setSmtpForm({ ...smtpForm, host: e.target.value })}
                         placeholder="e.g. smtp.example.com"
@@ -4009,7 +4225,7 @@ export const AdminDashboard: React.FC = () => {
 
                   {/* SMTP Port */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                       {isKa ? 'SMTP პორტი (Port)' : 'SMTP Port'}
                     </label>
                     <select
@@ -4024,27 +4240,25 @@ export const AdminDashboard: React.FC = () => {
 
                   {/* Zoho Email User */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                       {isKa ? 'გამომგზავნი ელ-ფოსტის მისამართი' : 'Sender Email Address'}
                     </label>
-                    <input
-                      type="email"
+                    <input type="email"
                       required
                       value={smtpForm.user}
                       onChange={e => setSmtpForm({ ...smtpForm, user: e.target.value })}
                       placeholder="support@dbuystore.com"
-                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono font-bold text-slate-800"
+                      className="w-full px-4 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden font-mono font-bold text-slate-800 dark:text-slate-100"
                     />
                   </div>
 
                   {/* Zoho Mail Password or App Password */}
                   <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1">
+                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                       {isKa ? 'Zoho Mail-ის პაროლი / აპლიკაციის პაროლი (App Password) *' : 'Zoho Mail Password / App Password *'}
                     </label>
                     <div className="relative">
-                      <input
-                        type={showSmtpPass ? 'text' : 'password'}
+                      <input type={showSmtpPass ? 'text' : 'password'}
                         value={smtpForm.pass}
                         onChange={e => setSmtpForm({ ...smtpForm, pass: e.target.value })}
                         placeholder={hasServerPass ? '•••••••••••••••• (Saved on Server)' : (isKa ? 'შეიყვანეთ Zoho პაროლი...' : 'Enter Zoho password...')}
@@ -4053,7 +4267,7 @@ export const AdminDashboard: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setShowSmtpPass(!showSmtpPass)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:text-slate-300 cursor-pointer"
                       >
                         {showSmtpPass ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
@@ -4077,8 +4291,8 @@ export const AdminDashboard: React.FC = () => {
               </form>
 
               {/* Zoho Instructions & Solutions Banner */}
-              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs text-slate-600">
-                <p className="font-bold text-slate-800 flex items-center space-x-1.5">
+              <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3 text-xs text-slate-600 dark:text-slate-300">
+                <p className="font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
                   <span>ℹ️</span>
                   <span>{isKa ? 'რატომ წერს Zoho "554 5.7.8 Access Restricted" და რა არის გამოსავალი?' : 'Why does Zoho return "554 5.7.8 Access Restricted" & Solution Options'}</span>
                 </p>
@@ -4096,9 +4310,9 @@ export const AdminDashboard: React.FC = () => {
                   </p>
                 </div>
 
-                <div className="space-y-1.5 text-[11px] text-slate-700">
-                  <p className="font-bold text-slate-900">{isKa ? '💡 3 მარტივი გზა პრობლემის გადასაჭრელად:' : '💡 3 Simple Solutions:'}</p>
-                  <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-600">
+                <div className="space-y-1.5 text-[11px] text-slate-700 dark:text-slate-200">
+                  <p className="font-bold text-slate-900 dark:text-white">{isKa ? '💡 3 მარტივი გზა პრობლემის გადასაჭრელად:' : '💡 3 Simple Solutions:'}</p>
+                  <ul className="list-disc list-inside space-y-1 text-[11px] text-slate-600 dark:text-slate-300">
                     <li>
                       <strong>1. Brevo (Sendinblue) - {isKa ? '100% უფასო (300 იმეილი/დღეში)' : '100% Free (300 emails/day)'}:</strong> {isKa ? 'დარეგისტრირდით brevo.com-ზე (1 წუთში), აიღეთ უფასო SMTP key, აირჩიეთ ზემოთ smtp-relay.brevo.com და გააგზავნეთ support@dbuystore.com-ის სახელით.' : 'Sign up at brevo.com, copy your free SMTP key, select smtp-relay.brevo.com above and send from support@dbuystore.com.'}
                     </li>
@@ -4122,10 +4336,10 @@ export const AdminDashboard: React.FC = () => {
                   </div>
                   <div>
                     <div className="flex items-center space-x-2">
-                      <h3 className="text-base font-black text-slate-900">
+                      <h3 className="text-base font-black text-slate-900 dark:text-white">
                         {isKa ? '📥 მომხმარებელთა შეტყობინებები (Contact Inbox)' : '📥 Customer Inquiries Inbox'}
                       </h3>
-                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
+                      <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:text-slate-200">
                         {contactMessages.length} {isKa ? 'წერილები' : 'total'}
                       </span>
                     </div>
@@ -4138,8 +4352,7 @@ export const AdminDashboard: React.FC = () => {
                 {/* Message Search */}
                 <div className="relative min-w-[240px]">
                   <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="text"
+                  <input type="text"
                     value={messageSearch}
                     onChange={e => setMessageSearch(e.target.value)}
                     placeholder={isKa ? 'ძებნა სახელით, ფოსტით, თემით...' : 'Search messages...'}
@@ -4161,7 +4374,7 @@ export const AdminDashboard: React.FC = () => {
                       <th className="py-3 px-4 text-right">{isKa ? 'მოქმედება' : 'Actions'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700">
+                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700 dark:text-slate-200">
                     {contactMessages
                       .filter(m => {
                         if (!messageSearch.trim()) return true;
@@ -4185,21 +4398,21 @@ export const AdminDashboard: React.FC = () => {
                             })}
                           </td>
                           <td className="py-3.5 px-4">
-                            <p className="font-bold text-slate-900">{msg.name}</p>
+                            <p className="font-bold text-slate-900 dark:text-white">{msg.name}</p>
                             <a href={`mailto:${msg.email}`} className="text-blue-600 font-mono text-[11px] hover:underline">
                               {msg.email}
                             </a>
                           </td>
                           <td className="py-3.5 px-4">
-                            <p className="font-bold text-slate-800">{msg.subject}</p>
+                            <p className="font-bold text-slate-800 dark:text-slate-100">{msg.subject}</p>
                             {msg.orderNumber && (
-                              <span className="inline-block text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 font-mono mt-0.5">
+                              <span className="inline-block text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 dark:text-slate-300 font-mono mt-0.5">
                                 #{msg.orderNumber}
                               </span>
                             )}
                           </td>
                           <td className="py-3.5 px-4 max-w-[280px]">
-                            <p className="line-clamp-2 text-slate-600 text-xs">
+                            <p className="line-clamp-2 text-slate-600 dark:text-slate-300 text-xs">
                               {msg.message}
                             </p>
                           </td>
@@ -4213,7 +4426,7 @@ export const AdminDashboard: React.FC = () => {
                                 ✅ {isKa ? 'უპასუხა' : 'Replied'}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:text-slate-200 border border-slate-200">
                                 👁️ {isKa ? 'წაკითხული' : 'Read'}
                               </span>
                             )}
@@ -4225,7 +4438,7 @@ export const AdminDashboard: React.FC = () => {
                                 setSelectedMessage(msg);
                                 if (msg.status === 'unread') handleMarkMessageRead(msg.id, 'read');
                               }}
-                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors cursor-pointer"
                             >
                               {isKa ? 'ნახვა' : 'View'}
                             </button>
@@ -4253,7 +4466,7 @@ export const AdminDashboard: React.FC = () => {
                       <tr>
                         <td colSpan={6} className="py-12 text-center text-slate-400">
                           <MessageSquare className="w-10 h-10 mx-auto text-slate-300 mb-2" />
-                          <p className="font-bold text-slate-600">
+                          <p className="font-bold text-slate-600 dark:text-slate-300">
                             {isKa ? 'შეტყობინებები ჯერ არ არის' : 'No contact messages yet'}
                           </p>
                           <p className="text-xs text-slate-400 mt-1">
@@ -4277,7 +4490,7 @@ export const AdminDashboard: React.FC = () => {
                         <Mail className="w-5 h-5" />
                       </div>
                       <div>
-                        <h3 className="text-base font-black text-slate-900">{selectedMessage.subject}</h3>
+                        <h3 className="text-base font-black text-slate-900 dark:text-white">{selectedMessage.subject}</h3>
                         <p className="text-xs text-slate-500">
                           {new Date(selectedMessage.createdAt).toLocaleString()}
                         </p>
@@ -4286,13 +4499,13 @@ export const AdminDashboard: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => setSelectedMessage(null)}
-                      className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                      className="p-1.5 rounded-xl hover:bg-slate-100 text-slate-400 hover:text-slate-600 dark:text-slate-300 transition-colors cursor-pointer"
                     >
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
-                  <div className="space-y-4 text-xs text-slate-700">
+                  <div className="space-y-4 text-xs text-slate-700 dark:text-slate-200">
                     <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200/80 space-y-2">
                       <p><strong>{isKa ? 'გამომგზავნი:' : 'From:'}</strong> {selectedMessage.name} (&lt;<a href={`mailto:${selectedMessage.email}`} className="text-blue-600 hover:underline">{selectedMessage.email}</a>&gt;)</p>
                       {selectedMessage.orderNumber && (
@@ -4302,8 +4515,8 @@ export const AdminDashboard: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <p className="font-bold text-slate-900">{isKa ? 'შეტყობინების ტექსტი:' : 'Message Body:'}</p>
-                      <div className="p-4 rounded-2xl bg-white border border-slate-200 text-slate-800 whitespace-pre-wrap leading-relaxed font-sans shadow-xs">
+                      <p className="font-bold text-slate-900 dark:text-white">{isKa ? 'შეტყობინების ტექსტი:' : 'Message Body:'}</p>
+                      <div className="p-4 rounded-2xl bg-white border border-slate-200 text-slate-800 dark:text-slate-100 whitespace-pre-wrap leading-relaxed font-sans shadow-xs">
                         {selectedMessage.message}
                       </div>
                     </div>
@@ -4357,7 +4570,7 @@ export const AdminDashboard: React.FC = () => {
                   <Layers className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-slate-900">
+                  <h3 className="text-lg font-black text-slate-900 dark:text-white">
                     {editingBillboard
                       ? (isKa ? 'ბილბორდის რედაქტირება' : 'Edit Billboard')
                       : (isKa ? 'ახალი ბილბორდის დამატება' : 'Add New Billboard')}
@@ -4369,7 +4582,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
               <button
                 onClick={() => setIsBillboardModalOpen(false)}
-                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -4404,7 +4617,7 @@ export const AdminDashboard: React.FC = () => {
                         className="w-8 h-8 rounded-lg object-cover bg-slate-950 shrink-0"
                       />
                       <div className="max-w-[100px]">
-                        <p className="text-[11px] font-bold text-slate-900 truncate">{prod.title}</p>
+                        <p className="text-[11px] font-bold text-slate-900 dark:text-white truncate">{prod.title}</p>
                         <p className="text-[10px] text-blue-600 font-black">{formatPrice(prod.price)}</p>
                       </div>
                     </button>
@@ -4415,7 +4628,7 @@ export const AdminDashboard: React.FC = () => {
               {/* 2. Main Product Image Setting */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-800">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100">
                     🖼️ {isKa ? 'ბილბორდის მთავარი სურათი (Main Product Showcase Image) *' : 'Main Product Showcase Image *'}
                   </label>
                   <div className="flex items-center space-x-1 bg-slate-100 p-0.5 rounded-lg text-[11px]">
@@ -4423,7 +4636,7 @@ export const AdminDashboard: React.FC = () => {
                       type="button"
                       onClick={() => setBillboardImageMode('url')}
                       className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                        billboardImageMode === 'url' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600'
+                        billboardImageMode === 'url' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 dark:text-slate-300'
                       }`}
                     >
                       {isKa ? 'URL ბმული' : 'URL Link'}
@@ -4432,7 +4645,7 @@ export const AdminDashboard: React.FC = () => {
                       type="button"
                       onClick={() => setBillboardImageMode('upload')}
                       className={`px-2.5 py-1 rounded-md font-bold transition-all cursor-pointer ${
-                        billboardImageMode === 'upload' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600'
+                        billboardImageMode === 'upload' ? 'bg-white text-blue-600 shadow-xs' : 'text-slate-600 dark:text-slate-300'
                       }`}
                     >
                       {isKa ? 'ფაილის ატვირთვა' : 'Upload File'}
@@ -4449,19 +4662,18 @@ export const AdminDashboard: React.FC = () => {
                       ref={billboardFileInputRef}
                       type="file"
                       accept="image/*"
-                      className="hidden"
+                      className="hidden dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder-slate-400"
                       onChange={e => {
                         const file = e.target.files?.[0];
                         if (file) processBillboardImageFile(file);
                       }}
                     />
                     <UploadCloud className="w-8 h-8 text-blue-500 mx-auto mb-2" />
-                    <p className="text-xs font-bold text-slate-800">{isKa ? 'დააჭირეთ სურათის ასატვირთად' : 'Click to upload image'}</p>
+                    <p className="text-xs font-bold text-slate-800 dark:text-slate-100">{isKa ? 'დააჭირეთ სურათის ასატვირთად' : 'Click to upload image'}</p>
                     <p className="text-[11px] text-slate-500">{isKa ? 'PNG, JPG, WEBP (ავტომატური ოპტიმიზაცია)' : 'PNG, JPG, WEBP (Auto optimized)'}</p>
                   </div>
                 ) : (
-                  <input
-                    type="text"
+                  <input type="text"
                     required
                     value={billboardForm.image}
                     onChange={e => setBillboardForm({ ...billboardForm, image: e.target.value })}
@@ -4474,7 +4686,7 @@ export const AdminDashboard: React.FC = () => {
                 {billboardForm.image && (
                   <div className="space-y-2 pt-1">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-bold text-slate-800 flex items-center space-x-1.5">
+                      <span className="font-bold text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
                         <Eye className="w-4 h-4 text-blue-600" />
                         <span>{isKa ? 'სურათის პოზიცია & ცოცხალი გადახედვა (Focal Point)' : 'Image Focal Point & Live Interactive Preview'}</span>
                       </span>
@@ -4554,7 +4766,7 @@ export const AdminDashboard: React.FC = () => {
                           className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
                             (billboardForm.image_position_y ?? 50) === 0
                               ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                              : 'bg-slate-100 text-slate-700 dark:text-slate-200 border-slate-200 hover:bg-slate-200'
                           }`}
                         >
                           {isKa ? 'ზედა (0%)' : 'Top (0%)'}
@@ -4565,7 +4777,7 @@ export const AdminDashboard: React.FC = () => {
                           className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
                             (billboardForm.image_position_y ?? 50) === 50
                               ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                              : 'bg-slate-100 text-slate-700 dark:text-slate-200 border-slate-200 hover:bg-slate-200'
                           }`}
                         >
                           {isKa ? 'ცენტრი (50%)' : 'Center (50%)'}
@@ -4576,7 +4788,7 @@ export const AdminDashboard: React.FC = () => {
                           className={`px-2.5 py-1 rounded-lg border font-bold transition-all cursor-pointer ${
                             (billboardForm.image_position_y ?? 50) === 100
                               ? 'bg-blue-600 text-white border-blue-600'
-                              : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
+                              : 'bg-slate-100 text-slate-700 dark:text-slate-200 border-slate-200 hover:bg-slate-200'
                           }`}
                         >
                           {isKa ? 'ქვედა (100%)' : 'Bottom (100%)'}
@@ -4589,7 +4801,7 @@ export const AdminDashboard: React.FC = () => {
 
               {/* 3. Background Gradient / Preset Colors */}
               <div>
-                <label className="block text-xs font-bold text-slate-800 mb-2">
+                <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-2">
                   🎨 {isKa ? 'ფონის გრადიენტი (Background Atmosphere Gradient)' : 'Background Atmosphere Gradient'}
                 </label>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
@@ -4605,7 +4817,7 @@ export const AdminDashboard: React.FC = () => {
                       }`}
                     >
                       <div className={`w-5 h-5 rounded-full bg-gradient-to-br ${grad.value} shrink-0 border border-slate-700 shadow-xs`} />
-                      <span className="text-[11px] font-bold text-slate-800 truncate">{grad.label}</span>
+                      <span className="text-[11px] font-bold text-slate-800 dark:text-slate-100 truncate">{grad.label}</span>
                     </button>
                   ))}
                 </div>
@@ -4613,11 +4825,10 @@ export const AdminDashboard: React.FC = () => {
 
               {/* 4. Ambient Background Texture URL */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">
+                <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                   🌌 {isKa ? 'ფონის ბუნდოვანი სურათი (Ambient Lifestyle Background URL - Optional)' : 'Ambient Lifestyle Background URL (Optional)'}
                 </label>
-                <input
-                  type="text"
+                <input type="text"
                   value={billboardForm.bgImage || ''}
                   onChange={e => setBillboardForm({ ...billboardForm, bgImage: e.target.value })}
                   placeholder={isKa ? 'https://images.unsplash.com/... (ფონის მსუბუქი ეფექტისთვის)' : 'https://images.unsplash.com/... (for subtle mood overlay)'}
@@ -4628,11 +4839,10 @@ export const AdminDashboard: React.FC = () => {
               {/* 5. Bilingual Titles */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
                     🇬🇪 ქართული სათაური (Georgian Headline) *
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     required
                     value={billboardForm.titleKa}
                     onChange={e => setBillboardForm({ ...billboardForm, titleKa: e.target.value })}
@@ -4642,11 +4852,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
                     🇬🇧 ინგლისური სათაური (English Headline) *
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     required
                     value={billboardForm.title}
                     onChange={e => setBillboardForm({ ...billboardForm, title: e.target.value })}
@@ -4659,10 +4868,10 @@ export const AdminDashboard: React.FC = () => {
               {/* 6. Bilingual Subtitles */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
                     🇬🇪 ქართული აღწერა (Georgian Subtitle)
                   </label>
-                  <textarea
+                  <textarea 
                     rows={2}
                     value={billboardForm.subtitleKa}
                     onChange={e => setBillboardForm({ ...billboardForm, subtitleKa: e.target.value })}
@@ -4672,10 +4881,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1">
+                  <label className="block text-xs font-bold text-slate-800 dark:text-slate-100 mb-1">
                     🇬🇧 ინგლისური აღწერა (English Subtitle)
                   </label>
-                  <textarea
+                  <textarea 
                     rows={2}
                     value={billboardForm.subtitle}
                     onChange={e => setBillboardForm({ ...billboardForm, subtitle: e.target.value })}
@@ -4688,11 +4897,10 @@ export const AdminDashboard: React.FC = () => {
               {/* 7. Badges, Pricing & Discounts */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1">
                     🏷️ Badge (EN)
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={billboardForm.badge || ''}
                     onChange={e => setBillboardForm({ ...billboardForm, badge: e.target.value })}
                     placeholder="Flagship Audio"
@@ -4701,11 +4909,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1">
                     🏷️ Badge (KA)
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={billboardForm.badgeKa || ''}
                     onChange={e => setBillboardForm({ ...billboardForm, badgeKa: e.target.value })}
                     placeholder="ტოპ შეთავაზება"
@@ -4714,11 +4921,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1">
                     🔥 Discount Tag
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={billboardForm.discountTag || ''}
                     onChange={e => setBillboardForm({ ...billboardForm, discountTag: e.target.value })}
                     placeholder="-27% OFF"
@@ -4727,11 +4933,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1">
                     💰 Display Price
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={billboardForm.priceTag || ''}
                     onChange={e => setBillboardForm({ ...billboardForm, priceTag: e.target.value })}
                     placeholder="$79.99"
@@ -4743,11 +4948,10 @@ export const AdminDashboard: React.FC = () => {
               {/* 8. Button Labels & Category */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1">
                     🔘 {isKa ? 'ღილაკის ტექსტი (KA)' : 'Button Label (KA)'}
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={billboardForm.buttonTextKa || ''}
                     onChange={e => setBillboardForm({ ...billboardForm, buttonTextKa: e.target.value })}
                     placeholder="ყურსასმენის შეძენა"
@@ -4756,11 +4960,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1">
                     🔘 {isKa ? 'ღილაკის ტექსტი (EN)' : 'Button Label (EN)'}
                   </label>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={billboardForm.buttonText || ''}
                     onChange={e => setBillboardForm({ ...billboardForm, buttonText: e.target.value })}
                     placeholder="Shop Now"
@@ -4769,7 +4972,7 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                  <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-200 mb-1">
                     📂 {isKa ? 'კატეგორია' : 'Category'}
                   </label>
                   <select
@@ -4789,7 +4992,7 @@ export const AdminDashboard: React.FC = () => {
               {/* 9. Active Status Toggle */}
               <div className="flex items-center justify-between p-3.5 bg-slate-50 rounded-2xl border border-slate-200">
                 <div>
-                  <p className="text-xs font-bold text-slate-900">
+                  <p className="text-xs font-bold text-slate-900 dark:text-white">
                     {isKa ? 'სტატუსი: აქტიური ბილბორდი' : 'Status: Active Billboard'}
                   </p>
                   <p className="text-[11px] text-slate-500">
@@ -4809,7 +5012,7 @@ export const AdminDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsBillboardModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
                 >
                   {isKa ? 'გაუქმება' : 'Cancel'}
                 </button>
@@ -4839,7 +5042,7 @@ export const AdminDashboard: React.FC = () => {
           <div className="relative w-full max-w-xl bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 max-h-[90vh] overflow-y-auto">
             <button
               onClick={() => setIsProductModalOpen(false)}
-              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               <X className="w-5 h-5" />
             </button>
@@ -4869,8 +5072,7 @@ export const AdminDashboard: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   {isKa ? 'პროდუქტის სათაური (EN) *' : 'Product Title (EN) *'}
                 </label>
-                <input
-                  type="text"
+                <input type="text"
                   required
                   value={prodForm.title ?? ''}
                   onChange={e => setProdForm({ ...prodForm, title: e.target.value })}
@@ -4883,8 +5085,7 @@ export const AdminDashboard: React.FC = () => {
                 <label className="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">
                   {isKa ? 'პროდუქტის სათაური ქართულად (KA)' : 'Product Title in Georgian (KA)'}
                 </label>
-                <input
-                  type="text"
+                <input type="text"
                   value={prodForm.titleKa ?? ''}
                   onChange={e => setProdForm({ ...prodForm, titleKa: e.target.value })}
                   placeholder=""
@@ -4895,7 +5096,7 @@ export const AdminDashboard: React.FC = () => {
               {/* Product URL Slug (Auto-generated from title, fully editable) */}
               <div className="bg-slate-50/80 p-3 rounded-2xl border border-slate-200/80 space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-slate-700">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200">
                     {isKa ? 'პროდუქტის URL მისამართი (Slug)' : 'Product URL Slug'}
                   </label>
                   <button
@@ -4912,12 +5113,11 @@ export const AdminDashboard: React.FC = () => {
                 </div>
                 <div className="flex items-center space-x-1.5 bg-white px-3 py-2 rounded-xl border border-slate-200">
                   <span className="text-xs text-slate-400 select-none font-mono">/product/{editingProduct ? editingProduct.id : 'prod-id'}/</span>
-                  <input
-                    type="text"
+                  <input type="text"
                     value={prodForm.customSlug || ''}
                     onChange={e => setProdForm({ ...prodForm, customSlug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '-') })}
                     placeholder=""
-                    className="flex-1 text-xs font-mono text-slate-800 focus:outline-hidden"
+                    className="flex-1 text-xs font-mono text-slate-800 dark:text-slate-100 focus:outline-hidden"
                   />
                 </div>
                 <p className="text-[10px] text-slate-500 leading-tight">
@@ -4969,11 +5169,10 @@ export const AdminDashboard: React.FC = () => {
 
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                     {isKa ? 'ფასი ($ USD) *' : 'Price ($ USD) *'}
                   </label>
-                  <input
-                    type="number"
+                  <input type="number"
                     step="0.01"
                     required
                     value={prodForm.price === '' || prodForm.price === 0 ? '' : prodForm.price}
@@ -4984,11 +5183,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                     {isKa ? 'ძველი ფასი ($)' : 'Orig Price ($)'}
                   </label>
-                  <input
-                    type="number"
+                  <input type="number"
                     step="0.01"
                     value={prodForm.origPrice === '' || prodForm.origPrice === undefined || prodForm.origPrice === 0 ? '' : prodForm.origPrice}
                     onChange={e => setProdForm({ ...prodForm, origPrice: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
@@ -4998,11 +5196,10 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-200 mb-1">
                     {isKa ? 'მარაგი (ერთეული)' : 'Stock Units'}
                   </label>
-                  <input
-                    type="number"
+                  <input type="number"
                     value={prodForm.stock === '' || prodForm.stock === undefined ? '' : prodForm.stock}
                     onChange={e => setProdForm({ ...prodForm, stock: e.target.value === '' ? ('' as any) : Number(e.target.value) })}
                     placeholder=""
@@ -5013,9 +5210,9 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Product Images Manager: Up to 5 Images Support */}
               <div className="space-y-3 bg-slate-50/80 p-4 rounded-3xl border border-slate-200/80">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center space-x-2">
-                    <label className="text-xs font-black text-slate-800 flex items-center space-x-1.5">
+                    <label className="text-xs font-black text-slate-800 dark:text-slate-100 flex items-center space-x-1.5">
                       <ImageIcon className="w-4 h-4 text-blue-600" />
                       <span>{isKa ? 'პროდუქტის სურათები' : 'Product Images'}</span>
                     </label>
@@ -5027,33 +5224,56 @@ export const AdminDashboard: React.FC = () => {
                       {prodForm.images.length}/5
                     </span>
                   </div>
-                  
-                  {/* Mode switcher */}
-                  <div className="inline-flex p-0.5 bg-white rounded-xl border border-slate-200 text-[11px] shadow-2xs">
+
+                  <div className="flex items-center space-x-2">
+                    {/* Vision AI Auto-Fill from Primary Image Button */}
                     <button
                       type="button"
-                      onClick={() => setImageInputMode('upload')}
-                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
-                        imageInputMode === 'upload'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
+                      disabled={isVisionGenerating || (prodForm.images.length === 0 && !prodForm.image)}
+                      onClick={handleVisionAutoFill}
+                      className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-purple-600 via-indigo-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 text-white font-extrabold text-[11px] shadow-sm flex items-center space-x-1.5 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
+                      title={isKa ? 'სურათის ანალიზი და მონაცემების ავტო-შევსება' : 'Vision AI: Identify product from image & auto-fill title, description & features'}
                     >
-                      <Upload className="w-3 h-3" />
-                      <span>{isKa ? 'ატვირთვა' : 'Upload'}</span>
+                      {isVisionGenerating ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                          <span>{isKa ? 'ანალიზი...' : 'Analyzing Image...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse" />
+                          <span>{isKa ? '✨ სურათიდან ავტო-შევსება' : '✨ Auto-Fill from Image'}</span>
+                        </>
+                      )}
                     </button>
-                    <button
-                      type="button"
-                      onClick={() => setImageInputMode('url')}
-                      className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
-                        imageInputMode === 'url'
-                          ? 'bg-blue-600 text-white shadow-xs'
-                          : 'text-slate-500 hover:text-slate-800'
-                      }`}
-                    >
-                      <LinkIcon className="w-3 h-3" />
-                      <span>{isKa ? 'ლინკი (URL)' : 'Link (URL)'}</span>
-                    </button>
+
+                    {/* Mode switcher */}
+                    <div className="inline-flex p-0.5 bg-white rounded-xl border border-slate-200 text-[11px] shadow-2xs">
+                      <button
+                        type="button"
+                        onClick={() => setImageInputMode('upload')}
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+                          imageInputMode === 'upload'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:text-slate-100'
+                        }`}
+                      >
+                        <Upload className="w-3 h-3" />
+                        <span>{isKa ? 'ატვირთვა' : 'Upload'}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setImageInputMode('url')}
+                        className={`px-2.5 py-1 rounded-lg font-semibold transition-all flex items-center space-x-1 cursor-pointer ${
+                          imageInputMode === 'url'
+                            ? 'bg-blue-600 text-white shadow-xs'
+                            : 'text-slate-500 hover:text-slate-800 dark:text-slate-100'
+                        }`}
+                      >
+                        <LinkIcon className="w-3 h-3" />
+                        <span>{isKa ? 'ლინკი (URL)' : 'Link (URL)'}</span>
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -5072,7 +5292,7 @@ export const AdminDashboard: React.FC = () => {
                       multiple
                       accept="image/png, image/jpeg, image/jpg, image/webp, image/gif, image/svg+xml"
                       onChange={handleFileInputChange}
-                      className="hidden"
+                      className="hidden dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder-slate-400"
                     />
 
                     {/* Drag and drop dropzone */}
@@ -5099,7 +5319,7 @@ export const AdminDashboard: React.FC = () => {
                         <div className="w-9 h-9 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center">
                           <UploadCloud className="w-4 h-4" />
                         </div>
-                        <p className="text-xs font-bold text-slate-800">
+                        <p className="text-xs font-bold text-slate-800 dark:text-slate-100">
                           {prodForm.images.length >= 5
                             ? (isKa ? 'მიღწეულია 5 სურათის ლიმიტი' : '5 images limit reached')
                             : (isKa ? 'დააჭირეთ ან გადმოათრიეთ სურათები (1-5 ფაილი)' : 'Click to select or drag & drop images (1-5 files)')}
@@ -5113,8 +5333,7 @@ export const AdminDashboard: React.FC = () => {
                 ) : (
                   <div className="space-y-2">
                     <div className="flex items-center space-x-2">
-                      <input
-                        type="text"
+                      <input type="text"
                         value={newImageUrl}
                         onChange={e => setNewImageUrl(e.target.value)}
                         onKeyDown={e => {
@@ -5169,7 +5388,7 @@ export const AdminDashboard: React.FC = () => {
                 {prodForm.images.length > 0 && (
                   <div className="pt-2 border-t border-slate-200/60 space-y-2">
                     <div className="flex items-center justify-between flex-wrap gap-2">
-                      <span className="text-[11px] font-bold text-slate-700 block">
+                      <span className="text-[11px] font-bold text-slate-700 dark:text-slate-200 block">
                         {isKa ? `დამატებული სურათები (${prodForm.images.length}/5):` : `Added Gallery Images (${prodForm.images.length}/5):`}
                       </span>
                     </div>
@@ -5198,7 +5417,7 @@ export const AdminDashboard: React.FC = () => {
                                 <span className={`text-[10px] font-extrabold px-1.5 py-0.5 rounded-md ${
                                   idx === 0
                                     ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-100 text-slate-600'
+                                    : 'bg-slate-100 text-slate-600 dark:text-slate-300'
                                 }`}>
                                   {idx === 0 ? (isKa ? '⭐ მთავარი' : '⭐ Cover') : `#${idx + 1}`}
                                 </span>
@@ -5230,7 +5449,7 @@ export const AdminDashboard: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => moveProdImage(idx, 'left')}
-                                      className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                                      className="p-1 rounded-md text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-100"
                                       title="Move left"
                                     >
                                       <ArrowLeft className="w-3 h-3" />
@@ -5240,7 +5459,7 @@ export const AdminDashboard: React.FC = () => {
                                     <button
                                       type="button"
                                       onClick={() => moveProdImage(idx, 'right')}
-                                      className="p-1 rounded-md text-slate-400 hover:text-slate-800 hover:bg-slate-100"
+                                      className="p-1 rounded-md text-slate-400 hover:text-slate-800 dark:text-slate-100 hover:bg-slate-100"
                                       title="Move right"
                                     >
                                       <ArrowRight className="w-3 h-3" />
@@ -5353,7 +5572,7 @@ export const AdminDashboard: React.FC = () => {
                       <span>{isKa ? '✨ AI აღწერა (EN)' : '✨ AI Copy (EN)'}</span>
                     </button>
                   </div>
-                  <textarea
+                  <textarea 
                     rows={3}
                     value={prodForm.description ?? ''}
                     onChange={e => setProdForm({ ...prodForm, description: e.target.value })}
@@ -5378,7 +5597,7 @@ export const AdminDashboard: React.FC = () => {
                       <span>{isKa ? '✨ AI ქართული რეკლამა' : '✨ AI Georgian Copy'}</span>
                     </button>
                   </div>
-                  <textarea
+                  <textarea 
                     rows={3}
                     value={prodForm.descriptionKa ?? ''}
                     onChange={e => setProdForm({ ...prodForm, descriptionKa: e.target.value })}
@@ -5392,7 +5611,7 @@ export const AdminDashboard: React.FC = () => {
               <div className="bg-blue-50/50 p-4 rounded-3xl border border-blue-100 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-xs font-black text-slate-900 flex items-center space-x-1.5">
+                    <label className="text-xs font-black text-slate-900 dark:text-white flex items-center space-x-1.5">
                       <Sparkles className="w-4 h-4 text-blue-600" />
                       <span>{isKa ? '4 ძირითადი მახასიათებელი (Key Features)' : '4 Key Features (Selling Points)'}</span>
                     </label>
@@ -5424,7 +5643,7 @@ export const AdminDashboard: React.FC = () => {
                       className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                         featuresTab === 'en'
                           ? 'bg-white text-blue-600 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                          : 'text-slate-600 hover:text-slate-900 dark:text-white'
                       }`}
                     >
                       🇺🇸 English ({(prodForm.featuresEn || []).filter(f => (f || '').trim()).length}/4)
@@ -5435,7 +5654,7 @@ export const AdminDashboard: React.FC = () => {
                       className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
                         featuresTab === 'ka'
                           ? 'bg-white text-blue-600 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
+                          : 'text-slate-600 hover:text-slate-900 dark:text-white'
                       }`}
                     >
                       🇬🇪 ქართული ({(prodForm.featuresKa || []).filter(f => (f || '').trim()).length}/4)
@@ -5463,8 +5682,7 @@ export const AdminDashboard: React.FC = () => {
                         <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold text-[10px] shrink-0">
                           {featIdx + 1}
                         </div>
-                        <input
-                          type="text"
+                        <input type="text"
                           value={currentVal}
                           onChange={e => handleFeatureChange(featIdx, e.target.value, featuresTab)}
                           placeholder={
@@ -5472,7 +5690,7 @@ export const AdminDashboard: React.FC = () => {
                               ? `Key feature #${featIdx + 1} (English selling point)`
                               : `მახასიათებელი #${featIdx + 1} (ქართულად)`
                           }
-                          className="flex-1 text-xs text-slate-800 focus:outline-hidden"
+                          className="flex-1 text-xs text-slate-800 dark:text-slate-100 focus:outline-hidden"
                         />
                       </div>
                     );
@@ -5480,11 +5698,237 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
+              {/* GLOBAL PRODUCT VIDEOS SECTION */}
+              <div className="bg-slate-900 text-white p-4 rounded-3xl border border-slate-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-black flex items-center space-x-2 text-white">
+                    <Video className="w-4 h-4 text-red-500" />
+                    <span>{isKa ? '🎥 პროდუქტის ვიდეოები (Global Product Videos)' : '🎥 Global Product Videos'}</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    {isKa ? 'ჩნდება გალერეაში ყველა ფერისთვის' : 'Appears in media gallery for all variants'}
+                  </span>
+                </div>
+
+                {/* Add YouTube / Upload Video form */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2 bg-slate-950 p-3 rounded-2xl border border-slate-800">
+                  <div className="sm:col-span-6">
+                    <input type="text"
+                      value={newVideoUrl}
+                      onChange={e => setNewVideoUrl(e.target.value)}
+                      placeholder={isKa ? 'YouTube URL ბმული (https://youtube.com/watch?v=...)' : 'YouTube URL (https://youtube.com/...)'}
+                      className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-white focus:outline-hidden focus:ring-1 focus:ring-red-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-4">
+                    <input type="text"
+                      value={newVideoTitle}
+                      onChange={e => setNewVideoTitle(e.target.value)}
+                      placeholder={isKa ? 'ვიდეოს სათაური' : 'Video title (optional)'}
+                      className="w-full px-3 py-2 text-xs bg-slate-900 border border-slate-800 rounded-xl text-white focus:outline-hidden focus:ring-1 focus:ring-red-500"
+                    />
+                  </div>
+                  <div className="sm:col-span-2 flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={handleAddYouTubeVideo}
+                      className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-bold text-xs rounded-xl transition-colors cursor-pointer flex items-center justify-center space-x-1"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>YouTube</span>
+                    </button>
+                  </div>
+                </div>
+
+                {/* Upload MP4 File directly */}
+                <div className="flex items-center justify-between pt-1">
+                  <input
+                    ref={videoFileInputRef}
+                    type="file"
+                    accept="video/mp4,video/webm,video/ogg"
+                    onChange={handleUploadVideoFile}
+                    className="hidden dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder-slate-400"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => videoFileInputRef.current?.click()}
+                    className="px-3.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition-colors flex items-center space-x-1.5 cursor-pointer"
+                  >
+                    <Upload className="w-3.5 h-3.5 text-blue-400" />
+                    <span>{isKa ? 'MP4/WebM ვიდეო ფაილის ატვირთვა R2-ში' : 'Upload MP4/WebM Video to R2'}</span>
+                  </button>
+                  <span className="text-[10px] text-slate-500">Max 50MB</span>
+                </div>
+
+                {/* Video items list */}
+                {(prodForm.videos || []).length > 0 && (
+                  <div className="space-y-2 pt-2 border-t border-slate-800">
+                    {prodForm.videos.map((vid, idx) => (
+                      <div key={vid.id || idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
+                        <div className="flex items-center space-x-2.5 min-w-0">
+                          <div className={`p-1.5 rounded-lg ${vid.type === 'youtube' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
+                            <Film className="w-4 h-4" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="font-bold text-white truncate">{vid.title || 'Product Video'}</p>
+                            <p className="text-[10px] text-slate-400 font-mono truncate">{vid.url}</p>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveVideo(idx)}
+                          className="p-1.5 text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg transition-colors cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* COLOR VARIANTS & VARIANT-SPECIFIC IMAGES SECTION */}
+              <div className="bg-indigo-50/70 dark:bg-slate-900/90 p-4 rounded-3xl border border-indigo-100 dark:border-slate-800 space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-xs font-black text-slate-900 dark:text-white flex items-center space-x-2">
+                      <Sliders className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                      <span>{isKa ? '🎨 ფერის ვარიანტები & სპეციფიკური სურათები' : '🎨 Color Variants & Variant-Specific Images'}</span>
+                    </label>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                      {isKa 
+                        ? 'თითოეული ფერის არჩევნისთვის ატვირთეთ კონკრეტული სურათები. ვიდეოები დარჩება გლობალური.'
+                        : 'Assign specific images to each color choice. Global videos remain shared across all variants.'}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={handleAddVariant}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>{isKa ? 'ფერის დამატება' : 'Add Color Variant'}</span>
+                  </button>
+                </div>
+
+                {/* Variants List */}
+                {(prodForm.variants || []).length === 0 ? (
+                  <div className="text-center py-4 text-xs text-slate-400 border-2 border-dashed border-indigo-100 dark:border-slate-800 rounded-2xl bg-white/50 dark:bg-slate-950/50">
+                    {isKa ? 'ფერის ვარიანტები არ არის დამატებული. (გამოყენებული იქნება მთავარი გალერეა)' : 'No color variants created yet. (Standard main gallery will be used)'}
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {prodForm.variants.map((variant, vIdx) => (
+                      <div key={variant.id || vIdx} className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-indigo-100 dark:border-slate-800 shadow-xs space-y-3">
+                        {/* Variant details row */}
+                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
+                          {/* Color picker circle + hex */}
+                          <div className="sm:col-span-3 flex items-center space-x-2">
+                            <input type="color"
+                              value={variant.colorCode || '#000000'}
+                              onChange={e => handleUpdateVariant(vIdx, { colorCode: e.target.value })}
+                              className="w-8 h-8 rounded-full border border-slate-300 cursor-pointer overflow-hidden p-0 bg-transparent"
+                            />
+                            <input type="text"
+                              value={variant.colorCode || '#000000'}
+                              onChange={e => handleUpdateVariant(vIdx, { colorCode: e.target.value })}
+                              className="w-20 px-2 py-1 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-slate-200"
+                            />
+                          </div>
+
+                          {/* Name EN */}
+                          <div className="sm:col-span-3">
+                            <input type="text"
+                              value={variant.name}
+                              onChange={e => handleUpdateVariant(vIdx, { name: e.target.value })}
+                              placeholder="Color Name (EN)"
+                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white font-bold"
+                            />
+                          </div>
+
+                          {/* Name KA */}
+                          <div className="sm:col-span-3">
+                            <input type="text"
+                              value={variant.nameKa || ''}
+                              onChange={e => handleUpdateVariant(vIdx, { nameKa: e.target.value })}
+                              placeholder="ფერის სახელი (KA)"
+                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white"
+                            />
+                          </div>
+
+                          {/* Price & Delete */}
+                          <div className="sm:col-span-3 flex items-center space-x-2 justify-end">
+                            <input type="number"
+                              step="0.01"
+                              value={variant.price ?? ''}
+                              onChange={e => handleUpdateVariant(vIdx, { price: e.target.value === '' ? undefined : Number(e.target.value) })}
+                              placeholder={`$${prodForm.price || 'Price'}`}
+                              className="w-20 px-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white font-bold"
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveVariant(vIdx)}
+                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors cursor-pointer"
+                              title="Delete Variant"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Variant-Specific Images Upload Zone */}
+                        <div className="pt-2 border-t border-slate-100 dark:border-slate-900 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                              📸 {isKa ? `„${variant.name}“ ფერის სურათები (${(variant.images || []).length}):` : `Images for "${variant.name}" (${(variant.images || []).length}):`}
+                            </span>
+
+                            <label className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] rounded-lg border border-indigo-200 dark:border-indigo-900 transition-colors cursor-pointer inline-flex items-center space-x-1">
+                              <Upload className="w-3 h-3" />
+                              <span>{isKa ? 'სურათის ატვირთვა R2-ში' : 'Upload Image to R2'}</span>
+                              <input
+                                type="file"
+                                accept="image/*"
+                                className="hidden dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder-slate-400"
+                                onChange={e => {
+                                  const file = e.target.files?.[0];
+                                  if (file) handleUploadVariantImage(vIdx, file);
+                                  e.target.value = '';
+                                }}
+                              />
+                            </label>
+                          </div>
+
+                          {/* Thumbnails grid */}
+                          {(variant.images || []).length > 0 && (
+                            <div className="flex items-center space-x-2 overflow-x-auto pb-1 pt-1">
+                              {variant.images.map((imgUrl, imgIdx) => (
+                                <div key={imgIdx} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0 group">
+                                  <CachedImage src={imgUrl} alt="Variant photo" className="w-full h-full object-cover" />
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveVariantImage(vIdx, imgIdx)}
+                                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                                  >
+                                    <Trash2 className="w-4 h-4 text-red-400" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="pt-2 flex justify-end space-x-2">
                 <button
                   type="button"
                   onClick={() => setIsProductModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
                 >
                   {isKa ? 'გაუქმება' : 'Cancel'}
                 </button>
@@ -5530,7 +5974,7 @@ export const AdminDashboard: React.FC = () => {
                 <Trash2 className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-base font-black text-slate-900">
+                <h3 className="text-base font-black text-slate-900 dark:text-white">
                   {isKa ? 'მომხმარებლის წაშლა' : 'Delete User Account'}
                 </h3>
                 <p className="text-xs text-slate-500">
@@ -5539,7 +5983,7 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
-            <p className="text-xs text-slate-600 mb-6">
+            <p className="text-xs text-slate-600 dark:text-slate-300 mb-6">
               {isKa 
                 ? 'დარწმუნებული ხართ, რომ გსურთ ამ მომხმარებლის ანგარიშის წაშლა? მომხმარებელი ვეღარ შეძლებს ძველი პაროლით შესვლას.'
                 : 'Are you sure you want to delete this registered user account? The user will no longer be able to log in with their existing credentials.'}
@@ -5549,7 +5993,7 @@ export const AdminDashboard: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setUserToDelete(null)}
-                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-colors cursor-pointer"
+                className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
               >
                 {isKa ? 'გაუქმება' : 'Cancel'}
               </button>
@@ -5625,19 +6069,19 @@ export const AdminDashboard: React.FC = () => {
               <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-2xl flex items-center justify-between text-xs">
                 <div>
                   <span className="text-slate-500 block text-[11px]">{isKa ? 'ადრესატი / ელ-ფოსტა:' : 'Customer & Email:'}</span>
-                  <span className="font-bold text-slate-900">{trackingModalOrder.customerName}</span>
+                  <span className="font-bold text-slate-900 dark:text-white">{trackingModalOrder.customerName}</span>
                   <span className="text-slate-500 ml-1">({trackingModalOrder.email})</span>
                 </div>
                 <div className="text-right">
                   <span className="text-slate-500 block text-[11px]">{isKa ? 'დანიშნულება:' : 'Destination:'}</span>
-                  <span className="font-bold text-slate-800">{trackingModalOrder.city}, {trackingModalOrder.country}</span>
+                  <span className="font-bold text-slate-800 dark:text-slate-100">{trackingModalOrder.city}, {trackingModalOrder.country}</span>
                 </div>
               </div>
 
               {/* Tracking Number Input */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-800">
+                  <label className="text-xs font-bold text-slate-800 dark:text-slate-100">
                     {isKa ? 'თრექინგ კოდი (Tracking Number)' : 'Tracking Number / Waybill'}
                   </label>
                   <button
@@ -5653,19 +6097,18 @@ export const AdminDashboard: React.FC = () => {
                     <span>{isKa ? 'გენერაცია' : 'Auto Generate'}</span>
                   </button>
                 </div>
-                <input
-                  type="text"
+                <input type="text"
                   required
                   value={trackingForm.trackingNumber}
                   onChange={(e) => setTrackingForm(prev => ({ ...prev, trackingNumber: e.target.value }))}
                   placeholder="მაგ: GEP-94819283 ან 94001118992231..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-900 dark:text-white focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
 
               {/* Carrier Selection */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-800">
+                <label className="text-xs font-bold text-slate-800 dark:text-slate-100">
                   {isKa ? 'საკურიერო კომპანია / გადამზიდი (Carrier)' : 'Shipping Carrier'}
                 </label>
                 <select
@@ -5686,7 +6129,7 @@ export const AdminDashboard: React.FC = () => {
                     }
                     setTrackingForm(prev => ({ ...prev, carrier, trackingUrl: defaultUrl || prev.trackingUrl }));
                   }}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 dark:text-slate-100 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
                 >
                   <option value="Georgian Post">საქართველოს ფოსტა (Georgian Post)</option>
                   <option value="FedEx">FedEx Express</option>
@@ -5700,22 +6143,21 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Direct Tracking URL (Optional) */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-800 flex items-center justify-between">
+                <label className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center justify-between">
                   <span>{isKa ? 'თრექინგის პირდაპირი ბმული (Tracking URL)' : 'Direct Tracking Link (Optional)'}</span>
                   <span className="text-[10px] text-slate-400 font-normal">{isKa ? 'მომხმარებელი გადავა 1-დაჭერით' : '1-click customer track'}</span>
                 </label>
-                <input
-                  type="url"
+                <input type="url"
                   value={trackingForm.trackingUrl}
                   onChange={(e) => setTrackingForm(prev => ({ ...prev, trackingUrl: e.target.value }))}
                   placeholder="https://www.gpost.ge/tracking?id=..."
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
+                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-900 dark:text-white focus:bg-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
                 />
               </div>
 
               {/* Status Selector */}
               <div className="space-y-1.5">
-                <label className="text-xs font-bold text-slate-800">
+                <label className="text-xs font-bold text-slate-800 dark:text-slate-100">
                   {isKa ? 'შეკვეთის სტატუსი (Order Status)' : 'Update Order Status'}
                 </label>
                 <div className="grid grid-cols-2 gap-2">
@@ -5727,7 +6169,7 @@ export const AdminDashboard: React.FC = () => {
                       className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer text-center ${
                         trackingForm.status === st
                           ? 'bg-blue-600 text-white border-blue-600 shadow-xs'
-                          : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          : 'bg-slate-50 text-slate-700 dark:text-slate-200 border-slate-200 hover:bg-slate-100'
                       }`}
                     >
                       {st}
@@ -5751,7 +6193,7 @@ export const AdminDashboard: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setTrackingModalOrder(null)}
-                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 hover:bg-slate-100 transition-colors cursor-pointer"
+                  className="px-4 py-2.5 rounded-xl text-xs font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 transition-colors cursor-pointer"
                 >
                   {isKa ? 'გაუქმება' : 'Cancel'}
                 </button>

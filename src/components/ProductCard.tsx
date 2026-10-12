@@ -67,6 +67,26 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
       if (badge === 'Hot Deal') return 'ცხელი შეთავაზება';
       if (badge === 'Trending') return 'ტრენდული';
       if (badge === 'New') return 'ახალი';
+    } else if (language === 'ru') {
+      if (badge === 'Best Seller') return 'Хит продаж';
+      if (badge === 'Hot Deal') return 'Горячая цена';
+      if (badge === 'Trending') return 'В тренде';
+      if (badge === 'New') return 'Новинка';
+    } else if (language === 'es') {
+      if (badge === 'Best Seller') return 'Más vendido';
+      if (badge === 'Hot Deal') return 'Oferta Top';
+      if (badge === 'Trending') return 'Tendencia';
+      if (badge === 'New') return 'Nuevo';
+    } else if (language === 'de') {
+      if (badge === 'Best Seller') return 'Bestseller';
+      if (badge === 'Hot Deal') return 'Top Angebot';
+      if (badge === 'Trending') return 'Im Trend';
+      if (badge === 'New') return 'Neu';
+    } else if (language === 'fr') {
+      if (badge === 'Best Seller') return 'Meilleure vente';
+      if (badge === 'Hot Deal') return 'Offre spéciale';
+      if (badge === 'Trending') return 'Tendance';
+      if (badge === 'New') return 'Nouveau';
     }
     return badge;
   };
@@ -104,7 +124,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
         )}
         <button
           onClick={handleCopyLink}
-          className="product-card-copy-btn p-2 rounded-full shadow-md bg-white/90 text-slate-500 hover:text-blue-600 hover:bg-white transition-all cursor-pointer"
+          className="product-card-copy-btn p-2 rounded-full shadow-md bg-white/90 dark:bg-slate-800/90 text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 transition-all cursor-pointer"
           title={language === 'ka' ? 'URL ბმულის კოპირება' : 'Copy unique URL'}
           aria-label="Copy unique product URL"
         >
@@ -114,8 +134,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
           onClick={handleWishlistToggle}
           className={`product-card-wishlist-btn p-2 rounded-full shadow-md backdrop-blur-xs transition-all cursor-pointer ${
             isFavorite 
-              ? 'bg-white text-red-500 hover:scale-110' 
-              : 'bg-white/90 text-slate-500 hover:text-red-500 hover:bg-white'
+              ? 'bg-white dark:bg-slate-800 text-red-500 hover:scale-110' 
+              : 'bg-white/90 dark:bg-slate-800/90 text-slate-500 dark:text-slate-300 hover:text-red-500 hover:bg-white dark:hover:bg-slate-800'
           }`}
           title={isFavorite ? t('wishlist.remove') : t('wishlist.add')}
           aria-label={t('wishlist.title')}
@@ -126,7 +146,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
 
       {/* Product Image Container */}
       <div 
-        className="product-card-image-wrapper relative w-full pt-[85%] bg-slate-100 overflow-hidden group cursor-pointer"
+        className="product-card-image-wrapper relative w-full pt-[85%] bg-slate-100 dark:bg-slate-900/60 overflow-hidden group cursor-pointer"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -134,7 +154,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
           <CachedImage
             src={getCardImageSrc(product)}
             alt={displayTitle}
-            className="product-card-img absolute inset-0 w-full h-full object-cover group-hover:scale-106 transition-transform duration-500 transform-gpu will-change-transform"
+            className="product-card-img absolute inset-0 w-full h-full object-cover"
             loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
@@ -148,8 +168,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
         {/* YouTube Video Hover Preview Overlay */}
         {youtubeId && (
           <div 
-            className={`youtube-hover-preview absolute inset-0 w-full h-full z-15 overflow-hidden transition-all duration-500 ease-in-out pointer-events-none bg-black ${
-              isHovered ? 'opacity-100 scale-100' : 'opacity-0 scale-105'
+            className={`youtube-hover-preview absolute inset-0 w-full h-full z-15 overflow-hidden transition-opacity duration-300 pointer-events-none bg-black ${
+              isHovered ? 'opacity-100' : 'opacity-0'
             }`}
           >
             {isHovered && (
@@ -178,7 +198,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
               e.stopPropagation();
               setQuickViewProduct(product);
             }}
-            className="pointer-events-auto flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white text-slate-900 font-bold text-xs shadow-lg hover:bg-slate-50 transition-transform transform translate-y-2 group-hover:translate-y-0 duration-200 cursor-pointer"
+            className="pointer-events-auto flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold text-xs shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-transform transform translate-y-2 group-hover:translate-y-0 duration-200 cursor-pointer"
           >
             <Eye className="w-3.5 h-3.5 text-blue-600" />
             <span>{t('products.quickView')}</span>
@@ -243,7 +263,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
                 ? 'animate-cart-pulse bg-emerald-600 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/50'
                 : product.stock > 0
                 ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md hover:scale-[1.01]'
-                : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
             }`}
           >
             {justAdded ? (

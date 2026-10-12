@@ -192,8 +192,7 @@ export const VerifiedDeliveriesPage: React.FC = () => {
           </div>
 
           <form onSubmit={handleTrack} className="flex gap-2">
-            <input
-              type="text"
+            <input type="text"
               required
               value={searchQuery}
               onChange={e => setSearchQuery(e.target.value)}
@@ -247,7 +246,7 @@ export const VerifiedDeliveriesPage: React.FC = () => {
                           <CheckCircle2 className="w-3 h-3" />
                         </div>
                         <div className="space-y-1">
-                          <p className="text-xs font-bold text-slate-900">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">
                             {language === 'ka' ? 'ჩაბარებულია მყიდველისთვის' : 'Delivered & Handed Over'}
                           </p>
                           <p className="text-[10px] text-slate-500">
@@ -262,7 +261,7 @@ export const VerifiedDeliveriesPage: React.FC = () => {
                           <CheckCircle2 className="w-3 h-3" />
                         </div>
                         <div className="space-y-1">
-                          <p className="text-xs font-bold text-slate-900">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">
                             {language === 'ka' ? 'განბაჟება დასრულებულია' : 'Customs Cleared & Arrived in Country'}
                           </p>
                           <p className="text-[10px] text-slate-500">
@@ -277,7 +276,7 @@ export const VerifiedDeliveriesPage: React.FC = () => {
                           <CheckCircle2 className="w-3 h-3" />
                         </div>
                         <div className="space-y-1">
-                          <p className="text-xs font-bold text-slate-900">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">
                             {language === 'ka' ? 'გაგზავნილია საერთაშორისო ტრანზიტით' : 'In Transit (International Flight)'}
                           </p>
                           <p className="text-[10px] text-slate-500">
@@ -292,7 +291,7 @@ export const VerifiedDeliveriesPage: React.FC = () => {
                           <CheckCircle2 className="w-3 h-3" />
                         </div>
                         <div className="space-y-1">
-                          <p className="text-xs font-bold text-slate-900">
+                          <p className="text-xs font-bold text-slate-900 dark:text-white">
                             {language === 'ka' ? 'შეკვეთა დადასტურებულია და გადაცემულია გადამზიდავზე' : 'Order Processed & Handed to Carrier'}
                           </p>
                           <p className="text-[10px] text-slate-500">
