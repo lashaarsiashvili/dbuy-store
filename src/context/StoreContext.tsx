@@ -1299,14 +1299,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }).catch(() => {});
 
-      // PostHog product view event
+      // PostHog product view event with strict duplicate prevention & debouncing
       if (typeof window !== 'undefined' && window.posthog) {
         const targetProd = products.find(p => p.id === productId);
-        window.posthog.capture('view_item', {
-          product_id: productId,
-          product_title: targetProd?.title || targetProd?.titleKa,
-          price: targetProd?.price,
-        });
+        const viewKey = `ph_view_${productId}`;
+        const lastView = sessionStorage.getItem(viewKey);
+        const now = Date.now();
+        if (!lastView || now - Number(lastView) > 4000) {
+          sessionStorage.setItem(viewKey, String(now));
+          window.posthog.capture('view_item', {
+            product_id: productId,
+            product_title: targetProd?.title || targetProd?.titleKa,
+            price: targetProd?.price,
+          });
+        }
       }
 
       // Notify Cloudflare /track endpoint
@@ -1417,13 +1423,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     analytics.trackAddToCart(product?.id, isCurrentAdmin);
 
     if (typeof window !== 'undefined' && window.posthog) {
-      window.posthog.capture('add_to_cart', {
-        product_id: product?.id,
-        product_title: product?.title || product?.titleKa,
-        price: product?.price,
-        quantity,
-        selected_option: selectedOption,
-      });
+      const cartKey = `ph_cart_${product?.id}_${selectedOption || 'default'}`;
+      const lastCart = sessionStorage.getItem(cartKey);
+      const now = Date.now();
+      if (!lastCart || now - Number(lastCart) > 2000) {
+        sessionStorage.setItem(cartKey, String(now));
+        window.posthog.capture('add_to_cart', {
+          product_id: product?.id,
+          product_title: product?.title || product?.titleKa,
+          price: product?.price,
+          quantity,
+          selected_option: selectedOption,
+        });
+      }
     }
 
     setCart(prev => {
@@ -2233,6 +2245,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setUser(adminUser);
       localStorage.setItem('dbuy_user', JSON.stringify(adminUser));
       setIsAuthModalOpen(false);
+      if (typeof window !== 'undefined' && window.posthog) {
+        window.posthog.identify(adminUser.email, {
+          email: adminUser.email,
+          name: adminUser.name,
+          role: adminUser.role,
+        });
+      }
       addToast(t('toasts.adminWelcome'), 'success');
       return true;
     }
@@ -2269,6 +2288,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setUser(loggedUser);
     localStorage.setItem('dbuy_user', JSON.stringify(loggedUser));
     setIsAuthModalOpen(false);
+    if (typeof window !== 'undefined' && window.posthog) {
+      window.posthog.identify(loggedUser.email, {
+        email: loggedUser.email,
+        name: loggedUser.name,
+        role: loggedUser.role,
+      });
+    }
     addToast(t('toasts.welcome', { name: loggedUser.name }), 'success');
     return true;
   };
@@ -2563,6 +2589,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const logoutUser = () => {
+    if (typeof window !== 'undefined' && window.posthog) {
+      window.posthog.reset();
+    }
     setUser(defaultUser);
     localStorage.removeItem('dbuy_user');
     localStorage.removeItem('dbuy_guest_cart');
