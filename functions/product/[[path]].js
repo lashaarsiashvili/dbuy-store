@@ -1,65 +1,64 @@
 /**
  * Cloudflare Pages Function: /product/[[path]].js
  * 
- * CRITICAL SAFETY NOTICE:
- * - This function is strictly READ-ONLY. It queries the Cloudflare D1 database and transforms HTML responses.
- * - It NEVER modifies, overwrites, drops, or deletes any products, database records, or storage assets.
- * - If a product image is missing in the database, it strictly omits the og:image tag without fallback/placeholders.
+ * STRICT RULES & SAFETY:
+ * - Read-only Cloudflare D1 query. Never modifies, updates, or deletes database records.
+ * - No fallback images: if image is missing in database, og:image and twitter:image are strictly omitted.
+ * - Bot interception for social sharing previews; regular visitors pass through to Vite SPA.
  */
 
 export async function onRequest(context) {
   const { request, env, params } = context;
   const url = new URL(request.url);
-  
-  // 1. Extract product identifier from URL parameter (e.g. /product/prod-123 -> params.path[0] is 'prod-123')
+
+  // 1. Check User-Agent against a comprehensive bot regex for social scrapers
+  const userAgent = request.headers.get('user-agent') || '';
+  const botRegex = /facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|applebot|pinterest|embedly|quora link preview|showyoubot|outbrain|vkShare|w3c_validator|slackbot/i;
+  const isBot = botRegex.test(userAgent);
+
+  // 2. Extract product identifier from URL path (e.g. /product/prod-123 -> params.path[0])
   const pathSegments = params.path || [];
   const productId = pathSegments[0];
 
-  // 2. Detect social media scraper bots based on User-Agent
-  const userAgent = request.headers.get('user-agent') || '';
-  const botRegex = /facebookexternalhit|twitterbot|linkedinbot|whatsapp|telegrambot|discordbot|applebot|pinterest|embedly|quora link preview|showyoubot|outbrain|vkShare|w3c_validator/i;
-  const isBot = botRegex.test(userAgent);
-
-  // If regular user or no product ID, pass through immediately to Vite SPA
+  // If regular user (not a bot) or productId is missing, pass through immediately to SPA
   if (!isBot || !productId) {
     return context.next();
   }
 
-  // 3. Connect directly to Cloudflare D1 database binding (`env.DB`)
+  // 3. Query Cloudflare D1 database in strict READ-ONLY mode
   let product = null;
   try {
     if (env.DB) {
-      // Read-only SQL query against D1 database
       const stmt = env.DB.prepare('SELECT * FROM products WHERE id = ? OR slug = ? LIMIT 1');
       const result = await stmt.bind(productId, productId).first();
       
       if (result) {
         product = {
-          id: result.id,
-          name: result.name || result.title,
-          description: result.description,
-          price: result.price,
-          image: result.image_url || result.image || result.imageUrl
+          name: result.name || result.title || 'Product',
+          description: result.description || '',
+          image: result.image_url || result.image || result.imageUrl || null
         };
       }
     }
   } catch (err) {
-    console.error('D1 Database query error for Open Graph bot request:', err);
+    console.error('D1 database query error during bot intercept:', err);
   }
 
-  // If product not found in D1, pass through original response
+  // If product not found, pass through original response
   if (!product) {
     return context.next();
   }
 
-  // Prepare metadata values
+  // 4. Prepare metadata values
   const siteTitle = "DBUY Store";
-  const productTitle = product.name ? `${product.name} - ${siteTitle}` : siteTitle;
-  const productDescription = product.description 
-    ? product.description.replace(/<[^>]*>?/gm, '').substring(0, 160) 
-    : `Check out ${product.name || 'this product'} on ${siteTitle}.`;
+  const productTitle = `${product.name} - ${siteTitle}`;
+  const cleanDescription = product.description
+    ? product.description.replace(/<[^>]*>?/gm, '').substring(0, 160)
+    : `Check out ${product.name} on ${siteTitle}.`;
   
-  // Construct absolute image URL if available
+  const productUrl = url.toString();
+
+  // Validate and format image URL without fallback placeholders
   let productImageUrl = null;
   if (product.image && typeof product.image === 'string' && product.image.trim() !== '') {
     const rawImg = product.image.trim();
@@ -70,42 +69,39 @@ export async function onRequest(context) {
     }
   }
 
-  const productUrl = url.toString();
-
-  // 4. Fetch the base response (index.html) from Cloudflare Pages assets
+  // 5. Fetch the base HTML response from Cloudflare Pages
   const response = await context.next();
 
-  // 5. Use HTMLRewriter to bulletproof metadata injection:
-  // - Remove existing conflicting meta tags to avoid duplication
-  // - Append fresh, dynamic Open Graph and Twitter card tags inside <head>
-  let tagsToAppend = `
+  // 6. Build dynamic meta tags
+  let dynamicTags = `
+    <title>${escapeHtml(productTitle)}</title>
     <meta property="og:title" content="${escapeHtml(productTitle)}" />
-    <meta property="og:description" content="${escapeHtml(productDescription)}" />
+    <meta property="og:description" content="${escapeHtml(cleanDescription)}" />
     <meta property="og:url" content="${escapeHtml(productUrl)}" />
+    <meta property="og:type" content="product" />
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(productTitle)}" />
-    <meta name="twitter:description" content="${escapeHtml(productDescription)}" />
+    <meta name="twitter:description" content="${escapeHtml(cleanDescription)}" />
   `;
 
-  // If product image is present, add image tags. If missing, strictly omitted without fallback placeholders.
+  // Append image tags ONLY if image exists in DB. Strictly NO fallback images.
   if (productImageUrl) {
-    tagsToAppend += `
+    dynamicTags += `
       <meta property="og:image" content="${escapeHtml(productImageUrl)}" />
       <meta name="twitter:image" content="${escapeHtml(productImageUrl)}" />
     `;
   }
 
+  // 7. Use HTMLRewriter to remove existing tags and append new ones
   return new HTMLRewriter()
-    // Remove existing og: and twitter: meta tags to prevent duplicates
     .on('meta[property^="og:"], meta[name^="twitter:"], meta[property^="twitter:"], title', {
       element(element) {
         element.remove();
       }
     })
-    // Append the dynamic Open Graph and Twitter tags right inside <head>
     .on('head', {
       element(element) {
-        element.append(`<title>${escapeHtml(productTitle)}</title>\n${tagsToAppend}`, { html: true });
+        element.append(dynamicTags, { html: true });
       }
     })
     .transform(response);
