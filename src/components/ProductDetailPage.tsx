@@ -8,6 +8,7 @@ import { ProductPaymentModule } from './ProductPaymentModule';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
 import { analytics } from './AdminAnalyticsDashboard';
 import { ProductReviewsSection } from './ProductReviewsSection';
+import { ProductSEO, ProductSEOData } from '@hooks/useDynamicMetaTags';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { 
   Star, 
@@ -162,6 +163,16 @@ export const ProductDetailPage: React.FC = () => {
   const productUrl = getProductUrl(product.id);
 
   const cleanMainImg = getProductImage(product);
+
+  const productSEOData: ProductSEOData = {
+    id: product.id,
+    title: displayTitle,
+    description: displayDesc,
+    imageUrl: cleanMainImg,
+    price: product.price,
+    currency: 'GEL',
+    inStock: (product.stock ?? 1) > 0,
+  };
 
   // Helper to parse any raw image data (string, JSON array, or array of strings)
   const parseImageArray = (raw: any): string[] => {
@@ -469,6 +480,9 @@ export const ProductDetailPage: React.FC = () => {
 
   return (
     <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-10 space-y-12">
+      {/* Dynamic SEO & Schema.org Structured Data */}
+      <ProductSEO product={productSEOData} />
+
       {/* Top Breadcrumb & Share Actions */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-100 dark:border-slate-800">
         <nav className="flex items-center space-x-2 text-xs font-medium text-slate-500 dark:text-slate-400 overflow-x-auto w-full sm:w-auto py-1">

@@ -15,9 +15,13 @@
     "moduleDetection": "force",
     "allowJs": true,
     "jsx": "react-jsx",
+    "baseUrl": ".",
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@hooks/*": [
+        "src/hooks/*"
       ]
     },
     "allowImportingTsExtensions": true,
