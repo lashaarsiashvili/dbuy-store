@@ -132,8 +132,8 @@ export const fetchPostHogAnalytics = async (
       });
 
       if (dailyRes.ok && refRes.ok) {
-        const dailyJson = await dailyRes.json();
-        const refJson = await refRes.json();
+        const dailyJson: any = await dailyRes.json();
+        const refJson: any = await refRes.json();
 
         const dailyVisitors: PostHogDailyVisitor[] = (dailyJson.results || []).map((row: any[]) => ({
           date: String(row[0] || '').slice(0, 10),
