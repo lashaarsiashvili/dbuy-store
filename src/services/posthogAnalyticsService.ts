@@ -31,8 +31,8 @@ export interface PostHogFunnelMetrics {
   productViews: number;
   addToCartClicks: number;
   completedOrders: number;
-  cartAbandonmentRate: number; // percentage e.g. 64.2%
-  checkoutConversionRate: number; // percentage e.g. 3.8%
+  cartAbandonmentRate: number; // percentage e.g. 100% or actual
+  checkoutConversionRate: number; // percentage
 }
 
 export interface PostHogAnalyticsData {
@@ -82,7 +82,7 @@ export const savePostHogConfig = (config: Partial<PostHogConfig>): void => {
 };
 
 /**
- * Fetch PostHog Analytics Data from API endpoint or compute rich fallback from store context
+ * Fetch PostHog Analytics Data from API endpoint or compute stable fallback from store context
  */
 export const fetchPostHogAnalytics = async (
   timeRangeDays: number = 7,
@@ -90,11 +90,11 @@ export const fetchPostHogAnalytics = async (
   completedOrdersCount: number = 0
 ): Promise<PostHogAnalyticsData> => {
   const cfg = getPostHogConfig();
-  const isConfigured = Boolean(cfg.personalApiKey && cfg.projectId);
+  // Must have Personal API Key starting with phx_ and a projectId
+  const hasValidPersonalKey = Boolean(cfg.personalApiKey && cfg.personalApiKey.startsWith('phx_') && cfg.projectId);
 
-  if (isConfigured) {
+  if (hasValidPersonalKey) {
     try {
-      // Execute PostHog HogQL / Query API call if personalApiKey & projectId are provided
       const cleanHost = cfg.hostUrl.replace(/\/$/, '');
       const queryUrl = `${cleanHost}/api/projects/${encodeURIComponent(cfg.projectId)}/query/`;
       
@@ -154,12 +154,11 @@ export const fetchPostHogAnalytics = async (
           };
         });
 
-        // Top products calculation from productsList
         const topProducts = productsList
           .map(p => ({
             productId: p.id,
             productTitle: p.title || p.titleKa || 'Product',
-            views: Number(p.views) || Math.floor(Math.random() * 40) + 10,
+            views: Number(p.views) || 15,
             price: p.price,
           }))
           .sort((a, b) => b.views - a.views)
@@ -167,9 +166,10 @@ export const fetchPostHogAnalytics = async (
 
         const totalViews = dailyVisitors.reduce((acc, d) => acc + d.pageviews, 0) || 120;
         const totalVisits = dailyVisitors.reduce((acc, d) => acc + d.visitors, 0) || 45;
-        const addCart = Math.round(totalViews * 0.18) + 12;
-        const orders = Math.max(completedOrdersCount, Math.round(addCart * 0.32));
-        const cartAbandonment = addCart > 0 ? Math.round(((addCart - orders) / addCart) * 100) : 0;
+        const addCart = Math.round(totalViews * 0.18) + 5;
+        // Strictly use actual completedOrdersCount from successful checkout webhooks/orders
+        const orders = Math.max(0, completedOrdersCount);
+        const cartAbandonment = addCart > 0 ? Math.round(((addCart - orders) / addCart) * 100) : 100;
         const conversion = totalVisits > 0 ? Math.round((orders / totalVisits) * 1000) / 10 : 0;
 
         return {
@@ -190,15 +190,15 @@ export const fetchPostHogAnalytics = async (
         };
       }
     } catch (err) {
-      console.warn('PostHog API fetch failed, utilizing enriched analytics fallback:', err);
+      console.warn('PostHog API fetch failed, utilizing stable fallback analytics:', err);
     }
   }
 
-  // Graceful Enriched Fallback using actual site catalog and orders
-  return generateEnrichedFallbackAnalytics(cfg, timeRangeDays, productsList, completedOrdersCount);
+  // Graceful Stable Fallback (prevents flapping/random recalculation on refresh)
+  return generateStableFallbackAnalytics(cfg, timeRangeDays, productsList, completedOrdersCount);
 };
 
-const generateEnrichedFallbackAnalytics = (
+const generateStableFallbackAnalytics = (
   cfg: PostHogConfig,
   timeRangeDays: number,
   productsList: Product[],
@@ -207,16 +207,17 @@ const generateEnrichedFallbackAnalytics = (
   const dailyVisitors: PostHogDailyVisitor[] = [];
   const now = new Date();
 
+  // Use a deterministic pseudo-random based on date string so data doesn't flap on every refresh
   for (let i = timeRangeDays - 1; i >= 0; i--) {
     const d = new Date(now);
     d.setDate(d.getDate() - i);
     const dateStr = d.toISOString().slice(0, 10);
-    const dayOfWeek = d.getDay();
-    const isWeekend = dayOfWeek === 0 || dayOfWeek === 6;
-
-    const baseVisits = isWeekend ? 38 + Math.floor(Math.random() * 15) : 24 + Math.floor(Math.random() * 12);
-    const pageviews = Math.round(baseVisits * (2.8 + Math.random() * 0.8));
-    const addTosCart = Math.round(baseVisits * 0.28);
+    
+    // Stable pseudo-random based on date character codes
+    const seed = dateStr.split('').reduce((acc, char) => acc + char.charCodeAt(0), 0);
+    const baseVisits = 25 + (seed % 15);
+    const pageviews = baseVisits * 3 + (seed % 8);
+    const addTosCart = Math.round(baseVisits * 0.25);
 
     dailyVisitors.push({
       date: dateStr,
@@ -238,7 +239,7 @@ const generateEnrichedFallbackAnalytics = (
     .map(p => ({
       productId: p.id,
       productTitle: p.title || p.titleKa || 'Product',
-      views: Number(p.views) || (p.isDeal ? 142 : Math.floor(Math.random() * 50) + 15),
+      views: Number(p.views) || (p.isDeal ? 142 : 25),
       price: p.price,
     }))
     .sort((a, b) => b.views - a.views)
@@ -247,13 +248,15 @@ const generateEnrichedFallbackAnalytics = (
   const totalVisits = dailyVisitors.reduce((acc, d) => acc + d.visitors, 0);
   const totalViews = dailyVisitors.reduce((acc, d) => acc + d.pageviews, 0);
   const totalAddCart = dailyVisitors.reduce((acc, d) => acc + d.addTosCart, 0);
-  const totalOrders = Math.max(completedOrdersCount, Math.round(totalAddCart * 0.35));
-  const cartAbandonment = totalAddCart > 0 ? Math.round(((totalAddCart - totalOrders) / totalAddCart) * 100) : 62;
-  const conversion = totalVisits > 0 ? Math.round((totalOrders / totalVisits) * 1000) / 10 : 3.4;
+  
+  // STRICT FIX: Completed orders must reflect actual verified checkout orders (completedOrdersCount), NEVER fake estimated orders from cart clicks!
+  const totalOrders = Math.max(0, completedOrdersCount);
+  const cartAbandonment = totalAddCart > 0 ? Math.round(((totalAddCart - totalOrders) / totalAddCart) * 100) : 100;
+  const conversion = totalVisits > 0 ? Math.round((totalOrders / totalVisits) * 1000) / 10 : 0.0;
 
   return {
     config: cfg,
-    isConfigured: Boolean(cfg.personalApiKey && cfg.projectId),
+    isConfigured: Boolean(cfg.personalApiKey && cfg.personalApiKey.startsWith('phx_') && cfg.projectId),
     dailyVisitors,
     trafficSources,
     topProducts: sortedProds,
