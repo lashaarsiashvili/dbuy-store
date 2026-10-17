@@ -590,6 +590,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             const slug = p.customSlug || p.slug || String(p.id);
             const badge = p.badge || '';
 
+            console.log('[D1 WRITE QUERY EXECUTING /api/store/products]:', { id: String(p.id), title: name, price });
             await db.prepare(`
               INSERT INTO products (id, slug, title, name, title_ka, name_ka, description, description_en, description_ka, features, features_en, features_ka, price, orig_price, original_price, image, image_path, images, images_json, category, stock, badge, videos, variants, updated_at)
               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -624,8 +625,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               primaryImage, primaryImage, imagesStr, imagesStr, category, stock, badge,
               videosStr, variantsStr
             ).run();
-          } catch (relationalDbErr) {
-            console.error('Relational DB product persistence error:', relationalDbErr);
+          } catch (relationalDbErr: any) {
+            console.error('[D1 WRITE QUERY ERROR]: Relational DB product persistence error:', relationalDbErr);
+            return jsonResponse({
+              success: false,
+              error: `D1 Query Error: ${relationalDbErr?.message || String(relationalDbErr)}`,
+              stack: relationalDbErr?.stack
+            }, 500);
           }
         }
 

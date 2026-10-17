@@ -1533,11 +1533,15 @@ export const AdminDashboard: React.FC = () => {
         localStorage.getItem('admin_slug') || 
         'dashboard';
 
+      console.log('PAYLOAD:', productPayload);
+      console.log('[BEARER TOKEN CHECK]: Bearer Token Header:', `Bearer ${adminSlug}`);
+
       if (editingProduct) {
         success = await updateProduct(productPayload);
       } else {
         success = await addProduct(productPayload);
       }
+      console.log('[PRODUCT SAVE RESULT]: success =', success);
     } catch (err: any) {
       console.error('Error in handleSaveProduct:', err);
       alert('Save failed: ' + err.message);

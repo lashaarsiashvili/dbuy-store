@@ -1074,56 +1074,99 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let apiSuccess = false;
 
     // 1. Authoritative server backend persistence (immediate disk, memory & source backup)
-    // The server converts raw base64 images into physical persistent file URLs (e.g. /uploads/prod-XYZ.jpg)
     try {
       const adminSlug = adminSecretSlug || localStorage.getItem('dbuy_admin_secret_slug') || 'dashboard';
+      const headers = { 
+        'Content-Type': 'application/json',
+        'X-Admin-Slug': adminSlug,
+        'Authorization': `Bearer ${adminSlug}`,
+        'x-admin-key': adminSlug
+      };
+
+      console.log('PAYLOAD /api/store/products:', { count: sanitizedProducts.length, adminSlug, sample: sanitizedProducts[0]?.title });
+      
       const res = await fetch('/api/store/products', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Admin-Slug': adminSlug,
-          'Authorization': `Bearer ${adminSlug}`,
-          'x-admin-key': adminSlug
-        },
+        headers,
         body: JSON.stringify({ products: sanitizedProducts }),
       });
-      if (res.ok) {
-        const json: any = await res.json();
-        if (json && json.lastUpdated) {
+
+      console.log('RESPONSE STATUS /api/store/products:', res.status);
+      const rawText = await res.text();
+      console.log('RESPONSE BODY /api/store/products:', rawText);
+
+      let json: any = null;
+      try {
+        json = JSON.parse(rawText);
+      } catch (parseErr) {
+        if (rawText.trim().toLowerCase().startsWith('<!doctype') || rawText.trim().toLowerCase().startsWith('<html')) {
+          console.error('[HTML/JSON MISMATCH]: /api/store/products returned HTML (index.html) instead of JSON! Endpoint might be misrouted.', rawText);
+          addToast(language === 'ka' ? 'API მარშრუტის შეცდომა (სერვერმა დააბრუნა HTML JSON-ის სანაცვლოდ)' : 'API Routing Error: Server returned HTML instead of JSON', 'error');
+        } else {
+          console.error('[JSON PARSE ERROR]: Could not parse /api/store/products response:', rawText);
+        }
+      }
+
+      if (res.ok && json && json.success) {
+        if (json.lastUpdated) {
           lastSyncTimestampRef.current = json.lastUpdated;
         }
-        if (json && Array.isArray(json.products) && json.products.length > 0) {
+        if (Array.isArray(json.products) && json.products.length > 0) {
           finalProducts = json.products;
         }
         apiSuccess = true;
       } else {
-        const json: any = await res.json().catch(() => ({}));
-        console.error('Failed to save products to /api/store/products:', res.status, json);
+        console.error('Failed to save products to /api/store/products:', res.status, json || rawText);
+        if (json?.error) {
+          addToast(`D1 /api/store/products: ${json.error}`, 'error');
+        }
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error syncing products to server:', err);
     }
 
     // 1b. Persist to /api/products (Cloudflare Worker KV / D1 compatibility)
     try {
       const adminSlug = adminSecretSlug || localStorage.getItem('dbuy_admin_secret_slug') || 'dashboard';
+      const headers2 = { 
+        'Content-Type': 'application/json',
+        'X-Admin-Slug': adminSlug,
+        'Authorization': `Bearer ${adminSlug}`,
+        'x-admin-key': adminSlug
+      };
+
+      console.log('PAYLOAD /api/products:', { count: finalProducts.length, adminSlug });
+
       const res2 = await fetch('/api/products', {
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Admin-Slug': adminSlug,
-          'Authorization': `Bearer ${adminSlug}`,
-          'x-admin-key': adminSlug
-        },
+        headers: headers2,
         body: JSON.stringify(finalProducts),
       });
-      if (res2.ok) {
+
+      console.log('RESPONSE STATUS /api/products:', res2.status);
+      const rawText2 = await res2.text();
+      console.log('RESPONSE BODY /api/products:', rawText2);
+
+      let json2: any = null;
+      try {
+        json2 = JSON.parse(rawText2);
+      } catch (parseErr) {
+        if (rawText2.trim().toLowerCase().startsWith('<!doctype') || rawText2.trim().toLowerCase().startsWith('<html')) {
+          console.error('[HTML/JSON MISMATCH]: /api/products returned HTML (index.html) instead of JSON!', rawText2);
+        } else {
+          console.error('[JSON PARSE ERROR]: Could not parse /api/products response:', rawText2);
+        }
+      }
+
+      if (res2.ok && json2 && json2.success) {
         apiSuccess = true;
       } else {
-        const json2: any = await res2.json().catch(() => ({}));
-        console.error('Failed to save products to /api/products:', res2.status, json2);
+        console.error('Failed to save products to /api/products:', res2.status, json2 || rawText2);
+        if (json2?.error) {
+          addToast(`D1 /api/products: ${json2.error}`, 'error');
+        }
       }
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Could not sync to /api/products:', e);
     }
 

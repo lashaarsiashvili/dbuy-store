@@ -154,6 +154,7 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
       const isPublishedGlobally = item.isPublishedGlobally ? 1 : 0;
       const publishedAt = item.publishedAt || null;
 
+      console.log('[D1 WRITE QUERY EXECUTING /api/products]:', { id, title, price });
       await env.DB.prepare(`
         INSERT INTO products (id, slug, title, name, title_ka, name_ka, description, description_ka, price, orig_price, original_price, currency, image, image_path, images, images_json, category, stock, badge, is_active, is_published_globally, published_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
@@ -201,7 +202,7 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
   } catch (error: any) {
     console.error('[Cloudflare D1 /api/products POST] Query error:', error);
     return new Response(
-      JSON.stringify({ success: false, error: error?.message || 'Failed to save products in D1' }),
+      JSON.stringify({ success: false, error: error?.message || 'Failed to save products in D1', stack: error?.stack }),
       { status: 500, headers: CORS_HEADERS }
     );
   }
