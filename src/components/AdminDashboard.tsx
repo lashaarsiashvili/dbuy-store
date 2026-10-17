@@ -199,8 +199,8 @@ export const AdminDashboard: React.FC = () => {
   const fetchSmtpAndMessages = async () => {
     try {
       const [msgRes, smtpRes] = await Promise.all([
-        smartApiFetch('/api/contact/messages').then(r => r.json()),
-        smartApiFetch('/api/admin/smtp').then(r => r.json())
+        smartApiFetch('/api/contact/messages').then(r => r.json() as Promise<any>),
+        smartApiFetch('/api/admin/smtp').then(r => r.json() as Promise<any>)
       ]);
       if (msgRes?.success) setContactMessages(msgRes.messages || []);
       if (smtpRes?.success) {
@@ -231,7 +231,7 @@ export const AdminDashboard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id, status }),
       });
-      const data = await res.json();
+      const data: any = await res.json();
       if (data.success) {
         setContactMessages(data.messages || []);
         addToast(isKa ? 'სტატუსი განახლდა' : 'Status updated', 'success');
@@ -248,7 +248,7 @@ export const AdminDashboard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id }),
       });
-      const data = await res.json();
+      const data: any = await res.json();
       if (data.success) {
         setContactMessages(data.messages || []);
         if (selectedMessage?.id === id) setSelectedMessage(null);
@@ -325,7 +325,7 @@ export const AdminDashboard: React.FC = () => {
       try {
         const checkRes = await smartApiFetch('/api/admin/smtp');
         if (checkRes.ok) {
-          const checkData = await checkRes.json();
+          const checkData: any = await checkRes.json();
           if (checkData.hasPass) {
             setHasServerPass(true);
             setSmtpTestResult({
@@ -366,7 +366,7 @@ export const AdminDashboard: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: target }),
       });
-      const data = await res.json();
+      const data: any = await res.json();
       if (data.success) {
         addToast(
           isKa 
@@ -1167,7 +1167,7 @@ export const AdminDashboard: React.FC = () => {
         throw new Error(`Vision AI request failed with status ${res.status}`);
       }
 
-      const json = await res.json();
+      const json: any = await res.json();
       if (!json.success && !json.data) {
         throw new Error(json.error || 'Failed to generate product details from image');
       }
@@ -1624,7 +1624,7 @@ export const AdminDashboard: React.FC = () => {
         const errorText = await res.text();
         throw new Error(errorText || 'Server responded with status ' + res.status);
       }
-      const json = await res.json();
+      const json: any = await res.json();
       if (json && json.success === false) {
         throw new Error(json.error || 'Response indicated failure');
       }

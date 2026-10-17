@@ -266,7 +266,7 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
                 paymentSource: 'google_pay',
               }),
             });
-            const orderData = await orderRes.json();
+            const orderData: any = await orderRes.json();
             if (!orderData.orderId && !orderData.id) throw new Error(orderData.error || 'Failed to create PayPal order');
             const orderId = orderData.orderId || orderData.id;
 
@@ -281,7 +281,7 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
             });
-            const captureResult = await captureRes.json();
+            const captureResult: any = await captureRes.json();
 
             const payerInfo = paymentData.paymentMethodData?.info?.billingAddress || {};
             const payer = {
@@ -464,7 +464,7 @@ export async function startPayPalV6ApplePayCheckout(options: ProcessPaymentOptio
             paymentSource: 'apple_pay',
           }),
         });
-        const orderData = await orderRes.json();
+        const orderData: any = await orderRes.json();
         if (!orderData.orderId && !orderData.id) throw new Error(orderData.error || 'Failed to create PayPal order');
         const orderId = orderData.orderId || orderData.id;
 
@@ -484,7 +484,7 @@ export async function startPayPalV6ApplePayCheckout(options: ProcessPaymentOptio
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         });
-        const captureResult = await captureRes.json();
+        const captureResult: any = await captureRes.json();
 
         const shipping = event.payment.shippingContact;
         const billing = event.payment.billingContact;

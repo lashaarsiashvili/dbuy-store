@@ -272,7 +272,7 @@ export async function generateProductAdCopy(params: GenerateAdCopyParams): Promi
     clearTimeout(timeoutId);
 
     if (response.ok) {
-      const json = await response.json();
+      const json: any = await response.json();
       if (json && json.success && json.data) {
         const d = json.data;
         return {

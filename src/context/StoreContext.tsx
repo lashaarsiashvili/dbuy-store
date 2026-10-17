@@ -857,7 +857,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         body: JSON.stringify({ billboards: slides, billboardIntervalSeconds: currentInterval }),
       });
       if (res.ok) {
-        const json = await res.json();
+        const json: any = await res.json();
         if (json && Array.isArray(json.billboards)) {
           finalSlides = json.billboards;
         }
@@ -999,7 +999,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
       })
         .then(res => res.json())
-        .then(data => {
+        .then((data: any) => {
           if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
             setProducts(data.products);
             try {
@@ -1061,7 +1061,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         body: JSON.stringify({ products: sanitizedProducts }),
       });
       if (res.ok) {
-        const json = await res.json();
+        const json: any = await res.json();
         if (json && json.lastUpdated) {
           lastSyncTimestampRef.current = json.lastUpdated;
         }
@@ -1290,7 +1290,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         headers: { 'Content-Type': 'application/json' },
       }).then(async res => {
         if (res.ok) {
-          const json = await res.json();
+          const json: any = await res.json();
           if (json && json.success && typeof json.views === 'number') {
             setProducts(prev =>
               prev.map(p => (p.id === productId ? { ...p, views: json.views } : p))
@@ -1869,7 +1869,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         },
       });
       if (!res.ok) return;
-      const json = await res.json();
+      const json: any = await res.json();
       if (!json.success) return;
 
       // Server indicates no modifications since last sync
@@ -1951,7 +1951,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ remoteUrl }),
       });
-      const json = await res.json();
+      const json: any = await res.json();
       if (json.success && json.data) {
         const d = json.data;
         if (Array.isArray(d.products)) {
@@ -2097,7 +2097,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ products }),
       });
-      const json = await res.json();
+      const json: any = await res.json();
       if (json.success) {
         addToast(
           language === 'ka'
@@ -2210,8 +2210,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       body: JSON.stringify({ email: trimmed }),
     })
       .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.registeredUsers)) {
+      .then((data: any) => {
+        if (data && data.success && Array.isArray(data.registeredUsers)) {
           setRegisteredUsers(data.registeredUsers);
         }
       })
@@ -2436,8 +2436,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }),
     })
       .then(res => res.json())
-      .then(data => {
-        if (data.success && Array.isArray(data.registeredUsers)) {
+      .then((data: any) => {
+        if (data && data.success && Array.isArray(data.registeredUsers)) {
           setRegisteredUsers(data.registeredUsers);
         }
       })
@@ -2566,7 +2566,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }),
       });
 
-      const json = await res.json();
+      const json: any = await res.json();
       if (!res.ok || !json.success) {
         addToast(json.error || (language === 'ka' ? 'ძველი პაროლი არასწორია' : 'Current password is incorrect'), 'error');
         return false;

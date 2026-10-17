@@ -283,7 +283,7 @@ export async function fetchHistoricalCloudflareAnalytics(options: {
       });
 
       if (res.ok) {
-        const data = await res.json();
+        const data: any = await res.json();
         if (data.success && Array.isArray(data.dailyTrend) && data.dailyTrend.length > 0 && data.totalRequests > 0) {
           const enriched: CloudflareHistoricalAnalytics = {
             ...data,
@@ -304,7 +304,7 @@ export async function fetchHistoricalCloudflareAnalytics(options: {
       const getUrl = `${endpoint}?days=${encodeURIComponent(days)}&forceRefresh=${forceRefresh ? 'true' : 'false'}`;
       const resGet = await fetch(getUrl);
       if (resGet.ok) {
-        const data = await resGet.json();
+        const data: any = await resGet.json();
         if (data.success && Array.isArray(data.dailyTrend) && data.dailyTrend.length > 0 && data.totalRequests > 0) {
           const enriched: CloudflareHistoricalAnalytics = {
             ...data,

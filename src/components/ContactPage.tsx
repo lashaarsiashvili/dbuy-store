@@ -125,7 +125,7 @@ export const ContactPage: React.FC = () => {
       });
 
       if (res.ok) {
-        const data = await res.json().catch(() => null);
+        const data: any = await res.json().catch(() => null);
         if (data && data.success) {
           isSuccess = true;
         }

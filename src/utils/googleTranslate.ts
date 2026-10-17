@@ -64,7 +64,7 @@ export function triggerGoogleTranslate(lang: string, fallbackReload = false) {
   setGoogleTranslateCookie(lang);
 
   // 2. Dispatch change event to the Google Translate combo box if present
-  const selectElem = document.querySelector<HTMLSelectElement>('.goog-te-combo');
+  const selectElem = (document.querySelector('.goog-te-combo') as unknown) as HTMLSelectElement | null;
   if (selectElem) {
     selectElem.value = lang;
     selectElem.dispatchEvent(new Event('change', { bubbles: true }));
@@ -73,7 +73,7 @@ export function triggerGoogleTranslate(lang: string, fallbackReload = false) {
     let attempts = 0;
     const interval = setInterval(() => {
       attempts++;
-      const el = document.querySelector<HTMLSelectElement>('.goog-te-combo');
+      const el = (document.querySelector('.goog-te-combo') as unknown) as HTMLSelectElement | null;
       if (el) {
         clearInterval(interval);
         el.value = lang;

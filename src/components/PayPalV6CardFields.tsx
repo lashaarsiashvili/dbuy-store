@@ -140,7 +140,7 @@ export const PayPalV6CardFields: React.FC<PayPalV6CardFieldsProps> = ({
         }),
       });
 
-      const orderData = await createRes.json();
+      const orderData: any = await createRes.json();
       const orderId = orderData.id || orderData.orderId;
       if (!orderId) {
         throw new Error(orderData.error || "Failed to create PayPal order");

@@ -56,7 +56,7 @@ const GoogleSignInButton: React.FC<{
             headers: { Authorization: `Bearer ${tokenResponse.access_token}` },
           },
         );
-        const data = await res.json();
+        const data: any = await res.json();
 
         if (data.email) {
           onComplete(data.email, data.name || "Google User", data.picture);
@@ -447,7 +447,7 @@ export const AuthModal: React.FC = () => {
         }),
       });
 
-      const data = await response.json();
+      const data: any = await response.json();
       if (response.ok && data.success) {
         if (data.tempPassword) {
           resetUserPassword(cleanEmail, data.tempPassword);

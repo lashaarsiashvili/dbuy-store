@@ -103,7 +103,7 @@ export async function fetchLiveGeoLocation(): Promise<{ country: string; code: s
     clearTimeout(timeoutId);
 
     if (res.ok) {
-      const data = await res.json();
+      const data: any = await res.json();
       const code = data.country || 'GE';
       const countryNames: Record<string, string> = {
         GE: 'Georgia',

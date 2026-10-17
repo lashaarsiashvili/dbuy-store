@@ -34,7 +34,7 @@ async function sendSmtpsMail(options: {
 }) {
   const socket = connect(
     { hostname: options.host, port: options.port },
-    { secureTransport: 'on' }
+    { secureTransport: 'on', allowHalfOpen: false }
   );
 
   const writer = socket.writable.getWriter();

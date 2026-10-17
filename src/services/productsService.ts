@@ -16,7 +16,7 @@ export const ProductsManager = {
       const response = await fetch(API_URL, { credentials: "omit" });
       if (!response.ok) throw new Error("Failed to fetch products from Cloudflare");
       
-      const products = await response.json();
+      const products: any = await response.json();
       return Array.isArray(products) ? products : (products && Array.isArray(products.products) ? products.products : []);
     } catch (error) {
       console.error("Cloudflare KV-დან პროდუქტების ჩატვირთვის შეცდომა:", error);

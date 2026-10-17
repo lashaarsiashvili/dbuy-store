@@ -2169,7 +2169,7 @@ app.post('/api/store/pull-remote', async (req, res) => {
       throw new Error(`Remote returned HTTP ${response.status} ${response.statusText}`);
     }
 
-    const json = await response.json();
+    const json: any = await response.json();
     if (!json.success || !json.data) {
       throw new Error('Remote did not return standard store sync payload');
     }
@@ -2825,12 +2825,12 @@ app.post('/api/generate', async (req, res) => {
         const dataPath = path.join(process.cwd(), 'data', relativePath);
         if (fs.existsSync(localPath)) {
           const buf = fs.readFileSync(localPath);
-          base64Data = buf.toString('base64');
+          base64Data = Buffer.from(buf).toString('base64');
           if (relativePath.endsWith('.png')) mimeType = 'image/png';
           else if (relativePath.endsWith('.webp')) mimeType = 'image/webp';
         } else if (fs.existsSync(dataPath)) {
           const buf = fs.readFileSync(dataPath);
-          base64Data = buf.toString('base64');
+          base64Data = Buffer.from(buf).toString('base64');
           if (relativePath.endsWith('.png')) mimeType = 'image/png';
           else if (relativePath.endsWith('.webp')) mimeType = 'image/webp';
         } else if (uploadsMap[targetImage]) {

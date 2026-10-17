@@ -191,7 +191,7 @@ export const analytics = {
       if (CLOUDFLARE_WORKER_URL && !CLOUDFLARE_WORKER_URL.includes('your-worker-subdomain')) {
         const res = await fetch(`${CLOUDFLARE_WORKER_URL}/api/analytics`);
         if (res.ok) {
-          const data = await res.json();
+          const data: any = await res.json();
           return {
             todayVisits: Number(data.visits) || 0,
             checkoutAttempts: Number(data.checkouts) || 0,
