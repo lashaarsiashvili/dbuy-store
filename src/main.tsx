@@ -1,7 +1,16 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
+import posthog from 'posthog-js';
+import { PostHogProvider } from 'posthog-js/react';
 import App from './App.tsx';
 import './index.css';
+
+// Initialize PostHog client
+posthog.init('phc_xBZDpwYNkS5gaEPe5EAT3wcBSyeSryw9wYY3qnEsMErJ', {
+  api_host: 'https://app.posthog.com',
+  autocapture: true,
+  capture_pageview: false, // Manual SPA pageview handling via usePostHogPageView
+});
 
 // Global error resilience: absorb cross-origin script errors from 3rd party widgets/sandboxes
 if (typeof window !== 'undefined') {
@@ -54,7 +63,10 @@ if (typeof window !== 'undefined') {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <PostHogProvider client={posthog}>
+      <App />
+    </PostHogProvider>
   </StrictMode>,
 );
+
 

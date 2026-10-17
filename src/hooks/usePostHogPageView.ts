@@ -15,32 +15,27 @@ export function usePostHogPageView(
   activeProductId?: string | null,
   activeCategory?: string | null
 ) {
-  const isInitialized = useRef(false);
   const lastTrackedPath = useRef('');
 
-  // 1. Initialize PostHog client once on mount
+  // 1. Fallback initialization if not initialized globally
   useEffect(() => {
-    if (typeof window === 'undefined' || isInitialized.current) return;
+    if (typeof window === 'undefined') return;
 
-    const config = getPostHogConfig();
-    const clientApiKey = import.meta.env.VITE_POSTHOG_KEY || import.meta.env.VITE_POSTHOG_API_KEY || config.personalApiKey;
-    const host = config.hostUrl || 'https://us.i.posthog.com';
+    if (!posthog.__loaded) {
+      const config = getPostHogConfig();
+      const clientApiKey = import.meta.env.VITE_POSTHOG_KEY || import.meta.env.VITE_POSTHOG_API_KEY || 'phc_xBZDpwYNkS5gaEPe5EAT3wcBSyeSryw9wYY3qnEsMErJ';
+      const host = config.hostUrl || 'https://app.posthog.com';
 
-    if (clientApiKey) {
-      try {
-        posthog.init(clientApiKey, {
-          api_host: host,
-          capture_pageview: false, // Disabled default auto-capture to manually handle SPA client-side routes accurately
-          capture_pageleave: true,
-          autocapture: false,
-          disable_session_recording: false,
-          loaded: (ph) => {
-            isInitialized.current = true;
-          },
-        });
-        isInitialized.current = true;
-      } catch (err) {
-        console.warn('PostHog initialization warning:', err);
+      if (clientApiKey) {
+        try {
+          posthog.init(clientApiKey, {
+            api_host: host,
+            capture_pageview: false,
+            autocapture: true,
+          });
+        } catch (err) {
+          console.warn('PostHog fallback initialization warning:', err);
+        }
       }
     }
   }, []);
@@ -68,7 +63,7 @@ export function usePostHogPageView(
 
     // Capture $pageview event in PostHog
     try {
-      if (typeof posthog !== 'undefined' && isInitialized.current) {
+      if (typeof posthog !== 'undefined') {
         posthog.capture('$pageview', properties);
       }
     } catch (err) {
@@ -76,3 +71,4 @@ export function usePostHogPageView(
     }
   }, [currentPage, activeProductId, activeCategory]);
 }
+
