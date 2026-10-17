@@ -49,7 +49,7 @@ const DEFAULT_POSTHOG_HOST = 'https://us.i.posthog.com';
 
 export const getPostHogConfig = (): PostHogConfig => {
   let key = import.meta.env.VITE_POSTHOG_PERSONAL_API_KEY || '';
-  let proj = import.meta.env.VITE_POSTHOG_PROJECT_ID || '';
+  let proj = import.meta.env.VITE_POSTHOG_PROJECT_ID || '661027';
   let host = import.meta.env.VITE_POSTHOG_HOST || DEFAULT_POSTHOG_HOST;
 
   if (typeof window !== 'undefined') {

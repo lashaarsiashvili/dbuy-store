@@ -24,7 +24,7 @@ export function usePostHogPageView(
     if (!posthog.__loaded) {
       const config = getPostHogConfig();
       const clientApiKey = import.meta.env.VITE_POSTHOG_KEY || import.meta.env.VITE_POSTHOG_API_KEY || 'phc_xBZDpwYNkS5gaEPe5EAT3wcBSyeSryw9wYY3qnEsMErJ';
-      const host = config.hostUrl || 'https://app.posthog.com';
+      const host = config.hostUrl || 'https://us.i.posthog.com';
 
       if (clientApiKey) {
         try {

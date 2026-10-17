@@ -7,9 +7,9 @@ import './index.css';
 
 // Initialize PostHog client
 posthog.init('phc_xBZDpwYNkS5gaEPe5EAT3wcBSyeSryw9wYY3qnEsMErJ', {
-  api_host: 'https://app.posthog.com',
-  autocapture: true,
-  capture_pageview: false, // Manual SPA pageview handling via usePostHogPageView
+  api_host: 'https://us.i.posthog.com',
+  autocapture: true, // ავტომატური კლიკების და მოვლენების ტრეკინგი
+  capture_pageview: false // რადგან custom ნავიგაცია მაქვს, pageview-ს ხელით გავაგზავნი კომპონენტებიდან
 });
 
 // Global error resilience: absorb cross-origin script errors from 3rd party widgets/sandboxes
