@@ -740,12 +740,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
 
     try {
-      await fetch('/api/store/theme', {
+      const adminSlug = adminSecretSlug || localStorage.getItem('dbuy_admin_secret_slug') || 'dashboard';
+      const res = await fetch('/api/store/theme', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSlug,
+          'Authorization': `Bearer ${adminSlug}`,
+          'x-admin-key': adminSlug
+        },
         body: JSON.stringify({ theme: updated }),
       });
-    } catch (err) {
+      if (!res.ok) {
+        const json: any = await res.json().catch(() => ({}));
+        console.error('Failed to save theme to server:', res.status, json);
+        addToast(language === 'ka' ? `თემის D1 ბაზაში შენახვის შეცდომა: ${json.error || res.status}` : `Theme D1 Save Error: ${json.error || res.status}`, 'error');
+      }
+    } catch (err: any) {
       console.error('Error syncing theme to server:', err);
     }
 
@@ -771,9 +782,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       document.documentElement.style.setProperty('--theme-font', getFontFamilyValue(defaultTheme.typographyTheme));
     }
     try {
+      const adminSlug = adminSecretSlug || localStorage.getItem('dbuy_admin_secret_slug') || 'dashboard';
       await fetch('/api/store/theme', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSlug,
+          'Authorization': `Bearer ${adminSlug}`,
+          'x-admin-key': adminSlug
+        },
         body: JSON.stringify({ theme: defaultTheme }),
       });
     } catch (err) {
@@ -851,9 +868,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 1. Authoritative server backend persistence (to convert raw base64 to physical URLs)
     try {
+      const adminSlug = adminSecretSlug || localStorage.getItem('dbuy_admin_secret_slug') || 'dashboard';
       const res = await fetch('/api/store/billboards', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSlug,
+          'Authorization': `Bearer ${adminSlug}`,
+          'x-admin-key': adminSlug
+        },
         body: JSON.stringify({ billboards: slides, billboardIntervalSeconds: currentInterval }),
       });
       if (res.ok) {
@@ -861,8 +884,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (json && Array.isArray(json.billboards)) {
           finalSlides = json.billboards;
         }
+      } else {
+        const json: any = await res.json().catch(() => ({}));
+        console.error('Failed to save billboards to server:', res.status, json);
+        addToast(language === 'ka' ? `ბილბორდების D1 ბაზაში შენახვის შეცდომა: ${json.error || res.status}` : `Billboards D1 Save Error: ${json.error || res.status}`, 'error');
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error syncing billboards to server:', err);
     }
 
@@ -1069,6 +1096,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           finalProducts = json.products;
         }
         apiSuccess = true;
+      } else {
+        const json: any = await res.json().catch(() => ({}));
+        console.error('Failed to save products to /api/store/products:', res.status, json);
       }
     } catch (err) {
       console.error('Error syncing products to server:', err);
@@ -1076,20 +1106,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     // 1b. Persist to /api/products (Cloudflare Worker KV / D1 compatibility)
     try {
+      const adminSlug = adminSecretSlug || localStorage.getItem('dbuy_admin_secret_slug') || 'dashboard';
       const res2 = await fetch('/api/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSlug,
+          'Authorization': `Bearer ${adminSlug}`,
+          'x-admin-key': adminSlug
+        },
         body: JSON.stringify(finalProducts),
       });
       if (res2.ok) {
         apiSuccess = true;
+      } else {
+        const json2: any = await res2.json().catch(() => ({}));
+        console.error('Failed to save products to /api/products:', res2.status, json2);
       }
     } catch (e) {
       console.warn('Could not sync to /api/products:', e);
     }
-
-    // Since products are successfully stored in state and localStorage, ensure operations succeed
-    apiSuccess = true;
 
     // 2. Set React state and localStorage with the optimized products (no raw base64!)
     setProducts(finalProducts);

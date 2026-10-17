@@ -155,16 +155,19 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
       const publishedAt = item.publishedAt || null;
 
       await env.DB.prepare(`
-        INSERT INTO products (id, slug, title, title_ka, description, description_ka, price, orig_price, currency, image, image_path, images, images_json, category, stock, badge, is_active, is_published_globally, published_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        INSERT INTO products (id, slug, title, name, title_ka, name_ka, description, description_ka, price, orig_price, original_price, currency, image, image_path, images, images_json, category, stock, badge, is_active, is_published_globally, published_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
         ON CONFLICT(id) DO UPDATE SET
           slug = excluded.slug,
           title = excluded.title,
+          name = excluded.name,
           title_ka = excluded.title_ka,
+          name_ka = excluded.name_ka,
           description = excluded.description,
           description_ka = excluded.description_ka,
           price = excluded.price,
           orig_price = excluded.orig_price,
+          original_price = excluded.original_price,
           currency = excluded.currency,
           image = excluded.image,
           image_path = excluded.image_path,
@@ -178,7 +181,7 @@ export async function handleProductsPost(env: Env, request: Request): Promise<Re
           published_at = excluded.published_at,
           updated_at = CURRENT_TIMESTAMP
       `).bind(
-        id, slug, title, titleKa, description, descriptionKa, price, origPrice, currency,
+        id, slug, title, title, titleKa, titleKa, description, descriptionKa, price, origPrice, origPrice, currency,
         primaryImage, primaryImage, imagesJson, imagesJson, category, stock, badge, isActive, isPublishedGlobally, publishedAt
       ).run();
     }
