@@ -3,7 +3,11 @@ import { initialProducts } from '../../src/data/initialProducts';
 export interface SeoProduct {
   id: string;
   title: string;
+  titleKa?: string;
+  titleEn?: string;
   description: string;
+  descriptionKa?: string;
+  descriptionEn?: string;
   image: string;
   price?: number;
   origPrice?: number;
@@ -110,14 +114,20 @@ export async function findProductForSeo(db: any, rawIdentifier: string): Promise
 
   if (!row) return null;
 
-  // Resolve title
-  const title = String(row.title_ka || row.titleKa || row.title || row.name || 'Product').trim();
+  // Resolve titles
+  const titleKa = String(row.title_ka || row.titleKa || row.title || row.name || 'Product').trim();
+  const titleEn = String(row.title_en || row.titleEn || row.title || row.name || 'Product').trim();
 
-  // Resolve description
-  const rawDesc = String(
+  // Resolve descriptions
+  const rawDescKa = String(
     row.description_ka || row.descriptionKa || row.description || row.description_en || ''
   ).trim();
-  const cleanDesc = rawDesc.replace(/<[^>]*>?/gm, '').trim();
+  const cleanDescKa = rawDescKa.replace(/<[^>]*>?/gm, '').trim();
+
+  const rawDescEn = String(
+    row.description_en || row.descriptionEn || row.description || ''
+  ).trim();
+  const cleanDescEn = rawDescEn.replace(/<[^>]*>?/gm, '').trim();
 
   // Resolve image (checking primary image and JSON arrays)
   let image = String(row.imageUrl || row.image || row.image_url || row.image_path || '').trim();
@@ -137,8 +147,12 @@ export async function findProductForSeo(db: any, rawIdentifier: string): Promise
 
   return {
     id: String(row.id || rawIdentifier),
-    title,
-    description: cleanDesc,
+    title: titleKa,
+    titleKa,
+    titleEn,
+    description: cleanDescKa,
+    descriptionKa: cleanDescKa,
+    descriptionEn: cleanDescEn,
     image,
     price,
     origPrice: origPrice > price ? origPrice : undefined,
@@ -159,7 +173,7 @@ const DEFAULT_SEO_GEL_RATE = 2.60;
 
 /**
  * Injects Open Graph (og:) and Twitter Card meta tags for Facebook and social media crawlers.
- * Dynamically converts USD prices to GEL using exact mathematical conversion.
+ * Dynamically renders language and currency based on ?lang= parameter (e.g. ?lang=en).
  */
 export function injectProductOpenGraphResponse(
   response: Response,
@@ -170,25 +184,58 @@ export function injectProductOpenGraphResponse(
   const url = new URL(requestUrl);
   const siteTitle = 'DBUY Store';
 
-  // Dynamic mathematical currency conversion from USD to GEL for Open Graph meta tags
+  const langParam = (url.searchParams.get('lang') || 'ka').toLowerCase();
+  const isEn = langParam === 'en';
+
   const rawPrice = product.price || 0;
   const rawOrigPrice = product.origPrice && product.origPrice > rawPrice ? product.origPrice : 0;
 
-  const gelPrice = rawPrice > 0 ? Math.round(rawPrice * exchangeRate * 100) / 100 : 0;
-  const gelOrigPrice = rawOrigPrice > 0 ? Math.round(rawOrigPrice * exchangeRate * 100) / 100 : 0;
-  const savings = gelOrigPrice > gelPrice ? Math.round(gelOrigPrice - gelPrice) : 0;
+  let seoTitle = '';
+  let seoDesc = '';
+  let currencyCode = 'GEL';
+  let priceAmount = 0;
+  let displayTitle = '';
 
-  const formattedPrice = gelPrice > 0 ? `${gelPrice} ₾` : '';
+  if (isEn) {
+    currencyCode = 'USD';
+    priceAmount = rawPrice;
+    displayTitle = product.titleEn || product.title;
 
-  // Optimized high-CTR Facebook Open Graph Title & Description
-  const seoTitle = gelPrice > 0
-    ? `🔥 ${product.title} — მხოლოდ ${formattedPrice} DBUY-ში!`
-    : `${product.title} — ${siteTitle}`;
+    const formattedUsdPrice = rawPrice > 0 ? `$${rawPrice}` : '';
 
-  const defaultDesc = `💰 ფასი: ${formattedPrice}${gelOrigPrice ? ` (ძველი ფასი: ${gelOrigPrice} ₾ — დაზოგეთ ${savings} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში • 🛡️ ოფიციალური გარანტია • შეუკვეთეთ ონლაინ`;
-  const seoDesc = product.description && product.description.length > 15
-    ? `${product.description.substring(0, 180)} | ${formattedPrice ? `ფასი: ${formattedPrice} • ` : ''}🚚 მიწოდება მთელ საქართველოში`
-    : defaultDesc;
+    seoTitle = rawPrice > 0
+      ? `🔥 ${displayTitle} — Only ${formattedUsdPrice} at DBUY!`
+      : `${displayTitle} — ${siteTitle}`;
+
+    const savingsUsd = rawOrigPrice > rawPrice ? Math.round(rawOrigPrice - rawPrice) : 0;
+    const defaultDescEn = `💰 Price: Only $${rawPrice}${rawOrigPrice ? ` (Regular: $${rawOrigPrice} — Save $${savingsUsd}! 🎉)` : ''} | 📦 Fast Worldwide Delivery • 🛡️ Official Guarantee • Order Online at DBUY Store`;
+
+    const descEn = product.descriptionEn || product.description;
+    seoDesc = descEn && descEn.length > 15
+      ? `${descEn.substring(0, 180)} | ${formattedUsdPrice ? `Price: ${formattedUsdPrice} • ` : ''}📦 Fast Worldwide Delivery`
+      : defaultDescEn;
+
+  } else {
+    currencyCode = 'GEL';
+    const gelPrice = rawPrice > 0 ? Math.round(rawPrice * exchangeRate * 100) / 100 : 0;
+    const gelOrigPrice = rawOrigPrice > 0 ? Math.round(rawOrigPrice * exchangeRate * 100) / 100 : 0;
+    const savingsGel = gelOrigPrice > gelPrice ? Math.round(gelOrigPrice - gelPrice) : 0;
+    priceAmount = gelPrice;
+
+    displayTitle = product.titleKa || product.title;
+    const formattedGelPrice = gelPrice > 0 ? `${gelPrice} ₾` : '';
+
+    seoTitle = gelPrice > 0
+      ? `🔥 ${displayTitle} — მხოლოდ ${formattedGelPrice} DBUY-ში!`
+      : `${displayTitle} — ${siteTitle}`;
+
+    const defaultDescKa = `💰 ფასი: მხოლოდ ${formattedGelPrice}${gelOrigPrice ? ` (ძველი ფასი: ${gelOrigPrice} ₾ — დაზოგეთ ${savingsGel} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში • 🛡️ ოფიციალური გარანტია • შეუკვეთეთ ონლაინ`;
+
+    const descKa = product.descriptionKa || product.description;
+    seoDesc = descKa && descKa.length > 15
+      ? `${descKa.substring(0, 180)} | ${formattedGelPrice ? `ფასი: ${formattedGelPrice} • ` : ''}🚚 მიწოდება მთელ საქართველოში`
+      : defaultDescKa;
+  }
 
   // Facebook & Social Crawlers strictly require absolute URLs with https://
   let seoImage = 'https://dbuystore.com/icon.png';
@@ -218,14 +265,14 @@ export function injectProductOpenGraphResponse(
     <meta property="og:image:secure_url" content="${escapeHtml(seoImage)}" id="og-image-secure" />
     <meta property="og:image:width" content="1200" id="og-image-width" />
     <meta property="og:image:height" content="630" id="og-image-height" />
-    <meta property="og:image:alt" content="${escapeHtml(product.title)}" id="og-image-alt" />
-    <meta property="product:price:currency" content="GEL" id="og-price-currency" />
-    ${gelPrice > 0 ? `<meta property="product:price:amount" content="${gelPrice}" id="og-price-amount" />` : ''}
+    <meta property="og:image:alt" content="${escapeHtml(displayTitle)}" id="og-image-alt" />
+    <meta property="product:price:currency" content="${currencyCode}" id="og-price-currency" />
+    ${priceAmount > 0 ? `<meta property="product:price:amount" content="${priceAmount}" id="og-price-amount" />` : ''}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(seoTitle)}" id="twitter-title" />
     <meta name="twitter:description" content="${escapeHtml(seoDesc)}" id="twitter-description" />
     <meta name="twitter:image" content="${escapeHtml(seoImage)}" id="twitter-image" />
-    <meta name="twitter:image:alt" content="${escapeHtml(product.title)}" id="twitter-image-alt" />
+    <meta name="twitter:image:alt" content="${escapeHtml(displayTitle)}" id="twitter-image-alt" />
   `;
 
   // Use Cloudflare HTMLRewriter to remove stale static tags and append dynamic product tags

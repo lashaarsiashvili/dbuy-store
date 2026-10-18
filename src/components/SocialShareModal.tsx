@@ -7,7 +7,7 @@ import {
   AdLanguage 
 } from '../utils/socialAdGenerator';
 import { getCachedGelRate, fetchCurrentGelRate } from '../utils/exchangeRate';
-import { publishFacebookPhotoPost } from '../utils/facebookApi';
+import { publishFacebookPhotoPost, publishFacebookFeedPost } from '../utils/facebookApi';
 import { 
   X, 
   Facebook, 
@@ -88,7 +88,8 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
 
-  const shareUrl = getProductShareUrl(product);
+  // Dynamic public share URL containing ?lang=en or ?lang=ka query parameter
+  const shareUrl = getProductShareUrl(product, undefined, language);
 
   const showToast = (msg: string, type: 'text' | 'link' | 'fb' | 'ig') => {
     setStatusMessage(msg);
@@ -264,8 +265,28 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     window.open('https://www.facebook.com/', '_blank');
   };
 
-  // 2. Share via Facebook Link Sharer Dialog
+  // 2. Share via Facebook Link Sharer Dialog or Feed Graph API
   const handleShareFacebookLink = async () => {
+    // Attempt direct Facebook Graph API Link Post with message caption
+    try {
+      const apiResult = await publishFacebookFeedPost({
+        link: shareUrl,
+        message: caption,
+      });
+
+      if (apiResult.success) {
+        showToast(
+          language === 'ka'
+            ? `🎉 ბმულის პოსტი წარმატებით გამოქვეყნდა Facebook-ზე! (ID: ${apiResult.postId})`
+            : `🎉 Link Post successfully published to Facebook with caption message! (ID: ${apiResult.postId})`,
+          'fb'
+        );
+        return;
+      }
+    } catch {
+      // Continue to sharer dialog if direct API token not configured
+    }
+
     try {
       await navigator.clipboard.writeText(caption);
     } catch {

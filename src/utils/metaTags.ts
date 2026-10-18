@@ -60,7 +60,7 @@ export function getProductOpenGraphPayload(
     ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol}${origPrice ? ` (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში | 🛡️ ოფიციალური გარანტია | შეუკვეთეთ ონლაინ DBUY Store-ში`
     : `💰 Price: Only ${currencySymbol}${price}${origPrice ? ` (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)` : ''} | 🚚 Fast Worldwide Delivery | 🛡️ Satisfaction Guarantee | Order online at DBUY Store`;
 
-  const shareUrl = getProductShareUrl(product, customBaseUrl);
+  const shareUrl = getProductShareUrl(product, customBaseUrl, language);
   const baseUrl = customBaseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://dbuystore.com');
 
   let imageUrl = product.image || (product.images && product.images[0]) || '/icon.png';

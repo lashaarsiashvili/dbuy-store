@@ -17,7 +17,7 @@ export interface SocialAdOptions {
 /**
  * Builds the canonical public URL for a product
  */
-export function getProductShareUrl(product: Product, customBaseUrl?: string): string {
+export function getProductShareUrl(product: Product, customBaseUrl?: string, language?: AdLanguage): string {
   let origin = 'https://dbuystore.com';
   if (customBaseUrl) {
     origin = customBaseUrl;
@@ -34,7 +34,8 @@ export function getProductShareUrl(product: Product, customBaseUrl?: string): st
   const path = product.customSlug
     ? `/b/${encodeURIComponent(slug)}`
     : (slug ? `/product/${product.id}/${encodeURIComponent(slug)}` : `/product/${product.id}`);
-  return `${origin.replace(/\/$/, '')}${path}`;
+  const langParam = language ? `?lang=${language}` : '';
+  return `${origin.replace(/\/$/, '')}${path}${langParam}`;
 }
 
 /**
@@ -49,7 +50,7 @@ export function generateSocialAdPost(options: SocialAdOptions): {
 } {
   const { product, style, language } = options;
   const isKa = language === 'ka';
-  const shareUrl = getProductShareUrl(product, options.baseUrl);
+  const shareUrl = getProductShareUrl(product, options.baseUrl, options.language);
 
   // Title selection
   const title = isKa

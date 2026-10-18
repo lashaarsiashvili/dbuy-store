@@ -1618,6 +1618,61 @@ app.post('/api/facebook/post-photo', async (req, res) => {
 });
 
 // ==========================================
+// FACEBOOK GRAPH API FEED LINK POSTING ENDPOINT
+// Publishes direct Link Posts with message caption via /{page_id}/feed
+// ==========================================
+app.post('/api/facebook/post-feed', async (req, res) => {
+  try {
+    const { link, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
+    const finalMessage = message || caption || '';
+    const token = accessToken || pageAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
+    const targetPageId = pageId || process.env.FACEBOOK_PAGE_ID || 'me';
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Facebook Access Token missing. Set FACEBOOK_PAGE_ACCESS_TOKEN in env or pass accessToken.',
+      });
+    }
+
+    const fbGraphUrl = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
+
+    const params = new URLSearchParams();
+    if (link) params.append('link', link);
+    if (finalMessage) params.append('message', finalMessage);
+    params.append('access_token', token);
+
+    const fbRes = await fetch(fbGraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    const fbData: any = await fbRes.json();
+
+    if (fbRes.ok && fbData.id) {
+      return res.json({
+        success: true,
+        postId: fbData.id,
+        message: 'Successfully published Link Post to Facebook Page feed with message!',
+      });
+    } else {
+      const errorDetail = fbData?.error?.message || fbData?.error?.user_msg || 'Facebook Graph API returned error';
+      return res.status(fbRes.status || 400).json({
+        success: false,
+        error: errorDetail,
+        details: fbData?.error,
+      });
+    }
+  } catch (err: any) {
+    console.error('Error publishing Facebook Feed Link Post:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Server error publishing Facebook Link Post' });
+  }
+});
+
+// ==========================================
 // UPLOAD PRODUCT IMAGE API
 // Saves uploaded/optimized base64 images as disk files
 // ==========================================
@@ -4375,6 +4430,9 @@ async function setupFrontend() {
           return res.sendFile(indexHtmlPath);
         }
 
+        const langParam = (req.query.lang as string || '').toLowerCase();
+        const isEn = langParam === 'en';
+
         let seoTitle = 'DBUY Store — Quality Tech, Fitness & Everyday Essentials';
         let seoDesc = 'Premium e-commerce storefront for tech, fitness, and everyday carry essentials with multi-currency, multi-language, cart, checkout, and admin dashboard.';
         let seoImage = 'https://dbuystore.com/assets/logo.png';
@@ -4393,19 +4451,52 @@ async function setupFrontend() {
           }
         }
 
+        let priceAmount = 0;
+        let currencyCode = 'GEL';
+
         if (matchedProduct) {
-          const rawTitle = matchedProduct.titleKa || matchedProduct.title_ka || matchedProduct.title;
+          const rawTitleKa = matchedProduct.titleKa || matchedProduct.title_ka || matchedProduct.title;
+          const rawTitleEn = matchedProduct.title_en || matchedProduct.titleEn || matchedProduct.title;
+
           const rawUsdPrice = matchedProduct.price || 0;
           const rawUsdOrigPrice = matchedProduct.origPrice && matchedProduct.origPrice > rawUsdPrice ? matchedProduct.origPrice : null;
-          
-          const exchangeRate = 2.60;
-          const price = rawUsdPrice > 0 ? Math.round(rawUsdPrice * exchangeRate * 100) / 100 : 0;
-          const origPrice = rawUsdOrigPrice ? Math.round(rawUsdOrigPrice * exchangeRate * 100) / 100 : null;
-          const savings = origPrice ? Math.round(origPrice - price) : 0;
 
-          // Match marketing copy generated for Facebook & Instagram social ads
-          seoTitle = `🔥 ${rawTitle} — სპეციალური შეთავაზება DBUY-ში!`;
-          seoDesc = `💰 ფასი: მხოლოდ ${price} ₾${origPrice ? ` (ძველი ფასი: ${origPrice} ₾ — დაზოგეთ ${savings} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში | 🛡️ ოფიციალური გარანტია | შეუკვეთეთ ონლაინ DBUY Store-ში`;
+          if (isEn) {
+            currencyCode = 'USD';
+            priceAmount = rawUsdPrice;
+            const savingsUsd = rawUsdOrigPrice ? Math.round(rawUsdOrigPrice - rawUsdPrice) : 0;
+
+            seoTitle = rawUsdPrice > 0
+              ? `🔥 ${rawTitleEn} — Only $${rawUsdPrice} at DBUY!`
+              : `${rawTitleEn} — DBUY Store`;
+
+            const defaultDescEn = `💰 Price: Only $${rawUsdPrice}${rawUsdOrigPrice ? ` (Regular: $${rawUsdOrigPrice} — Save $${savingsUsd}! 🎉)` : ''} | 📦 Fast Worldwide Delivery • 🛡️ Official Guarantee • Order Online at DBUY Store`;
+            const rawDescEn = matchedProduct.description_en || matchedProduct.descriptionEn || matchedProduct.description || '';
+            const cleanDescEn = rawDescEn.replace(/<[^>]*>/g, '').trim();
+
+            seoDesc = cleanDescEn && cleanDescEn.length > 15
+              ? `${cleanDescEn.substring(0, 180)} | Price: $${rawUsdPrice} • 📦 Fast Worldwide Delivery`
+              : defaultDescEn;
+          } else {
+            currencyCode = 'GEL';
+            const exchangeRate = 2.60;
+            const gelPrice = rawUsdPrice > 0 ? Math.round(rawUsdPrice * exchangeRate * 100) / 100 : 0;
+            const gelOrigPrice = rawUsdOrigPrice ? Math.round(rawUsdOrigPrice * exchangeRate * 100) / 100 : null;
+            const savingsGel = gelOrigPrice ? Math.round(gelOrigPrice - gelPrice) : 0;
+            priceAmount = gelPrice;
+
+            seoTitle = gelPrice > 0
+              ? `🔥 ${rawTitleKa} — მხოლოდ ${gelPrice} ₾ DBUY-ში!`
+              : `${rawTitleKa} — DBUY Store`;
+
+            const defaultDescKa = `💰 ფასი: მხოლოდ ${gelPrice} ₾${gelOrigPrice ? ` (ძველი ფასი: ${gelOrigPrice} ₾ — დაზოგეთ ${savingsGel} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში | 🛡️ ოფიციალური გარანტია | შეუკვეთეთ ონლაინ DBUY Store-ში`;
+            const rawDescKa = matchedProduct.description_ka || matchedProduct.descriptionKa || matchedProduct.description || '';
+            const cleanDescKa = rawDescKa.replace(/<[^>]*>/g, '').trim();
+
+            seoDesc = cleanDescKa && cleanDescKa.length > 15
+              ? `${cleanDescKa.substring(0, 180)} | ფასი: ${gelPrice} ₾ • 🚚 მიწოდება მთელ საქართველოში`
+              : defaultDescKa;
+          }
 
           if (matchedProduct.image) {
             seoImage = matchedProduct.image.startsWith('http') 
@@ -4413,23 +4504,23 @@ async function setupFrontend() {
               : `https://dbuystore.com${matchedProduct.image.startsWith('/') ? '' : '/'}${matchedProduct.image}`;
           }
 
-          const descClean = (matchedProduct.shortDescription || matchedProduct.description || '')
-            .replace(/<[^>]*>/g, '')
-            .substring(0, 160)
-            .trim();
-
           const ratingValue = matchedProduct.rating || 4.8;
           const reviewCount = matchedProduct.reviewsCount || 12;
           const offersStock = matchedProduct.stock && matchedProduct.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
+
+          const prodTitle = isEn ? rawTitleEn : matchedProduct.title;
+          const prodDesc = isEn 
+            ? (matchedProduct.description_en || matchedProduct.description || '').replace(/<[^>]*>/g, '').substring(0, 160).trim()
+            : (matchedProduct.description_ka || matchedProduct.description || '').replace(/<[^>]*>/g, '').substring(0, 160).trim();
 
           productSchema = `
     <script type="application/ld+json">
     {
       "@context": "https://schema.org",
       "@type": "Product",
-      "name": "${matchedProduct.title.replace(/"/g, '\\"')}",
+      "name": "${prodTitle.replace(/"/g, '\\"')}",
       "image": "${seoImage}",
-      "description": "${descClean.replace(/"/g, '\\"')}",
+      "description": "${prodDesc.replace(/"/g, '\\"')}",
       "sku": "DBUY-${matchedProduct.id}",
       "mpn": "DBUY-${matchedProduct.id}",
       "brand": {
@@ -4444,8 +4535,8 @@ async function setupFrontend() {
       "offers": {
         "@type": "Offer",
         "url": "${seoUrl}",
-        "priceCurrency": "GEL",
-        "price": "${price}",
+        "priceCurrency": "${currencyCode}",
+        "price": "${priceAmount}",
         "itemCondition": "https://schema.org/NewCondition",
         "availability": "${offersStock}"
       }
@@ -4468,11 +4559,15 @@ async function setupFrontend() {
           .replace(/<meta name="twitter:image" [^>]*>/g, `<meta name="twitter:image" content="${seoImage}" id="twitter-image" />`);
 
         if (matchedProduct && matchedProduct.price) {
-          const convertedGelPrice = Math.round(matchedProduct.price * 2.60 * 100) / 100;
-          modifiedHtml = modifiedHtml.replace(
-            /<meta property="product:price:amount" [^>]*>/,
-            `<meta property="product:price:amount" content="${convertedGelPrice}" id="og-price-amount" />`
-          );
+          modifiedHtml = modifiedHtml
+            .replace(
+              /<meta property="product:price:amount" [^>]*>/,
+              `<meta property="product:price:amount" content="${priceAmount}" id="og-price-amount" />`
+            )
+            .replace(
+              /<meta property="product:price:currency" [^>]*>/,
+              `<meta property="product:price:currency" content="${currencyCode}" id="og-price-currency" />`
+            );
         }
 
         if (!modifiedHtml.includes('property="og:image"')) {
