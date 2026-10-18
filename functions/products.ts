@@ -1,36 +1,34 @@
-import { handleProductsGet, handleProductsPost, handleProductsDelete } from './api/products';
+export async function handleProductsPost(env: any, request: Request): Promise<Response> {
+  try {
+    const product: any = await request.json();
 
-export interface EventContext<Env = any> {
-  request: Request;
-  env: Env;
-  params?: Record<string, string>;
-  data?: Record<string, any>;
+    // D1 ბაზაში ჩაწერის ბრძანება (დარწმუნდით რომ env.DB სწორია თქვენი Binding-ისთვის)
+    const info = await env.DB.prepare(
+      `INSERT INTO products (id, title, price, description, category, imageUrl, createdAt) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    ).bind(
+      product.id,
+      product.title,
+      product.price,
+      product.description || "",
+      product.category || "",
+      product.imageUrl || "",
+      product.createdAt || new Date().toISOString()
+    ).run();
+
+    if (info.success) {
+      return new Response(JSON.stringify({ success: true, product }), {
+        status: 201,
+        headers: { 'Content-Type': 'application/json' }
+      });
+    } else {
+      throw new Error("D1 Insert failed");
+    }
+  } catch (error: any) {
+    console.error("POST შეცდომა:", error);
+    return new Response(JSON.stringify({ success: false, error: error.message }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    });
+  }
 }
-
-export type PagesFunction<Env = any> = (context: EventContext<Env>) => Promise<Response> | Response;
-
-export const onRequest: PagesFunction<any> = async (context) => {
-  const { request, env } = context;
-
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204 });
-  }
-
-  if (request.method === 'GET') {
-    return handleProductsGet(env, request);
-  }
-
-  if (request.method === 'POST') {
-    return handleProductsPost(env, request);
-  }
-
-  if (request.method === 'DELETE') {
-    return handleProductsDelete(env, request);
-  }
-
-  return new Response(
-    JSON.stringify({ success: false, error: `Method ${request.method} Not Allowed` }),
-    { status: 405, headers: { 'Content-Type': 'application/json' } }
-  );
-};
-
