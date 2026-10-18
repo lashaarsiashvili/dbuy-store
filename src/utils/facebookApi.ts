@@ -32,7 +32,13 @@ export async function publishFacebookPhotoPost(
     const response = await fetch('/api/facebook/post-photo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify({
+        imageUrl: params.imageUrl,
+        message: params.message,
+        caption: params.message,
+        accessToken: params.accessToken,
+        pageId: params.pageId,
+      }),
     });
 
     if (response.ok) {
@@ -137,7 +143,13 @@ export async function publishFacebookFeedPost(
     const response = await fetch('/api/facebook/post-feed', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(params),
+      body: JSON.stringify({
+        link: params.link,
+        message: params.message,
+        caption: params.message,
+        accessToken: params.accessToken,
+        pageId: params.pageId,
+      }),
     });
 
     if (response.ok) {
@@ -165,6 +177,7 @@ export async function publishFacebookFeedPost(
       const bodyData = new URLSearchParams();
       if (params.link) bodyData.append('link', params.link);
       if (params.message) bodyData.append('message', params.message);
+      if (params.message) bodyData.append('caption', params.message);
       bodyData.append('access_token', token);
 
       const fbRes = await fetch(graphUrl, {

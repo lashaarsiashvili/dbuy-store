@@ -23,7 +23,10 @@ export async function onRequestPost(context: any) {
 
     const params = new URLSearchParams();
     if (link) params.append('link', link);
-    if (finalMessage) params.append('message', finalMessage);
+    if (finalMessage) {
+      params.append('message', finalMessage);
+      params.append('caption', finalMessage);
+    }
     params.append('access_token', token);
 
     const fbRes = await fetch(fbGraphUrl, {

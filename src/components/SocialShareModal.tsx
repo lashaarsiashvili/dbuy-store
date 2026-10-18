@@ -303,7 +303,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
       'fb'
     );
 
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(caption)}`;
     window.open(fbUrl, '_blank', 'width=650,height=600,scrollbars=yes,resizable=yes');
   };
 
