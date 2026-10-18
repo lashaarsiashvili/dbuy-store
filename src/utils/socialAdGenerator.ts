@@ -142,24 +142,33 @@ export function generateSocialAdPost(options: SocialAdOptions): {
         ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
         : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
 
-      const featureList = features.slice(0, 4).map(f => `  • ${f}`).join('\n');
+      const featureBullets = features.length > 0
+        ? features.slice(0, 4).map((f, i) => {
+            const emojis = ['✨', '⭐', '🎯', '🚀'];
+            const emoji = emojis[i % emojis.length];
+            // Remove existing bullet symbols if any
+            const clean = f.replace(/^[•\-\*\s]+/, '').trim();
+            return `${emoji} ${clean}`;
+          }).join('\n')
+        : '✨ უმაღლესი პრემიუმ ხარისხი\n⭐ პრაქტიკული და ერგონომიული დიზაინი\n🎯 გარანტირებული საიმედოობა';
 
       const caption = `${headline}
 
 ${priceSection}
 
-✨ რატომ უნდა შეიძინოთ:
-${featureList || '  • უმაღლესი პრემიუმ ხარისხი\n  • პრაქტიკული და ერგონომიული დიზაინი\n  • გარანტირებული საიმედოობა'}
+Key Highlights:
+${featureBullets}
 
-📦 შეკვეთის უპირატესობები:
-  🚚 სწრაფი მიწოდება მთელი საქართველოს მასშტაბით
-  💳 უსაფრთხო ონლაინ გადახდა (Visa, Mastercard, Apple Pay, Google Pay)
-  🛡️ ოფიციალური ხარისხის გარანტია
+Why order with DBUY:
+📦 სწრაფი & თრექინგით მიწოდება მთელი საქართველოს მასშტაბით
+🚚 უფასო მიწოდება 100 ₾-ზე მეტი შეკვეთისას
+💳 უსაფრთხო გადახდა (Visa, Mastercard, Apple Pay, Google Pay)
+🛡️ 100% ხარისხისა და კმაყოფილების გარანტია
 
-👉 დეტალები და შეკვეთა იხილეთ ბმულზე:
+Call to Action (CTA):
+👉 შეკვეთისთვის გადადით ბმულზე:
 ${shareUrl}
-
-📩 შეკვეთისთვის ასევე შეგიძლიათ მოგვწეროთ პირად შეტყობინებაში!
+📥 დეტალებისთვის ან შეკვეთისთვის მოგვწერეთ პირადში (DM)!
 
 ${defaultHashtags.join(' ')}`;
 
@@ -170,24 +179,32 @@ ${defaultHashtags.join(' ')}`;
         ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
         : `💰 Price: Only ${currencySymbol}${price}`;
 
-      const featureList = features.slice(0, 4).map(f => `  • ${f}`).join('\n');
+      const featureBullets = features.length > 0
+        ? features.slice(0, 4).map((f, i) => {
+            const emojis = ['✨', '⭐', '🎯', '🚀'];
+            const emoji = emojis[i % emojis.length];
+            const clean = f.replace(/^[•\-\*\s]+/, '').trim();
+            return `${emoji} ${clean}`;
+          }).join('\n')
+        : '✨ Premium Build Quality & Engineering\n⭐ Sleek Modern Ergonomic Aesthetics\n🎯 Tested Daily Durability';
 
       const caption = `${headline}
 
 ${priceSection}
 
-✨ Key Highlights:
-${featureList || '  • Premium build and engineering\n  • Modern ergonomic design\n  • Tested durability'}
+Key Highlights:
+${featureBullets}
 
-📦 Why order with DBUY:
-  🚚 Fast & Trackable Worldwide Delivery
-  💳 Secure Checkout (Apple Pay, Google Pay, Cards, PayPal)
-  🛡️ 100% Satisfaction Guarantee
+Why order with DBUY:
+📦 Fast & Trackable Worldwide Delivery
+🚚 Free Shipping on orders over $50
+💳 Secure Checkout (Apple Pay, Google Pay, Cards, PayPal)
+🛡️ 100% Satisfaction Guarantee
 
+Call to Action (CTA):
 👉 Tap the link to view and order now:
 ${shareUrl}
-
-📩 DM us directly for inquiries or quick ordering!
+📥 DM us directly for inquiries or quick ordering!
 
 ${defaultHashtags.join(' ')}`;
 
@@ -198,27 +215,53 @@ ${defaultHashtags.join(' ')}`;
   // 2. SHORT / STORY / REELS FORMAT
   if (style === 'story') {
     if (isKa) {
-      const headline = `⚡ აღმოაჩინე: ${title}`;
-      const caption = `⚡ ${title}
+      const headline = `⚡ ${title}`;
+      const priceSection = origPrice
+        ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
+        : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
 
-${origPrice ? `🔥 ფასდაკლებით: ${price} ${currencySymbol} (ნაცვლად ${origPrice} ${currencySymbol}-ისა!)` : `🔥 ფასი: ${price} ${currencySymbol}`}
-🚚 სწრაფი მიწოდება პირდაპირ კარამდე!
+      const caption = `🔥 ${title} — სპეციალური შეთავაზება DBUY-ში!
 
-👉 შეუკვეთე აქ: ${shareUrl}
-📩 ან მოგვწერე ჩათში
+${priceSection}
+
+Key Highlights:
+✨ პრემიუმ ხარისხი და ერგონომიული დიზაინი
+⭐ გარანტირებული საიმედოობა
+
+Why order with DBUY:
+📦 სწრაფი მიწოდება მთელ საქართველოში
+🛡️ 100% ხარისხის გარანტია
+
+Call to Action (CTA):
+👉 შეუკვეთეთ ბმულიდან:
+${shareUrl}
+📥 ან მოგვწერეთ პირად შეტყობინებაში!
 
 ${defaultHashtags.slice(0, 4).join(' ')}`;
 
       return { headline, caption, shareUrl, hashtags: defaultHashtags.slice(0, 4) };
     } else {
-      const headline = `⚡ Spotlight: ${title}`;
-      const caption = `⚡ ${title}
+      const headline = `⚡ ${title}`;
+      const priceSection = origPrice
+        ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
+        : `💰 Price: Only ${currencySymbol}${price}`;
 
-${origPrice ? `🔥 Now on Sale: ${currencySymbol}${price} (Was ${currencySymbol}${origPrice})` : `🔥 Price: ${currencySymbol}${price}`}
-🚚 Fast door-to-door delivery!
+      const caption = `🔥 ${title} — Special Offer at DBUY Store!
 
-👉 Order directly: ${shareUrl}
-📩 Or send us a DM
+${priceSection}
+
+Key Highlights:
+✨ Premium Build Quality
+⭐ Sleek Modern Aesthetics
+
+Why order with DBUY:
+📦 Fast & Trackable Delivery
+🛡️ 100% Satisfaction Guarantee
+
+Call to Action (CTA):
+👉 Order directly via link:
+${shareUrl}
+📥 Or send us a DM!
 
 ${defaultHashtags.slice(0, 4).join(' ')}`;
 
@@ -229,37 +272,59 @@ ${defaultHashtags.slice(0, 4).join(' ')}`;
   // 3. SPECIAL PROMO / URGENT DEAL
   if (isKa) {
     const headline = `🚨 შეზღუდული აქცია! ${title} — ${discountPercent > 0 ? `-${discountPercent}%` : 'საუკეთესო ფასად'}`;
-    const caption = `🚨 შეზღუდული დროის აქცია DBUY-ში!
+    const priceSection = origPrice
+      ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
+      : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
 
-🌟 ${title}
-${origPrice ? `💥 აქციის ფასი: ${price} ${currencySymbol} (${origPrice} ${currencySymbol}-ის ნაცვლად! დაზოგეთ ${savings} ${currencySymbol})` : `💥 საუკეთესო ფასი: ${price} ${currencySymbol}`}
+    const caption = `🔥 ${title} — სპეციალური შეთავაზება DBUY-ში!
 
-⏰ მარაგში დარჩენილია მხოლოდ რამდენიმე ერთეული!
-🚚 სწრაფი საკურიერო მიწოდება მთელ საქართველოში
-💳 გადაიხადე ონლაინ ან განვადებით
+${priceSection}
 
+Key Highlights:
+✨ შეზღუდული დროის აქცია და საუკეთესო ფასი
+⭐ 100% ორიგინალი პროდუქტი
+🎯 შეზღუდული რაოდენობა მარაგში
+
+Why order with DBUY:
+📦 სწრაფი & თრექინგით მიწოდება
+💳 უსაფრთხო ონლაინ გადახდა
+🛡️ 100% ხარისხისა და კმაყოფილების გარანტია
+
+Call to Action (CTA):
 👉 ისარგებლეთ ფასდაკლებით სანამ მარაგი ამოიწურება:
 ${shareUrl}
+📥 შეკვეთისთვის მოგვწერეთ პირად შეტყობინებაში!
 
-#აქცია #ფასდაკლება #DBUY #საქართველო #ონლაინშოპინგი`;
+${defaultHashtags.join(' ')}`;
 
-    return { headline, caption, shareUrl, hashtags: ['#აქცია', '#ფასდაკლება', '#DBUY', '#საქართველო'] };
+    return { headline, caption, shareUrl, hashtags: defaultHashtags };
   } else {
-    const headline = `🚨 Flash Deal! ${title} — ${discountPercent > 0 ? `${discountPercent}% OFF` : 'Best Value'}`;
-    const caption = `🚨 Limited Time Flash Deal at DBUY!
+    const headline = `🚨 Limited Time Flash Deal! ${title}`;
+    const priceSection = origPrice
+      ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
+      : `💰 Price: Only ${currencySymbol}${price}`;
 
-🌟 ${title}
-${origPrice ? `💥 Deal Price: ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}!)` : `💥 Deal Price: ${currencySymbol}${price}`}
+    const caption = `🔥 ${title} — Special Offer at DBUY Store!
 
-⏰ Limited inventory available at this price!
-🚚 Fast trackable shipping
-💳 Secure payments with instant confirmation
+${priceSection}
 
+Key Highlights:
+✨ Limited Time Price Drop
+⭐ Premium Grade Materials & Finish
+🎯 High Demand Top Rated Item
+
+Why order with DBUY:
+📦 Fast & Trackable Worldwide Delivery
+💳 Secure Checkout
+🛡️ 100% Satisfaction Guarantee
+
+Call to Action (CTA):
 👉 Grab yours before the sale ends:
 ${shareUrl}
+📥 DM us directly for inquiries or quick ordering!
 
-#FlashSale #SpecialDeal #DBUY #OnlineStore`;
+${defaultHashtags.join(' ')}`;
 
-    return { headline, caption, shareUrl, hashtags: ['#FlashSale', '#SpecialDeal', '#DBUY', '#OnlineStore'] };
+    return { headline, caption, shareUrl, hashtags: defaultHashtags };
   }
 }

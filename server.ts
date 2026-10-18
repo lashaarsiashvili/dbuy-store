@@ -1552,6 +1552,72 @@ Return ONLY a valid JSON object matching this schema without markdown code block
 });
 
 // ==========================================
+// FACEBOOK GRAPH API PHOTO POSTING ENDPOINT
+// Publishes direct Photo Posts via /{page_id}/photos
+// ==========================================
+app.post('/api/facebook/post-photo', async (req, res) => {
+  try {
+    const { imageUrl, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
+    const finalMessage = message || caption || '';
+    const token = accessToken || pageAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
+    const targetPageId = pageId || process.env.FACEBOOK_PAGE_ID || 'me';
+
+    if (!imageUrl) {
+      return res.status(400).json({ success: false, error: 'imageUrl is required' });
+    }
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Facebook Access Token missing. Set FACEBOOK_PAGE_ACCESS_TOKEN in env or pass accessToken.',
+      });
+    }
+
+    let fullImageUrl = imageUrl;
+    if (fullImageUrl.startsWith('/')) {
+      fullImageUrl = `https://dbuystore.com${fullImageUrl}`;
+    }
+
+    const fbGraphUrl = `https://graph.facebook.com/v19.0/${targetPageId}/photos`;
+
+    const params = new URLSearchParams();
+    params.append('url', fullImageUrl);
+    params.append('caption', finalMessage);
+    params.append('message', finalMessage);
+    params.append('access_token', token);
+
+    const fbRes = await fetch(fbGraphUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    const fbData: any = await fbRes.json();
+
+    if (fbRes.ok && (fbData.id || fbData.post_id)) {
+      return res.json({
+        success: true,
+        photoId: fbData.id,
+        postId: fbData.post_id || fbData.id,
+        message: 'Successfully published Photo Post to Facebook Page!',
+      });
+    } else {
+      const errorDetail = fbData?.error?.message || fbData?.error?.user_msg || 'Facebook Graph API returned error';
+      return res.status(fbRes.status || 400).json({
+        success: false,
+        error: errorDetail,
+        details: fbData?.error,
+      });
+    }
+  } catch (err: any) {
+    console.error('Error publishing Facebook Photo Post:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Server error publishing Facebook Photo Post' });
+  }
+});
+
+// ==========================================
 // UPLOAD PRODUCT IMAGE API
 // Saves uploaded/optimized base64 images as disk files
 // ==========================================

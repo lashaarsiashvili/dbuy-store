@@ -7,6 +7,7 @@ import {
   AdLanguage 
 } from '../utils/socialAdGenerator';
 import { getCachedGelRate, fetchCurrentGelRate } from '../utils/exchangeRate';
+import { publishFacebookPhotoPost } from '../utils/facebookApi';
 import { 
   X, 
   Facebook, 
@@ -194,9 +195,31 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     }
   };
 
-  // 1. Share full post to Facebook (Image Download + Text Copy + Open Facebook Composer)
+  // 1. Share full Photo Post to Facebook (Direct Graph API /me/photos or Photo Upload + Text Copy + Open Composer)
   const handleShareFacebookFullPost = async () => {
-    // 1. Copy generated ad copy to clipboard first
+    const imageUrl = product.image || (product.images && product.images[0]) || '';
+
+    // Attempt direct Facebook Graph API Photo Post
+    try {
+      const apiResult = await publishFacebookPhotoPost({
+        imageUrl,
+        message: caption,
+      });
+
+      if (apiResult.success) {
+        showToast(
+          language === 'ka'
+            ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა Facebook-ზე! (ID: ${apiResult.photoId || apiResult.postId})`
+            : `🎉 Photo Post successfully published to Facebook! (ID: ${apiResult.photoId || apiResult.postId})`,
+          'fb'
+        );
+        return;
+      }
+    } catch {
+      // Continue to fallback photo-post workflow if direct API key not configured
+    }
+
+    // 1. Copy generated ad copy to clipboard
     try {
       await navigator.clipboard.writeText(caption);
     } catch {
@@ -215,8 +238,8 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
         });
         showToast(
           language === 'ka'
-            ? 'სურათი და ტექსტი წარმატებით გადაეგზავნა გაზიარების მენიუს!'
-            : 'Image and ad copy sent to share menu!',
+            ? 'სურათი და სარეკლამო ტექსტი გაიგზავნა Facebook Photo Post-ის მენიუში!'
+            : 'Image & ad copy sent to Facebook Photo Post share menu!',
           'fb'
         );
         return;
@@ -225,19 +248,19 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
       }
     }
 
-    // 3. Automatically download product image so merchant has the picture on device
+    // 3. Automatically download main product photo for direct Facebook photo upload
     await handleDownloadImage();
 
     // 4. Show instructional guidance banner
     setShowFbGuidance(true);
     showToast(
       language === 'ka'
-        ? '📸 სურათი ჩამოიტვირთა! 📝 ტექსტი დაკოპირდა!'
-        : '📸 Image downloaded! 📝 Text copied!',
+        ? '📸 ფოტო ჩამოიტვირთა! 📝 ტექსტი დაკოპირდა! ატვირთეთ ფოტო Facebook-ზე.'
+        : '📸 Photo downloaded! 📝 Ad copy copied! Ready for Facebook photo upload.',
       'fb'
     );
 
-    // 5. Open Facebook post composer / feed in a new window
+    // 5. Open Facebook post composer / feed in a new window for direct photo upload
     window.open('https://www.facebook.com/', '_blank');
   };
 
@@ -249,7 +272,6 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
       fallbackCopyText(caption);
     }
 
-    // Also download image as backup
     await handleDownloadImage();
 
     setShowFbGuidance(true);
@@ -260,12 +282,10 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
       'fb'
     );
 
-    // Open Facebook Sharer Dialog
     const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
     window.open(fbUrl, '_blank', 'width=650,height=600,scrollbars=yes,resizable=yes');
   };
 
-  // Backwards compatibility alias
   const handleShareFacebook = handleShareFacebookFullPost;
 
   // 2. Share to Instagram (Copy formatted text + Download high-res ad image + Open Instagram)
