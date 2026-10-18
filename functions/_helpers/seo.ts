@@ -155,29 +155,37 @@ function escapeHtml(str: string): string {
     .replace(/'/g, '&#039;');
 }
 
+const DEFAULT_SEO_GEL_RATE = 2.60;
+
 /**
  * Injects Open Graph (og:) and Twitter Card meta tags for Facebook and social media crawlers.
+ * Dynamically converts USD prices to GEL using exact mathematical conversion.
  */
 export function injectProductOpenGraphResponse(
   response: Response,
   product: SeoProduct,
-  requestUrl: string
+  requestUrl: string,
+  exchangeRate: number = DEFAULT_SEO_GEL_RATE
 ): Response {
   const url = new URL(requestUrl);
   const siteTitle = 'DBUY Store';
 
-  // Format pricing for Georgian market
-  const formattedPrice = product.price ? `${product.price} ₾` : '';
-  const savings = product.origPrice && product.price
-    ? Math.round(product.origPrice - product.price)
-    : 0;
+  // Dynamic mathematical currency conversion from USD to GEL for Open Graph meta tags
+  const rawPrice = product.price || 0;
+  const rawOrigPrice = product.origPrice && product.origPrice > rawPrice ? product.origPrice : 0;
+
+  const gelPrice = rawPrice > 0 ? Math.round(rawPrice * exchangeRate * 100) / 100 : 0;
+  const gelOrigPrice = rawOrigPrice > 0 ? Math.round(rawOrigPrice * exchangeRate * 100) / 100 : 0;
+  const savings = gelOrigPrice > gelPrice ? Math.round(gelOrigPrice - gelPrice) : 0;
+
+  const formattedPrice = gelPrice > 0 ? `${gelPrice} ₾` : '';
 
   // Optimized high-CTR Facebook Open Graph Title & Description
-  const seoTitle = product.price
+  const seoTitle = gelPrice > 0
     ? `🔥 ${product.title} — მხოლოდ ${formattedPrice} DBUY-ში!`
     : `${product.title} — ${siteTitle}`;
 
-  const defaultDesc = `💰 ფასი: ${formattedPrice}${product.origPrice ? ` (ძველი ფასი: ${product.origPrice} ₾ — დაზოგეთ ${savings} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში • 🛡️ ოფიციალური გარანტია • შეუკვეთეთ ონლაინ`;
+  const defaultDesc = `💰 ფასი: ${formattedPrice}${gelOrigPrice ? ` (ძველი ფასი: ${gelOrigPrice} ₾ — დაზოგეთ ${savings} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში • 🛡️ ოფიციალური გარანტია • შეუკვეთეთ ონლაინ`;
   const seoDesc = product.description && product.description.length > 15
     ? `${product.description.substring(0, 180)} | ${formattedPrice ? `ფასი: ${formattedPrice} • ` : ''}🚚 მიწოდება მთელ საქართველოში`
     : defaultDesc;
@@ -212,7 +220,7 @@ export function injectProductOpenGraphResponse(
     <meta property="og:image:height" content="630" id="og-image-height" />
     <meta property="og:image:alt" content="${escapeHtml(product.title)}" id="og-image-alt" />
     <meta property="product:price:currency" content="GEL" id="og-price-currency" />
-    ${product.price ? `<meta property="product:price:amount" content="${product.price}" id="og-price-amount" />` : ''}
+    ${gelPrice > 0 ? `<meta property="product:price:amount" content="${gelPrice}" id="og-price-amount" />` : ''}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(seoTitle)}" id="twitter-title" />
     <meta name="twitter:description" content="${escapeHtml(seoDesc)}" id="twitter-description" />

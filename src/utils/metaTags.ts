@@ -1,6 +1,7 @@
 import { Product } from '../types';
 import { generateProductSlug } from '../context/StoreContext';
 import { getProductShareUrl } from './socialAdGenerator';
+import { getCachedGelRate } from './exchangeRate';
 
 export interface OpenGraphMetaPayload {
   title: string;
@@ -18,17 +19,35 @@ export interface OpenGraphMetaPayload {
 export function getProductOpenGraphPayload(
   product: Product,
   language: 'ka' | 'en' = 'ka',
-  customBaseUrl?: string
+  customBaseUrl?: string,
+  exchangeRateGEL?: number
 ): OpenGraphMetaPayload {
   const isKa = language === 'ka';
   const rawTitle = isKa
     ? (product.titleKa || product.title_ka || product.title)
     : (product.title_en || product.title || product.titleKa || 'Product');
   
-  const price = product.price || 0;
-  const origPrice = product.origPrice && product.origPrice > price ? product.origPrice : null;
-  const currencySymbol = isKa ? '₾' : '$';
-  const currencyCode = isKa ? 'GEL' : 'USD';
+  const rawUsdPrice = product.price || 0;
+  const rawUsdOrigPrice = product.origPrice && product.origPrice > rawUsdPrice ? product.origPrice : null;
+  const exchangeRate = exchangeRateGEL && exchangeRateGEL > 0 ? exchangeRateGEL : getCachedGelRate();
+
+  let price: number;
+  let origPrice: number | null = null;
+  let currencySymbol: string;
+  let currencyCode: string;
+
+  if (isKa) {
+    price = Math.round(rawUsdPrice * exchangeRate * 100) / 100;
+    origPrice = rawUsdOrigPrice ? Math.round(rawUsdOrigPrice * exchangeRate * 100) / 100 : null;
+    currencySymbol = '₾';
+    currencyCode = 'GEL';
+  } else {
+    price = rawUsdPrice;
+    origPrice = rawUsdOrigPrice;
+    currencySymbol = '$';
+    currencyCode = 'USD';
+  }
+
   const savings = origPrice ? Math.round(origPrice - price) : 0;
 
   // High-converting marketing copy headline matching socialAdGenerator

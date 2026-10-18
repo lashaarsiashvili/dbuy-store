@@ -4329,8 +4329,12 @@ async function setupFrontend() {
 
         if (matchedProduct) {
           const rawTitle = matchedProduct.titleKa || matchedProduct.title_ka || matchedProduct.title;
-          const price = matchedProduct.price || 0;
-          const origPrice = matchedProduct.origPrice && matchedProduct.origPrice > price ? matchedProduct.origPrice : null;
+          const rawUsdPrice = matchedProduct.price || 0;
+          const rawUsdOrigPrice = matchedProduct.origPrice && matchedProduct.origPrice > rawUsdPrice ? matchedProduct.origPrice : null;
+          
+          const exchangeRate = 2.60;
+          const price = rawUsdPrice > 0 ? Math.round(rawUsdPrice * exchangeRate * 100) / 100 : 0;
+          const origPrice = rawUsdOrigPrice ? Math.round(rawUsdOrigPrice * exchangeRate * 100) / 100 : null;
           const savings = origPrice ? Math.round(origPrice - price) : 0;
 
           // Match marketing copy generated for Facebook & Instagram social ads
@@ -4375,7 +4379,7 @@ async function setupFrontend() {
         "@type": "Offer",
         "url": "${seoUrl}",
         "priceCurrency": "GEL",
-        "price": "${matchedProduct.price}",
+        "price": "${price}",
         "itemCondition": "https://schema.org/NewCondition",
         "availability": "${offersStock}"
       }
@@ -4398,9 +4402,10 @@ async function setupFrontend() {
           .replace(/<meta name="twitter:image" [^>]*>/g, `<meta name="twitter:image" content="${seoImage}" id="twitter-image" />`);
 
         if (matchedProduct && matchedProduct.price) {
+          const convertedGelPrice = Math.round(matchedProduct.price * 2.60 * 100) / 100;
           modifiedHtml = modifiedHtml.replace(
             /<meta property="product:price:amount" [^>]*>/,
-            `<meta property="product:price:amount" content="${matchedProduct.price}" id="og-price-amount" />`
+            `<meta property="product:price:amount" content="${convertedGelPrice}" id="og-price-amount" />`
           );
         }
 
