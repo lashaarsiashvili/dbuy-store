@@ -599,7 +599,9 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                   <div className="flex items-start space-x-2.5 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/40 shadow-xs">
                     <span className="text-lg shrink-0">📸</span>
                     <div>
-                      <span className="font-black block text-slate-900 dark:text-white">1. სურათი ჩამოტვირთულია</span>
+                      <span className="font-black block text-slate-900 dark:text-white">
+                        {language === 'ka' ? '1. სურათი ჩამოტვირთულია' : '1. Photo Downloaded'}
+                      </span>
                       <span className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight block mt-0.5">
                         {language === 'ka' 
                           ? 'Facebook-ის ფანჯარაში დააჭირეთ „ფოტოს/ვიდეოს დამატება“-ს და აირჩიეთ გადმოწერილი ფაილი.' 
@@ -610,7 +612,9 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                   <div className="flex items-start space-x-2.5 bg-white/80 dark:bg-slate-900/80 p-2.5 rounded-xl border border-blue-100 dark:border-blue-900/40 shadow-xs">
                     <span className="text-lg shrink-0">📝</span>
                     <div>
-                      <span className="font-black block text-slate-900 dark:text-white">2. ტექსტი დაკოპირებულია</span>
+                      <span className="font-black block text-slate-900 dark:text-white">
+                        {language === 'ka' ? '2. ტექსტი დაკოპირებულია' : '2. Text Copied'}
+                      </span>
                       <span className="text-[11px] text-slate-600 dark:text-slate-300 leading-tight block mt-0.5">
                         {language === 'ka' 
                           ? 'პოსტის ტექსტის ველში გააკეთეთ ჩასმა (Paste / Ctrl+V ან ტელეფონზე ეკრანზე თითის დაჭერით „ჩასმა“).' 

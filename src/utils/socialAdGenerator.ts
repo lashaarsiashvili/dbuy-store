@@ -146,7 +146,6 @@ export function generateSocialAdPost(options: SocialAdOptions): {
         ? features.slice(0, 4).map((f, i) => {
             const emojis = ['✨', '⭐', '🎯', '🚀'];
             const emoji = emojis[i % emojis.length];
-            // Remove existing bullet symbols if any
             const clean = f.replace(/^[•\-\*\s]+/, '').trim();
             return `${emoji} ${clean}`;
           }).join('\n')
@@ -156,16 +155,16 @@ export function generateSocialAdPost(options: SocialAdOptions): {
 
 ${priceSection}
 
-Key Highlights:
+მთავარი უპირატესობები:
 ${featureBullets}
 
-Why order with DBUY:
+რატომ DBUY Store:
 📦 სწრაფი & თრექინგით მიწოდება მთელი საქართველოს მასშტაბით
 🚚 უფასო მიწოდება 100 ₾-ზე მეტი შეკვეთისას
 💳 უსაფრთხო გადახდა (Visa, Mastercard, Apple Pay, Google Pay)
 🛡️ 100% ხარისხისა და კმაყოფილების გარანტია
 
-Call to Action (CTA):
+შეკვეთა (CTA):
 👉 შეკვეთისთვის გადადით ბმულზე:
 ${shareUrl}
 📥 დეტალებისთვის ან შეკვეთისთვის მოგვწერეთ პირადში (DM)!
@@ -224,15 +223,15 @@ ${defaultHashtags.join(' ')}`;
 
 ${priceSection}
 
-Key Highlights:
+მთავარი უპირატესობები:
 ✨ პრემიუმ ხარისხი და ერგონომიული დიზაინი
 ⭐ გარანტირებული საიმედოობა
 
-Why order with DBUY:
+რატომ DBUY Store:
 📦 სწრაფი მიწოდება მთელ საქართველოში
 🛡️ 100% ხარისხის გარანტია
 
-Call to Action (CTA):
+შეკვეთა (CTA):
 👉 შეუკვეთეთ ბმულიდან:
 ${shareUrl}
 📥 ან მოგვწერეთ პირად შეტყობინებაში!
@@ -280,17 +279,17 @@ ${defaultHashtags.slice(0, 4).join(' ')}`;
 
 ${priceSection}
 
-Key Highlights:
+მთავარი უპირატესობები:
 ✨ შეზღუდული დროის აქცია და საუკეთესო ფასი
 ⭐ 100% ორიგინალი პროდუქტი
 🎯 შეზღუდული რაოდენობა მარაგში
 
-Why order with DBUY:
+რატომ DBUY Store:
 📦 სწრაფი & თრექინგით მიწოდება
 💳 უსაფრთხო ონლაინ გადახდა
 🛡️ 100% ხარისხისა და კმაყოფილების გარანტია
 
-Call to Action (CTA):
+შეკვეთა (CTA):
 👉 ისარგებლეთ ფასდაკლებით სანამ მარაგი ამოიწურება:
 ${shareUrl}
 📥 შეკვეთისთვის მოგვწერეთ პირად შეტყობინებაში!
