@@ -1,22 +1,27 @@
-// Cloudflare Pages Function: /b/[[slug]]
-// Dynamically enriches index.html with product-specific Open Graph tags
-// for custom slug short URLs so Facebook and other social crawlers display the product image.
+/// <reference types="@cloudflare/workers-types" />
 
-import { injectProductOpenGraph } from '../_helpers/seo';
+/**
+ * Cloudflare Pages Function: /b/[[slug]]
+ * Dynamically enriches index.html with product-specific Open Graph tags
+ * for custom short slug URLs (/b/:slug) so Facebook and social crawlers
+ * display the product's actual image, title, and description.
+ */
 
-export const onRequest = async (context: {
-  request: Request;
-  params: Record<string, string | string[]>;
-  next: () => Promise<Response>;
-}): Promise<Response> => {
-  const { request, params } = context;
+import { findProductForSeo, injectProductOpenGraphResponse } from '../_helpers/seo';
+
+interface Env {
+  DB?: any;
+}
+
+export const onRequest: PagesFunction<Env> = async (context) => {
+  const { request, env, params } = context;
   const url = new URL(request.url);
 
   // Fetch the static index.html response
   const response = await context.next();
   const contentType = response.headers.get('content-type') || '';
 
-  if (!contentType.includes('text/html')) {
+  if (contentType && !contentType.includes('text/html')) {
     return response;
   }
 
@@ -39,15 +44,14 @@ export const onRequest = async (context: {
   }
 
   try {
-    const rawHtml = await response.text();
-    const modifiedHtml = injectProductOpenGraph(rawHtml, slug, url.toString());
+    const product = await findProductForSeo(env.DB, slug);
+    if (!product) {
+      return response;
+    }
 
-    return new Response(modifiedHtml, {
-      status: response.status,
-      statusText: response.statusText,
-      headers: response.headers,
-    });
+    return injectProductOpenGraphResponse(response, product, request.url);
   } catch (err) {
+    console.error('[Short Slug OG Middleware Error]:', err);
     return response;
   }
 };

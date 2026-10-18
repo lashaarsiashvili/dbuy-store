@@ -1,62 +1,240 @@
 import { initialProducts } from '../../src/data/initialProducts';
 
-export function injectProductOpenGraph(html: string, identifier: string, requestUrl: string): string {
-  if (!identifier) return html;
+export interface SeoProduct {
+  id: string;
+  title: string;
+  description: string;
+  image: string;
+  price?: number;
+  origPrice?: number;
+}
 
-  const decoded = decodeURIComponent(identifier).toLowerCase().trim();
-  const slugify = (text: string) => {
-    return String(text || '')
-      .toLowerCase()
-      .trim()
-      .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
-      .replace(/\s+/g, '-')
-      .replace(/-+/g, '-');
+function slugify(text: string): string {
+  return String(text || '')
+    .toLowerCase()
+    .trim()
+    .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
+}
+
+/**
+ * Searches Cloudflare D1 (with fallbacks to store_kv and initialProducts)
+ * in strict READ-ONLY mode. Never fails if certain optional columns are missing.
+ */
+export async function findProductForSeo(db: any, rawIdentifier: string): Promise<SeoProduct | null> {
+  if (!rawIdentifier) return null;
+
+  const decodedId = decodeURIComponent(rawIdentifier).trim();
+  const decodedLower = decodedId.toLowerCase();
+  let row: any = null;
+
+  if (db && typeof db.prepare === 'function') {
+    // 1. Direct ID match first (the 'id' column is always guaranteed to exist)
+    try {
+      row = await db.prepare('SELECT * FROM products WHERE id = ? LIMIT 1').bind(decodedId).first();
+    } catch (err) {
+      console.warn('[SEO] Direct ID lookup error:', err);
+    }
+
+    // 2. If not found by direct ID, scan products table safely in JavaScript (avoids missing column SQL errors)
+    if (!row) {
+      try {
+        const queryRes = await db.prepare('SELECT * FROM products').all();
+        const results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+        row = results.find((r: any) => {
+          const rId = String(r.id || '').toLowerCase().trim();
+          const rSlug = String(r.slug || r.customSlug || r.custom_slug || '').toLowerCase().trim();
+          const rTitle = String(r.title || r.name || '').toLowerCase().trim();
+          const rTitleKa = String(r.title_ka || r.name_ka || '').toLowerCase().trim();
+          const rSlugified = slugify(r.title || r.name || '');
+          return (
+            rId === decodedLower ||
+            (rSlug && rSlug === decodedLower) ||
+            rTitle === decodedLower ||
+            rTitleKa === decodedLower ||
+            rSlugified === decodedLower
+          );
+        });
+      } catch (err) {
+        console.warn('[SEO] Relational products scan error:', err);
+      }
+    }
+
+    // 3. Fallback to store_kv 'products' cache if relational lookup didn't find it
+    if (!row) {
+      try {
+        const kvRes: any = await db.prepare("SELECT value FROM store_kv WHERE key = 'products' LIMIT 1").first();
+        if (kvRes?.value) {
+          const kvProds = JSON.parse(kvRes.value);
+          if (Array.isArray(kvProds)) {
+            row = kvProds.find((r: any) => {
+              const rId = String(r.id || '').toLowerCase().trim();
+              const rSlug = String(r.slug || r.customSlug || r.custom_slug || '').toLowerCase().trim();
+              const rTitle = String(r.title || r.name || '').toLowerCase().trim();
+              const rTitleKa = String(r.title_ka || r.name_ka || '').toLowerCase().trim();
+              const rSlugified = slugify(r.title || r.name || '');
+              return (
+                rId === decodedLower ||
+                (rSlug && rSlug === decodedLower) ||
+                rTitle === decodedLower ||
+                rTitleKa === decodedLower ||
+                rSlugified === decodedLower
+              );
+            });
+          }
+        }
+      } catch (err) {
+        console.warn('[SEO] store_kv products lookup notice:', err);
+      }
+    }
+  }
+
+  // 4. Fallback to initialProducts static catalog
+  if (!row) {
+    row = initialProducts.find((p) => {
+      const pId = String(p.id).toLowerCase().trim();
+      const pSlug = p.customSlug ? p.customSlug.toLowerCase().trim() : '';
+      const pTitle = p.title ? p.title.toLowerCase().trim() : '';
+      const pTitleKa = p.titleKa || p.title_ka ? String(p.titleKa || p.title_ka).toLowerCase().trim() : '';
+      const pSlugified = slugify(p.title);
+      return (
+        pId === decodedLower ||
+        (pSlug && pSlug === decodedLower) ||
+        pTitle === decodedLower ||
+        pTitleKa === decodedLower ||
+        pSlugified === decodedLower
+      );
+    });
+  }
+
+  if (!row) return null;
+
+  // Resolve title
+  const title = String(row.title_ka || row.titleKa || row.title || row.name || 'Product').trim();
+
+  // Resolve description
+  const rawDesc = String(
+    row.description_ka || row.descriptionKa || row.description || row.description_en || ''
+  ).trim();
+  const cleanDesc = rawDesc.replace(/<[^>]*>?/gm, '').trim();
+
+  // Resolve image (checking primary image and JSON arrays)
+  let image = String(row.imageUrl || row.image || row.image_url || row.image_path || '').trim();
+  if (!image && (row.images || row.images_json)) {
+    try {
+      const parsed = typeof row.images === 'string'
+        ? JSON.parse(row.images)
+        : (typeof row.images_json === 'string' ? JSON.parse(row.images_json) : row.images);
+      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
+        image = parsed[0].trim();
+      }
+    } catch (e) {}
+  }
+
+  const price = Number(row.price) || 0;
+  const origPrice = Number(row.origPrice ?? row.orig_price ?? row.original_price ?? row.originalPrice ?? 0);
+
+  return {
+    id: String(row.id || rawIdentifier),
+    title,
+    description: cleanDesc,
+    image,
+    price,
+    origPrice: origPrice > price ? origPrice : undefined,
   };
+}
 
-  const product = initialProducts.find((p) => {
-    const idMatch = String(p.id).toLowerCase() === decoded;
-    const slugMatch = p.customSlug && p.customSlug.toLowerCase().trim() === decoded;
-    const genSlugMatch = slugify(p.title) === decoded;
-    return idMatch || slugMatch || genSlugMatch;
-  });
+function escapeHtml(str: string): string {
+  if (!str) return '';
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
+}
 
-  if (!product) return html;
+/**
+ * Injects Open Graph (og:) and Twitter Card meta tags for Facebook and social media crawlers.
+ */
+export function injectProductOpenGraphResponse(
+  response: Response,
+  product: SeoProduct,
+  requestUrl: string
+): Response {
+  const url = new URL(requestUrl);
+  const siteTitle = 'DBUY Store';
 
-  const title = product.titleKa || product.title_ka || product.title;
-  const price = product.price || 0;
-  const origPrice = product.origPrice && product.origPrice > price ? product.origPrice : null;
-  const savings = origPrice ? Math.round(origPrice - price) : 0;
+  // Format pricing for Georgian market
+  const formattedPrice = product.price ? `${product.price} ₾` : '';
+  const savings = product.origPrice && product.price
+    ? Math.round(product.origPrice - product.price)
+    : 0;
 
-  const seoTitle = `🔥 ${title} — მხოლოდ ${price} ₾ DBUY-ში!`;
-  const seoDesc = `💰 ფასი: ${price} ₾${origPrice ? ` (ძველი ფასი: ${origPrice} ₾ — დაზოგეთ ${savings} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში • 🛡️ ოფიციალური გარანტია • შეუკვეთეთ ონლაინ`;
-  
+  // Optimized high-CTR Facebook Open Graph Title & Description
+  const seoTitle = product.price
+    ? `🔥 ${product.title} — მხოლოდ ${formattedPrice} DBUY-ში!`
+    : `${product.title} — ${siteTitle}`;
+
+  const defaultDesc = `💰 ფასი: ${formattedPrice}${product.origPrice ? ` (ძველი ფასი: ${product.origPrice} ₾ — დაზოგეთ ${savings} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში • 🛡️ ოფიციალური გარანტია • შეუკვეთეთ ონლაინ`;
+  const seoDesc = product.description && product.description.length > 15
+    ? `${product.description.substring(0, 180)} | ${formattedPrice ? `ფასი: ${formattedPrice} • ` : ''}🚚 მიწოდება მთელ საქართველოში`
+    : defaultDesc;
+
+  // Facebook & Social Crawlers strictly require absolute URLs with https://
   let seoImage = 'https://dbuystore.com/icon.png';
-  if (product.image) {
-    seoImage = product.image.startsWith('http')
-      ? product.image
-      : `https://dbuystore.com${product.image.startsWith('/') ? '' : '/'}${product.image}`;
+  if (product.image && typeof product.image === 'string' && product.image.trim() !== '') {
+    const rawImg = product.image.trim();
+    if (rawImg.startsWith('http://') || rawImg.startsWith('https://')) {
+      seoImage = rawImg;
+    } else {
+      const cleanPath = rawImg.startsWith('/') ? rawImg : `/${rawImg}`;
+      const host = url.host && !url.host.includes('localhost') ? url.host : 'dbuystore.com';
+      seoImage = `https://${host}${cleanPath}`;
+    }
   }
 
-  const seoUrl = requestUrl;
+  const seoUrl = url.toString();
 
-  let modifiedHtml = html
-    .replace(/<title>[^<]*<\/title>/, `<title>${seoTitle}</title>`)
-    .replace(/<meta name="description" [^>]*>/, `<meta name="description" content="${seoDesc}" />`)
-    .replace(/<meta property="og:title" [^>]*>/, `<meta property="og:title" content="${seoTitle}" id="og-title" />`)
-    .replace(/<meta property="og:description" [^>]*>/, `<meta property="og:description" content="${seoDesc}" id="og-description" />`)
-    .replace(/<meta property="og:image" [^>]*>/g, `<meta property="og:image" content="${seoImage}" id="og-image" />`)
-    .replace(/<meta property="og:image:secure_url" [^>]*>/g, `<meta property="og:image:secure_url" content="${seoImage}" id="og-image-secure" />`)
-    .replace(/<meta property="og:url" [^>]*>/g, `<meta property="og:url" content="${seoUrl}" id="og-url" />`)
-    .replace(/<meta name="twitter:title" [^>]*>/, `<meta name="twitter:title" content="${seoTitle}" id="twitter-title" />`)
-    .replace(/<meta name="twitter:description" [^>]*>/, `<meta name="twitter:description" content="${seoDesc}" id="twitter-description" />`)
-    .replace(/<meta name="twitter:image" [^>]*>/g, `<meta name="twitter:image" content="${seoImage}" id="twitter-image" />`);
+  // Dynamic Tags Block for <head>
+  const dynamicTags = `
+    <title>${escapeHtml(seoTitle)}</title>
+    <meta name="description" content="${escapeHtml(seoDesc)}" />
+    <meta property="og:type" content="product" />
+    <meta property="og:site_name" content="${escapeHtml(siteTitle)}" />
+    <meta property="og:title" content="${escapeHtml(seoTitle)}" id="og-title" />
+    <meta property="og:description" content="${escapeHtml(seoDesc)}" id="og-description" />
+    <meta property="og:url" content="${escapeHtml(seoUrl)}" id="og-url" />
+    <meta property="og:image" content="${escapeHtml(seoImage)}" id="og-image" />
+    <meta property="og:image:secure_url" content="${escapeHtml(seoImage)}" id="og-image-secure" />
+    <meta property="og:image:width" content="1200" id="og-image-width" />
+    <meta property="og:image:height" content="630" id="og-image-height" />
+    <meta property="og:image:alt" content="${escapeHtml(product.title)}" id="og-image-alt" />
+    <meta property="product:price:currency" content="GEL" id="og-price-currency" />
+    ${product.price ? `<meta property="product:price:amount" content="${product.price}" id="og-price-amount" />` : ''}
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="${escapeHtml(seoTitle)}" id="twitter-title" />
+    <meta name="twitter:description" content="${escapeHtml(seoDesc)}" id="twitter-description" />
+    <meta name="twitter:image" content="${escapeHtml(seoImage)}" id="twitter-image" />
+    <meta name="twitter:image:alt" content="${escapeHtml(product.title)}" id="twitter-image-alt" />
+  `;
 
-  if (price) {
-    modifiedHtml = modifiedHtml.replace(
-      /<meta property="product:price:amount" [^>]*>/,
-      `<meta property="product:price:amount" content="${price}" id="og-price-amount" />`
-    );
+  // Use Cloudflare HTMLRewriter to remove stale static tags and append dynamic product tags
+  if (typeof HTMLRewriter !== 'undefined') {
+    return new HTMLRewriter()
+      .on('title, meta[property^="og:"], meta[name^="twitter:"], meta[property^="twitter:"], meta[name="description"], meta[property^="product:"]', {
+        element(element) {
+          element.remove();
+        },
+      })
+      .on('head', {
+        element(element) {
+          element.append(dynamicTags, { html: true });
+        },
+      })
+      .transform(response);
   }
 
-  return modifiedHtml;
+  return response;
 }
