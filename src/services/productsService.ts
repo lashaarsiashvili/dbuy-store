@@ -1,14 +1,24 @@
+import type { Product } from '../types';
+
+const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL)
+  ? String(import.meta.env.VITE_API_URL).replace(/\/+$/, '')
+  : '';
+const API_URL = `${API_BASE}/api/products`;
+
 export const ProductsManager = {
   // პროდუქტების წამოღება
   async getProducts(): Promise<Product[]> {
     try {
-      const response = await fetch(API_URL, { credentials: "omit" });
-      if (!response.ok) throw new Error("Failed to fetch products");
+      const response = await fetch(`${API_URL}?_t=${Date.now()}`, { 
+        credentials: 'omit',
+        cache: 'no-store'
+      });
+      if (!response.ok) throw new Error('Failed to fetch products');
       
       const products: any = await response.json();
-      return Array.isArray(products) ? products : (products?.products || []);
+      return Array.isArray(products) ? products : (products?.products || products?.results || []);
     } catch (error) {
-      console.error("D1-დან პროდუქტების ჩატვირთვის შეცდომა:", error);
+      console.error('D1-დან პროდუქტების ჩატვირთვის შეცდომა:', error);
       return [];
     }
   },
@@ -18,21 +28,23 @@ export const ProductsManager = {
     try {
       const productToSave = {
         ...newProduct,
-        id: newProduct.id || "prod_" + Date.now(),
-        createdAt: new Date().toISOString()
+        id: newProduct.id || 'prod_' + Date.now(),
+        createdAt: newProduct.createdAt || new Date().toISOString()
       };
 
       const response = await fetch(API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // ვაგზავნით მხოლოდ 1 ობიექტს და არა მთლიან სიას
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(productToSave) 
       });
 
-      if (!response.ok) throw new Error("Failed to add product to D1");
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Failed to add product to D1: ${errorText || response.statusText}`);
+      }
       return await response.json();
     } catch (error) {
-      console.error("დამატების შეცდომა:", error);
+      console.error('დამატების შეცდომა:', error);
       throw error;
     }
   },
@@ -40,16 +52,25 @@ export const ProductsManager = {
   // პროდუქტის რედაქტირება
   async updateProduct(id: string, updatedFields: Partial<Product>): Promise<any> {
     try {
-      const response = await fetch(`${API_URL}/${id}`, {
-        method: "PUT", // ან PATCH, გააჩნია თქვენი API როგორ არის აწყობილი
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...updatedFields, updatedAt: new Date().toISOString() })
+      const payload = {
+        ...updatedFields,
+        id,
+        updatedAt: new Date().toISOString()
+      };
+
+      const response = await fetch(API_URL, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error("Failed to update product");
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Failed to update product: ${errorText || response.statusText}`);
+      }
       return await response.json();
     } catch (error) {
-      console.error("განახლების შეცდომა:", error);
+      console.error('განახლების შეცდომა:', error);
       throw error;
     }
   },
@@ -57,14 +78,19 @@ export const ProductsManager = {
   // პროდუქტის წაშლა
   async deleteProduct(id: string): Promise<any> {
     try {
-      const response = await fetch(`${API_URL}/${id}`, {
-        method: "DELETE"
+      const response = await fetch(`${API_URL}?id=${encodeURIComponent(id)}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id })
       });
 
-      if (!response.ok) throw new Error("Failed to delete product");
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        throw new Error(`Failed to delete product: ${errorText || response.statusText}`);
+      }
       return await response.json();
     } catch (error) {
-      console.error("წაშლის შეცდომა:", error);
+      console.error('წაშლის შეცდომა:', error);
       throw error;
     }
   }

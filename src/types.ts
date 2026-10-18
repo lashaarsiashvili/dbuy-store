@@ -61,7 +61,9 @@ export interface Product {
   youtubeId?: string;
   youtubeVideoId?: string;
   created_at?: string;
+  createdAt?: string;
   updated_at?: string;
+  updatedAt?: string;
 }
 
 export interface CartItem {
