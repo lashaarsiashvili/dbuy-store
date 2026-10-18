@@ -62,10 +62,14 @@ export const PostHogAnalyticsDashboard: React.FC = () => {
   // Config Form
   const [configForm, setConfigForm] = useState<PostHogConfig>(getPostHogConfig());
 
-  const loadAnalytics = async () => {
+  const [includeAdminActivity, setIncludeAdminActivity] = useState<boolean>(() => {
+    return typeof localStorage !== 'undefined' && localStorage.getItem('dbuy_include_admin_analytics') === 'true';
+  });
+
+  const loadAnalytics = async (force: boolean = false) => {
     setLoading(true);
     try {
-      const res = await fetchPostHogAnalytics(timeRangeDays, products, orders.length);
+      const res = await fetchPostHogAnalytics(timeRangeDays, products, orders.length, force);
       setData(res);
     } catch (err) {
       console.error('Failed to load PostHog analytics:', err);
@@ -75,7 +79,7 @@ export const PostHogAnalyticsDashboard: React.FC = () => {
   };
 
   useEffect(() => {
-    loadAnalytics();
+    loadAnalytics(false);
   }, [timeRangeDays, products.length, orders.length]);
 
   const handleSaveConfig = (e: React.FormEvent) => {
@@ -157,12 +161,36 @@ export const PostHogAnalyticsDashboard: React.FC = () => {
 
             <button
               type="button"
-              onClick={loadAnalytics}
+              onClick={() => loadAnalytics(true)}
               disabled={loading}
               className="p-2.5 rounded-2xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer border border-slate-200 dark:border-slate-700"
               title={isKa ? 'მონაცემების განახლება' : 'Refresh analytics'}
             >
               <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin text-blue-600' : ''}`} />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const next = !includeAdminActivity;
+                setIncludeAdminActivity(next);
+                localStorage.setItem('dbuy_include_admin_analytics', String(next));
+                addToast(
+                  next 
+                    ? (isKa ? 'ადმინის ტესტები ჩაერთო ანალიტიკაში' : 'Admin test tracking enabled')
+                    : (isKa ? 'ადმინის ტესტები გამოირთო ანალიტიკიდან' : 'Admin test tracking excluded'),
+                  'info'
+                );
+                loadAnalytics(true);
+              }}
+              className={`px-3 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer border ${
+                includeAdminActivity
+                  ? 'bg-emerald-600 text-white border-emerald-500 shadow-xs'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-700'
+              }`}
+              title={isKa ? 'ჩართეთ/გამორთეთ ადმინის ტესტების აღრიცხვა' : 'Toggle admin test action tracking'}
+            >
+              {includeAdminActivity ? (isKa ? '✓ ადმინ ტესტები: ჩართულია' : '✓ Admin Tests: ON') : (isKa ? '○ ადმინ ტესტები: გამოთიშული' : '○ Admin Tests: OFF')}
             </button>
 
             <button

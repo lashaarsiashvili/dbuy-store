@@ -87,7 +87,8 @@ export const savePostHogConfig = (config: Partial<PostHogConfig>): void => {
 export const fetchPostHogAnalytics = async (
   timeRangeDays: number = 7,
   productsList: Product[] = [],
-  completedOrdersCount: number = 0
+  completedOrdersCount: number = 0,
+  forceRefresh: boolean = false
 ): Promise<PostHogAnalyticsData> => {
   const cfg = getPostHogConfig();
   // Must have Personal API Key starting with phx_ and a projectId
@@ -96,11 +97,13 @@ export const fetchPostHogAnalytics = async (
   if (hasValidPersonalKey) {
     try {
       const cleanHost = cfg.hostUrl.replace(/\/$/, '');
-      const queryUrl = `${cleanHost}/api/projects/${encodeURIComponent(cfg.projectId)}/query/`;
+      const queryUrl = `${cleanHost}/api/projects/${encodeURIComponent(cfg.projectId)}/query/${forceRefresh ? `?_t=${Date.now()}` : ''}`;
       
       const headers = {
         'Authorization': `Bearer ${cfg.personalApiKey}`,
         'Content-Type': 'application/json',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
       };
 
       // 1. Fetch Daily Visitors HogQL Query
@@ -115,6 +118,7 @@ export const fetchPostHogAnalytics = async (
         method: 'POST',
         headers,
         body: JSON.stringify(dailyQuery),
+        cache: forceRefresh ? 'no-store' : 'default',
       });
 
       // 2. Fetch Traffic Sources (Referrers)

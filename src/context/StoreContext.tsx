@@ -1493,8 +1493,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [promoDiscountPercent, setPromoDiscountPercent] = useState(0);
 
   const addToCart = (product: Product, quantity = 1, selectedOption?: string) => {
-    // Analytics tracking (excluding admin traffic)
-    const isCurrentAdmin = Boolean(
+    // Analytics tracking (excluding admin traffic unless explicitly enabled via dashboard toggle)
+    const includeAdminTests = typeof localStorage !== 'undefined' && localStorage.getItem('dbuy_include_admin_analytics') === 'true';
+    const isCurrentAdmin = includeAdminTests ? false : Boolean(
       isAdmin ||
       user?.role === 'admin' ||
       user?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
@@ -1502,6 +1503,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       isExcludedAdminDevice()
     );
     analytics.trackAddToCart(product?.id, isCurrentAdmin);
+
+    // Reliable server-side tracking fallback for mobile browsers & Apple ITP resilience
+    try {
+      fetch('/api/track', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ type: 'cart', productId: product?.id }),
+        keepalive: true,
+      }).catch(() => {});
+    } catch {}
 
     if (typeof window !== 'undefined' && window.posthog) {
       const cartKey = `ph_cart_${product?.id}_${selectedOption || 'default'}`;
