@@ -1,27 +1,4 @@
-/**
- * /functions/api/products.ts
- *
- * Cloudflare Pages Function route handler for /api/products.
- * Strictly validates the Cloudflare D1 env.DB connection, ensures table creation matching
- * the canonical schema (id, slug, title, description, price, currency, image_path, category, stock, is_active),
- * executes parameterized prepared statements, resolves raw GitHub assets, and returns { success: true, products: [...] }.
- */
-
-import { initialProducts, DB_VERSION } from '../../src/data/initialProducts';
-import { ASSET_BASE_URL, normalizeSlug, resolveGithubAssetUrl } from '../../src/utils/githubAssets';
-
-export interface Env {
-  DB: {
-    prepare(query: string): {
-      bind(...values: any[]): any;
-      all<T = any>(): Promise<{ results: T[]; [key: string]: any }>;
-      first<T = any>(colName?: string): Promise<T | null>;
-      run(): Promise<any>;
-    };
-    exec(query: string): Promise<any>;
-  };
-  [key: string]: any;
-}
+/// <reference types="@cloudflare/workers-types" />
 
 export interface EventContext<Env = any> {
   request: Request;
@@ -34,312 +11,212 @@ export type PagesFunction<Env = any> = (context: EventContext<Env>) => Promise<R
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Slug',
-  'Content-Type': 'application/json',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Slug, x-admin-key',
   'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
-  'Pragma': 'no-cache',
-  'Expires': '0',
 };
 
-async function ensureProductsTable(env: Env) {
-  if (!env || !env.DB || typeof env.DB.exec !== 'function') return;
-  try {
-    // Try to create table, ignore error if it already exists
-    await env.DB.exec(`CREATE TABLE products (id TEXT PRIMARY KEY, title TEXT)`);
-  } catch (e) {}
-  
-  try {
-    await env.DB.exec('ALTER TABLE products ADD COLUMN slug TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN description TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN price REAL;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN currency TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN image TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN image_path TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN images TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN images_json TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN category TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN stock INTEGER;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN is_active INTEGER DEFAULT 1;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN title_ka TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN orig_price REAL;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN badge TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN is_published_globally INTEGER DEFAULT 0;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN published_at TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN videos TEXT;');
-    await env.DB.exec('ALTER TABLE products ADD COLUMN variants TEXT;');
-  } catch (e) {}
+function jsonResponse(data: any, status = 200) {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: {
+      'Content-Type': 'application/json',
+      ...CORS_HEADERS,
+    },
+  });
 }
 
-export async function handleProductsPost(env: Env, request: Request): Promise<Response> {
-  if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Cloudflare D1 database connection unavailable' }),
-      { status: 500, headers: CORS_HEADERS }
-    );
-  }
-
-  try {
-    await ensureProductsTable(env);
-
-    const body: any = await request.json().catch(() => null);
-    if (!body) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Invalid JSON payload' }),
-        { status: 400, headers: CORS_HEADERS }
-      );
-    }
-
-    const rawList = Array.isArray(body) ? body : (Array.isArray(body.products) ? body.products : [body]);
-    const activeIds: string[] = [];
-
-    for (const item of rawList) {
-      if (!item || typeof item !== 'object') continue;
-      const id = String(item.id || `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
-      activeIds.push(id);
-      const title = item.title || item.titleKa || 'Product';
-      const titleKa = item.titleKa || item.title_ka || '';
-      const slug = item.customSlug ? normalizeSlug(item.customSlug) : (normalizeSlug(title) || id);
-      const description = item.description || item.descriptionKa || '';
-      const descriptionKa = item.descriptionKa || item.description_ka || '';
-      const price = Number(item.price) || 0.00;
-      const origPrice = item.origPrice ? Number(item.origPrice) : null;
-      const currency = item.currency || 'USD';
-      
-      const rawImagesArr = Array.isArray(item.images) && item.images.length > 0 
-        ? item.images 
-        : (item.image ? [item.image] : []);
-
-      const r2Bucket = env.R2_BUCKET || env.MEDIA_BUCKET || env.BUCKET;
-      const cleanImagesArr: string[] = [];
-
-      for (let idx = 0; idx < rawImagesArr.length; idx++) {
-        let imgUrl = String(rawImagesArr[idx] || '').trim();
-        // If image is a base64 string, upload it to R2
-        if (imgUrl.startsWith('data:image/') && r2Bucket && typeof r2Bucket.put === 'function') {
-          try {
-            const match = imgUrl.match(/^data:([a-zA-Z0-9-+/.]+);base64,(.+)$/s);
-            if (match) {
-              const mimeType = match[1];
-              const base64Data = match[2].trim().replace(/\s/g, '');
-              const bin = atob(base64Data);
-              const u8 = new Uint8Array(bin.length);
-              for (let b = 0; b < bin.length; b++) u8[b] = bin.charCodeAt(b);
-              let ext = 'webp';
-              if (mimeType.includes('png')) ext = 'png';
-              else if (mimeType.includes('jpeg') || mimeType.includes('jpg')) ext = 'jpg';
-              const cleanId = id.replace(/[^a-zA-Z0-9_-]/g, '-').toLowerCase();
-              const filename = `${cleanId}${idx > 0 ? `-${idx}` : ''}.${ext}`;
-              const key = `products/${filename}`;
-              await r2Bucket.put(key, u8, {
-                httpMetadata: { contentType: mimeType, cacheControl: 'public, max-age=31536000, immutable' }
-              });
-              imgUrl = `https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/${filename}`;
-            }
-          } catch (e) {
-            console.error('Failed to convert base64 to R2 in products.ts:', e);
-          }
-        }
-        if (imgUrl) cleanImagesArr.push(imgUrl);
-      }
-
-      const primaryImage = cleanImagesArr[0] || (typeof item.image === 'string' ? item.image : '');
-      const imagesJson = JSON.stringify(cleanImagesArr.length > 0 ? cleanImagesArr : (primaryImage ? [primaryImage] : []));
-
-      const category = item.category || 'general';
-      const stock = Number(item.stock) || 0;
-      const badge = item.badge || '';
-      const isActive = item.is_active !== undefined ? Number(item.is_active) : 1;
-      const isPublishedGlobally = item.isPublishedGlobally ? 1 : 0;
-      const publishedAt = item.publishedAt || null;
-
-      console.log('[D1 WRITE QUERY EXECUTING /api/products]:', { id, title, price });
-      await env.DB.prepare(`
-        INSERT INTO products (id, slug, title, name, title_ka, name_ka, description, description_ka, price, orig_price, original_price, currency, image, image_path, images, images_json, category, stock, badge, is_active, is_published_globally, published_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(id) DO UPDATE SET
-          slug = excluded.slug,
-          title = excluded.title,
-          name = excluded.name,
-          title_ka = excluded.title_ka,
-          name_ka = excluded.name_ka,
-          description = excluded.description,
-          description_ka = excluded.description_ka,
-          price = excluded.price,
-          orig_price = excluded.orig_price,
-          original_price = excluded.original_price,
-          currency = excluded.currency,
-          image = excluded.image,
-          image_path = excluded.image_path,
-          images = excluded.images,
-          images_json = excluded.images_json,
-          category = excluded.category,
-          stock = excluded.stock,
-          badge = excluded.badge,
-          is_active = excluded.is_active,
-          is_published_globally = excluded.is_published_globally,
-          published_at = excluded.published_at,
-          updated_at = CURRENT_TIMESTAMP
-      `).bind(
-        id, slug, title, title, titleKa, titleKa, description, descriptionKa, price, origPrice, origPrice, currency,
-        primaryImage, primaryImage, imagesJson, imagesJson, category, stock, badge, isActive, isPublishedGlobally, publishedAt
-      ).run();
-    }
-
-    // Explicitly delete products from D1 that are no longer present in the updated products payload
-    if (activeIds.length > 0) {
-      const placeholders = activeIds.map(() => '?').join(',');
-      await env.DB.prepare(`DELETE FROM products WHERE id NOT IN (${placeholders})`).bind(...activeIds).run();
-    } else if (Array.isArray(body) && body.length === 0) {
-      await env.DB.prepare('DELETE FROM products').run();
-    }
-
-    return new Response(
-      JSON.stringify({ success: true, count: rawList.length }),
-      { status: 200, headers: CORS_HEADERS }
-    );
-  } catch (error: any) {
-    console.error('[Cloudflare D1 /api/products POST] Query error:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: error?.message || 'Failed to save products in D1', stack: error?.stack }),
-      { status: 500, headers: CORS_HEADERS }
-    );
-  }
-}
-
-export async function handleProductsGet(env: Env, request?: Request): Promise<Response> {
-  if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
-    const errorMsg = 'Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid';
-    console.error(`[Cloudflare D1 /api/products] Connection Error: ${errorMsg}`);
-    return new Response(
-      JSON.stringify({ success: false, error: errorMsg, products: [] }),
-      { status: 500, headers: CORS_HEADERS }
-    );
-  }
-
-  try {
-    // Retrieve active products with parameterized query
-    const { results } = await env.DB.prepare('SELECT * FROM products WHERE is_active = 1 ORDER BY id DESC').all();
-    const products = Array.isArray(results) ? results.map(p => {
-      let imagesArr: string[] = [];
-      if (p.images_json) {
-        try { imagesArr = JSON.parse(p.images_json); } catch (e) {}
-      }
-      if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
-        imagesArr = (p.image || p.image_path) ? [p.image || p.image_path] : [];
-      }
-
-      const primaryImg = p.image || p.image_path || imagesArr[0] || '';
-      
-      // Images are now stored in D1/R2 as permanent public URLs, no resolution needed.
-      const resolvedPrimary = primaryImg;
-      const resolvedImages = imagesArr;
-
-      return {
-        ...p,
-        id: String(p.id),
-        title: p.title,
-        titleKa: p.title_ka || p.title,
-        customSlug: p.slug,
-        description: p.description,
-        descriptionKa: p.description_ka,
-        price: p.price,
-        origPrice: p.orig_price,
-        badge: p.badge,
-        image: resolvedPrimary,
-        imageUrl: resolvedPrimary,
-        images: resolvedImages.length > 0 ? resolvedImages : [resolvedPrimary],
-      };
-    }) : [];
-
-    return new Response(
-      JSON.stringify({ success: true, products }),
-      { status: 200, headers: CORS_HEADERS }
-    );
-  } catch (error: any) {
-    console.error('[Cloudflare D1 /api/products] Query execution error:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: error?.message || 'Database query error', products: [] }),
-      { status: 500, headers: CORS_HEADERS }
-    );
-  }
-}
-
-export async function handleProductsDelete(env: Env, request: Request): Promise<Response> {
-  if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
-    return new Response(
-      JSON.stringify({ success: false, error: 'Cloudflare D1 database connection unavailable' }),
-      { status: 500, headers: CORS_HEADERS }
-    );
-  }
-
-  try {
-    const url = new URL(request.url);
-    let id = url.searchParams.get('id') || url.searchParams.get('productId') || '';
-
-    if (!id && request.headers.get('content-type')?.includes('application/json')) {
-      const body: any = await request.json().catch(() => null);
-      if (body) {
-        id = body.id || body.productId || '';
-      }
-    }
-
-    if (!id) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Product ID is required for deletion' }),
-        { status: 400, headers: CORS_HEADERS }
-      );
-    }
-
-    const res = await env.DB.prepare('DELETE FROM products WHERE id = ? OR slug = ?').bind(id, id).run();
-
-    return new Response(
-      JSON.stringify({ success: true, deletedId: id, result: res }),
-      { status: 200, headers: CORS_HEADERS }
-    );
-  } catch (error: any) {
-    console.error('[Cloudflare D1 /api/products DELETE] Error:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: error?.message || 'Failed to delete product from D1' }),
-      { status: 500, headers: CORS_HEADERS }
-    );
-  }
-}
-
-export const onRequest: PagesFunction<Env> = async (context) => {
+export const onRequest: PagesFunction<any> = async (context) => {
   const { request, env } = context;
 
   if (request.method === 'OPTIONS') {
     return new Response(null, { status: 204, headers: CORS_HEADERS });
   }
 
-  if (request.method === 'GET') {
-    return handleProductsGet(env, request);
+  if (!env || !env.DB || typeof env.DB.prepare !== 'function') {
+    return jsonResponse({
+      success: false,
+      error: 'Cloudflare D1 database connection unavailable: env.DB binding is missing or invalid',
+      products: [],
+    }, 500);
   }
 
-  if (request.method === 'POST') {
-    return handleProductsPost(env, request);
+  try {
+    // 1. GET: Fetch all products safely
+    if (request.method === 'GET') {
+      let results: any[] = [];
+      try {
+        const queryRes = await env.DB.prepare('SELECT * FROM products').all();
+        results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+      } catch (err) {
+        console.error('[D1 GET Error]:', err);
+      }
+
+      // Map products to ensure both raw list and formatted product properties exist
+      const products = results.map((p: any) => {
+        let imagesArr: string[] = [];
+        if (p.images_json || p.images) {
+          try {
+            imagesArr = typeof p.images_json === 'string' ? JSON.parse(p.images_json) : (typeof p.images === 'string' ? JSON.parse(p.images) : p.images);
+          } catch (e) {}
+        }
+        if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
+          const fallbackImg = p.imageUrl || p.image || p.image_path || '';
+          imagesArr = fallbackImg ? [fallbackImg] : [];
+        }
+
+        const primaryImg = p.imageUrl || p.image || p.image_path || imagesArr[0] || '';
+
+        return {
+          ...p,
+          id: String(p.id),
+          title: p.title || p.name || 'Product',
+          titleKa: p.title_ka || p.name_ka || p.title || p.name || '',
+          customSlug: p.slug || p.customSlug || String(p.id),
+          description: p.description || p.description_en || '',
+          descriptionKa: p.description_ka || '',
+          price: Number(p.price) || 0,
+          origPrice: Number(p.orig_price || p.original_price) || 0,
+          category: p.category || 'general',
+          stock: Number(p.stock) || 0,
+          badge: p.badge || '',
+          image: primaryImg,
+          imageUrl: primaryImg,
+          image_path: primaryImg,
+          images: imagesArr,
+          createdAt: p.createdAt || p.created_at || new Date().toISOString(),
+        };
+      });
+
+      return jsonResponse({ success: true, products, results: products });
+    }
+
+    // 2. POST / PUT: Add or Update a product safely without overwriting schema
+    if (request.method === 'POST' || request.method === 'PUT') {
+      const body = await request.json<any>().catch(() => null);
+      if (!body) {
+        return jsonResponse({ success: false, error: 'Invalid JSON payload' }, 400);
+      }
+
+      const rawList = Array.isArray(body) ? body : (Array.isArray(body.products) ? body.products : [body]);
+      const savedProducts: any[] = [];
+
+      for (const product of rawList) {
+        if (!product || typeof product !== 'object') continue;
+
+        const id = String(product.id || `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`);
+        const title = product.title || product.titleKa || product.name || 'Product';
+        const titleKa = product.titleKa || product.title_ka || product.name_ka || title;
+        const price = Number(product.price) || 0;
+        const origPrice = Number(product.origPrice || product.original_price) || 0;
+        const description = product.description || product.description_en || '';
+        const descriptionKa = product.descriptionKa || product.description_ka || description;
+        const category = product.category || 'general';
+        const stock = Number(product.stock) || 0;
+        const badge = product.badge || '';
+        const customSlug = product.customSlug || product.slug || id;
+
+        const imagesArr = Array.isArray(product.images) && product.images.length > 0
+          ? product.images
+          : (product.image || product.imageUrl ? [product.image || product.imageUrl] : []);
+        const primaryImage = product.imageUrl || product.image || imagesArr[0] || '';
+        const imagesJson = JSON.stringify(imagesArr.length > 0 ? imagesArr : (primaryImage ? [primaryImage] : []));
+        const createdAt = product.createdAt || product.created_at || new Date().toISOString();
+
+        console.log('[D1 WRITE /api/products]: Saving product ID:', id, title, price);
+
+        try {
+          await env.DB.prepare(`
+            INSERT INTO products (id, slug, title, name, title_ka, name_ka, description, description_en, description_ka, price, orig_price, original_price, image, image_path, imageUrl, images, images_json, category, stock, badge, createdAt, created_at, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+              slug = excluded.slug,
+              title = excluded.title,
+              name = excluded.name,
+              title_ka = excluded.title_ka,
+              name_ka = excluded.name_ka,
+              description = excluded.description,
+              description_en = excluded.description_en,
+              description_ka = excluded.description_ka,
+              price = excluded.price,
+              orig_price = excluded.orig_price,
+              original_price = excluded.original_price,
+              image = excluded.image,
+              image_path = excluded.image_path,
+              imageUrl = excluded.imageUrl,
+              images = excluded.images,
+              images_json = excluded.images_json,
+              category = excluded.category,
+              stock = excluded.stock,
+              badge = excluded.badge,
+              updated_at = CURRENT_TIMESTAMP
+          `).bind(
+            id, customSlug, title, title, titleKa, titleKa, description, description, descriptionKa,
+            price, origPrice, origPrice, primaryImage, primaryImage, primaryImage, imagesJson, imagesJson,
+            category, stock, badge, createdAt, createdAt
+          ).run();
+        } catch (dbErr) {
+          console.warn('Full ON CONFLICT insert failed, trying minimal insert:', dbErr);
+          await env.DB.prepare(`
+            INSERT OR REPLACE INTO products (id, title, price, description, category, imageUrl)
+            VALUES (?, ?, ?, ?, ?, ?)
+          `).bind(
+            id, title, price, description, category, primaryImage
+          ).run();
+        }
+
+        savedProducts.push({
+          id,
+          title,
+          price,
+          description,
+          category,
+          imageUrl: primaryImage,
+          image: primaryImage,
+          images: imagesArr,
+          createdAt,
+        });
+      }
+
+      return jsonResponse({
+        success: true,
+        product: savedProducts[0],
+        products: savedProducts,
+        count: savedProducts.length,
+      }, request.method === 'POST' ? 201 : 200);
+    }
+
+    // 3. DELETE: Remove single product by ID
+    if (request.method === 'DELETE') {
+      const url = new URL(request.url);
+      let id = url.searchParams.get('id') || url.searchParams.get('productId') || '';
+
+      if (!id) {
+        const body = await request.json<any>().catch(() => null);
+        if (body) id = body.id || body.productId || '';
+      }
+
+      if (!id) {
+        return jsonResponse({ success: false, error: 'Product ID is required for deletion' }, 400);
+      }
+
+      await env.DB.prepare('DELETE FROM products WHERE id = ? OR slug = ?').bind(id, id).run();
+      return jsonResponse({ success: true, deletedId: id });
+    }
+
+    return jsonResponse({ success: false, error: `Method ${request.method} Not Allowed` }, 405);
+  } catch (err: any) {
+    console.error('[D1 /api/products Error]:', err);
+    return jsonResponse({
+      success: false,
+      error: err?.message || 'Database operation error',
+      stack: err?.stack,
+    }, 500);
   }
-
-  if (request.method === 'DELETE') {
-    return handleProductsDelete(env, request);
-  }
-
-  return new Response(
-    JSON.stringify({ success: false, error: `Method ${request.method} Not Allowed` }),
-    { status: 405, headers: CORS_HEADERS }
-  );
 };
 
-export const onRequestGet: PagesFunction<Env> = async (context) => {
-  return handleProductsGet(context.env, context.request);
-};
-
-export const onRequestDelete: PagesFunction<Env> = async (context) => {
-  return handleProductsDelete(context.env, context.request);
-};
-
-export const onRequestOptions: PagesFunction<Env> = async () => {
-  return new Response(null, { status: 204, headers: CORS_HEADERS });
-};
+export const onRequestGet = onRequest;
+export const onRequestPost = onRequest;
+export const onRequestPut = onRequest;
+export const onRequestDelete = onRequest;
+export const onRequestOptions = onRequest;
