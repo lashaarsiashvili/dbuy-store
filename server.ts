@@ -1412,6 +1412,10 @@ Input Details:
 - Tone: "${tone || 'high-converting'}"
 
 CRITICAL OUTPUT REQUIREMENTS:
+0. SYSTEM PROMPT — LOCALIZATION & CURRENCY LOGIC:
+   - If Georgian is selected: Generate the ad copy in Georgian. Fetch the original USD price and automatically convert it to Georgian Lari (₾ / GEL) using the current exchange rate (1 USD ≈ 2.70 GEL). Perform the exact mathematical conversion—do not simply replace the currency symbol.
+   - If English is selected: Generate the ad copy in English and keep the original price in USD ($).
+   - Strict Constraint: This localization and conversion logic applies ONLY to the generated ad copy and price display. Do NOT alter, translate, or modify product names, images, or base product descriptions. Retain the existing system behavior for those components.
 1. CONCISE & PUNCHY:
    - "descriptionEn": Exactly 2 to 3 short, engaging, high-impact sentences (max 45 words). Absolutely no verbose marketing filler, no fluff, and no generic promotional sentences. Keep it extremely crisp and focused.
    - "descriptionKa": Exactly 2 to 3 short, natural, and highly attractive sentences in Georgian (ქართული სარეკლამო აღწერა). It must be native, persuasive, and grammatically flawless.

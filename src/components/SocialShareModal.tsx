@@ -6,6 +6,7 @@ import {
   AdPostStyle, 
   AdLanguage 
 } from '../utils/socialAdGenerator';
+import { getCachedGelRate, fetchCurrentGelRate } from '../utils/exchangeRate';
 import { 
   X, 
   Facebook, 
@@ -47,18 +48,33 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   const [copiedType, setCopiedType] = useState<'text' | 'link' | 'fb' | 'ig' | null>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [showFbGuidance, setShowFbGuidance] = useState<boolean>(false);
+  const [exchangeRate, setExchangeRate] = useState<number>(() => getCachedGelRate());
 
-  // Update caption when language or style changes
+  // Fetch real-time current exchange rate
+  useEffect(() => {
+    let active = true;
+    fetchCurrentGelRate().then((rate) => {
+      if (active && rate > 0) {
+        setExchangeRate(rate);
+      }
+    });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  // Update caption when language, style, or exchangeRate changes
   useEffect(() => {
     if (!product) return;
     const generated = generateSocialAdPost({
       product,
       style,
       language,
+      exchangeRateGEL: exchangeRate,
     });
     setCaption(generated.caption);
     setStatusMessage('');
-  }, [product, style, language]);
+  }, [product, style, language, exchangeRate]);
 
   // Handle escape key
   useEffect(() => {
@@ -297,6 +313,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
       product,
       style,
       language,
+      exchangeRateGEL: exchangeRate,
     });
     setCaption(generated.caption);
     setStatusMessage(language === 'ka' ? 'ტექსტი აღდგა საწყის სარეკლამო ვერსიაზე' : 'Reset to default ad copy');
@@ -362,13 +379,22 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 <h4 className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate">
                   {displayTitle}
                 </h4>
-                <div className="flex items-center space-x-2 mt-0.5">
+                <div className="flex items-center space-x-2 mt-0.5 flex-wrap">
                   <span className="text-xs font-black text-blue-600 dark:text-blue-400">
-                    {product.price} {language === 'ka' ? '₾' : '$'}
+                    {language === 'ka'
+                      ? `${(Math.round((product.price || 0) * exchangeRate * 100) / 100).toFixed(2)} ₾`
+                      : `$${(product.price || 0).toFixed(2)}`}
                   </span>
                   {product.origPrice && product.origPrice > product.price && (
                     <span className="text-[11px] text-slate-400 line-through">
-                      {product.origPrice} {language === 'ka' ? '₾' : '$'}
+                      {language === 'ka'
+                        ? `${(Math.round(product.origPrice * exchangeRate * 100) / 100).toFixed(2)} ₾`
+                        : `$${product.origPrice.toFixed(2)}`}
+                    </span>
+                  )}
+                  {language === 'ka' && (
+                    <span className="text-[10px] font-semibold text-slate-400 dark:text-slate-500">
+                      (1$ ≈ {exchangeRate.toFixed(2)}₾)
                     </span>
                   )}
                   {product.badge && (

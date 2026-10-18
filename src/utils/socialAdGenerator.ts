@@ -1,5 +1,6 @@
 import { Product } from '../types';
 import { generateProductSlug } from '../context/StoreContext';
+import { getCachedGelRate } from './exchangeRate';
 
 export type AdPostStyle = 'sales' | 'story' | 'promo';
 export type AdLanguage = 'ka' | 'en';
@@ -10,6 +11,7 @@ export interface SocialAdOptions {
   language: AdLanguage;
   baseUrl?: string;
   customDiscountPercent?: number;
+  exchangeRateGEL?: number;
 }
 
 /**
@@ -70,12 +72,45 @@ export function generateSocialAdPost(options: SocialAdOptions): {
     }
   }
 
-  // Price formatting
-  const price = product.price || 0;
-  const origPrice = product.origPrice && product.origPrice > price ? product.origPrice : null;
-  const currencySymbol = isKa ? '₾' : '$';
-  const savings = origPrice ? Math.round(origPrice - price) : 0;
-  const discountPercent = origPrice ? Math.round(((origPrice - price) / origPrice) * 100) : 0;
+  // Localization & Currency Logic:
+  // If Georgian is selected: Generate the ad copy in Georgian. Fetch the original USD price
+  // and automatically convert it to Georgian Lari (₾ / GEL) using the current exchange rate.
+  // Perform the exact mathematical conversion—do not simply replace the currency symbol.
+  // If English is selected: Generate the ad copy in English and keep the original price in USD ($).
+  // Strict Constraint: This localization and conversion logic applies ONLY to the generated ad copy
+  // and price display. Do NOT alter, translate, or modify product names, images, or base product descriptions.
+  const rawUsdPrice = product.price || 0;
+  const rawUsdOrigPrice = product.origPrice && product.origPrice > rawUsdPrice ? product.origPrice : null;
+  const exchangeRate = options.exchangeRateGEL && options.exchangeRateGEL > 0
+    ? options.exchangeRateGEL
+    : getCachedGelRate();
+
+  let price: number;
+  let origPrice: number | null = null;
+  let savings: number = 0;
+  let currencySymbol: string;
+
+  if (isKa) {
+    // Exact mathematical conversion USD -> GEL
+    price = Math.round(rawUsdPrice * exchangeRate * 100) / 100;
+    if (rawUsdOrigPrice) {
+      origPrice = Math.round(rawUsdOrigPrice * exchangeRate * 100) / 100;
+      savings = Math.round((origPrice - price) * 100) / 100;
+    }
+    currencySymbol = '₾';
+  } else {
+    // Keep original price in USD ($)
+    price = rawUsdPrice;
+    if (rawUsdOrigPrice) {
+      origPrice = rawUsdOrigPrice;
+      savings = Math.round((origPrice - price) * 100) / 100;
+    }
+    currencySymbol = '$';
+  }
+
+  const discountPercent = origPrice && origPrice > price
+    ? Math.round(((origPrice - price) / origPrice) * 100)
+    : 0;
 
   // Category hashtag mapping
   const categoryTagsKa: Record<string, string> = {

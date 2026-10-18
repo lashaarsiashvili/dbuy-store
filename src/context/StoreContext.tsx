@@ -562,8 +562,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const isKa = language === 'ka';
     const rawTitle = (isKa && product.titleKa) ? product.titleKa : product.title;
     const headline = isKa ? `🔥 ${rawTitle} — სპეციალური შეთავაზება DBUY-ში!` : `🔥 ${rawTitle} — Special Offer at DBUY Store!`;
-    const price = product.price || 0;
-    const origPrice = product.origPrice && product.origPrice > price ? product.origPrice : null;
+    const price = isKa ? Math.round((product.price || 0) * (theme.gelRate || 2.70) * 100) / 100 : (product.price || 0);
+    const origPrice = product.origPrice && product.origPrice > product.price 
+      ? (isKa ? Math.round(product.origPrice * (theme.gelRate || 2.70) * 100) / 100 : product.origPrice) 
+      : null;
     const currencySymbol = isKa ? '₾' : '$';
     const text = isKa 
       ? `💰 მხოლოდ ${price} ${currencySymbol}${origPrice ? ` (ძველი: ${origPrice} ${currencySymbol})` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში | 🛡️ ოფიციალური გარანტია`
