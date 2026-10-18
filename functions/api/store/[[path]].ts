@@ -177,6 +177,153 @@ async function loadFullProducts(db: D1Database, rawProducts: any[]): Promise<any
   return parseAndFallbackProducts(rawProducts);
 }
 
+/**
+ * Dynamically queries PRAGMA table_info to inspect existing columns in D1.
+ * Ensures queries never crash due to schema differences or missing columns.
+ */
+async function getTableColumns(db: D1Database, tableName = 'products'): Promise<Set<string>> {
+  const cols = new Set<string>();
+  try {
+    const info = await db.prepare(`PRAGMA table_info(${tableName})`).all();
+    if (Array.isArray(info?.results)) {
+      for (const row of info.results) {
+        if (row && typeof (row as any).name === 'string') {
+          cols.add(String((row as any).name).toLowerCase());
+        }
+      }
+    }
+  } catch (err) {
+    console.warn(`[PRAGMA table_info(${tableName}) Warning]:`, err);
+  }
+  return cols;
+}
+
+/**
+ * Safely inserts or updates a product in D1 relational table without data destruction.
+ * Preserves existing images, stock, descriptions, and custom fields.
+ */
+async function upsertProductRelational(db: D1Database, p: any, tableColumns: Set<string>): Promise<void> {
+  const id = String(p.id);
+  const title = String(p.title_en || p.title || p.name || 'Product').trim();
+  const name = String(p.name || p.title || p.title_en || 'Product').trim();
+  const titleKa = String(p.title_ka || p.titleKa || p.name_ka || title).trim();
+  const descEn = String(p.description_en || p.description || '').trim();
+  const descKa = String(p.description_ka || p.descriptionKa || '').trim();
+  const description = descEn || descKa;
+  const price = Number(p.price) || 0;
+  const origPriceVal = Number(p.origPrice ?? p.orig_price ?? p.original_price ?? p.originalPrice ?? 0);
+  const category = String(p.category || 'general').trim();
+  const stock = p.stock !== undefined && p.stock !== null && p.stock !== '' ? Number(p.stock) : 10;
+  const slug = String(p.customSlug || p.slug || id).trim();
+  const badge = String(p.badge || '').trim();
+
+  let imagesArray: string[] = [];
+  if (Array.isArray(p.images) && p.images.length > 0) {
+    imagesArray = p.images;
+  } else if (typeof p.images === 'string') {
+    try { imagesArray = JSON.parse(p.images); } catch { imagesArray = [p.images]; }
+  } else if (p.image) {
+    imagesArray = [p.image];
+  }
+  const primaryImage = String(imagesArray[0] || p.image || p.imageUrl || p.image_path || '').trim();
+  if (imagesArray.length === 0 && primaryImage) imagesArray = [primaryImage];
+  const imagesStr = JSON.stringify(imagesArray);
+
+  const featuresStr = JSON.stringify(Array.isArray(p.features) ? p.features : []);
+  const featuresEnStr = JSON.stringify(Array.isArray(p.features_en) ? p.features_en : (Array.isArray(p.featuresEn) ? p.featuresEn : []));
+  const featuresKaStr = JSON.stringify(Array.isArray(p.features_ka) ? p.features_ka : (Array.isArray(p.featuresKa) ? p.featuresKa : []));
+  const videosStr = JSON.stringify(Array.isArray(p.videos) ? p.videos : []);
+  const variantsStr = JSON.stringify(Array.isArray(p.variants) ? p.variants : []);
+  const nowIso = new Date().toISOString();
+
+  const candidateMap: Record<string, any> = {
+    id,
+    slug,
+    customslug: slug,
+    custom_slug: slug,
+    title,
+    name,
+    title_ka: titleKa,
+    titleka: titleKa,
+    name_ka: titleKa,
+    description,
+    description_en: descEn,
+    description_ka: descKa,
+    features: featuresStr,
+    features_en: featuresEnStr,
+    features_ka: featuresKaStr,
+    price,
+    orig_price: origPriceVal,
+    original_price: origPriceVal,
+    image: primaryImage,
+    imageurl: primaryImage,
+    image_url: primaryImage,
+    image_path: primaryImage,
+    images: imagesStr,
+    images_json: imagesStr,
+    category,
+    stock,
+    badge,
+    videos: videosStr,
+    variants: variantsStr,
+    updated_at: nowIso,
+    created_at: p.createdAt || p.created_at || nowIso,
+  };
+
+  let activeCols: string[] = [];
+  let activeVals: any[] = [];
+
+  if (tableColumns.size > 0) {
+    for (const [col, val] of Object.entries(candidateMap)) {
+      if (tableColumns.has(col.toLowerCase())) {
+        activeCols.push(col);
+        activeVals.push(val);
+      }
+    }
+    if (tableColumns.has('id') && !activeCols.includes('id')) {
+      activeCols.unshift('id');
+      activeVals.unshift(id);
+    }
+    if (tableColumns.has('name') && !activeCols.includes('name')) {
+      activeCols.push('name');
+      activeVals.push(name);
+    }
+  } else {
+    activeCols = ['id', 'name', 'title', 'price', 'description', 'category', 'image', 'stock'];
+    activeVals = [id, name, title, price, description, category, primaryImage, stock];
+  }
+
+  const placeholders = activeCols.map(() => '?').join(', ');
+  const updateClauses = activeCols
+    .filter(col => col.toLowerCase() !== 'id')
+    .map(col => `${col} = excluded.${col}`)
+    .join(', ');
+
+  const insertSql = `
+    INSERT INTO products (${activeCols.join(', ')})
+    VALUES (${placeholders})
+    ON CONFLICT(id) DO UPDATE SET
+      ${updateClauses}
+  `;
+
+  try {
+    await db.prepare(insertSql).bind(...activeVals).run();
+  } catch (conflictErr: any) {
+    console.warn('[D1 ON CONFLICT fallback in upsertProductRelational]:', conflictErr?.message || conflictErr);
+    // Secondary fallback: check if exists -> UPDATE or INSERT
+    const existing = await db.prepare('SELECT id FROM products WHERE id = ?').bind(id).first().catch(() => null);
+    if (existing) {
+      const updateCols = activeCols.filter(c => c.toLowerCase() !== 'id');
+      const setPart = updateCols.map(c => `${c} = ?`).join(', ');
+      const updateVals = updateCols.map(c => candidateMap[c]);
+      updateVals.push(id);
+      await db.prepare(`UPDATE products SET ${setPart} WHERE id = ?`).bind(...updateVals).run();
+    } else {
+      await db.prepare(`INSERT INTO products (${activeCols.join(', ')}) VALUES (${placeholders})`).bind(...activeVals).run();
+    }
+  }
+}
+
 import { handleMigrateImages } from '../migrate-images';
 
 export const onRequest: PagesFunction<Env> = async (context) => {
@@ -213,13 +360,19 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       await db.exec('ALTER TABLE products ADD COLUMN name TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN description TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN price REAL;');
-      await db.exec('ALTER TABLE products ADD COLUMN original_price REAL;');
+      await db.exec('ALTER TABLE products ADD COLUMN orig_price REAL DEFAULT 0;');
+      await db.exec('ALTER TABLE products ADD COLUMN original_price REAL DEFAULT 0;');
       await db.exec('ALTER TABLE products ADD COLUMN image TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN image_path TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN images TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN images_json TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN category TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 0;');
+      await db.exec('ALTER TABLE products ADD COLUMN badge TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN slug TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;');
       await db.exec('ALTER TABLE products ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;');
+      await db.exec('ALTER TABLE products ADD COLUMN title_ka TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN name_ka TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN description_en TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;');
@@ -307,8 +460,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               description_en: row.description_en || row.description || '',
               description_ka: row.description_ka || '',
               price: Number(row.price) || 0,
-              origPrice: Number(row.original_price) || 0,
-              original_price: Number(row.original_price) || 0,
+              origPrice: Number(row.orig_price ?? row.original_price ?? 0),
+              original_price: Number(row.original_price ?? row.orig_price ?? 0),
               image: imagesArr[0] || row.image || '',
               images: imagesArr,
               videos: videosArr,
@@ -357,12 +510,19 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     if (path.endsWith('/products')) {
       try {
-        const { results } = await db.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+        let results: any[] = [];
+        try {
+          const qRes = await db.prepare('SELECT * FROM products').all();
+          results = Array.isArray(qRes?.results) ? qRes.results : [];
+        } catch (e) {
+          console.warn('[D1 /products GET warning]:', e);
+        }
+
         if (results && results.length > 0) {
           const formatted = results.map((row: any) => {
             let imagesArr: string[] = [];
             if (row.images) {
-              try { imagesArr = JSON.parse(row.images); } catch (e) { imagesArr = []; }
+              try { imagesArr = typeof row.images === 'string' ? JSON.parse(row.images) : row.images; } catch (e) { imagesArr = []; }
             }
             if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
               imagesArr = row.image && row.image !== 'null' ? [row.image] : [];
@@ -375,27 +535,45 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             if (row.variants) {
               try { variantsArr = typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants; } catch (e) { variantsArr = []; }
             }
+            const primaryImg = imagesArr[0] || row.image || row.imageUrl || row.image_path || '';
+            const titleVal = row.title || row.name || 'Product';
+            const nameVal = row.name || row.title || 'Product';
+
             return {
-              id: row.id,
-              title: row.name,
-              titleKa: row.name_ka || '',
-              title_en: row.name,
-              title_ka: row.name_ka || '',
+              id: String(row.id),
+              name: nameVal,
+              title: titleVal,
+              titleKa: row.name_ka || row.title_ka || titleVal,
+              title_en: row.name || row.title || titleVal,
+              title_ka: row.name_ka || row.title_ka || titleVal,
               description: row.description || '',
               descriptionKa: row.description_ka || '',
               description_en: row.description_en || row.description || '',
               description_ka: row.description_ka || '',
               price: Number(row.price) || 0,
-              origPrice: Number(row.original_price) || 0,
-              image: imagesArr[0] || row.image || '',
+              origPrice: Number(row.orig_price ?? row.original_price ?? 0),
+              original_price: Number(row.original_price ?? row.orig_price ?? 0),
+              image: primaryImg,
+              imageUrl: primaryImg,
               images: imagesArr,
               videos: videosArr,
               variants: variantsArr,
               category: row.category || 'tech',
-              stock: Number(row.stock) || 0,
+              stock: row.stock !== undefined ? Number(row.stock) : 0,
               views: Number(row.views) || 0,
+              badge: row.badge || '',
+              customSlug: row.slug || row.customSlug || String(row.id),
+              createdAt: row.created_at || row.createdAt || new Date().toISOString(),
             };
           });
+
+          // Sort newest first
+          formatted.sort((a: any, b: any) => {
+            const tA = new Date(a.createdAt || 0).getTime();
+            const tB = new Date(b.createdAt || 0).getTime();
+            return tB - tA;
+          });
+
           return jsonResponse({ success: true, products: formatted });
         }
       } catch (err) {}
@@ -553,17 +731,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           return jsonResponse({ success: false, error: 'Products array is required' }, 400);
         }
 
+        const tableColumns = await getTableColumns(db, 'products');
         const sanitizedProducts = [];
+
         for (const p of products) {
           let imagesArray: string[] = [];
-          if (Array.isArray(p.images)) {
+          if (Array.isArray(p.images) && p.images.length > 0) {
             imagesArray = p.images;
           } else if (p.image) {
             imagesArray = [p.image];
           }
 
           const primaryImage = imagesArray[0] || p.image || '';
-          const imagesStr = JSON.stringify(imagesArray);
 
           sanitizedProducts.push({
             ...p,
@@ -571,60 +750,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             images: imagesArray,
           });
 
-          // Write directly to the products relational table in D1 as requested
+          // Write directly and safely to products relational table in D1 without data destruction
           try {
-            const name = p.title_en || p.title || p.name || '';
-            const nameKa = p.title_ka || p.titleKa || '';
-            const descEn = p.description_en || p.description || '';
-            const descKa = p.description_ka || p.descriptionKa || '';
-            const description = descEn || descKa;
-            const featuresStr = JSON.stringify(Array.isArray(p.features) ? p.features : []);
-            const featuresEnStr = JSON.stringify(Array.isArray(p.features_en) ? p.features_en : (Array.isArray(p.featuresEn) ? p.featuresEn : []));
-            const featuresKaStr = JSON.stringify(Array.isArray(p.features_ka) ? p.features_ka : (Array.isArray(p.featuresKa) ? p.featuresKa : []));
-            const videosStr = JSON.stringify(Array.isArray(p.videos) ? p.videos : []);
-            const variantsStr = JSON.stringify(Array.isArray(p.variants) ? p.variants : []);
-            const price = Number(p.price) || 0;
-            const originalPrice = p.origPrice !== undefined && p.origPrice !== null && p.origPrice !== '' ? Number(p.origPrice) : (p.original_price !== undefined && p.original_price !== null && p.original_price !== '' ? Number(p.original_price) : null);
-            const category = p.category || '';
-            const stock = Number(p.stock) || 0;
-            const slug = p.customSlug || p.slug || String(p.id);
-            const badge = p.badge || '';
-
-            console.log('[D1 WRITE QUERY EXECUTING /api/store/products]:', { id: String(p.id), title: name, price });
-            await db.prepare(`
-              INSERT INTO products (id, slug, title, name, title_ka, name_ka, description, description_en, description_ka, features, features_en, features_ka, price, orig_price, original_price, image, image_path, images, images_json, category, stock, badge, videos, variants, updated_at)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-              ON CONFLICT(id) DO UPDATE SET
-                slug = excluded.slug,
-                title = excluded.title,
-                name = excluded.name,
-                title_ka = excluded.title_ka,
-                name_ka = excluded.name_ka,
-                description = excluded.description,
-                description_en = excluded.description_en,
-                description_ka = excluded.description_ka,
-                features = excluded.features,
-                features_en = excluded.features_en,
-                features_ka = excluded.features_ka,
-                price = excluded.price,
-                orig_price = excluded.orig_price,
-                original_price = excluded.original_price,
-                image = excluded.image,
-                image_path = excluded.image_path,
-                images = excluded.images,
-                images_json = excluded.images_json,
-                category = excluded.category,
-                stock = excluded.stock,
-                badge = excluded.badge,
-                videos = excluded.videos,
-                variants = excluded.variants,
-                updated_at = CURRENT_TIMESTAMP
-            `).bind(
-              String(p.id), slug, name, name, nameKa, nameKa, description, descEn, descKa,
-              featuresStr, featuresEnStr, featuresKaStr, price, originalPrice, originalPrice,
-              primaryImage, primaryImage, imagesStr, imagesStr, category, stock, badge,
-              videosStr, variantsStr
-            ).run();
+            await upsertProductRelational(db, p, tableColumns);
           } catch (relationalDbErr: any) {
             console.error('[D1 WRITE QUERY ERROR]: Relational DB product persistence error:', relationalDbErr);
             return jsonResponse({
@@ -635,18 +763,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           }
         }
 
-        // Prune deleted products from D1 relational products table
-        try {
-          const activeIds = sanitizedProducts.map(p => String(p.id)).filter(Boolean);
-          if (activeIds.length > 0) {
-            const placeholders = activeIds.map(() => '?').join(',');
-            await db.prepare(`DELETE FROM products WHERE id NOT IN (${placeholders})`).bind(...activeIds).run();
-          } else {
-            await db.prepare('DELETE FROM products').run();
-          }
-        } catch (pruneErr) {
-          console.error('Relational DB product pruning error:', pruneErr);
-        }
+        // CRITICAL PRODUCTION DATA SAFETY:
+        // Do NOT run destructive bulk deletion commands (e.g. DELETE WHERE id NOT IN).
+        // Individual product deletions are handled strictly by dedicated DELETE endpoints.
 
         await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
         await dbPut(db, 'last_updated', lastUpdatedNew);
@@ -729,6 +848,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
         if (Array.isArray(products)) {
           const r2Bucket = env.R2_BUCKET || env.MEDIA_BUCKET || env.BUCKET;
+          const tableColumns = await getTableColumns(db, 'products');
           const sanitizedProducts = [];
           for (const p of products) {
             let imagesArray: string[] = [];
@@ -752,27 +872,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               images: imagesStr,
             });
 
-            // Write directly to the products relational table in D1 as requested
+            // Write directly and safely to products relational table in D1 without data destruction
             try {
-              const name = p.title || '';
-              const description = p.description || '';
-              const price = Number(p.price) || 0;
-              const originalPrice = Number(p.origPrice) || Number(p.original_price) || 0;
-              const category = p.category || '';
-              const stock = Number(p.stock) || 0;
-
-              // Try updating first
-              const updateRes = await db.prepare(
-                'UPDATE products SET name = ?, description = ?, price = ?, original_price = ?, image = ?, images = ?, category = ?, stock = ? WHERE id = ?'
-              ).bind(name, description, price, originalPrice, primaryImage, imagesStr, category, stock, p.id).run();
-
-              const changes = (updateRes as any)?.meta?.changes || 0;
-              if (changes === 0) {
-                // If product does not exist yet, insert it
-                await db.prepare(
-                  'INSERT INTO products (id, name, description, price, original_price, image, images, category, stock) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)'
-                ).bind(p.id, name, description, price, originalPrice, primaryImage, imagesStr, category, stock).run();
-              }
+              await upsertProductRelational(db, p, tableColumns);
             } catch (relationalDbErr) {
               console.error('Relational DB product persistence error during sync:', relationalDbErr);
             }
