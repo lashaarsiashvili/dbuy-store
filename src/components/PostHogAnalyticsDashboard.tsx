@@ -334,8 +334,29 @@ export const PostHogAnalyticsDashboard: React.FC = () => {
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" strokeOpacity={0.4} />
-              <XAxis dataKey="date" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+              <XAxis 
+                dataKey="date" 
+                tick={{ fontSize: 11, fill: '#94a3b8' }} 
+                tickLine={false} 
+                axisLine={false} 
+                tickFormatter={(val) => {
+                  try {
+                    const parts = val.split('-');
+                    if (parts.length === 3) {
+                      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+                      const mIdx = parseInt(parts[1], 10) - 1;
+                      return `${monthNames[mIdx] || parts[1]} ${parseInt(parts[2], 10)}`;
+                    }
+                  } catch {}
+                  return val;
+                }}
+              />
+              <YAxis 
+                domain={[0, 'auto']} 
+                tick={{ fontSize: 11, fill: '#94a3b8' }} 
+                tickLine={false} 
+                axisLine={false} 
+              />
               <Tooltip 
                 contentStyle={{ 
                   backgroundColor: '#0f172a', 
@@ -346,8 +367,28 @@ export const PostHogAnalyticsDashboard: React.FC = () => {
                   boxShadow: '0 10px 25px -5px rgba(0,0,0,0.5)',
                 }} 
               />
-              <Area type="monotone" dataKey="pageviews" stroke="#a855f7" strokeWidth={2.5} fillOpacity={1} fill="url(#colorViews)" name="Pageviews" />
-              <Area type="monotone" dataKey="visitors" stroke="#3b82f6" strokeWidth={3} fillOpacity={1} fill="url(#colorVisitors)" name="Visitors" />
+              <Area 
+                type="monotone" 
+                dataKey="pageviews" 
+                stroke="#a855f7" 
+                strokeWidth={2.5} 
+                dot={{ r: 3, fill: '#a855f7', stroke: '#fff', strokeWidth: 1.5 }}
+                activeDot={{ r: 6, fill: '#a855f7', stroke: '#fff', strokeWidth: 2 }}
+                fillOpacity={1} 
+                fill="url(#colorViews)" 
+                name="Pageviews" 
+              />
+              <Area 
+                type="monotone" 
+                dataKey="visitors" 
+                stroke="#3b82f6" 
+                strokeWidth={3} 
+                dot={{ r: 3.5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 1.5 }}
+                activeDot={{ r: 6.5, fill: '#3b82f6', stroke: '#fff', strokeWidth: 2 }}
+                fillOpacity={1} 
+                fill="url(#colorVisitors)" 
+                name="Visitors" 
+              />
             </AreaChart>
           </ResponsiveContainer>
         </div>
