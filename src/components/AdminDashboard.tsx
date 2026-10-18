@@ -1523,6 +1523,7 @@ export const AdminDashboard: React.FC = () => {
         publishedAt: new Date().toISOString(),
         rating: editingProduct ? (editingProduct.rating || 5.0) : 5.0,
         reviewsCount: editingProduct ? (editingProduct.reviewsCount || 1) : 1,
+        views: editingProduct ? (editingProduct.views || 0) : 0,
       };
 
       const adminSlug = adminSecretSlug || 

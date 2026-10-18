@@ -2055,7 +2055,7 @@ app.delete('/api/products', (req, res) => {
 app.post('/api/store/products/:id/view', (req, res) => {
   try {
     const { id } = req.params;
-    const product = storeDb.products.find(p => p.id === id);
+    const product = storeDb.products.find(p => p.id === id || p.customSlug === id || (p as any).slug === id);
     if (!product) {
       res.status(404).json({ success: false, error: 'Product not found' });
       return;

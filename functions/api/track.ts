@@ -56,9 +56,13 @@ export async function onRequestPost(context: any) {
 
       // B. Increment product views if a product page was visited
       if (productIdToIncrement) {
-        await db.prepare('UPDATE products SET views = COALESCE(views, 0) + 1 WHERE id = ? OR customSlug = ?')
-          .bind(String(productIdToIncrement), String(productIdToIncrement))
-          .run();
+        try {
+          await db.prepare('UPDATE products SET views = COALESCE(views, 0) + 1 WHERE id = ? OR slug = ?')
+            .bind(String(productIdToIncrement), String(productIdToIncrement))
+            .run();
+        } catch (updateErr) {
+          console.warn('[Track product view error]:', updateErr);
+        }
       }
     }
 

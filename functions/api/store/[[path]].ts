@@ -263,6 +263,7 @@ async function upsertProductRelational(db: D1Database, p: any, tableColumns: Set
     images_json: imagesStr,
     category,
     stock,
+    views: Number(p.views) || 0,
     badge,
     videos: videosStr,
     variants: variantsStr,
@@ -381,6 +382,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN videos TEXT;');
       await db.exec('ALTER TABLE products ADD COLUMN variants TEXT;');
+      await db.exec('ALTER TABLE products ADD COLUMN views INTEGER DEFAULT 0;');
     } catch (e) {
       console.warn('Column addition warning:', e);
     }
@@ -589,6 +591,27 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     const lastUpdatedNew = new Date().toISOString();
 
     // Endpoints that do not require administrative header
+    if (path.includes('/products/') && path.endsWith('/view')) {
+      try {
+        const match = path.match(/\/products\/([^\/]+)\/view$/);
+        const prodId = match ? decodeURIComponent(match[1]) : '';
+        if (prodId) {
+          try {
+            await db.exec('ALTER TABLE products ADD COLUMN views INTEGER DEFAULT 0;').catch(() => {});
+            await db.prepare('UPDATE products SET views = COALESCE(views, 0) + 1 WHERE id = ? OR slug = ?').bind(prodId, prodId).run();
+            const row: any = await db.prepare('SELECT views FROM products WHERE id = ? OR slug = ?').bind(prodId, prodId).first();
+            const newViews = row ? (Number(row.views) || 1) : 1;
+            return jsonResponse({ success: true, id: prodId, views: newViews });
+          } catch (dbErr: any) {
+            console.warn('[D1 View Increment Warning]:', dbErr);
+          }
+        }
+        return jsonResponse({ success: true, id: prodId, views: 1 });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to increment view' }, 500);
+      }
+    }
+
     if (path.endsWith('/order')) {
       try {
         const newOrder: any = await request.json();

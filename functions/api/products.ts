@@ -102,6 +102,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
           origPrice: Number(p.orig_price ?? p.original_price ?? 0),
           category: p.category || 'general',
           stock: p.stock !== undefined ? Number(p.stock) : 0,
+          views: Number(p.views) || 0,
           badge: p.badge || '',
           image: primaryImg,
           imageUrl: primaryImg,
@@ -155,6 +156,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
 
         const categoryVal = String(product.category || 'general').trim();
         const stockVal = product.stock !== undefined ? Number(product.stock) : 10;
+        const viewsVal = Number(product.views) || 0;
         const badgeVal = String(product.badge || '').trim();
         const slugVal = String(product.customSlug || product.slug || id).trim();
 
@@ -190,6 +192,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
           original_price: origPriceVal,
           category: categoryVal,
           stock: stockVal,
+          views: viewsVal,
           badge: badgeVal,
           image: primaryImg,
           imageurl: primaryImg,
