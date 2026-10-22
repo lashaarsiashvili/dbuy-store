@@ -5559,12 +5559,12 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              {/* Descriptions (EN & KA) */}
+               {/* Product Description (EN) */}
               <div className="space-y-3">
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {isKa ? 'პროდუქტის სარეკლამო აღწერა (EN)' : 'Product Description (EN)'}
+                      {isKa ? 'პროდუქტის სარეკლამო აღწერა (EN - Strictly English)' : 'Product Description (EN - Strictly English)'}
                     </label>
                     <button
                       type="button"
@@ -5578,52 +5578,27 @@ export const AdminDashboard: React.FC = () => {
                     </button>
                   </div>
                   <textarea 
-                    rows={3}
+                    rows={4}
                     value={prodForm.description ?? ''}
                     onChange={e => setProdForm({ ...prodForm, description: e.target.value })}
-                    placeholder=""
-                    className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {isKa ? 'პროდუქტის სარეკლამო აღწერა ქართულად (KA)' : 'Product Description in Georgian (KA)'}
-                    </label>
-                    <button
-                      type="button"
-                      disabled={isGeneratingCopy}
-                      onClick={() => handleGenerateAdCopy('descriptionKa')}
-                      className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:underline flex items-center space-x-1 cursor-pointer disabled:opacity-50"
-                      title="Generate Georgian advertising copy"
-                    >
-                      <Sparkles className="w-3 h-3 text-blue-500" />
-                      <span>{isKa ? '✨ AI ქართული რეკლამა' : '✨ AI Georgian Copy'}</span>
-                    </button>
-                  </div>
-                  <textarea 
-                    rows={3}
-                    value={prodForm.descriptionKa ?? ''}
-                    onChange={e => setProdForm({ ...prodForm, descriptionKa: e.target.value })}
-                    placeholder=""
+                    placeholder="Enter unique product description in English based strictly on the product title..."
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden leading-relaxed"
                   />
                 </div>
               </div>
 
-              {/* 4 Key Features Section: Dual-Language (EN & KA) Auto-Generation & Manual Editing */}
+              {/* 4 Key Features Section (Strictly English) */}
               <div className="bg-blue-50/50 p-4 rounded-3xl border border-blue-100 space-y-3">
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-xs font-black text-slate-900 dark:text-white flex items-center space-x-1.5">
                       <Sparkles className="w-4 h-4 text-blue-600" />
-                      <span>{isKa ? '4 ძირითადი მახასიათებელი (Key Features)' : '4 Key Features (Selling Points)'}</span>
+                      <span>{isKa ? '4 ძირითადი მახასიათებელი (Key Features - EN)' : '4 Key Features (Selling Points - EN)'}</span>
                     </label>
                     <p className="text-[11px] text-slate-500 mt-0.5">
                       {isKa 
-                        ? 'მყიდველისთვის მიმზიდველი 4 მთავარი პუნქტი (ინგლისურ და ქართულ ენებზე)' 
-                        : 'Attractive highlights displayed on product detail & quick view in both languages'}
+                        ? 'მყიდველისთვის მიმზიდველი 4 მთავარი პუნქტი ინგლისურ ენაზე' 
+                        : 'Attractive highlights displayed on product detail & quick view'}
                     </p>
                   </div>
 
@@ -5632,56 +5607,16 @@ export const AdminDashboard: React.FC = () => {
                     disabled={isGeneratingCopy}
                     onClick={() => handleGenerateAdCopy('features')}
                     className="inline-flex items-center space-x-1.5 px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] shadow-xs transition-all cursor-pointer shrink-0 disabled:opacity-50"
-                    title={isKa ? 'ავტომატური გენერაცია ორივე ენისთვის' : 'Auto-generate 4 features for both languages'}
+                    title="Auto-generate 4 features in English"
                   >
                     <Wand2 className="w-3.5 h-3.5 text-amber-300" />
                     <span>{isKa ? '🪄 AI 4 მახასიათებელი' : '🪄 AI 4 Features'}</span>
                   </button>
                 </div>
 
-                {/* Language Switch Tabs for Features */}
-                <div className="flex items-center justify-between pt-1 border-t border-blue-100/60">
-                  <div className="flex items-center space-x-1 p-1 bg-blue-100/70 rounded-xl">
-                    <button
-                      type="button"
-                      onClick={() => setFeaturesTab('en')}
-                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                        featuresTab === 'en'
-                          ? 'bg-white text-blue-600 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-white'
-                      }`}
-                    >
-                      🇺🇸 English ({(prodForm.featuresEn || []).filter(f => (f || '').trim()).length}/4)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFeaturesTab('ka')}
-                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                        featuresTab === 'ka'
-                          ? 'bg-white text-blue-600 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900 dark:text-white'
-                      }`}
-                    >
-                      🇬🇪 ქართული ({(prodForm.featuresKa || []).filter(f => (f || '').trim()).length}/4)
-                    </button>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleAutoGenerateFeatures(featuresTab)}
-                    className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 cursor-pointer"
-                    title={featuresTab === 'en' ? 'Auto-generate 4 English features' : 'ავტომატური ქართული მახასიათებლები'}
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>{featuresTab === 'ka' ? 'ქართული პუნქტების განახლება' : 'Regenerate English points'}</span>
-                  </button>
-                </div>
-
-                <div className="space-y-2">
+                <div className="space-y-2 pt-1">
                   {[0, 1, 2, 3].map((featIdx) => {
-                    const currentVal = featuresTab === 'en'
-                      ? (prodForm.featuresEn?.[featIdx] ?? '')
-                      : (prodForm.featuresKa?.[featIdx] ?? '');
+                    const currentVal = prodForm.featuresEn?.[featIdx] ?? '';
                     return (
                       <div key={featIdx} className="flex items-center space-x-2 bg-white p-1.5 pl-2.5 rounded-xl border border-slate-200 shadow-2xs">
                         <div className="w-5 h-5 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-200 flex items-center justify-center font-bold text-[10px] shrink-0">
@@ -5689,12 +5624,8 @@ export const AdminDashboard: React.FC = () => {
                         </div>
                         <input type="text"
                           value={currentVal}
-                          onChange={e => handleFeatureChange(featIdx, e.target.value, featuresTab)}
-                          placeholder={
-                            featuresTab === 'en'
-                              ? `Key feature #${featIdx + 1} (English selling point)`
-                              : `მახასიათებელი #${featIdx + 1} (ქართულად)`
-                          }
+                          onChange={e => handleFeatureChange(featIdx, e.target.value, 'en')}
+                          placeholder={`Key feature #${featIdx + 1} (English selling point)`}
                           className="flex-1 text-xs text-slate-800 dark:text-slate-100 focus:outline-hidden"
                         />
                       </div>

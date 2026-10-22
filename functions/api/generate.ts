@@ -53,14 +53,11 @@ export async function onRequestPost(context: any) {
           },
         });
 
-        const systemPrompt = `Analyze the provided product image. Identify the exact brand, model, and item. Generate a highly detailed, real-world e-commerce product title, a rich SEO-friendly description, and a list of key technical features. Return the result in a structured JSON format with the following keys:
+        const systemPrompt = `You are an expert e-commerce copywriter. Your task is to generate a unique, highly persuasive, and engaging promotional product description and key selling points strictly in ENGLISH based ONLY on the provided product title and image. Do not use generic templates, do not mix features from unrelated products, and ensure every product gets a distinct, tailored description. No Georgian language allowed. Return the result in a structured JSON format with the following keys:
 {
-  "title": "Clear, appealing, professional product title in English",
-  "titleKa": "ზუსტი და მიმზიდველი პროდუქტის სათაური ქართულად",
-  "description": "Rich, highly detailed, real-world e-commerce product description in English",
-  "descriptionKa": "ვრცელი, დეტალური და გაყიდვებზე ორიენტირებული აღწერა ქართულად",
-  "features": ["Key Feature 1 with emoji", "Key Feature 2 with emoji", "Key Feature 3 with emoji", "Key Feature 4 with emoji"],
-  "featuresKa": ["ძირითადი მახასიათებელი 1 ემოჯით", "ძირითადი მახასიათებელი 2 ემოჯით", "ძირითადი მახასიათებელი 3 ემოჯით", "ძირითადი მახასიათებელი 4 ემოჯით"]
+  "title": "Clear, appealing, professional product title strictly in English",
+  "description": "Rich, highly detailed, real-world e-commerce product description strictly in English",
+  "features": ["Key Feature 1 with emoji", "Key Feature 2 with emoji", "Key Feature 3 with emoji", "Key Feature 4 with emoji"]
 }`;
 
         const response = await ai.models.generateContent({

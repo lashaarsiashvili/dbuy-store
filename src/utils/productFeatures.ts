@@ -16,25 +16,20 @@ export function generateProductFeatures(
   const combined = `${title} ${desc}`.toLowerCase();
   const isKa = lang === 'ka';
 
-  // 1. Try to extract explicit bullet points from description that match the requested language
-  const bulletCandidates: string[] = [];
-  if (desc) {
-    const lines = desc.split(/[\n\r]+/);
-    for (const line of lines) {
-      const cleaned = line.replace(/^[\s*•\-–—►✔✓\d.)]+/, '').trim();
-      if (cleaned.length >= 10 && cleaned.length <= 90 && !cleaned.toLowerCase().startsWith('http')) {
-        const hasKa = isGeorgianText(cleaned);
-        // If English is requested, do not extract Georgian bullets
-        if (!isKa && hasKa) continue;
-        // If Georgian is requested, do not extract bullets with exclusively English letters
-        if (isKa && !hasKa && cleaned.length > 20) continue;
-        bulletCandidates.push(cleaned);
-      }
-    }
-  }
+  // 1. Extract key highlights/sentences directly from product description if available
+  if (desc && desc.length > 15) {
+    const sentences = desc
+      .split(/(?<=[.!?])\s+/)
+      .map(s => s.replace(/^[\s*•\-–—►✔✓\d.)]+/, '').trim())
+      .filter(s => s.length >= 12 && s.length <= 100 && !s.toLowerCase().startsWith('http'));
 
-  if (bulletCandidates.length >= 4) {
-    return bulletCandidates.slice(0, 4);
+    if (sentences.length >= 4) {
+      const emojis = ['⭐', '🚀', '🛡️', '✨'];
+      return sentences.slice(0, 4).map((s, idx) => {
+        const clean = s.replace(/[.]+$/, '');
+        return `${emojis[idx % emojis.length]} ${clean.charAt(0).toUpperCase() + clean.slice(1)}`;
+      });
+    }
   }
 
   // 2. Domain-specific rule matching for popular gadget/e-commerce categories
