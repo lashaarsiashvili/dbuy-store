@@ -1,4 +1,67 @@
 import React, { useState, useEffect, useId } from 'react';
+import { useStore } from '../context/StoreContext';
+import { initialProducts } from '../data/initialProducts';
+import { Product } from '../types';
+
+function formatImageUrl(url?: string): string | null {
+  if (!url) return null;
+  const cleanUrl = url.trim();
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://') || cleanUrl.startsWith('data:') || cleanUrl.startsWith('/')) {
+    return cleanUrl;
+  }
+  return `/uploads/${cleanUrl}`;
+}
+
+function findProductInCatalog(itemId: string, catalog: Product[]): Product | undefined {
+  if (!itemId) return undefined;
+  const rawId = String(itemId).trim();
+  const lowerId = rawId.toLowerCase();
+
+  // 1. Direct match on id
+  let match = catalog.find(p => String(p.id).trim() === rawId);
+  if (match) return match;
+
+  // 2. Case-insensitive id match
+  match = catalog.find(p => String(p.id).trim().toLowerCase() === lowerId);
+  if (match) return match;
+
+  // 3. Match on slug / customSlug
+  match = catalog.find(p => {
+    const slugVal = p.customSlug || (p as any).slug;
+    return slugVal && String(slugVal).trim().toLowerCase() === lowerId;
+  });
+  if (match) return match;
+
+  // 4. Match on title / titleKa
+  match = catalog.find(p => 
+    String(p.title || '').trim().toLowerCase() === lowerId ||
+    String(p.titleKa || '').trim().toLowerCase() === lowerId
+  );
+  if (match) return match;
+
+  // 5. Partial ID match
+  match = catalog.find(p => String(p.id).includes(rawId) || rawId.includes(String(p.id)));
+  return match;
+}
+
+function formatFallbackTitle(itemId: string): string {
+  if (!itemId) return 'პროდუქტი';
+  const str = String(itemId).trim();
+
+  if (str.startsWith('prod-')) {
+    const parts = str.split('-');
+    const suffix = parts[parts.length - 1] || parts[1] || str;
+    return `პროდუქტი #${suffix.toUpperCase()}`;
+  }
+
+  if (str.includes('-') || str.includes('_')) {
+    return str
+      .replace(/[-_]+/g, ' ')
+      .replace(/\b\w/g, c => c.toUpperCase());
+  }
+
+  return str;
+}
 
 // ============================================================================
 // 0. CONFIGURATION & EXPORTS FOR APPLICATION-WIDE TRACKING
@@ -171,7 +234,21 @@ export const analytics = {
 // ==========================================
 // 1. ADMIN DASHBOARD COMPONENT
 // ==========================================
-export const AdminAnalyticsDashboard: React.FC<{ products?: any[] }> = () => {
+export const AdminAnalyticsDashboard: React.FC<{ products?: any[] }> = (props) => {
+  let storeProducts: Product[] = [];
+  try {
+    const store = useStore();
+    if (store && store.products && store.products.length > 0) {
+      storeProducts = store.products;
+    }
+  } catch {
+    // Graceful catch if rendered outside StoreProvider
+  }
+
+  const catalog: Product[] = (props?.products && props.products.length > 0)
+    ? props.products
+    : (storeProducts.length > 0 ? storeProducts : initialProducts);
+
   // დღევანდელი თარიღი ფორმატში YYYY-MM-DD
   const todayStr = new Date().toISOString().split('T')[0];
 
@@ -450,12 +527,92 @@ export const AdminAnalyticsDashboard: React.FC<{ products?: any[] }> = () => {
           </h3>
           {stats.topProducts && stats.topProducts.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-              {stats.topProducts.map((p, idx) => (
-                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px', fontSize: '13px' }}>
-                  <span style={{ fontWeight: 600 }}>{p.item_id}</span>
-                  <span style={{ color: '#0284c7', fontWeight: 700 }}>{p.views} ნახვა</span>
-                </div>
-              ))}
+              {stats.topProducts.map((p, idx) => {
+                const matchedProduct = findProductInCatalog(p.item_id, catalog);
+                const title = matchedProduct 
+                  ? (matchedProduct.titleKa || matchedProduct.title) 
+                  : formatFallbackTitle(p.item_id);
+                const imageUrl = matchedProduct?.image ? formatImageUrl(matchedProduct.image) : null;
+
+                return (
+                  <div 
+                    key={idx} 
+                    style={{ 
+                      display: 'flex', 
+                      justify: 'space-between', 
+                      alignItems: 'center', 
+                      padding: '8px 12px', 
+                      background: '#f8fafc', 
+                      borderRadius: '10px', 
+                      fontSize: '13px',
+                      gap: '12px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', minWidth: 0, flex: 1 }}>
+                      {/* Product Thumbnail Image / Fallback Icon */}
+                      <div 
+                        style={{ 
+                          width: '36px', 
+                          height: '36px', 
+                          borderRadius: '8px', 
+                          overflow: 'hidden', 
+                          background: '#f1f5f9', 
+                          flexShrink: 0, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center',
+                          border: '1px solid #e2e8f0'
+                        }}
+                      >
+                        {imageUrl ? (
+                          <img 
+                            src={imageUrl} 
+                            alt={title} 
+                            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                            onError={(e) => {
+                              const target = e.currentTarget;
+                              target.style.display = 'none';
+                              if (target.parentElement) {
+                                target.parentElement.innerHTML = '<span style="font-size: 16px;">🛍️</span>';
+                              }
+                            }}
+                          />
+                        ) : (
+                          <span style={{ fontSize: '16px' }}>📦</span>
+                        )}
+                      </div>
+
+                      {/* Product Title / Fallback Title & Price */}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div 
+                          title={title}
+                          style={{ 
+                            fontWeight: 600, 
+                            color: '#0f172a', 
+                            whiteSpace: 'nowrap', 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis',
+                            fontSize: '13px',
+                            lineHeight: '1.2'
+                          }}
+                        >
+                          {title}
+                        </div>
+                        {matchedProduct && (
+                          <div style={{ fontSize: '11px', color: '#64748b', marginTop: '2px', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            ${matchedProduct.price} USD
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* View Count Badge - Exact Styling Kept */}
+                    <span style={{ color: '#0284c7', fontWeight: 700, flexShrink: 0, whiteSpace: 'nowrap' }}>
+                      {p.views} ნახვა
+                    </span>
+                  </div>
+                );
+              })}
             </div>
           ) : (
             <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>მონაცემები ჯერ არ არის</p>
