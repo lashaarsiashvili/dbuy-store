@@ -196,11 +196,11 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     }
   };
 
-  // 1. Share full Photo Post to Facebook (Direct Graph API /me/photos or Photo Upload + Text Copy + Open Composer)
+  // 1. Share full Post to Facebook (Copies Social Ad Copy + Downloads Photo + Opens Facebook Sharer URL)
   const handleShareFacebookFullPost = async () => {
     const imageUrl = product.image || (product.images && product.images[0]) || '';
 
-    // Attempt direct Facebook Graph API Photo Post
+    // Attempt direct Facebook Graph API Photo Post if configured
     try {
       const apiResult = await publishFacebookPhotoPost({
         imageUrl,
@@ -217,96 +217,43 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
         return;
       }
     } catch {
-      // Continue to fallback photo-post workflow if direct API key not configured
+      // Continue to Facebook Sharer workflow if Graph API token not present
     }
 
-    // 1. Copy generated ad copy to clipboard
+    // 1. Immediately copy current product's full generated Social Ad Copy (with emojis, prices, specs, link, hashtags)
     try {
-      await navigator.clipboard.writeText(caption);
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(caption);
+      } else {
+        fallbackCopyText(caption);
+      }
     } catch {
       fallbackCopyText(caption);
     }
 
-    // 2. Check if mobile Web Share API with files is supported
-    const imageFile = await getProductImageFile();
-    if (imageFile && navigator.canShare && navigator.canShare({ files: [imageFile] })) {
-      try {
-        await navigator.share({
-          files: [imageFile],
-          title: displayTitle,
-          text: caption,
-          url: shareUrl,
-        });
-        showToast(
-          language === 'ka'
-            ? 'სურათი და სარეკლამო ტექსტი გაიგზავნა Facebook Photo Post-ის მენიუში!'
-            : 'Image & ad copy sent to Facebook Photo Post share menu!',
-          'fb'
-        );
-        return;
-      } catch (err: any) {
-        if (err?.name === 'AbortError') return;
-      }
-    }
+    // 2. Display quick visible alert/toast
+    const toastMsg = language === 'ka'
+      ? '✅ პროდუქტის სარეკლამო ტექსტი დაკოპირდა! დააჭირეთ Ctrl+V (Paste) Facebook-ის პოსტის ველში.'
+      : '✅ Product ad copy copied! Press Ctrl+V (Paste) in the Facebook post box.';
+    
+    showToast(toastMsg, 'fb');
 
-    // 3. Automatically download main product photo for direct Facebook photo upload
-    await handleDownloadImage();
-
-    // 4. Show instructional guidance banner
-    setShowFbGuidance(true);
-    showToast(
-      language === 'ka'
-        ? '📸 ფოტო ჩამოიტვირთა! 📝 ტექსტი დაკოპირდა! ატვირთეთ ფოტო Facebook-ზე.'
-        : '📸 Photo downloaded! 📝 Ad copy copied! Ready for Facebook photo upload.',
-      'fb'
-    );
-
-    // 5. Open Facebook post composer / feed in a new window for direct photo upload
-    window.open('https://www.facebook.com/', '_blank');
-  };
-
-  // 2. Share via Facebook Link Sharer Dialog or Feed Graph API
-  const handleShareFacebookLink = async () => {
-    // Attempt direct Facebook Graph API Link Post with message caption
+    // 3. Download product image in background so user has photo ready for Facebook
     try {
-      const apiResult = await publishFacebookFeedPost({
-        link: shareUrl,
-        message: caption,
-      });
-
-      if (apiResult.success) {
-        showToast(
-          language === 'ka'
-            ? `🎉 ბმულის პოსტი წარმატებით გამოქვეყნდა Facebook-ზე! (ID: ${apiResult.postId})`
-            : `🎉 Link Post successfully published to Facebook with caption message! (ID: ${apiResult.postId})`,
-          'fb'
-        );
-        return;
-      }
+      await handleDownloadImage();
     } catch {
-      // Continue to sharer dialog if direct API token not configured
+      // Non-blocking catch
     }
-
-    try {
-      await navigator.clipboard.writeText(caption);
-    } catch {
-      fallbackCopyText(caption);
-    }
-
-    await handleDownloadImage();
 
     setShowFbGuidance(true);
-    showToast(
-      language === 'ka'
-        ? 'ტექსტი დაკოპირდა! Facebook-ის ფანჯარაში უბრალოდ ჩააკარით (Paste / Ctrl+V).'
-        : 'Text copied! Simply paste (Ctrl+V) into Facebook share post.',
-      'fb'
-    );
 
-    const fbUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}&quote=${encodeURIComponent(caption)}`;
-    window.open(fbUrl, '_blank', 'width=650,height=600,scrollbars=yes,resizable=yes');
+    // 4. Immediately open Facebook Sharer URL with the product page link
+    const fbSharerUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+    window.open(fbSharerUrl, '_blank', 'width=650,height=600,scrollbars=yes,resizable=yes');
   };
 
+  // 2. Share via Facebook Sharer Link
+  const handleShareFacebookLink = handleShareFacebookFullPost;
   const handleShareFacebook = handleShareFacebookFullPost;
 
   // 2. Share to Instagram (Copy formatted text + Download high-res ad image + Open Instagram)
