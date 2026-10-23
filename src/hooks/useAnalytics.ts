@@ -1,19 +1,17 @@
 import { useEffect, useRef } from 'react';
-import { trackStoreEvent } from '../components/AdminAnalyticsDashboard';
+import { trackStoreEvent, isUserAdmin } from '../components/AdminAnalyticsDashboard';
 
 /**
  * Lightweight React storefront tracking hook.
  * Fires trackStoreEvent('page_view') on mount and posts to /api/track on route navigation.
+ * STRICTLY SKIPS when the user is an admin or visiting the admin dashboard!
  */
 export function useAnalytics(pathName?: string, activeProductId?: string | null) {
   const lastTrackedKey = useRef<string>('');
 
   useEffect(() => {
-    trackStoreEvent('page_view');
-  }, []);
-
-  useEffect(() => {
     if (typeof window === 'undefined') return;
+    if (isUserAdmin()) return;
 
     const currentPath = pathName || window.location.pathname || '/';
     const trackingKey = `${currentPath}:${activeProductId || ''}`;
@@ -22,22 +20,8 @@ export function useAnalytics(pathName?: string, activeProductId?: string | null)
     if (lastTrackedKey.current === trackingKey) return;
     lastTrackedKey.current = trackingKey;
 
-    const payload: { path: string; productId?: string } = {
-      path: currentPath,
-    };
-
-    if (activeProductId) {
-      payload.productId = String(activeProductId);
-    }
-
-    fetch('/api/track', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      keepalive: true,
-    }).catch(() => {
-      // Non-blocking catch to ensure client UX remains uninterrupted
-    });
+    trackStoreEvent('page_view', activeProductId ? { itemId: String(activeProductId) } : undefined);
   }, [pathName, activeProductId]);
 }
+
 

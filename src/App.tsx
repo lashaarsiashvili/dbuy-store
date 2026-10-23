@@ -22,7 +22,7 @@ import { VerifiedDeliveriesPage } from './components/VerifiedDeliveriesPage';
 import { AdsGallery } from './components/AdsGallery';
 import { ToastContainer } from './components/ToastContainer';
 import { getPayPalV6Instance } from './utils/paypalV6';
-import { analytics } from './components/AdminAnalyticsDashboard';
+import { analytics, isUserAdmin } from './components/AdminAnalyticsDashboard';
 import { useAnalytics } from './hooks/useAnalytics';
 
 const LIVE_PAYPAL_CLIENT_ID = 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
@@ -40,34 +40,46 @@ const MainLayout: React.FC = () => {
     isAdmin 
   } = useStore();
 
-  // Lightweight React storefront tracking hook
+  // Lightweight React storefront tracking hook (automatically skips admins)
   useAnalytics(typeof window !== 'undefined' ? window.location.pathname : '/', activeProductId);
 
-  // Site Visit Analytics Tracking (excluding admin users)
+  // Site Visit Analytics Tracking (strictly excluding admin users and admin panel reloads)
   useEffect(() => {
     const isCurrentAdmin = Boolean(
       isAdmin ||
       user?.role === 'admin' ||
       user?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
-      user?.email?.toLowerCase().trim() === 'admin@dbuy.com'
+      user?.email?.toLowerCase().trim() === 'admin@dbuy.com' ||
+      currentPage === 'admin' ||
+      isUserAdmin()
     );
-    analytics.trackVisit(isCurrentAdmin);
+
+    if (isCurrentAdmin) return;
+
+    analytics.trackVisit(false);
 
     // Active session heartbeat every 25 seconds for real-time live visitor tracking
-    if (!isCurrentAdmin) {
-      const interval = setInterval(() => {
-        if (typeof document !== 'undefined' && !document.hidden) {
-          analytics.trackHeartbeat(window.location.pathname);
-        }
-      }, 25000);
-      return () => clearInterval(interval);
-    }
-  }, [user, isAdmin]);
+    const interval = setInterval(() => {
+      if (typeof document !== 'undefined' && !document.hidden && !isUserAdmin()) {
+        analytics.trackHeartbeat(window.location.pathname);
+      }
+    }, 25000);
+    return () => clearInterval(interval);
+  }, [user, isAdmin, currentPage]);
 
   // Scroll to top on page change and log view
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
-    if (currentPage !== 'admin') {
+    const isCurrentAdmin = Boolean(
+      isAdmin ||
+      user?.role === 'admin' ||
+      user?.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ||
+      user?.email?.toLowerCase().trim() === 'admin@dbuy.com' ||
+      currentPage === 'admin' ||
+      isUserAdmin()
+    );
+
+    if (!isCurrentAdmin && currentPage !== 'admin') {
       const pageNames: Record<string, string> = {
         home: 'Storefront (Home)',
         category: 'Category Browse Page',
@@ -83,7 +95,7 @@ const MainLayout: React.FC = () => {
       };
       recordVisit(pageNames[currentPage] || currentPage);
     }
-  }, [currentPage]);
+  }, [currentPage, user, isAdmin]);
 
   // Dynamic SEO Injection for Search Engines, Category Browse views, and Products (Schema.org JSON-LD / OpenGraph / Twitter Cards)
   useEffect(() => {

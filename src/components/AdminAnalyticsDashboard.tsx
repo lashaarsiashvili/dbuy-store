@@ -26,22 +26,50 @@ export interface AnalyticsData {
   cartAbandonmentRate: number;
   topProducts?: { item_id: string; views: number }[];
   topSources?: { source: string; visitors: number }[];
+  topCountries?: { country: string; visitors: number }[];
   trend: { label: string; visitors: number; pageviews: number }[];
   lastUpdated: string;
 }
 
 // მარტივი სესიის იდენტიფიკატორი
 export function getOrCreateSessionId(): string {
-  if (typeof sessionStorage === 'undefined') return 's_anon';
+  if (typeof sessionStorage === 'undefined') return 'usr_anon';
   try {
     let sid = sessionStorage.getItem('store_session_id');
     if (!sid) {
-      sid = 's_' + Math.random().toString(36).substring(2, 9);
+      sid = 'usr_' + Math.random().toString(36).substring(2, 9);
       sessionStorage.setItem('store_session_id', sid);
     }
     return sid;
   } catch {
-    return 's_anon';
+    return 'usr_anon';
+  }
+}
+
+export function isUserAdmin(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const path = window.location.pathname.toLowerCase();
+    const isAdminRoute = path.startsWith('/admin') || path.includes('dashboard') || path.includes('analytics') || path.includes('/admin-');
+    const hasAdminSession = 
+      localStorage.getItem('isAdmin') === 'true' || 
+      localStorage.getItem('admin_token') !== null ||
+      sessionStorage.getItem('admin_session') !== null;
+    const userRole = localStorage.getItem('user_role');
+    const rawUser = localStorage.getItem('dbuy_user');
+    let isUserEmailAdmin = false;
+    if (rawUser) {
+      try {
+        const u = JSON.parse(rawUser);
+        const cleanEmail = String(u?.email || '').toLowerCase().trim();
+        if (cleanEmail === 'lashaarsiashvili@gmail.com' || cleanEmail === 'admin@dbuy.com' || u?.role === 'admin') {
+          isUserEmailAdmin = true;
+        }
+      } catch {}
+    }
+    return isAdminRoute || hasAdminSession || userRole === 'admin' || isUserEmailAdmin;
+  } catch {
+    return false;
   }
 }
 
@@ -52,42 +80,32 @@ export const trackStoreEvent = (
 ) => {
   if (typeof window === 'undefined') return;
 
-  // 1. შემოწმება: თუ ადმინია, საერთოდ არ ჩაიწეროს!
-  let isAdmin = false;
-  try {
-    isAdmin = 
-      localStorage.getItem('isAdmin') === 'true' || 
-      localStorage.getItem('admin_token') !== null ||
-      window.location.pathname.startsWith('/admin');
-  } catch {}
+  // 1. ადმინის გამორიცხვის მკაცრი ფილტრი
+  const path = window.location.pathname.toLowerCase();
+  
+  // შემოწმება: თუ მისამართი შეიცავს admin-ს, ან ადმინის დეშბორდზე ხართ
+  const isAdminRoute = path.startsWith('/admin') || path.includes('dashboard') || path.includes('analytics');
+  
+  // შემოწმება: თუ ბრაუზერში შენახულია ადმინის სესია / ტოკენი
+  const hasAdminSession = 
+    localStorage.getItem('isAdmin') === 'true' || 
+    localStorage.getItem('admin_token') !== null ||
+    sessionStorage.getItem('admin_session') !== null;
 
-  if (isAdmin) {
-    return; // ადმინის ნახვები იბლოკება აქ
+  // თუ რომელიმე პირობა სრულდება — ტრეკინგი მომენტალურად ჩერდება და ბაზაში არაფერი იგზავნება
+  if (isAdminRoute || hasAdminSession || isUserAdmin()) {
+    return;
   }
 
-  // 2. საიდან შემოვიდა (Referrer)
-  let referrer = 'Direct / Organic';
+  // 2. რეალური მომხმარებლის ტრაფიკის მონაცემები
+  let referrer = 'Direct';
   try {
     if (document.referrer) {
-      referrer = new URL(document.referrer).hostname || 'Direct / Organic';
+      referrer = new URL(document.referrer).hostname || 'Direct';
     }
   } catch {}
 
-  // 3. ლოკალური ქეში
-  try {
-    const currentLogs = JSON.parse(localStorage.getItem('dbuy_analytics_events') || '[]');
-    currentLogs.push({
-      type: eventType,
-      item_id: metadata?.itemId || metadata?.itemName || null,
-      referrer,
-      timestamp: Date.now()
-    });
-    localStorage.setItem('dbuy_analytics_events', JSON.stringify(currentLogs));
-  } catch (err) {
-    console.warn('Failed to save analytics event locally:', err);
-  }
-
-  // 4. გაგზავნა სერვერზე
+  // 3. გაგზავნა Cloudflare D1-ში
   try {
     fetch('/api/track', {
       method: 'POST',
@@ -98,8 +116,7 @@ export const trackStoreEvent = (
         item_id: metadata?.itemId || metadata?.itemName || null,
         referrer: referrer,
         session_id: getOrCreateSessionId()
-      }),
-      keepalive: true
+      })
     }).catch(() => {});
   } catch {}
 };
@@ -270,6 +287,7 @@ export const AdminAnalyticsDashboard: React.FC<{ products?: any[] }> = () => {
             cartAbandonmentRate: serverData.cartAbandonmentRate ?? prev.cartAbandonmentRate,
             topProducts: (serverData.topProducts && serverData.topProducts.length > 0) ? serverData.topProducts : prev.topProducts,
             topSources: (serverData.topSources && serverData.topSources.length > 0) ? serverData.topSources : prev.topSources,
+            topCountries: (serverData.topCountries && serverData.topCountries.length > 0) ? serverData.topCountries : prev.topCountries,
             lastUpdated: new Date().toLocaleTimeString()
           }));
         }
@@ -455,6 +473,25 @@ export const AdminAnalyticsDashboard: React.FC<{ products?: any[] }> = () => {
                 <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px', fontSize: '13px' }}>
                   <span style={{ fontWeight: 600 }}>{s.source}</span>
                   <span style={{ color: '#059669', fontWeight: 700 }}>{s.visitors} ვიზიტორი</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>მონაცემები ჯერ არ არის</p>
+          )}
+        </div>
+
+        {/* ვიზიტორთა ქვეყნები */}
+        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+            🌍 ტოპ ქვეყნები
+          </h3>
+          {stats.topCountries && stats.topCountries.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {stats.topCountries.map((c, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px', fontSize: '13px' }}>
+                  <span style={{ fontWeight: 600 }}>📍 {c.country}</span>
+                  <span style={{ color: '#0284c7', fontWeight: 700 }}>{c.visitors} ვიზიტორი</span>
                 </div>
               ))}
             </div>
