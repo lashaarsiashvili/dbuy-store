@@ -6,9 +6,16 @@
  * 2. Development / Test environment (AI Studio dev/pre containers, localhost, 127.0.0.1)
  */
 
-export function isDevOrTestEnvironment(): boolean {
+export function shouldShowGooglePay(): boolean {
   if (typeof window === 'undefined') {
     return Boolean(import.meta.env?.DEV);
+  }
+
+  const hostname = (window.location.hostname || '').toLowerCase();
+
+  // თუ საიტი გაშვებულია მთავარ დომენზე — გადახდა არ გამოჩნდება
+  if (hostname.includes('dbuystore.com')) {
+    return false;
   }
 
   // URL query parameter overrides for direct developer testing (?gpay=1 / ?env=test / ?gpay=0)
@@ -28,29 +35,22 @@ export function isDevOrTestEnvironment(): boolean {
     // Ignore URL parsing errors
   }
 
-  const hostname = (window.location.hostname || '').toLowerCase();
+  // სატესტო გარემოებში (localhost, AI Studio, preview ლინკები) გამოჩნდება
+  return true;
+}
 
-  // Explicit AI Studio Dev / Preview containers and local developer machines
-  const isLocalOrDevServer = Boolean(
-    import.meta.env?.DEV ||
-    hostname === 'localhost' ||
-    hostname === '127.0.0.1' ||
-    hostname.endsWith('.local') ||
-    hostname.includes('ais-dev') ||
-    hostname.includes('ais-pre') ||
-    hostname.includes('webcontainer')
-  );
-
-  return isLocalOrDevServer;
+export function isDevOrTestEnvironment(): boolean {
+  return shouldShowGooglePay();
 }
 
 /**
  * Returns true if Google Pay should be enabled.
- * - In Production/Live: FALSE (Google Pay completely removed & disabled; PayPal is sole active method)
+ * - In Production/Live (dbuystore.com): FALSE (Google Pay completely removed & disabled; PayPal is sole active method)
  * - In Development/Test: TRUE (Google Pay kept intact alongside PayPal for testing)
  */
 export function isGooglePayAvailable(): boolean {
-  return isDevOrTestEnvironment();
+  return shouldShowGooglePay();
 }
 
-export const isGooglePayEnabled = isGooglePayAvailable;
+export const isGooglePayEnabled = shouldShowGooglePay;
+

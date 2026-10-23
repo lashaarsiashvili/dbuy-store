@@ -65,7 +65,7 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
         
         try {
           if (!paymentsClientRef.current) {
-            paymentsClientRef.current = new window.google.payments.api.PaymentsClient({ env: 'PRODUCTION' });
+            paymentsClientRef.current = new window.google.payments.api.PaymentsClient({ environment: 'TEST' });
           }
 
           const isReadyToPayRequest = Object.assign({}, baseRequest, {

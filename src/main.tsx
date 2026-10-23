@@ -1,26 +1,7 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
-import posthog from 'posthog-js';
-import { PostHogProvider } from 'posthog-js/react';
 import App from './App.tsx';
 import './index.css';
-
-// Ensure posthog is globally attached to window object for PostHog Toolbar & authorization
-if (typeof window !== 'undefined') {
-  (window as any).posthog = posthog;
-}
-
-// Initialize PostHog client
-posthog.init('phc_xBZDpwYNkS5gaEPe5EAT3wcBSyeSryw9wYY3qnEsMErJ', {
-  api_host: 'https://us.i.posthog.com',
-  autocapture: true, // ავტომატური კლიკების და მოვლენების ტრეკინგი
-  capture_pageview: false, // რადგან custom ნავიგაცია მაქვს, pageview-ს ხელით გავაგზავნი კომპონენტებიდან
-  loaded: (ph) => {
-    if (typeof window !== 'undefined') {
-      (window as any).posthog = ph;
-    }
-  }
-});
 
 // Global error resilience: absorb cross-origin script errors from 3rd party widgets/sandboxes
 if (typeof window !== 'undefined') {
@@ -73,10 +54,9 @@ if (typeof window !== 'undefined') {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <PostHogProvider client={posthog}>
-      <App />
-    </PostHogProvider>
+    <App />
   </StrictMode>,
 );
+
 
 

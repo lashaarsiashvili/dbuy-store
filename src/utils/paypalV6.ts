@@ -252,7 +252,7 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
     const googlePayConfig = googlePaySdk?.config;
 
     const paymentsClient = new google.payments.api.PaymentsClient({
-      environment: 'PRODUCTION',
+      environment: 'TEST', // Ensures test mode for Google Pay
       paymentDataCallbacks: {
         onPaymentAuthorized: async (paymentData: any) => {
           try {

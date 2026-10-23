@@ -173,6 +173,7 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
         countryCode: countryCode,
       },
       merchantInfo: {
+        merchantId: '12345678901234567890',
         merchantName: merchantName,
       },
       emailRequired: true,

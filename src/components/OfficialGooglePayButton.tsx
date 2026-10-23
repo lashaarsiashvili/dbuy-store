@@ -241,6 +241,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
           ],
         },
         merchantInfo: {
+          merchantId: '12345678901234567890',
           merchantName: 'DBUY Store',
         },
         emailRequired: true,
