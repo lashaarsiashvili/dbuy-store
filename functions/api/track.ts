@@ -48,11 +48,34 @@ export async function onRequestPost(context: any) {
         await db.exec('ALTER TABLE products ADD COLUMN views INTEGER DEFAULT 0;');
       } catch (e) {}
 
-      // A. Insert row into analytics_visits
+      // A. Insert row into analytics_visits & store_events
       const visitId = crypto.randomUUID ? crypto.randomUUID() : `v-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`;
       await db.prepare('INSERT INTO analytics_visits (id, path, user_agent, ip_address) VALUES (?, ?, ?, ?)')
         .bind(visitId, String(rawPath), String(userAgent), String(ipAddress))
         .run();
+
+      try {
+        await db.exec(`
+          CREATE TABLE IF NOT EXISTS store_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT,
+            session_id TEXT,
+            page_path TEXT,
+            device_type TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+        const isMobile = /mobile/i.test(userAgent) ? 'mobile' : 'desktop';
+        await db.prepare(
+          `INSERT INTO store_events (event_type, session_id, page_path, device_type)
+           VALUES (?, ?, ?, ?)`
+        ).bind(
+          body.event_type || 'page_view',
+          body.session_id || 'anonymous',
+          body.page_path || rawPath || '/',
+          isMobile
+        ).run();
+      } catch (e) {}
 
       // B. Increment product views if a product page was visited
       if (productIdToIncrement) {

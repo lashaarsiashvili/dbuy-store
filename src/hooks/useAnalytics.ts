@@ -1,11 +1,16 @@
 import { useEffect, useRef } from 'react';
+import { trackStoreEvent } from '../components/AdminAnalyticsDashboard';
 
 /**
  * Lightweight React storefront tracking hook.
- * Fires a POST request to /api/track whenever the user navigates to a new route.
+ * Fires trackStoreEvent('page_view') on mount and posts to /api/track on route navigation.
  */
 export function useAnalytics(pathName?: string, activeProductId?: string | null) {
   const lastTrackedKey = useRef<string>('');
+
+  useEffect(() => {
+    trackStoreEvent('page_view');
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -35,3 +40,4 @@ export function useAnalytics(pathName?: string, activeProductId?: string | null)
     });
   }, [pathName, activeProductId]);
 }
+

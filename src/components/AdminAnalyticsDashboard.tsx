@@ -28,19 +28,49 @@ export interface AnalyticsData {
   lastUpdated: string;
 }
 
+// მარტივი სესიის იდენტიფიკატორი
+export function getOrCreateSessionId(): string {
+  if (typeof sessionStorage === 'undefined') return 's_anon';
+  try {
+    let sid = sessionStorage.getItem('store_session_id');
+    if (!sid) {
+      sid = 's_' + Math.random().toString(36).substring(2, 9);
+      sessionStorage.setItem('store_session_id', sid);
+    }
+    return sid;
+  } catch {
+    return 's_anon';
+  }
+}
+
 // ივენთის შენახვის ფუნქცია
 export const trackStoreEvent = (eventType: 'page_view' | 'add_to_cart' | 'purchase') => {
-  if (typeof localStorage === 'undefined') return;
+  if (typeof window === 'undefined') return;
+
+  // 1. ლოკალური ქეში
   try {
     const currentLogs = JSON.parse(localStorage.getItem('dbuy_analytics_events') || '[]');
-    currentLogs.push({
-      type: eventType,
-      timestamp: Date.now()
-    });
+    currentLogs.push({ type: eventType, timestamp: Date.now() });
     localStorage.setItem('dbuy_analytics_events', JSON.stringify(currentLogs));
   } catch (err) {
-    console.warn('Failed to save analytics event:', err);
+    console.warn('Failed to save analytics event locally:', err);
   }
+
+  // 2. ცენტრალურ სერვერზე (D1) გაგზავნა
+  try {
+    const payload = {
+      event_type: eventType,
+      page_path: window.location.pathname || '/',
+      session_id: getOrCreateSessionId()
+    };
+
+    fetch('/api/track', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      keepalive: true
+    }).catch(() => {});
+  } catch {}
 };
 
 export const analytics = {
