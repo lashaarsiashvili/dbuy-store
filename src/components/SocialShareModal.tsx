@@ -198,6 +198,14 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
   // 1. Share full Post to Facebook (Copies Social Ad Copy + Downloads Photo + Opens Facebook Sharer URL)
   const handleShareFacebookFullPost = async () => {
+    // 0. IMMEDIATELY open Facebook Sharer URL to avoid popup blockers
+    const fbSharerUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+    const win = window.open(fbSharerUrl, '_blank', 'noopener,noreferrer,width=650,height=600,scrollbars=yes,resizable=yes');
+    
+    if (!win) {
+      alert(language === 'ka' ? 'გთხოვთ დაუშვათ pop-up ფანჯრები Facebook-ისთვის.' : 'Please allow pop-ups for Facebook.');
+    }
+
     const imageUrl = product.image || (product.images && product.images[0]) || '';
 
     // Attempt direct Facebook Graph API Photo Post if configured
@@ -210,8 +218,8 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
       if (apiResult.success) {
         showToast(
           language === 'ka'
-            ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა Facebook-ზე! (ID: ${apiResult.photoId || apiResult.postId})`
-            : `🎉 Photo Post successfully published to Facebook! (ID: ${apiResult.photoId || apiResult.postId})`,
+            ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა Facebook-ზე!`
+            : `🎉 Photo Post successfully published to Facebook!`,
           'fb'
         );
         return;
@@ -220,7 +228,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
       // Continue to Facebook Sharer workflow if Graph API token not present
     }
 
-    // 1. Immediately copy current product's full generated Social Ad Copy (with emojis, prices, specs, link, hashtags)
+    // 1. Copy generated ad copy to clipboard
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         await navigator.clipboard.writeText(caption);
@@ -238,22 +246,22 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     
     showToast(toastMsg, 'fb');
 
-    // 3. Download product image in background so user has photo ready for Facebook
+    // 3. Download product image
     try {
       await handleDownloadImage();
     } catch {
-      // Non-blocking catch
+      // Non-blocking
     }
 
     setShowFbGuidance(true);
-
-    // 4. Immediately open Facebook Sharer URL with the product page link
-    const fbSharerUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
-    window.open(fbSharerUrl, '_blank', 'width=650,height=600,scrollbars=yes,resizable=yes');
   };
 
   // 2. Share via Facebook Sharer Link
-  const handleShareFacebookLink = handleShareFacebookFullPost;
+  const handleShareFacebookLink = () => {
+    const fbSharerUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
+    window.open(fbSharerUrl, '_blank', 'noopener,noreferrer,width=650,height=600,scrollbars=yes,resizable=yes');
+  };
+  
   const handleShareFacebook = handleShareFacebookFullPost;
 
   // 2. Share to Instagram (Copy formatted text + Download high-res ad image + Open Instagram)
