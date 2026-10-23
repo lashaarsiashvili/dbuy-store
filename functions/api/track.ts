@@ -62,18 +62,25 @@ export async function onRequestPost(context: any) {
             session_id TEXT,
             page_path TEXT,
             device_type TEXT,
+            item_id TEXT,
+            referrer TEXT,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           );
         `);
+        try { await db.exec('ALTER TABLE store_events ADD COLUMN item_id TEXT;'); } catch (e) {}
+        try { await db.exec('ALTER TABLE store_events ADD COLUMN referrer TEXT;'); } catch (e) {}
+
         const isMobile = /mobile/i.test(userAgent) ? 'mobile' : 'desktop';
         await db.prepare(
-          `INSERT INTO store_events (event_type, session_id, page_path, device_type)
-           VALUES (?, ?, ?, ?)`
+          `INSERT INTO store_events (event_type, session_id, page_path, device_type, item_id, referrer)
+           VALUES (?, ?, ?, ?, ?, ?)`
         ).bind(
           body.event_type || 'page_view',
           body.session_id || 'anonymous',
           body.page_path || rawPath || '/',
-          isMobile
+          isMobile,
+          body.item_id || null,
+          body.referrer || 'Direct / Organic'
         ).run();
       } catch (e) {}
 

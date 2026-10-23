@@ -24,6 +24,8 @@ export interface AnalyticsData {
   addToCartClicks: number;
   completedPurchases: number;
   cartAbandonmentRate: number;
+  topProducts?: { item_id: string; views: number }[];
+  topSources?: { source: string; visitors: number }[];
   trend: { label: string; visitors: number; pageviews: number }[];
   lastUpdated: string;
 }
@@ -44,30 +46,59 @@ export function getOrCreateSessionId(): string {
 }
 
 // ივენთის შენახვის ფუნქცია
-export const trackStoreEvent = (eventType: 'page_view' | 'add_to_cart' | 'purchase') => {
+export const trackStoreEvent = (
+  eventType: 'page_view' | 'add_to_cart' | 'purchase',
+  metadata?: { itemId?: string; itemName?: string }
+) => {
   if (typeof window === 'undefined') return;
 
-  // 1. ლოკალური ქეში
+  // 1. შემოწმება: თუ ადმინია, საერთოდ არ ჩაიწეროს!
+  let isAdmin = false;
+  try {
+    isAdmin = 
+      localStorage.getItem('isAdmin') === 'true' || 
+      localStorage.getItem('admin_token') !== null ||
+      window.location.pathname.startsWith('/admin');
+  } catch {}
+
+  if (isAdmin) {
+    return; // ადმინის ნახვები იბლოკება აქ
+  }
+
+  // 2. საიდან შემოვიდა (Referrer)
+  let referrer = 'Direct / Organic';
+  try {
+    if (document.referrer) {
+      referrer = new URL(document.referrer).hostname || 'Direct / Organic';
+    }
+  } catch {}
+
+  // 3. ლოკალური ქეში
   try {
     const currentLogs = JSON.parse(localStorage.getItem('dbuy_analytics_events') || '[]');
-    currentLogs.push({ type: eventType, timestamp: Date.now() });
+    currentLogs.push({
+      type: eventType,
+      item_id: metadata?.itemId || metadata?.itemName || null,
+      referrer,
+      timestamp: Date.now()
+    });
     localStorage.setItem('dbuy_analytics_events', JSON.stringify(currentLogs));
   } catch (err) {
     console.warn('Failed to save analytics event locally:', err);
   }
 
-  // 2. ცენტრალურ სერვერზე (D1) გაგზავნა
+  // 4. გაგზავნა სერვერზე
   try {
-    const payload = {
-      event_type: eventType,
-      page_path: window.location.pathname || '/',
-      session_id: getOrCreateSessionId()
-    };
-
     fetch('/api/track', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        event_type: eventType,
+        page_path: window.location.pathname,
+        item_id: metadata?.itemId || metadata?.itemName || null,
+        referrer: referrer,
+        session_id: getOrCreateSessionId()
+      }),
       keepalive: true
     }).catch(() => {});
   } catch {}
@@ -189,17 +220,62 @@ export const AdminAnalyticsDashboard: React.FC<{ products?: any[] }> = () => {
       };
     });
 
+    // Top products calculation locally
+    const prodMap: Record<string, number> = {};
+    filteredEvents.forEach((e: any) => {
+      if (e.type === 'page_view' && e.item_id) {
+        prodMap[e.item_id] = (prodMap[e.item_id] || 0) + 1;
+      }
+    });
+    const localTopProducts = Object.entries(prodMap)
+      .map(([item_id, views]) => ({ item_id, views }))
+      .sort((a, b) => b.views - a.views)
+      .slice(0, 5);
+
+    // Top traffic sources calculation locally
+    const srcMap: Record<string, number> = {};
+    filteredEvents.forEach((e: any) => {
+      const src = e.referrer || 'Direct';
+      srcMap[src] = (srcMap[src] || 0) + 1;
+    });
+    const localTopSources = Object.entries(srcMap)
+      .map(([source, visitors]) => ({ source, visitors }))
+      .sort((a, b) => b.visitors - a.visitors)
+      .slice(0, 5);
+
     setStats({
       activeVisitors: visitors,
       productPageViews: views,
       addToCartClicks: carts,
       completedPurchases: purchases,
       cartAbandonmentRate: abandonment,
+      topProducts: localTopProducts,
+      topSources: localTopSources,
       trend: trendData,
       lastUpdated: new Date().toLocaleTimeString()
     });
 
-    setIsLoading(false);
+    // Attempt to fetch real-time server D1 stats
+    const endpoint = filterMode === 'custom' ? `/api/event?date=${selectedDate}` : `/api/event?days=${presetDays}`;
+    fetch(endpoint)
+      .then(res => res.json())
+      .then((serverData: any) => {
+        if (serverData && !serverData.error) {
+          setStats(prev => ({
+            ...prev,
+            activeVisitors: serverData.activeVisitors ?? prev.activeVisitors,
+            productPageViews: serverData.productPageViews ?? prev.productPageViews,
+            addToCartClicks: serverData.addToCartClicks ?? prev.addToCartClicks,
+            completedPurchases: serverData.completedPurchases ?? prev.completedPurchases,
+            cartAbandonmentRate: serverData.cartAbandonmentRate ?? prev.cartAbandonmentRate,
+            topProducts: (serverData.topProducts && serverData.topProducts.length > 0) ? serverData.topProducts : prev.topProducts,
+            topSources: (serverData.topSources && serverData.topSources.length > 0) ? serverData.topSources : prev.topSources,
+            lastUpdated: new Date().toLocaleTimeString()
+          }));
+        }
+      })
+      .catch(() => {})
+      .finally(() => setIsLoading(false));
   };
 
   useEffect(() => {
@@ -344,6 +420,49 @@ export const AdminAnalyticsDashboard: React.FC<{ products?: any[] }> = () => {
             <path d="M 10 150 Q 150 135 300 100 T 600 70 T 900 50" fill="none" stroke="#0284c7" strokeWidth="3" />
           </svg>
         </div>
+      </div>
+
+      {/* პროდუქტების და ტრაფიკის წყაროების ბლოკი */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '20px', marginTop: '24px' }}>
+        
+        {/* ყველაზე ნახვადი პროდუქტები */}
+        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+            🔥 პოპულარული პროდუქტები
+          </h3>
+          {stats.topProducts && stats.topProducts.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {stats.topProducts.map((p, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px', fontSize: '13px' }}>
+                  <span style={{ fontWeight: 600 }}>{p.item_id}</span>
+                  <span style={{ color: '#0284c7', fontWeight: 700 }}>{p.views} ნახვა</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>მონაცემები ჯერ არ არის</p>
+          )}
+        </div>
+
+        {/* ტრაფიკის წყაროები */}
+        <div style={{ background: '#ffffff', padding: '20px', borderRadius: '16px', border: '1px solid #e2e8f0' }}>
+          <h3 style={{ margin: '0 0 16px', fontSize: '15px', fontWeight: 700, color: '#0f172a' }}>
+            🌐 საიდან შემოდიან (წყაროები)
+          </h3>
+          {stats.topSources && stats.topSources.length > 0 ? (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {stats.topSources.map((s, idx) => (
+                <div key={idx} style={{ display: 'flex', justifyContent: 'space-between', padding: '8px 12px', background: '#f8fafc', borderRadius: '8px', fontSize: '13px' }}>
+                  <span style={{ fontWeight: 600 }}>{s.source}</span>
+                  <span style={{ color: '#059669', fontWeight: 700 }}>{s.visitors} ვიზიტორი</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ fontSize: '13px', color: '#94a3b8', margin: 0 }}>მონაცემები ჯერ არ არის</p>
+          )}
+        </div>
+
       </div>
 
     </div>
