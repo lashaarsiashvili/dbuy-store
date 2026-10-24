@@ -62,57 +62,63 @@ export const onRequest: PagesFunction<{ DB: D1Database }> = async (context) => {
   const botRegex = /Googlebot|bingbot|facebookexternalhit|Twitterbot|WhatsApp|LinkedInBot|Applebot|TelegramBot|Discordbot/i;
   const userAgent = request.headers.get("User-Agent") || "";
 
-  if (url.pathname.startsWith("/product/") && botRegex.test(userAgent)) {
-    const id = url.pathname.split("/")[2];
-    const product = await env.DB.prepare("SELECT * FROM products WHERE id = ? LIMIT 1").bind(id).first();
+  if (url.pathname.startsWith("/product/")) {
+    const productMatch = url.pathname.match(/^\/product\/([^\/]+)(?:\/.*)?$/);
+    
+    if (productMatch && botRegex.test(userAgent)) {
+      const productId = decodeURIComponent(productMatch[1]);
+      const product = await env.DB.prepare("SELECT * FROM products WHERE id = ? LIMIT 1")
+        .bind(productId)
+        .first<any>();
 
-    if (product) {
-      const response = await next();
+      if (product) {
+        const response = await next();
 
-      // Clean metadata
-      let imageUrl = product.image;
-      try {
-        const parsedImage = JSON.parse(product.image);
-        if (Array.isArray(parsedImage)) imageUrl = parsedImage[0];
-      } catch (e) {}
-      
-      const cleanDescription = (product.description || "")
-        .replace(/[\r\n]+/g, " ")
-        .substring(0, 150) + "...";
+        // Clean metadata
+        let imageUrl = product.image;
+        try {
+          const parsedImage = JSON.parse(product.image);
+          if (Array.isArray(parsedImage)) imageUrl = parsedImage[0];
+        } catch (e) {}
+        
+        const cleanDescription = (product.description || "")
+          .replace(/[\r\n]+/g, " ")
+          .substring(0, 150) + "...";
 
-      const jsonLd = JSON.stringify({
-        "@context": "https://schema.org/",
-        "@type": "Product",
-        "name": product.title,
-        "image": imageUrl,
-        "description": cleanDescription,
-        "offers": {
-          "@type": "Offer",
-          "price": product.price,
-          "priceCurrency": "USD",
-          "availability": "https://schema.org/InStock",
-        },
-      });
+        const jsonLd = JSON.stringify({
+          "@context": "https://schema.org/",
+          "@type": "Product",
+          "name": product.title,
+          "image": imageUrl,
+          "description": cleanDescription,
+          "offers": {
+            "@type": "Offer",
+            "price": product.price,
+            "priceCurrency": "USD",
+            "availability": "https://schema.org/InStock",
+          },
+        });
 
-      return new HTMLRewriter()
-        .on("title", {
-          element(el) { el.setInnerContent(`${product.title} | DBUY Store`); }
-        })
-        .on("head", {
-          element(el) {
-            el.append(`
+        return new HTMLRewriter()
+          .on("title", {
+            element(el) { el.setInnerContent(`${product.title} | DBUY Store`); }
+          })
+          .on("head", {
+            element(el) {
+              el.append(`
 <meta name="description" content="${cleanDescription}" />
-<link rel="canonical" href="https://www.dbuystore.com/product/${id}" />
+<link rel="canonical" href="https://www.dbuystore.com/product/${productId}" />
 <meta property="og:title" content="${product.title}" />
 <meta property="og:description" content="${cleanDescription}" />
 <meta property="og:image" content="${imageUrl}" />
-<meta property="og:url" content="https://www.dbuystore.com/product/${id}" />
+<meta property="og:url" content="https://www.dbuystore.com/product/${productId}" />
 <meta property="og:type" content="product" />
 <meta name="twitter:card" content="summary_large_image" />
 <script type="application/ld+json">${jsonLd}</script>`, { html: true });
-          }
-        })
-        .transform(response);
+            }
+          })
+          .transform(response);
+      }
     }
   }
 
