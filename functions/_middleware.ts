@@ -3,36 +3,48 @@ export const onRequest: PagesFunction<{ DB: D1Database }> = async (context) => {
   const url = new URL(request.url);
 
   // 1. Dynamic Sitemap Generation
+  const baseUrl = "https://www.dbuystore.com";
+  interface ProductRecord { id: string; }
+
   if (url.pathname === "/sitemap.xml") {
     try {
       const { results } = await env.DB.prepare(
-        "SELECT id, updatedAt, updated_at FROM products"
-      ).all();
-      
+        "SELECT id FROM products"
+      ).all<{ id: string | number }>();
+
+      const today = new Date().toISOString().split("T")[0];
+
+      const productUrls = (results || [])
+        .map((item) => `
+    <url>
+      <loc>${baseUrl}/product/${item.id}</loc>
+      <lastmod>${today}</lastmod>
+      <changefreq>weekly</changefreq>
+      <priority>0.8</priority>
+    </url>`)
+        .join("");
+
       const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://www.dbuystore.com/</loc>
-    <priority>1.0</priority>
+    <loc>${baseUrl}/</loc>
+    <lastmod>${today}</lastmod>
     <changefreq>daily</changefreq>
-  </url>
-  ${results.map((item: any) => `
-  <url>
-    <loc>https://www.dbuystore.com/product/${item.id}</loc>
-    <lastmod>${new Date(item.updatedAt || item.updated_at || Date.now()).toISOString()}</lastmod>
-    <priority>0.8</priority>
-    <changefreq>weekly</changefreq>
-  </url>`).join('')}
+    <priority>1.0</priority>
+  </url>${productUrls}
 </urlset>`;
 
-      return new Response(xml, {
+      return new Response(xml.trim(), {
         headers: {
           "Content-Type": "application/xml; charset=utf-8",
-          "Cache-Control": "public, max-age=86400, s-maxage=86400",
+          "Cache-Control": "public, max-age=3600",
         },
       });
-    } catch (e) {
-      return new Response("Error generating sitemap", { status: 500 });
+    } catch (err: any) {
+      return new Response(`Error generating sitemap: ${err?.message || err}`, { 
+        status: 500,
+        headers: { "Content-Type": "text/plain; charset=utf-8" }
+      });
     }
   }
 
