@@ -28,8 +28,8 @@ const VERIFIED_DELIVERIES: DeliveryRecord[] = [
     destinationKa: 'თბილისი, საქართველო',
     item: 'Hybrid ANC Headphones Pro',
     itemKa: 'Hybrid ANC ყურსასმენები Pro',
-    carrier: 'Georgian Post',
-    carrierKa: 'საქართველოს ფოსტა',
+    carrier: 'Global Tracked Courier',
+    carrierKa: 'საერთაშორისო გადამზიდავი',
     trackingNumber: 'GP004920412GE',
     date: '2026-09-03',
     status: 'Delivered',
@@ -45,8 +45,8 @@ const VERIFIED_DELIVERIES: DeliveryRecord[] = [
     destinationKa: 'ქუთაისი, საქართველო',
     item: 'Smart Hydration Bottle OLED',
     itemKa: 'ჭკვიანი თერმოსი OLED ეკრანით',
-    carrier: 'Georgian Post',
-    carrierKa: 'საქართველოს ფოსტა',
+    carrier: 'Global Tracked Courier',
+    carrierKa: 'საერთაშორისო გადამზიდავი',
     trackingNumber: 'GP004920519GE',
     date: '2026-09-01',
     status: 'Delivered',
@@ -62,8 +62,8 @@ const VERIFIED_DELIVERIES: DeliveryRecord[] = [
     destinationKa: 'ბათუმი, საქართველო',
     item: 'Ultralight Magnesium Pilates Ring',
     itemKa: 'ულტრამსუბუქი პილატესის რგოლი',
-    carrier: 'Georgian Post',
-    carrierKa: 'საქართველოს ფოსტა',
+    carrier: 'Global Tracked Courier',
+    carrierKa: 'საერთაშორისო გადამზიდავი',
     trackingNumber: 'GP004920822GE',
     date: '2026-08-28',
     status: 'Delivered',
@@ -79,8 +79,8 @@ const VERIFIED_DELIVERIES: DeliveryRecord[] = [
     destinationKa: 'თბილისი, საქართველო',
     item: 'Precision Gyro Grip Strengthener',
     itemKa: 'გიროსკოპული მაჯის სავარჯიშო',
-    carrier: 'Georgian Post',
-    carrierKa: 'საქართველოს ფოსტა',
+    carrier: 'Global Tracked Courier',
+    carrierKa: 'საერთაშორისო გადამზიდავი',
     trackingNumber: 'GP004921102GE',
     date: '2026-08-25',
     status: 'Delivered',
@@ -96,8 +96,8 @@ const VERIFIED_DELIVERIES: DeliveryRecord[] = [
     destinationKa: 'რუსთავი, საქართველო',
     item: 'MagSafe Leather Cardholder Wallet',
     itemKa: 'MagSafe ტყავის საფულე ტელეფონისთვის',
-    carrier: 'Georgian Post',
-    carrierKa: 'საქართველოს ფოსტა',
+    carrier: 'Global Tracked Courier',
+    carrierKa: 'საერთაშორისო გადამზიდავი',
     trackingNumber: 'GP004921415GE',
     date: '2026-08-22',
     status: 'Delivered',
@@ -153,17 +153,17 @@ export const VerifiedDeliveriesPage: React.FC = () => {
           </h1>
           <p className="text-slate-500 dark:text-slate-400 text-xs sm:text-sm max-w-2xl mx-auto leading-relaxed">
             {language === 'ka' 
-              ? 'ჩვენი მაღაზია მუშაობს სრულიად გამჭვირვალედ. ყველა შეკვეთა იგზავნება ლიცენზირებული საერთაშორისო გადამზიდავებით და საქართველოს ტერიტორიაზე ბარდება საქართველოს ფოსტის მეშვეობით.' 
-              : 'Our boutique shop operates with total transparency. Every order is dispatched from authenticated brand channels and delivered to your doorstep in Georgia via official partners like Georgian Post.'}
+              ? 'ჩვენი მაღაზია მუშაობს სრულიად გამჭვირვალედ. ყველა შეკვეთა იგზავნება ლიცენზირებული საერთაშორისო გადამზიდავებით და ბარდება პირდაპირ თქვენს კართან მსოფლიოს 45+ ქვეყანაში.' 
+              : 'Our boutique shop operates with total transparency. Every order is dispatched from authenticated brand channels and delivered directly to your doorstep across 45+ countries worldwide via premium tracked couriers (FedEx, DHL, UPS & regional postal services).'}
           </p>
         </div>
 
         {/* Live Delivery Performance Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs text-center space-y-1">
-            <p className="text-2xl font-black text-blue-600 dark:text-blue-400">1,420+</p>
+            <p className="text-2xl font-black text-blue-600 dark:text-blue-400">45+</p>
             <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{language === 'ka' ? 'ჩაბარებული შეკვეთა' : 'Completed Deliveries'}</p>
-            <p className="text-[10px] text-slate-400">{language === 'ka' ? 'საქართველოს მასშტაბით' : 'Across all regions of Georgia'}</p>
+            <p className="text-[10px] text-slate-400">{language === 'ka' ? 'მსოფლიოს მასშტაბით' : 'Across 45+ countries worldwide'}</p>
           </div>
           <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs text-center space-y-1">
             <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400">100%</p>
@@ -173,7 +173,7 @@ export const VerifiedDeliveriesPage: React.FC = () => {
           <div className="p-5 bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs text-center space-y-1">
             <p className="text-2xl font-black text-indigo-600 dark:text-indigo-400">9-11 {language === 'ka' ? 'დღე' : 'Days'}</p>
             <p className="text-xs font-bold text-slate-800 dark:text-slate-200">{language === 'ka' ? 'საშუალო მიწოდების დრო' : 'Average Delivery Transit'}</p>
-            <p className="text-[10px] text-slate-400">{language === 'ka' ? 'აშშ/ევროპის საწყობიდან' : 'From US/European centers'}</p>
+            <p className="text-[10px] text-slate-400">{language === 'ka' ? 'თრექინგით საერთაშორისო გადაზიდვა' : 'Tracked international door-to-door delivery'}</p>
           </div>
         </div>
 
@@ -186,8 +186,8 @@ export const VerifiedDeliveriesPage: React.FC = () => {
             </h2>
             <p className="text-xs text-slate-400">
               {language === 'ka' 
-                ? 'შეიყვანეთ შეკვეთის ID ან საქართველოს ფოსტის თრექინგ კოდი, რათა რეალურ დროში იხილოთ მიწოდების სტატუსი.' 
-                : 'Enter your order ID or Georgian Post tracking number to inspect live logistics milestones.'}
+                ? 'შეიყვანეთ შეკვეთის ID ან თრექინგ კოდი, რათა რეალურ დროში იხილოთ მიწოდების სტატუსი.' 
+                : 'Enter your order ID or international tracking number to inspect live logistics milestones.'}
             </p>
           </div>
 
