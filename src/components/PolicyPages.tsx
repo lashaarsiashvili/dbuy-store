@@ -102,13 +102,10 @@ export const GuaranteePage: React.FC = () => {
               <div className="text-[9px] uppercase font-bold text-slate-500 tracking-wider">
                 {isKa ? "ბიზნეს იდენტობა" : "Business Vetting Details"}
               </div>
-              <div className="text-xs font-bold text-white">
-                <span>DBUY Commerce LLC</span>
-              </div>
               <p className="text-[11px] text-slate-400 leading-relaxed">
                 {isKa
-                  ? "რეგისტრირებული ბიზნეს კომპანია (დელავერი, აშშ). მისამართი: 1209 North Orange Street, Wilmington, DE 19801. მხარდაჭერის ნომერი: +1-888-232-1541."
-                  : "Registered and active e-commerce operator. Corporate Address: 1209 North Orange Street, Wilmington, DE 19801. Phone: +1-888-232-1541."}
+                  ? "მხარდაჭერის ნომერი: +1-888-232-1541."
+                  : "Phone: +1-888-232-1541."}
               </p>
             </div>
 

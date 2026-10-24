@@ -246,7 +246,7 @@ export const Footer: React.FC = () => {
           {/* Rights & Security Notice */}
           <div className="flex flex-col items-center sm:items-start gap-1 text-center sm:text-left text-[10px] sm:text-[11px]">
             <div className="flex flex-col sm:flex-row items-center gap-2">
-              <span>{t('footer.rights')}</span>
+              <span>Dbuystore. All Rights Reserved</span>
               <span className="hidden sm:inline text-slate-700 dark:text-slate-200">•</span>
               <span className="inline-flex items-center space-x-1 text-emerald-400 font-semibold bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-500/30">
                 <Lock className="w-3 h-3 text-emerald-400" />
@@ -254,7 +254,6 @@ export const Footer: React.FC = () => {
               </span>
             </div>
             <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
-              DBUY Commerce LLC • 1209 North Orange Street, Wilmington, DE 19801 • Corporate ID #7014920
             </p>
           </div>
 

@@ -447,14 +447,10 @@ export const ContactPage: React.FC = () => {
                 <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   {useStore().language === 'ka' ? "კორპორატიული ოფისი" : "Corporate Headquarters"}
                 </h3>
-                <p className="text-xs font-bold text-slate-800 dark:text-slate-200">DBUY Commerce LLC</p>
                 <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  1209 North Orange Street<br />
-                  Wilmington, DE 19801<br />
-                  United States
+                  Support available online
                 </p>
                 <div className="pt-1.5 border-t border-slate-100 dark:border-slate-800 mt-1.5 text-[11px] text-slate-500 dark:text-slate-400 space-y-0.5">
-                  <p><strong>{useStore().language === 'ka' ? "რეგისტრაციის ID" : "Registered ID"}:</strong> #7014920</p>
                   <p><strong>{useStore().language === 'ka' ? "ტელეფონი" : "Support Phone"}:</strong> +1-888-232-1541</p>
                 </div>
               </div>

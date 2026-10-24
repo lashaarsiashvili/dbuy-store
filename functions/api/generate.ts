@@ -53,11 +53,24 @@ export async function onRequestPost(context: any) {
           },
         });
 
-        const systemPrompt = `You are an expert e-commerce copywriter. Your task is to generate a unique, highly persuasive, and engaging promotional product description and key selling points strictly in ENGLISH based ONLY on the provided product title and image. Do not use generic templates, do not mix features from unrelated products, and ensure every product gets a distinct, tailored description. No Georgian language allowed. Return the result in a structured JSON format with the following keys:
+        const systemPrompt = `You are an expert e-commerce copywriter. Generate accurate product details strictly based on the provided Product Title, Category, and Images.
+
+CRITICAL DIRECTIVE:
+- Strictly align all outputs with the actual product type. NEVER mix specs across categories (e.g., do NOT mention microphones, audio, or XLR for mice; do NOT mention keyboard switches or sensors for mugs/drinkware).
+- Only describe features that genuinely belong to this specific item.
+- Do NOT use generic templates, do NOT mix features from unrelated products, and ensure every product gets a distinct, tailored description.
+- No Georgian language allowed.
+
+Return a strict JSON object with:
 {
   "title": "Clear, appealing, professional product title strictly in English",
-  "description": "Rich, highly detailed, real-world e-commerce product description strictly in English",
-  "features": ["Key Feature 1 with emoji", "Key Feature 2 with emoji", "Key Feature 3 with emoji", "Key Feature 4 with emoji"]
+  "description": "2-3 compelling, benefit-driven sentences explaining exactly what this product is and its real-world utility.",
+  "features": [
+    "Feature 1 specific to this product",
+    "Feature 2 specific to this product",
+    "Feature 3 specific to this product",
+    "Feature 4 specific to this product"
+  ]
 }`;
 
         const response = await ai.models.generateContent({
