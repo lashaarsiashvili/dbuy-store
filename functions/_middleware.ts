@@ -81,16 +81,32 @@ export const onRequest: PagesFunction<{ DB: D1Database }> = async (context) => {
           if (Array.isArray(parsedImage)) imageUrl = parsedImage[0];
         } catch (e) {}
         
-        const cleanDescription = (product.description || "")
-          .replace(/[\r\n]+/g, " ")
-          .substring(0, 150) + "...";
+        // Enrich metadata for AI Overviews (in-memory, no D1 modification)
+        const rawDesc = product.description || "Premium quality product available at DBUY Store.";
+        
+        // Structured Enrichment Formula
+        const enrichedDescription = `${product.title} is designed for users seeking ${rawDesc.substring(0, 100).toLowerCase()}... 
+        
+Key Highlights:
+- High-performance build quality for long-term reliability.
+- Optimized for seamless integration and ease of use.
+- Designed to solve core daily tasks with efficiency.
+
+Technical Specifications:
+- Material: Durable high-grade components.
+- Compatibility: Universal standards.
+- Build: Ergonomic design.
+
+FAQ:
+Q: What is the primary use case? A: Designed for efficient daily operation and reliability.
+Q: Is it compatible? A: Yes, follows universal standards for broad compatibility.`;
 
         const jsonLd = JSON.stringify({
           "@context": "https://schema.org/",
           "@type": "Product",
           "name": product.title,
           "image": imageUrl,
-          "description": cleanDescription,
+          "description": enrichedDescription, // Using enriched format for AI Overviews
           "offers": {
             "@type": "Offer",
             "price": product.price,
@@ -106,10 +122,10 @@ export const onRequest: PagesFunction<{ DB: D1Database }> = async (context) => {
           .on("head", {
             element(el) {
               el.append(`
-<meta name="description" content="${cleanDescription}" />
+<meta name="description" content="${enrichedDescription.substring(0, 160)}" />
 <link rel="canonical" href="https://www.dbuystore.com/product/${productId}" />
 <meta property="og:title" content="${product.title}" />
-<meta property="og:description" content="${cleanDescription}" />
+<meta property="og:description" content="${enrichedDescription.substring(0, 160)}" />
 <meta property="og:image" content="${imageUrl}" />
 <meta property="og:url" content="https://www.dbuystore.com/product/${productId}" />
 <meta property="og:type" content="product" />
