@@ -150,33 +150,59 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     document.body.removeChild(textArea);
   };
 
-  const getAllProductImages = React.useMemo(() => {
-    const urls = new Set<string>();
-    if (product.image) urls.add(product.image);
-    if (Array.isArray(product.images)) product.images.forEach(i => urls.add(i));
-    if ((product as any).gallery) {
-      try {
-        const gal = typeof (product as any).gallery === 'string' ? JSON.parse((product as any).gallery) : (product as any).gallery;
-        if (Array.isArray(gal)) gal.forEach(i => urls.add(i));
-      } catch (e) {}
+  // Safe helper to extract product images
+  const getSafeProductImages = (product: any): string[] => {
+    if (!product) return [];
+    const urls: string[] = [];
+    const addUrl = (u: any) => {
+      if (typeof u === 'string' && u.trim().startsWith('http') && !urls.includes(u.trim())) {
+        urls.push(u.trim());
+      }
+    };
+    addUrl(product.image);
+    addUrl(product.imageUrl);
+    addUrl(product.thumbnail);
+
+    const rawLists = [product.images, product.gallery, product.additionalImages, product.media];
+    for (const raw of rawLists) {
+      if (!raw) continue;
+      if (Array.isArray(raw)) {
+        raw.forEach(item => typeof item === 'string' ? addUrl(item) : addUrl(item?.url || item?.src));
+      } else if (typeof raw === 'string') {
+        try {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) {
+            parsed.forEach(item => typeof item === 'string' ? addUrl(item) : addUrl(item?.url || item?.src));
+          } else {
+            raw.split(',').forEach(s => addUrl(s));
+          }
+        } catch {
+          raw.split(',').forEach(s => addUrl(s));
+        }
+      }
     }
-    return Array.from(urls).filter(Boolean);
+    return urls;
+  };
+
+  const getAllProductImages = React.useMemo(() => {
+    return getSafeProductImages(product);
   }, [product]);
 
-  const handleDownloadAll = async () => {
-    for (let i = 0; i < getAllProductImages.length; i++) {
-        const url = getAllProductImages[i];
-        try {
-            const res = await fetch(url);
-            const blob = await res.blob();
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(blob);
-            a.download = `dbuy-product-${product.id}-${i + 1}.jpg`;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(a.href);
-        } catch {}
+  const handleDownloadImage = async () => {
+    const url = getAllProductImages[0];
+    if (!url) return;
+    try {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `dbuy-product-${product.id}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+    } catch (e) {
+        console.error("Download failed", e);
     }
   };
 
@@ -254,7 +280,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
         }
     }
 
-    // 4. Fallback: Copy caption, open Facebook
+    // 4. Fallback: Copy caption, open Facebook (cleanly, without sharer.php)
     try { await navigator.clipboard.writeText(caption); } catch {}
     
     showToast(language === 'ka' ? '✅ ტექსტი დაკოპირდა!' : '✅ Ad copy copied!', 'fb');
@@ -406,6 +432,16 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                   )}
                 </div>
               </div>
+            </div>
+            
+            {/* Product Image Thumbnails Diagnostic Gallery */}
+            <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <p className="w-full text-[10px] font-bold text-slate-500 mb-1">
+                Detected Product Images ({getAllProductImages.length} photos):
+              </p>
+              {getAllProductImages.map((url, idx) => (
+                <img key={idx} src={url} alt={`Thumb ${idx}`} className="w-12 h-12 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shadow-xs" />
+              ))}
             </div>
 
             <div className="flex items-center space-x-1.5 shrink-0 pl-2">
