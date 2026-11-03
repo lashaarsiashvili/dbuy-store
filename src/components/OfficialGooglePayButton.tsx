@@ -154,12 +154,10 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
         if (response.result && containerRef.current) {
           containerRef.current.innerHTML = '';
 
-          // Create button strictly adhering to Google Pay API specifications and Brand Guidelines (Rounded Capsule Design)
-          const capsuleRadius = Math.max(25, Math.round(height / 2));
           const button = paymentsClientRef.current.createButton({
-            buttonColor: buttonColor === 'white' ? 'white' : 'default',
-            buttonType: buttonType || 'buy',
-            buttonRadius: capsuleRadius, // Pill-shaped rounded capsule radius as specified by Google Pay UI guidelines
+            buttonColor: 'white',
+            buttonType: 'pay',
+            buttonRadius: 24,
             buttonBorderType: 'default_border',
             buttonSizeMode: buttonSizeMode,
             buttonLocale: 'en',
@@ -167,14 +165,13 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
               if (e && e.preventDefault) e.preventDefault();
               handlePaymentClick();
             },
-            allowedPaymentMethods: [cardPaymentMethod], // use the same payment methods as for the loadPaymentData() API call
+            allowedPaymentMethods: [cardPaymentMethod],
           });
 
           button.style.width = '100%';
           button.style.height = `${height}px`;
-          button.style.borderRadius = '9999px'; // Pill-shaped capsule design
+          button.style.borderRadius = '24px';
           button.style.cursor = 'pointer';
-          button.style.boxShadow = '0 1px 3px rgba(60, 64, 67, 0.12)';
 
           containerRef.current.appendChild(button);
           setGoogleClientReady(true);
@@ -319,7 +316,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
   return (
     <div className={`w-full space-y-2.5 ${className}`}>
       {/* Google Pay Clear-Space Container & Capsule Badge Wrapper Structure */}
-      <div className="gpay-capsule-wrapper relative w-full py-1 flex items-center justify-center">
+      <div className="gpay-capsule-wrapper relative w-full flex items-center justify-center" style={{ background: 'transparent', margin: '8px 0', minWidth: '152px' }}>
         {/* Official Google Pay Button Mount Target */}
         <div
           ref={containerRef}
