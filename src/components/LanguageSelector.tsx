@@ -106,15 +106,31 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
       )}
 
       {code === 'fr' && (
-        // French Flag (Tricolore)
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
-          <clipPath id="fr-circle">
-            <circle cx="30" cy="30" r="30" />
-          </clipPath>
+          <clipPath id="fr-circle"><circle cx="30" cy="30" r="30" /></clipPath>
           <g clipPath="url(#fr-circle)">
-            <rect x="0" y="0" width="20" height="60" fill="#002395" />
-            <rect x="20" y="0" width="20" height="60" fill="#ffffff" />
-            <rect x="40" y="0" width="20" height="60" fill="#ED2939" />
+            <rect x="0" width="20" height="60" fill="#002395" />
+            <rect x="20" width="20" height="60" fill="#ffffff" />
+            <rect x="40" width="20" height="60" fill="#ED2939" />
+          </g>
+        </svg>
+      )}
+      {code === 'it' && (
+        <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
+          <clipPath id="it-circle"><circle cx="30" cy="30" r="30" /></clipPath>
+          <g clipPath="url(#it-circle)">
+            <rect x="0" width="20" height="60" fill="#008C45" />
+            <rect x="20" width="20" height="60" fill="#ffffff" />
+            <rect x="40" width="20" height="60" fill="#CD212A" />
+          </g>
+        </svg>
+      )}
+      {code === 'zh' && (
+        <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
+          <clipPath id="zh-circle"><circle cx="30" cy="30" r="30" /></clipPath>
+          <g clipPath="url(#zh-circle)">
+            <rect width="60" height="60" fill="#DE2910" />
+            <circle cx="20" cy="20" r="6" fill="#FFDE00" />
           </g>
         </svg>
       )}
@@ -127,8 +143,10 @@ export const languagesList: LanguageOption[] = [
   { code: 'ka', shortLabel: 'GEO', fullLabel: 'ქართული' },
   { code: 'ru', shortLabel: 'RUS', fullLabel: 'Русский' },
   { code: 'es', shortLabel: 'ESP', fullLabel: 'Español' },
-  { code: 'de', shortLabel: 'GER', fullLabel: 'Deutsch' },
+  { code: 'it', shortLabel: 'ITA', fullLabel: 'Italiano' },
   { code: 'fr', shortLabel: 'FRA', fullLabel: 'Français' },
+  { code: 'de', shortLabel: 'GER', fullLabel: 'Deutsch' },
+  { code: 'zh', shortLabel: 'CHI', fullLabel: '中文' },
 ];
 
 export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ variant = 'light' }) => {

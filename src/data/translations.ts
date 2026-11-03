@@ -2519,5 +2519,8 @@ export const translations: Record<Language, Record<string, string>> = {
     "common.cancel": "Annuler",
     "common.save": "Enregistrer",
     "common.error": "Une erreur est survenue"
-  }
+  },
+  "it": {},
+  "de": {},
+  "zh": {}
 };

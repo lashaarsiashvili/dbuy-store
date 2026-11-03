@@ -1,7 +1,7 @@
 import { Language } from '../types';
 import { translations } from '../data/translations';
 
-const SUPPORTED_LANGUAGES: Language[] = ['en', 'ka', 'es', 'ru', 'de', 'zh'];
+const SUPPORTED_LANGUAGES: Language[] = ['en', 'ka', 'ru', 'es', 'it', 'fr', 'de', 'zh'];
 
 declare global {
   interface Window {

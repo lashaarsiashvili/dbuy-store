@@ -196,66 +196,106 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     }
   };
 
-  // 1. Share full Post to Facebook (Copies Social Ad Copy + Downloads Photo + Opens Facebook Sharer URL)
-  const handleShareFacebookFullPost = async () => {
-    // 0. IMMEDIATELY open Facebook Sharer URL to avoid popup blockers
-    const fbSharerUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(shareUrl)}`;
-    const win = window.open(fbSharerUrl, '_blank', 'noopener,noreferrer,width=650,height=600,scrollbars=yes,resizable=yes');
-    
-    if (!win) {
-      alert(language === 'ka' ? 'გთხოვთ დაუშვათ pop-up ფანჯრები Facebook-ისთვის.' : 'Please allow pop-ups for Facebook.');
+  const [fbPageId, setFbPageId] = useState<string>(localStorage.getItem('dbuy_fb_page_id') || '');
+  const [fbAccessToken, setFbAccessToken] = useState<string>(localStorage.getItem('dbuy_fb_token') || '');
+  const [showDirectPublish, setShowDirectPublish] = useState<boolean>(false);
+
+  // Helper to stitch images into 2x2 grid
+  const generate2x2Grid = async (imageUrls: string[]): Promise<Blob | null> => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 1200;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, 1200, 1200);
+
+    const imagesToUse = imageUrls.slice(0, 4);
+    const size = 580; // (1200 - 3 * 20) / 2
+    const gap = 20;
+
+    for (let i = 0; i < imagesToUse.length; i++) {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.src = imagesToUse[i];
+      await new Promise((resolve) => { img.onload = resolve; img.onerror = resolve; });
+
+      const x = (i % 2) * (size + gap) + gap;
+      const y = Math.floor(i / 2) * (size + gap) + gap;
+      
+      // Aspect fill
+      const ratio = Math.max(size / img.width, size / img.height);
+      const w = img.width * ratio;
+      const h = img.height * ratio;
+      ctx.drawImage(img, x + (size - w) / 2, y + (size - h) / 2, w, h);
     }
 
+    return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+  };
+
+  // 1. Share full Post to Facebook
+  const handleShareFacebookFullPost = async () => {
     const imageUrls = [
       product.image,
       ...(Array.isArray(product.images) ? product.images : []),
     ].filter(Boolean) as string[];
 
-    // Attempt direct Facebook Graph API Photo Post if configured
-    try {
-      const apiResult = await publishFacebookPhotoPost({
-        imageUrls,
-        message: caption,
-      });
-
-      if (apiResult.success) {
-        showToast(
-          language === 'ka'
-            ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა Facebook-ზე!`
-            : `🎉 Photo Post successfully published to Facebook!`,
-          'fb'
-        );
-        return;
-      }
-    } catch {
-      // Continue to Facebook Sharer workflow if Graph API token not present
+    // 1. Generate 2x2 Grid
+    const gridBlob = await generate2x2Grid(imageUrls);
+    if (gridBlob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(gridBlob);
+        a.download = `dbuy-grid-${product.id}.jpg`;
+        a.click();
     }
 
-    // 1. Copy generated ad copy to clipboard
+    // 2. Direct Graph API Photo Post if configured
+    if (fbPageId && fbAccessToken) {
+        try {
+            setStatusMessage(language === 'ka' ? 'იგზავნება Facebook-ზე...' : 'Publishing to Facebook...');
+            
+            const apiResult = await publishFacebookPhotoPost({
+                imageUrls,
+                message: caption,
+                accessToken: fbAccessToken,
+                pageId: fbPageId,
+            });
+
+            if (apiResult.success) {
+                showToast(
+                    language === 'ka'
+                        ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა Facebook-ზე!`
+                        : `🎉 Photo Post successfully published to Facebook!`,
+                    'fb'
+                );
+                return;
+            } else {
+                throw new Error(apiResult.error);
+            }
+        } catch (err: any) {
+            alert(`Facebook API Error: ${err.message}`);
+        }
+    }
+
+    // 3. Fallback: Copy generated ad copy to clipboard, download image and open Facebook
     try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
         await navigator.clipboard.writeText(caption);
-      } else {
-        fallbackCopyText(caption);
-      }
     } catch {
-      fallbackCopyText(caption);
+        fallbackCopyText(caption);
     }
 
-    // 2. Display quick visible alert/toast
     const toastMsg = language === 'ka'
-      ? '✅ პროდუქტის სარეკლამო ტექსტი დაკოპირდა! დააჭირეთ Ctrl+V (Paste) Facebook-ის პოსტის ველში.'
-      : '✅ Product ad copy copied! Press Ctrl+V (Paste) in the Facebook post box.';
+        ? '✅ პროდუქტის სარეკლამო ტექსტი დაკოპირდა! დააჭირეთ Ctrl+V (Paste) Facebook-ის პოსტის ველში.'
+        : '✅ Product ad copy copied! Press Ctrl+V (Paste) in the Facebook post box.';
     
     showToast(toastMsg, 'fb');
 
-    // 3. Download product image
     try {
-      await handleDownloadImage();
-    } catch {
-      // Non-blocking
-    }
+        await handleDownloadImage();
+    } catch { }
 
+    window.open('https://www.facebook.com/', '_blank');
     setShowFbGuidance(true);
   };
 
@@ -604,6 +644,44 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 </div>
               </div>
             )}
+
+            {/* Direct Publishing Bar */}
+            <div className="border border-slate-200 dark:border-slate-700 rounded-2xl overflow-hidden bg-white dark:bg-slate-900">
+                <button
+                    onClick={() => setShowDirectPublish(!showDirectPublish)}
+                    className="w-full p-3 flex items-center justify-between text-xs font-bold text-slate-800 dark:text-slate-200 bg-slate-50 dark:bg-slate-800"
+                >
+                    <div className="flex items-center space-x-2">
+                        <Layers className="w-4 h-4 text-indigo-500" />
+                        <span>{language === 'ka' ? 'პირდაპირი გამოქვეყნება Dbuy Hub (API)' : 'Direct Auto-Publish to Dbuy Hub (API)'}</span>
+                    </div>
+                    <span>{showDirectPublish ? '−' : '+'}</span>
+                </button>
+                {showDirectPublish && (
+                    <div className="p-3 space-y-2 border-t border-slate-200 dark:border-slate-700">
+                        <input
+                            type="text"
+                            placeholder="Facebook Page ID"
+                            value={fbPageId}
+                            onChange={(e) => {
+                                setFbPageId(e.target.value);
+                                localStorage.setItem('dbuy_fb_page_id', e.target.value);
+                            }}
+                            className="w-full p-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                        <input
+                            type="password"
+                            placeholder="Page Access Token"
+                            value={fbAccessToken}
+                            onChange={(e) => {
+                                setFbAccessToken(e.target.value);
+                                localStorage.setItem('dbuy_fb_token', e.target.value);
+                            }}
+                            className="w-full p-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
+                        />
+                    </div>
+                )}
+            </div>
 
             {/* Social Share Primary Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
