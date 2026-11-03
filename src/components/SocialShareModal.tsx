@@ -253,7 +253,9 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
   // 1. Share full Post to Facebook
   const handleShareFacebookFullPost = async () => {
-    setStatusMessage(language === 'ka' ? 'მუშავდება...' : 'Processing images...');
+    // Enforce English ad copy and toast
+    setLanguage('en');
+    setStatusMessage('Processing images...');
     
     // 1. Generate 2x2 Grid via Proxy & Copy to clipboard
     const proxyUrl = (url: string) => `/api/image-proxy?url=${encodeURIComponent(url)}`;
@@ -261,21 +263,30 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     
     const gridBlob = await generate2x2Grid(proxiedImages);
     
+    let imageCopied = false;
     if (gridBlob) {
         try {
             await navigator.clipboard.write([
                 new ClipboardItem({ 'image/png': gridBlob })
             ]);
-            showToast(language === 'ka' ? '✅ 4-ფოტოიანი კოლაჟი დაკოპირდა!' : '✅ 4-Photo Collage Copied!', 'fb');
+            imageCopied = true;
         } catch (err) {
-            console.error('Clipboard copy failed:', err);
+            console.error('Clipboard copy failed, falling back to download:', err);
         }
+    }
+    
+    // Fallback: Download collage if clipboard failed
+    if (!imageCopied && gridBlob) {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(gridBlob);
+        a.download = `dbuy-grid-${product.id}.jpg`;
+        a.click();
     }
     
     // 2. Direct Graph API Photo Post if configured
     if (fbPageId && fbAccessToken) {
         try {
-            setStatusMessage(language === 'ka' ? 'იგზავნება Facebook-ზე...' : 'Publishing to Facebook...');
+            setStatusMessage('Publishing to Facebook...');
             const apiResult = await publishFacebookPhotoPost({
                 imageUrls: getAllProductImages,
                 message: caption,
@@ -284,7 +295,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
             });
 
             if (apiResult.success) {
-                showToast(language === 'ka' ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა!` : `🎉 Photo Post successfully published!`, 'fb');
+                showToast(`🎉 Photo Post successfully published!`, 'fb');
             } else {
                 throw new Error(apiResult.error);
             }
@@ -296,7 +307,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     // 3. Copy caption & open Facebook
     try { await navigator.clipboard.writeText(caption); } catch {}
     
-    setStatusMessage(language === 'ka' ? '✅ მზად არის! ჩასვით Facebook-ში' : '✅ Ready! Paste in Facebook');
+    setStatusMessage('✅ Ad text & photos copied! Just click inside Facebook and press Ctrl+V to paste your multi-photo post.');
     window.open('https://www.facebook.com/', '_blank');
   };
 
