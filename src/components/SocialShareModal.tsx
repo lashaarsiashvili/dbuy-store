@@ -268,24 +268,11 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
             ]);
             showToast(language === 'ka' ? '✅ 4-ფოტოიანი კოლაჟი დაკოპირდა!' : '✅ 4-Photo Collage Copied!', 'fb');
         } catch (err) {
-            const a = document.createElement('a');
-            a.href = URL.createObjectURL(gridBlob);
-            a.download = `dbuy-grid-${product.id}.jpg`;
-            a.click();
+            console.error('Clipboard copy failed:', err);
         }
     }
     
-    // 2. Download all individual images via proxy
-    for (const url of proxiedImages) {
-        const res = await fetch(url);
-        const blob = await res.blob();
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = `dbuy-product-${product.id}-${Date.now()}.jpg`;
-        a.click();
-    }
-
-    // 3. Direct Graph API Photo Post if configured
+    // 2. Direct Graph API Photo Post if configured
     if (fbPageId && fbAccessToken) {
         try {
             setStatusMessage(language === 'ka' ? 'იგზავნება Facebook-ზე...' : 'Publishing to Facebook...');
@@ -306,7 +293,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
         }
     }
 
-    // 4. Copy caption & open Facebook
+    // 3. Copy caption & open Facebook
     try { await navigator.clipboard.writeText(caption); } catch {}
     
     setStatusMessage(language === 'ka' ? '✅ მზად არის! ჩასვით Facebook-ში' : '✅ Ready! Paste in Facebook');
@@ -330,12 +317,12 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     }
 
     // Auto-trigger image download for quick posting to feed / story
-    await handleDownloadImage();
+    // await handleDownloadImage();
 
     showToast(
       language === 'ka'
-        ? 'სარეკლამო ტექსტი დაკოპირდა და სურათი ჩამოიტვირთა! შექმენით პოსტი Instagram-ზე.'
-        : 'Caption copied and image downloaded! Ready to publish on Instagram.',
+        ? 'სარეკლამო ტექსტი დაკოპირდა! შექმენით პოსტი Instagram-ზე.'
+        : 'Caption copied! Ready to publish on Instagram.',
       'ig'
     );
 
