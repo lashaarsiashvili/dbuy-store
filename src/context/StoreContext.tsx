@@ -385,8 +385,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [language, setLanguageState] = useState<Language>(() => getSavedLanguage());
 
   const setLanguage = (lang: Language) => {
+    // 1. Trigger React-based i18n
     const updatedLang = changeLanguage(lang);
     setLanguageState(updatedLang);
+    
+    // 2. Trigger Google Translate engine
+    const translateCode = lang === 'zh' ? 'zh-CN' : lang;
+    triggerGoogleTranslate(translateCode);
   };
 
   // Sync document.documentElement.lang and trigger DOM i18n updates on mount and language changes

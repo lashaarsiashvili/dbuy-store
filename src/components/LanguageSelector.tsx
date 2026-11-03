@@ -174,6 +174,7 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
   const handleSelectLanguage = (code: Language) => {
     setLanguage(code);
     setIsOpen(false);
+    localStorage.setItem('dbuy_lang', code);
   };
 
   return (

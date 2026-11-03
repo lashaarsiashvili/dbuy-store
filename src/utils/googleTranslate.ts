@@ -4,7 +4,7 @@
  * Supports: English ('en'), Georgian ('ka'), Russian ('ru'), Spanish ('es'), German ('de'), French ('fr').
  */
 
-export const SUPPORTED_TRANSLATE_LANGUAGES = ['en', 'ka', 'ru', 'es', 'de', 'fr'] as const;
+export const SUPPORTED_TRANSLATE_LANGUAGES = ['en', 'ka', 'ru', 'es', 'it', 'fr', 'de', 'zh-CN'] as const;
 export type SupportedTranslateLang = typeof SUPPORTED_TRANSLATE_LANGUAGES[number];
 
 /**

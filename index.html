@@ -310,6 +310,10 @@
     <meta name="Impact-Site-Verification" content="41a39fad-b42a-4494-9fd7-da906394874d" />
   </head>
   <body class="bg-slate-50 text-slate-900 antialiased selection:bg-blue-500 selection:text-white">
+    <style>
+      .goog-te-banner-frame { display: none !important; }
+      body { top: 0px !important; }
+    </style>
     <!-- Google Translate Official Widget Element -->
     <div id="google_translate_element" style="display: none;"></div>
     <script type="text/javascript">
@@ -317,7 +321,7 @@
         if (window.google && window.google.translate) {
           new window.google.translate.TranslateElement({
             pageLanguage: 'en',
-            includedLanguages: 'en,ka,ru,es,de,fr', // English, Georgian, Russian, Spanish, German, French
+            includedLanguages: 'en,ka,ru,es,it,fr,de,zh-CN',
             autoDisplay: false
           }, 'google_translate_element');
         }

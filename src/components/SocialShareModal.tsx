@@ -150,49 +150,33 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     document.body.removeChild(textArea);
   };
 
-  // Helper to get image as File object (for Web Share API with files)
-  const getProductImageFile = async (): Promise<File | null> => {
-    const imageUrl = product.image || (product.images && product.images[0]) || '';
-    if (!imageUrl) return null;
-    try {
-      const res = await fetch(imageUrl);
-      const blob = await res.blob();
-      const safeTitle = (product.title || 'product').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-      const ext = blob.type.includes('png') ? 'png' : 'jpg';
-      const filename = `dbuy-${safeTitle}.${ext}`;
-      return new File([blob], filename, { type: blob.type || 'image/jpeg' });
-    } catch {
-      return null;
+  const getAllProductImages = React.useMemo(() => {
+    const urls = new Set<string>();
+    if (product.image) urls.add(product.image);
+    if (Array.isArray(product.images)) product.images.forEach(i => urls.add(i));
+    if ((product as any).gallery) {
+      try {
+        const gal = typeof (product as any).gallery === 'string' ? JSON.parse((product as any).gallery) : (product as any).gallery;
+        if (Array.isArray(gal)) gal.forEach(i => urls.add(i));
+      } catch (e) {}
     }
-  };
+    return Array.from(urls).filter(Boolean);
+  }, [product]);
 
-  // Download product image
-  const handleDownloadImage = async () => {
-    const imageUrl = product.image || (product.images && product.images[0]) || '';
-    if (!imageUrl) return;
-
-    const safeTitle = (product.title || 'product').toLowerCase().replace(/[^a-z0-9]/g, '-').slice(0, 30);
-    const filename = `dbuy-${safeTitle}.jpg`;
-
-    try {
-      const res = await fetch(imageUrl);
-      const blob = await res.blob();
-      const blobUrl = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = blobUrl;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(blobUrl);
-    } catch {
-      const a = document.createElement('a');
-      a.href = imageUrl;
-      a.download = filename;
-      a.target = '_blank';
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+  const handleDownloadAll = async () => {
+    for (let i = 0; i < getAllProductImages.length; i++) {
+        const url = getAllProductImages[i];
+        try {
+            const res = await fetch(url);
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `dbuy-product-${product.id}-${i + 1}.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(a.href);
+        } catch {}
     }
   };
 
@@ -236,39 +220,31 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
   // 1. Share full Post to Facebook
   const handleShareFacebookFullPost = async () => {
-    const imageUrls = [
-      product.image,
-      ...(Array.isArray(product.images) ? product.images : []),
-    ].filter(Boolean) as string[];
-
     // 1. Generate 2x2 Grid
-    const gridBlob = await generate2x2Grid(imageUrls);
+    const gridBlob = await generate2x2Grid(getAllProductImages);
     if (gridBlob) {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(gridBlob);
         a.download = `dbuy-grid-${product.id}.jpg`;
         a.click();
     }
+    
+    // 2. Download all individual images
+    await handleDownloadAll();
 
-    // 2. Direct Graph API Photo Post if configured
+    // 3. Direct Graph API Photo Post if configured
     if (fbPageId && fbAccessToken) {
         try {
             setStatusMessage(language === 'ka' ? 'იგზავნება Facebook-ზე...' : 'Publishing to Facebook...');
-            
             const apiResult = await publishFacebookPhotoPost({
-                imageUrls,
+                imageUrls: getAllProductImages,
                 message: caption,
                 accessToken: fbAccessToken,
                 pageId: fbPageId,
             });
 
             if (apiResult.success) {
-                showToast(
-                    language === 'ka'
-                        ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა Facebook-ზე!`
-                        : `🎉 Photo Post successfully published to Facebook!`,
-                    'fb'
-                );
+                showToast(language === 'ka' ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა!` : `🎉 Photo Post successfully published!`, 'fb');
                 return;
             } else {
                 throw new Error(apiResult.error);
@@ -278,23 +254,10 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
         }
     }
 
-    // 3. Fallback: Copy generated ad copy to clipboard, download image and open Facebook
-    try {
-        await navigator.clipboard.writeText(caption);
-    } catch {
-        fallbackCopyText(caption);
-    }
-
-    const toastMsg = language === 'ka'
-        ? '✅ პროდუქტის სარეკლამო ტექსტი დაკოპირდა! დააჭირეთ Ctrl+V (Paste) Facebook-ის პოსტის ველში.'
-        : '✅ Product ad copy copied! Press Ctrl+V (Paste) in the Facebook post box.';
+    // 4. Fallback: Copy caption, open Facebook
+    try { await navigator.clipboard.writeText(caption); } catch {}
     
-    showToast(toastMsg, 'fb');
-
-    try {
-        await handleDownloadImage();
-    } catch { }
-
+    showToast(language === 'ka' ? '✅ ტექსტი დაკოპირდა!' : '✅ Ad copy copied!', 'fb');
     window.open('https://www.facebook.com/', '_blank');
     setShowFbGuidance(true);
   };
@@ -562,7 +525,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 value={caption}
                 onChange={e => setCaption(e.target.value)}
                 rows={9}
-                className="w-full p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-sans leading-relaxed resize-y"
+                className="notranslate w-full p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-xs sm:text-sm text-slate-800 dark:text-slate-100 focus:bg-white dark:focus:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-sans leading-relaxed resize-y"
                 placeholder={language === 'ka' ? 'სარეკლამო ტექსტი...' : 'Ad text...'}
               />
               <div className="absolute bottom-2.5 right-3 text-[10px] font-medium text-slate-400 pointer-events-none bg-white/80 dark:bg-slate-800/80 px-1.5 py-0.5 rounded-md backdrop-blur-xs">
