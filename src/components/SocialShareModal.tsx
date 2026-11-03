@@ -207,7 +207,14 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   };
 
   const [fbPageId, setFbPageId] = useState<string>(localStorage.getItem('dbuy_fb_page_id') || '');
-  const [fbAccessToken, setFbAccessToken] = useState<string>(localStorage.getItem('dbuy_fb_token') || '');
+  const [fbAccessToken, setFbAccessToken] = useState<string>(localStorage.getItem('dbuy_fb_token') || '1651734446366149|6ZDc5AoAGiOypXX3GWSYUWM0leI');
+  
+  // Ensure default is saved
+  useEffect(() => {
+    if (!localStorage.getItem('dbuy_fb_token')) {
+        localStorage.setItem('dbuy_fb_token', '1651734446366149|6ZDc5AoAGiOypXX3GWSYUWM0leI');
+    }
+  }, []);
   const [showDirectPublish, setShowDirectPublish] = useState<boolean>(false);
 
   // Helper to stitch images into 2x2 grid
@@ -246,17 +253,40 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
   // 1. Share full Post to Facebook
   const handleShareFacebookFullPost = async () => {
-    // 1. Generate 2x2 Grid
-    const gridBlob = await generate2x2Grid(getAllProductImages);
+    setStatusMessage(language === 'ka' ? 'მუშავდება...' : 'Processing images...');
+    
+    // 1. Generate 2x2 Grid via Proxy
+    const proxyUrl = (url: string) => `/api/image-proxy?url=${encodeURIComponent(url)}`;
+    const proxiedImages = getAllProductImages.map(proxyUrl);
+    
+    const gridBlob = await generate2x2Grid(proxiedImages);
+    
     if (gridBlob) {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(gridBlob);
-        a.download = `dbuy-grid-${product.id}.jpg`;
-        a.click();
+        // Copy to clipboard
+        try {
+            await navigator.clipboard.write([
+                new ClipboardItem({ 'image/png': gridBlob })
+            ]);
+            showToast(language === 'ka' ? '✅ 4-ფოტოიანი კოლაჟი დაკოპირდა! ჩასვით Facebook-ში' : '✅ 4-Photo Collage Copied! Paste in Facebook', 'fb');
+        } catch (err) {
+            console.error('Clipboard copy failed:', err);
+            // Fallback: download
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(gridBlob);
+            a.download = `dbuy-grid-${product.id}.jpg`;
+            a.click();
+        }
     }
     
-    // 2. Download all individual images
-    await handleDownloadAll();
+    // 2. Download all individual images via proxy
+    for (const url of proxiedImages) {
+        const res = await fetch(url);
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `dbuy-product-${product.id}-${Date.now()}.jpg`;
+        a.click();
+    }
 
     // 3. Direct Graph API Photo Post if configured
     if (fbPageId && fbAccessToken) {
@@ -280,10 +310,9 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
         }
     }
 
-    // 4. Fallback: Copy caption, open Facebook (cleanly, without sharer.php)
+    // 4. Fallback: Copy caption, open Facebook
     try { await navigator.clipboard.writeText(caption); } catch {}
     
-    showToast(language === 'ka' ? '✅ ტექსტი დაკოპირდა!' : '✅ Ad copy copied!', 'fb');
     window.open('https://www.facebook.com/', '_blank');
     setShowFbGuidance(true);
   };

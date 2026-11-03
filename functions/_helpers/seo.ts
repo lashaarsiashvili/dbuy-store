@@ -261,12 +261,11 @@ export function injectProductOpenGraphResponse(
     <meta property="og:title" content="${escapeHtml(seoTitle)}" id="og-title" />
     <meta property="og:description" content="${escapeHtml(seoDesc)}" id="og-description" />
     <meta property="og:url" content="${escapeHtml(seoUrl)}" id="og-url" />
-    <meta property="og:image" content="${escapeHtml(seoImage)}" id="og-image" />
-    <meta property="og:image:secure_url" content="${escapeHtml(seoImage)}" id="og-image-secure" />
-    <meta property="og:image:width" content="1200" id="og-image-width" />
-    <meta property="og:image:height" content="630" id="og-image-height" />
-    <meta property="og:image:alt" content="${escapeHtml(displayTitle)}" id="og-image-alt" />
+    ${product.image ? `<meta property="og:image" content="${escapeHtml(product.image)}" id="og-image" />` : ''}
+    <meta property="og:type" content="product" />
+    <meta property="og:site_name" content="${escapeHtml(siteTitle)}" />
     <meta property="product:price:currency" content="${currencyCode}" id="og-price-currency" />
+
     ${priceAmount > 0 ? `<meta property="product:price:amount" content="${priceAmount}" id="og-price-amount" />` : ''}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:title" content="${escapeHtml(seoTitle)}" id="twitter-title" />
