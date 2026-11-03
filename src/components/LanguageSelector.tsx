@@ -175,6 +175,7 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
     setLanguage(code);
     setIsOpen(false);
     localStorage.setItem('dbuy_lang', code);
+    triggerGoogleTranslate(code === 'zh' ? 'zh-CN' : code);
   };
 
   return (

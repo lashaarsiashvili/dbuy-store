@@ -255,7 +255,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   const handleShareFacebookFullPost = async () => {
     // Enforce English ad copy and toast
     setLanguage('en');
-    setStatusMessage('Processing images...');
+    setStatusMessage('Processing assets...');
     
     // 1. Generate 2x2 Grid via Proxy & Copy to clipboard
     const proxyUrl = (url: string) => `/api/image-proxy?url=${encodeURIComponent(url)}`;
@@ -263,24 +263,14 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     
     const gridBlob = await generate2x2Grid(proxiedImages);
     
-    let imageCopied = false;
     if (gridBlob) {
         try {
             await navigator.clipboard.write([
                 new ClipboardItem({ 'image/png': gridBlob })
             ]);
-            imageCopied = true;
         } catch (err) {
-            console.error('Clipboard copy failed, falling back to download:', err);
+            console.error('Clipboard image copy failed:', err);
         }
-    }
-    
-    // Fallback: Download collage if clipboard failed
-    if (!imageCopied && gridBlob) {
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(gridBlob);
-        a.download = `dbuy-grid-${product.id}.jpg`;
-        a.click();
     }
     
     // 2. Direct Graph API Photo Post if configured
@@ -307,7 +297,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     // 3. Copy caption & open Facebook
     try { await navigator.clipboard.writeText(caption); } catch {}
     
-    setStatusMessage('✅ Ad text & photos copied! Just click inside Facebook and press Ctrl+V to paste your multi-photo post.');
+    setStatusMessage('✅ Ad text & photo copied! Just click inside Facebook and press Ctrl+V to paste your post!');
     window.open('https://www.facebook.com/', '_blank');
   };
 
@@ -376,7 +366,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     : (product.title_en || product.title || product.titleKa);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
+    <div className="notranslate fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
       <div 
         className="fixed inset-0" 
         onClick={onClose}
