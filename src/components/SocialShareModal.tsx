@@ -255,22 +255,19 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
   const handleShareFacebookFullPost = async () => {
     setStatusMessage(language === 'ka' ? 'მუშავდება...' : 'Processing images...');
     
-    // 1. Generate 2x2 Grid via Proxy
+    // 1. Generate 2x2 Grid via Proxy & Copy to clipboard
     const proxyUrl = (url: string) => `/api/image-proxy?url=${encodeURIComponent(url)}`;
     const proxiedImages = getAllProductImages.map(proxyUrl);
     
     const gridBlob = await generate2x2Grid(proxiedImages);
     
     if (gridBlob) {
-        // Copy to clipboard
         try {
             await navigator.clipboard.write([
                 new ClipboardItem({ 'image/png': gridBlob })
             ]);
-            showToast(language === 'ka' ? '✅ 4-ფოტოიანი კოლაჟი დაკოპირდა! ჩასვით Facebook-ში' : '✅ 4-Photo Collage Copied! Paste in Facebook', 'fb');
+            showToast(language === 'ka' ? '✅ 4-ფოტოიანი კოლაჟი დაკოპირდა!' : '✅ 4-Photo Collage Copied!', 'fb');
         } catch (err) {
-            console.error('Clipboard copy failed:', err);
-            // Fallback: download
             const a = document.createElement('a');
             a.href = URL.createObjectURL(gridBlob);
             a.download = `dbuy-grid-${product.id}.jpg`;
@@ -301,20 +298,19 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
             if (apiResult.success) {
                 showToast(language === 'ka' ? `🎉 ფოტო-პოსტი წარმატებით გამოქვეყნდა!` : `🎉 Photo Post successfully published!`, 'fb');
-                return;
             } else {
                 throw new Error(apiResult.error);
             }
         } catch (err: any) {
-            alert(`Facebook API Error: ${err.message}`);
+            console.error(`Facebook API Error: ${err.message}`);
         }
     }
 
-    // 4. Fallback: Copy caption, open Facebook
+    // 4. Copy caption & open Facebook
     try { await navigator.clipboard.writeText(caption); } catch {}
     
+    setStatusMessage(language === 'ka' ? '✅ მზად არის! ჩასვით Facebook-ში' : '✅ Ready! Paste in Facebook');
     window.open('https://www.facebook.com/', '_blank');
-    setShowFbGuidance(true);
   };
 
   // 2. Share via Facebook Sharer Link
