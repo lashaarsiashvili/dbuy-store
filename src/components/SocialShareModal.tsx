@@ -206,12 +206,15 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
       alert(language === 'ka' ? 'გთხოვთ დაუშვათ pop-up ფანჯრები Facebook-ისთვის.' : 'Please allow pop-ups for Facebook.');
     }
 
-    const imageUrl = product.image || (product.images && product.images[0]) || '';
+    const imageUrls = [
+      product.image,
+      ...(Array.isArray(product.images) ? product.images : []),
+    ].filter(Boolean) as string[];
 
     // Attempt direct Facebook Graph API Photo Post if configured
     try {
       const apiResult = await publishFacebookPhotoPost({
-        imageUrl,
+        imageUrls,
         message: caption,
       });
 
