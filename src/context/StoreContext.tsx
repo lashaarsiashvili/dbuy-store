@@ -544,15 +544,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const copyProductUrl = (productId: string) => {
-    const url = getProductUrl(productId);
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-      navigator.clipboard.writeText(url).then(() => {
-        addToast(language === 'ka' ? '🔗 პროდუქტის უნიკალური ბმული დაკოპირდა!' : '🔗 Product unique URL copied to clipboard!', 'success');
-      }).catch(() => {
+    try {
+      const url = getProductUrl(productId);
+      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+        navigator.clipboard.writeText(url).then(() => {
+          addToast(language === 'ka' ? '🔗 პროდუქტის უნიკალური ბმული დაკოპირდა!' : '🔗 Product unique URL copied to clipboard!', 'success');
+        }).catch((err) => {
+          console.error('Clipboard write failed:', err);
+          addToast(url, 'info');
+        });
+      } else {
         addToast(url, 'info');
-      });
-    } else {
-      addToast(url, 'info');
+      }
+    } catch (err) {
+      console.error('Error copying product URL:', err);
     }
   };
 
@@ -561,25 +566,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (!product || !product.id) {
         throw new Error('Invalid product');
       }
+
+      // Robust check for essential fields
+      const title = product.title || 'Product';
+      const price = product.price || 0;
+      
       const url = getProductUrl(product.id);
       const isKa = language === 'ka';
-      const rawTitle = (isKa && product.titleKa) ? product.titleKa : product.title;
+      const rawTitle = (isKa && product.titleKa) ? product.titleKa : title;
       const headline = isKa ? `🔥 ${rawTitle} — სპეციალური შეთავაზება DBUY-ში!` : `🔥 ${rawTitle} — Special Offer at DBUY Store!`;
-      const price = isKa ? Math.round((product.price || 0) * (theme.gelRate || 2.70) * 100) / 100 : (product.price || 0);
-      const origPrice = product.origPrice && product.origPrice > product.price 
+      
+      const priceGEL = isKa ? Math.round(price * (theme.gelRate || 2.70) * 100) / 100 : price;
+      const origPrice = product.origPrice && product.origPrice > price 
         ? (isKa ? Math.round(product.origPrice * (theme.gelRate || 2.70) * 100) / 100 : product.origPrice) 
         : null;
+      
       const currencySymbol = isKa ? '₾' : '$';
       const text = isKa 
-        ? `💰 მხოლოდ ${price} ${currencySymbol}${origPrice ? ` (ძველი: ${origPrice} ${currencySymbol})` : ''} | 🚚 გლობალური მიწოდება მთელ მსოფლიოში | 🛡️ ოფიციალური გარანტია`
-        : `💰 Only ${currencySymbol}${price}${origPrice ? ` (Was: ${currencySymbol}${origPrice})` : ''} | 🚚 Worldwide Shipping | 🛡️ Warranty`;
+        ? `💰 მხოლოდ ${priceGEL} ${currencySymbol}${origPrice ? ` (ძველი: ${origPrice} ${currencySymbol})` : ''} | 🚚 გლობალური მიწოდება მთელ მსოფლიოში | 🛡️ ოფიციალური გარანტია`
+        : `💰 Only ${currencySymbol}${priceGEL}${origPrice ? ` (Was: ${currencySymbol}${origPrice})` : ''} | 🚚 Worldwide Shipping | 🛡️ Warranty`;
 
       if (typeof navigator !== 'undefined' && navigator.share) {
         navigator.share({
           title: headline,
           text: `${headline}\n${text}`,
           url: url,
-        }).catch(() => {
+        }).catch((err) => {
+          console.warn('Native share failed, falling back to copy:', err);
           copyProductUrl(product.id);
         });
       } else {
@@ -587,7 +600,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     } catch (err) {
       console.error('Sharing error:', err);
-      addToast(language === 'ka' ? 'გაზიარების შეცდომა' : 'Sharing error', 'error');
+      addToast(language === 'ka' ? 'გაზიარების შეცდომა' : 'Error sharing product', 'error');
     }
   };
 
