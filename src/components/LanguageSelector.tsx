@@ -2,7 +2,6 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { Language } from '../types';
 import { ChevronDown, Check } from 'lucide-react';
-import { triggerGoogleTranslate, getGoogleTranslateCookie } from '../utils/googleTranslate';
 
 export interface LanguageOption {
   code: Language;
@@ -21,11 +20,8 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
       className={`rounded-full overflow-hidden shrink-0 shadow-xs border border-black/10 flex items-center justify-center relative select-none ${className}`}
     >
       {code === 'en' && (
-        // British Flag (Union Jack)
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
-          <clipPath id="uk-circle">
-            <circle cx="30" cy="30" r="30" />
-          </clipPath>
+          <clipPath id="uk-circle"><circle cx="30" cy="30" r="30" /></clipPath>
           <g clipPath="url(#uk-circle)">
             <rect width="60" height="60" fill="#012169" />
             <path d="M 0 0 L 60 60 M 60 0 L 0 60" stroke="#ffffff" strokeWidth="10" />
@@ -37,37 +33,22 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
       )}
 
       {code === 'ka' && (
-        // Georgian Flag (Five-cross flag)
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
-          <clipPath id="geo-circle">
-            <circle cx="30" cy="30" r="30" />
-          </clipPath>
+          <clipPath id="geo-circle"><circle cx="30" cy="30" r="30" /></clipPath>
           <g clipPath="url(#geo-circle)">
             <rect width="60" height="60" fill="#ffffff" />
             <path d="M 30 0 V 60 M 0 30 H 60" stroke="#DC2626" strokeWidth="9" />
-            {/* 4 Bolnur-Katskhuri Small Crosses */}
-            <g transform="translate(14, 14)">
-              <path d="M -5 0 H 5 M 0 -5 V 5" stroke="#DC2626" strokeWidth="2.8" strokeLinecap="round" />
-            </g>
-            <g transform="translate(46, 14)">
-              <path d="M -5 0 H 5 M 0 -5 V 5" stroke="#DC2626" strokeWidth="2.8" strokeLinecap="round" />
-            </g>
-            <g transform="translate(14, 46)">
-              <path d="M -5 0 H 5 M 0 -5 V 5" stroke="#DC2626" strokeWidth="2.8" strokeLinecap="round" />
-            </g>
-            <g transform="translate(46, 46)">
-              <path d="M -5 0 H 5 M 0 -5 V 5" stroke="#DC2626" strokeWidth="2.8" strokeLinecap="round" />
-            </g>
+            <g transform="translate(14, 14)"><path d="M -5 0 H 5 M 0 -5 V 5" stroke="#DC2626" strokeWidth="2.8" strokeLinecap="round" /></g>
+            <g transform="translate(46, 14)"><path d="M -5 0 H 5 M 0 -5 V 5" stroke="#DC2626" strokeWidth="2.8" strokeLinecap="round" /></g>
+            <g transform="translate(14, 46)"><path d="M -5 0 H 5 M 0 -5 V 5" stroke="#DC2626" strokeWidth="2.8" strokeLinecap="round" /></g>
+            <g transform="translate(46, 46)"><path d="M -5 0 H 5 M 0 -5 V 5" stroke="#DC2626" strokeWidth="2.8" strokeLinecap="round" /></g>
           </g>
         </svg>
       )}
 
       {code === 'ru' && (
-        // Russian Flag
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
-          <clipPath id="rus-circle">
-            <circle cx="30" cy="30" r="30" />
-          </clipPath>
+          <clipPath id="rus-circle"><circle cx="30" cy="30" r="30" /></clipPath>
           <g clipPath="url(#rus-circle)">
             <rect y="0" width="60" height="20" fill="#ffffff" />
             <rect y="20" width="60" height="20" fill="#2563EB" />
@@ -77,11 +58,8 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
       )}
 
       {code === 'es' && (
-        // Spanish Flag
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
-          <clipPath id="esp-circle">
-            <circle cx="30" cy="30" r="30" />
-          </clipPath>
+          <clipPath id="esp-circle"><circle cx="30" cy="30" r="30" /></clipPath>
           <g clipPath="url(#esp-circle)">
             <rect y="0" width="60" height="15" fill="#DC2626" />
             <rect y="15" width="60" height="30" fill="#FACC15" />
@@ -92,11 +70,8 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
       )}
 
       {code === 'de' && (
-        // German Flag
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
-          <clipPath id="ger-circle">
-            <circle cx="30" cy="30" r="30" />
-          </clipPath>
+          <clipPath id="ger-circle"><circle cx="30" cy="30" r="30" /></clipPath>
           <g clipPath="url(#ger-circle)">
             <rect y="0" width="60" height="20" fill="#18181b" />
             <rect y="20" width="60" height="20" fill="#DC2626" />
@@ -115,6 +90,7 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
           </g>
         </svg>
       )}
+
       {code === 'it' && (
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
           <clipPath id="it-circle"><circle cx="30" cy="30" r="30" /></clipPath>
@@ -125,6 +101,7 @@ export const CircularFlag: React.FC<{ code: Language; size?: number; className?:
           </g>
         </svg>
       )}
+
       {code === 'zh' && (
         <svg viewBox="0 0 60 60" className="w-full h-full object-cover">
           <clipPath id="zh-circle"><circle cx="30" cy="30" r="30" /></clipPath>
@@ -172,10 +149,16 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
   }, []);
 
   const handleSelectLanguage = (code: Language) => {
+    // 1. Update React Context state immediately (triggers instant re-render across all UI components)
     setLanguage(code);
     setIsOpen(false);
-    localStorage.setItem('dbuy_lang', code);
-    triggerGoogleTranslate(code === 'zh' ? 'zh-CN' : code);
+    
+    // 2. Persist to localStorage safely
+    try {
+      localStorage.setItem('dbuy_lang', code);
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   return (
@@ -190,7 +173,7 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
         className={`inline-flex items-center space-x-1.5 min-h-[36px] sm:min-h-[38px] px-2.5 py-1 text-xs font-bold rounded-lg border transition-all cursor-pointer select-none shadow-2xs touch-manipulation ${
           variant === 'dark'
             ? 'bg-slate-900 border-slate-800 text-slate-100 hover:bg-slate-800 hover:border-slate-700'
-            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 hover:text-slate-900 dark:text-white dark:hover:text-slate-100'
+            : 'bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-700 hover:border-slate-300 hover:text-slate-900 dark:hover:text-slate-100'
         }`}
       >
         <CircularFlag code={currentLang.code} size={16} />
@@ -205,7 +188,7 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
           className="absolute right-0 mt-1.5 w-48 max-w-[calc(100vw-32px)] bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-800 py-1.5 z-50 animate-in fade-in zoom-in-95 duration-100 divide-y divide-slate-100 dark:divide-slate-800"
         >
           <div className="px-3 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-slate-400 dark:text-slate-500">
-            {t('top.selectLanguage')}
+            {t('top.selectLanguage') || 'Select Language'}
           </div>
           <div className="py-1">
             {languagesList.map((item) => {
@@ -221,7 +204,7 @@ export const LanguageSelector: React.FC<{ variant?: 'light' | 'dark' }> = ({ var
                   className={`w-full flex items-center justify-between min-h-[44px] px-3 py-2.5 text-xs transition-colors cursor-pointer text-left touch-manipulation ${
                     isSelected
                       ? 'bg-blue-50/80 dark:bg-blue-950/80 text-blue-700 dark:text-blue-300 font-bold'
-                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 font-medium'
+                      : 'text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-slate-100 font-medium'
                   }`}
                 >
                   <div className="flex items-center space-x-2.5">
