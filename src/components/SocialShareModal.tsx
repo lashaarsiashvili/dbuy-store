@@ -251,70 +251,50 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
   };
 
-  // 1. Share full Post to Facebook
+  // 1. Share full Post to Facebook (Sequential multi-image download + Text Copy)
   const handleShareFacebookFullPost = async () => {
-    // Enforce English ad copy and toast
+    // 1. Enforce English ad copy for worldwide shipping
     setLanguage('en');
-    setStatusMessage('Processing assets...');
-    
-    // 1. Generate 2x2 Grid via Proxy & Copy to clipboard
-    const proxyUrl = (url: string) => `/api/image-proxy?url=${encodeURIComponent(url)}`;
-    const proxiedImages = getAllProductImages.map(proxyUrl);
-    
-    const gridBlob = await generate2x2Grid(proxiedImages);
-    
-    let clipboardSuccess = false;
-    if (gridBlob) {
-        try {
-            await navigator.clipboard.write([
-                new ClipboardItem({ 'image/png': gridBlob })
-            ]);
-            clipboardSuccess = true;
-        } catch (err) {
-            console.error('Clipboard image copy failed:', err);
-        }
+    setStatusMessage('Preparing ad copy and product images...');
+
+    // 2. Combine Text
+    const productUrl = getProductShareUrl(product, undefined, 'en');
+    const fullPostText = `${caption}\n\n🛒 Order Worldwide: ${productUrl}`;
+
+    // 3. Copy Text
+    try {
+      await navigator.clipboard.writeText(fullPostText);
+    } catch {
+      fallbackCopyText(fullPostText);
     }
-    
-    // 2. Sequential download fallback if clipboard failed
-    if (!clipboardSuccess) {
-        for (let i = 0; i < proxiedImages.length; i++) {
-            const res = await fetch(proxiedImages[i]);
+
+    // 4. Sequential Image Download
+    const imagesToDownload = getAllProductImages;
+    for (let i = 0; i < imagesToDownload.length; i++) {
+        try {
+            const res = await fetch(imagesToDownload[i]);
             const blob = await res.blob();
             const a = document.createElement('a');
             a.href = URL.createObjectURL(blob);
-            a.download = `dbuy-product-${product.id}-${i + 1}.jpg`;
+            a.download = `product-image-${product.id}-${i + 1}.jpg`;
             document.body.appendChild(a);
             a.click();
             document.body.removeChild(a);
-            await new Promise(resolve => setTimeout(resolve, 350));
+            URL.revokeObjectURL(a.href);
+            
+            // 400ms delay to prevent browser blocking
+            await new Promise(resolve => setTimeout(resolve, 400));
+        } catch (err) {
+            console.error(`Download failed for image ${i + 1}`, err);
         }
     }
     
-    // 3. Direct Graph API Photo Post if configured
-    if (fbPageId && fbAccessToken) {
-        try {
-            setStatusMessage('Publishing to Facebook...');
-            const apiResult = await publishFacebookPhotoPost({
-                imageUrls: getAllProductImages, // Full array
-                message: caption,               // Full English ad text
-                accessToken: fbAccessToken,
-                pageId: fbPageId,
-            });
-
-            if (apiResult.success) {
-                showToast(`🎉 Photo Post successfully published!`, 'fb');
-            } else {
-                throw new Error(apiResult.error);
-            }
-        } catch (err: any) {
-            console.error(`Facebook API Error: ${err.message}`);
-        }
-    }
-
-    // 4. Copy caption & open Facebook
-    try { await navigator.clipboard.writeText(caption); } catch {}
+    showToast(
+      `Copied caption & downloaded ${imagesToDownload.length} product images! Paste caption and drop images into Facebook.`,
+      'fb'
+    );
     
-    setStatusMessage('✅ Ad text & photo copied! Just click inside Facebook and press Ctrl+V to paste your post!');
+    // 5. Open Facebook
     window.open('https://www.facebook.com/', '_blank');
   };
 

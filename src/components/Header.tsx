@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
+import { useLanguage } from '../context/LanguageContext';
 import { Category, Currency, Language } from '../types';
 import { BrandLogo } from './BrandLogo';
 import { LanguageSelector } from './LanguageSelector';
@@ -29,7 +30,6 @@ export const Header: React.FC = () => {
     setCurrentPage,
     navigateToCategory,
     language,
-    setLanguage,
     currency,
     setCurrency,
     selectedCategory,
@@ -48,6 +48,8 @@ export const Header: React.FC = () => {
     isDarkMode,
     toggleDarkMode,
   } = useStore();
+  const tFinal = (key: string, params?: Record<string, string | number>) => t(key, params);
+
 
   const [announcementClosed, setAnnouncementClosed] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);

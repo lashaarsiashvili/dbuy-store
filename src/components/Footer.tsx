@@ -223,7 +223,7 @@ export const Footer: React.FC = () => {
                 className="hover:text-white text-emerald-400 font-semibold transition-colors cursor-pointer text-left flex items-center space-x-1.5"
               >
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0"></span>
-                <span>{useStore().language === 'ka' ? 'ვერიფიცირებული მიწოდება' : 'Verified Deliveries'}</span>
+                <span>{t('footer.verifiedDeliveries')}</span>
               </button>
             </li>
             <li className="pt-1">
@@ -246,11 +246,11 @@ export const Footer: React.FC = () => {
           {/* Rights & Security Notice */}
           <div className="flex flex-col items-center sm:items-start gap-1 text-center sm:text-left text-[10px] sm:text-[11px]">
             <div className="flex flex-col sm:flex-row items-center gap-2">
-              <span>Dbuystore. All Rights Reserved</span>
+              <span>{t('footer.allRightsReserved')}</span>
               <span className="hidden sm:inline text-slate-700 dark:text-slate-200">•</span>
               <span className="inline-flex items-center space-x-1 text-emerald-400 font-semibold bg-emerald-950/80 px-2 py-0.5 rounded-md border border-emerald-500/30">
                 <Lock className="w-3 h-3 text-emerald-400" />
-                <span>256-Bit SSL Encrypted & PCI-DSS Compliant</span>
+                <span>{t('footer.securityBadge')}</span>
               </span>
             </div>
             <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
@@ -260,7 +260,7 @@ export const Footer: React.FC = () => {
           {/* Authentic Official Payment Methods Bar */}
           <div className="flex flex-col items-center gap-1.5 order-2">
             <span className="text-[10px] uppercase tracking-wider font-semibold text-slate-500 hidden sm:block">
-              {useStore().language === 'ka' ? 'გადახდის მეთოდები' : 'Secure Payment Methods'}
+              {t('footer.securePaymentMethods')}
             </span>
             <PaymentBadges />
           </div>

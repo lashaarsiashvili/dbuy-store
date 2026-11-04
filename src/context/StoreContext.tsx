@@ -22,7 +22,6 @@ import { initialBillboards } from '../data/initialBillboards';
 import { categoryIdToSlug, slugToCategoryId } from '../data/categoryNavigationData';
 import { translations } from '../data/translations';
 import { getSavedLanguage, getTranslation, changeLanguage } from '../utils/i18n';
-import { triggerGoogleTranslate } from '../utils/googleTranslate';
 import { loadImageBackupsIDB, preloadProductImages } from '../utils/imageStorage';
 import { 
   loadVisitorLogs, 
@@ -558,29 +557,37 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const shareProduct = (product: Product) => {
-    const url = getProductUrl(product.id);
-    const isKa = language === 'ka';
-    const rawTitle = (isKa && product.titleKa) ? product.titleKa : product.title;
-    const headline = isKa ? `🔥 ${rawTitle} — სპეციალური შეთავაზება DBUY-ში!` : `🔥 ${rawTitle} — Special Offer at DBUY Store!`;
-    const price = isKa ? Math.round((product.price || 0) * (theme.gelRate || 2.70) * 100) / 100 : (product.price || 0);
-    const origPrice = product.origPrice && product.origPrice > product.price 
-      ? (isKa ? Math.round(product.origPrice * (theme.gelRate || 2.70) * 100) / 100 : product.origPrice) 
-      : null;
-    const currencySymbol = isKa ? '₾' : '$';
-    const text = isKa 
-      ? `💰 მხოლოდ ${price} ${currencySymbol}${origPrice ? ` (ძველი: ${origPrice} ${currencySymbol})` : ''} | 🚚 გლობალური მიწოდება მთელ მსოფლიოში | 🛡️ ოფიციალური გარანტია`
-      : `💰 Only ${currencySymbol}${price}${origPrice ? ` (Was: ${currencySymbol}${origPrice})` : ''} | 🚚 Worldwide Shipping | 🛡️ Warranty`;
+    try {
+      if (!product || !product.id) {
+        throw new Error('Invalid product');
+      }
+      const url = getProductUrl(product.id);
+      const isKa = language === 'ka';
+      const rawTitle = (isKa && product.titleKa) ? product.titleKa : product.title;
+      const headline = isKa ? `🔥 ${rawTitle} — სპეციალური შეთავაზება DBUY-ში!` : `🔥 ${rawTitle} — Special Offer at DBUY Store!`;
+      const price = isKa ? Math.round((product.price || 0) * (theme.gelRate || 2.70) * 100) / 100 : (product.price || 0);
+      const origPrice = product.origPrice && product.origPrice > product.price 
+        ? (isKa ? Math.round(product.origPrice * (theme.gelRate || 2.70) * 100) / 100 : product.origPrice) 
+        : null;
+      const currencySymbol = isKa ? '₾' : '$';
+      const text = isKa 
+        ? `💰 მხოლოდ ${price} ${currencySymbol}${origPrice ? ` (ძველი: ${origPrice} ${currencySymbol})` : ''} | 🚚 გლობალური მიწოდება მთელ მსოფლიოში | 🛡️ ოფიციალური გარანტია`
+        : `💰 Only ${currencySymbol}${price}${origPrice ? ` (Was: ${currencySymbol}${origPrice})` : ''} | 🚚 Worldwide Shipping | 🛡️ Warranty`;
 
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      navigator.share({
-        title: headline,
-        text: `${headline}\n${text}`,
-        url: url,
-      }).catch(() => {
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        navigator.share({
+          title: headline,
+          text: `${headline}\n${text}`,
+          url: url,
+        }).catch(() => {
+          copyProductUrl(product.id);
+        });
+      } else {
         copyProductUrl(product.id);
-      });
-    } else {
-      copyProductUrl(product.id);
+      }
+    } catch (err) {
+      console.error('Sharing error:', err);
+      addToast(language === 'ka' ? 'გაზიარების შეცდომა' : 'Sharing error', 'error');
     }
   };
 

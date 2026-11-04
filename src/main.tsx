@@ -1,6 +1,7 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import { LanguageProvider } from './context/LanguageContext';
 import './index.css';
 
 // Global error resilience: absorb cross-origin script errors from 3rd party widgets/sandboxes
@@ -54,7 +55,9 @@ if (typeof window !== 'undefined') {
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <LanguageProvider>
+      <App />
+    </LanguageProvider>
   </StrictMode>,
 );
 

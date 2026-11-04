@@ -125,8 +125,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
         <button
           onClick={handleCopyLink}
           className="product-card-copy-btn p-2 rounded-full shadow-md bg-white/90 dark:bg-slate-800/90 text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 transition-all cursor-pointer"
-          title={language === 'ka' ? 'URL ბმულის კოპირება' : 'Copy unique URL'}
-          aria-label="Copy unique product URL"
+          title={t('product.card.copyUrl')}
+          aria-label={t('product.card.copyUrl')}
         >
           <LinkIcon className="w-3.5 h-3.5" />
         </button>
@@ -187,7 +187,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
         {youtubeId && !isHovered && (
           <div className="absolute bottom-2.5 left-2.5 z-10 flex items-center space-x-1 px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-md text-white text-[9.5px] font-extrabold uppercase tracking-wider shadow-sm pointer-events-none transition-opacity duration-300">
             <Play className="w-2.5 h-2.5 fill-white text-white" />
-            <span>Video</span>
+            <span>{t('product.card.video')}</span>
           </div>
         )}
 
@@ -274,7 +274,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
             ) : (
               <>
                 <ShoppingCart className="w-4 h-4 transition-transform group-hover:scale-110" />
-                <span data-i18n="add_to_cart">{(typeof window !== 'undefined' && window.t ? window.t('add_to_cart') : t('add_to_cart'))}</span>
+                <span className="font-extrabold tracking-wide">{t('products.addToCart')}</span>
               </>
             )}
           </button>
@@ -284,3 +284,4 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
   </ScrollReveal>
 );
 };
+

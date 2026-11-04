@@ -165,7 +165,7 @@ export const Hero: React.FC = () => {
                     onClick={() => handleSlideAction(slide)}
                     className="group relative inline-flex items-center space-x-2 min-h-[38px] xs:min-h-[42px] sm:min-h-[46px] px-4 xs:px-5 sm:px-7 py-2 sm:py-3 rounded-full bg-gradient-to-r from-sky-500 via-blue-600 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 active:scale-95 text-white font-black text-xs sm:text-sm tracking-wider uppercase shadow-[0_0_25px_rgba(56,189,248,0.5)] hover:shadow-[0_0_30px_rgba(56,189,248,0.8)] border border-white/30 transition-all duration-300 cursor-pointer overflow-hidden touch-manipulation"
                   >
-                    <span className="relative z-10">{isKa ? slide.buttonTextKa || 'ყიდვა ახლა' : slide.buttonText || 'Shop Now'}</span>
+                    <span className="relative z-10">{t('hero.shopNow')}</span>
                     <span className="relative z-10 text-base leading-none transform group-hover:translate-x-1 transition-transform duration-200">&#8594;</span>
                     <div className="absolute inset-0 bg-white/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   </button>
@@ -182,7 +182,7 @@ export const Hero: React.FC = () => {
         type="button"
         onClick={prevSlide}
         className="slider-btn prev-btn absolute left-2 sm:left-5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 xs:w-9 xs:h-9 sm:w-11 sm:h-11 flex items-center justify-center rounded-full bg-black/35 hover:bg-black/60 active:scale-90 text-white backdrop-blur-md border border-white/20 transition-all duration-300 cursor-pointer shadow-lg text-base sm:text-2xl touch-manipulation"
-        aria-label="Previous slide"
+        aria-label={t('hero.prevSlide')}
       >
         &#10094;
       </button>
@@ -191,7 +191,7 @@ export const Hero: React.FC = () => {
         type="button"
         onClick={nextSlide}
         className="slider-btn next-btn absolute right-2 sm:right-5 top-1/2 -translate-y-1/2 z-10 w-8 h-8 xs:w-9 xs:h-9 sm:w-11 sm:h-11 flex items-center justify-center rounded-full bg-black/35 hover:bg-black/60 active:scale-90 text-white backdrop-blur-md border border-white/20 transition-all duration-300 cursor-pointer shadow-lg text-base sm:text-2xl touch-manipulation"
-        aria-label="Next slide"
+        aria-label={t('hero.nextSlide')}
       >
         &#10095;
       </button>
