@@ -702,6 +702,36 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                             }}
                             className="w-full p-2 text-xs rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800"
                         />
+                        <button
+                            type="button"
+                            onClick={async () => {
+                                setStatusMessage('Publishing to Dbuy Facebook Page...');
+                                try {
+                                    const response = await fetch('/api/facebook/publish', {
+                                        method: 'POST',
+                                        headers: { 'Content-Type': 'application/json' },
+                                        body: JSON.stringify({
+                                            accessToken: fbAccessToken,
+                                            pageId: fbPageId,
+                                            message: caption,
+                                            images: getAllProductImages
+                                        })
+                                    });
+                                    const data = await response.json();
+                                    if (data.success) {
+                                        showToast('🚀 Auto-Published to Dbuy Page!', 'fb');
+                                    } else {
+                                        throw new Error(data.error);
+                                    }
+                                } catch(err: any) {
+                                    setStatusMessage('Error publishing to Facebook: ' + err.message);
+                                    addToast('Auto-Publish failed', 'error');
+                                }
+                            }}
+                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm transition-all cursor-pointer"
+                        >
+                            🚀 Auto-Publish to Dbuy Page
+                        </button>
                     </div>
                 )}
             </div>

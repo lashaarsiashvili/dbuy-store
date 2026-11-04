@@ -1676,6 +1676,62 @@ app.post('/api/facebook/post-feed', async (req, res) => {
 });
 
 // ==========================================
+// FACEBOOK MULTI-PHOTO ALBUM POSTING ENDPOINT
+// Uploads multiple images and publishes to a feed post
+// ==========================================
+app.post('/api/facebook/publish', async (req, res) => {
+  const { accessToken, pageId, message, images } = req.body;
+  
+  if (!accessToken || !pageId || !images || !Array.isArray(images)) {
+    return res.status(400).json({ success: false, error: 'Missing required parameters' });
+  }
+
+  try {
+    // 1. Upload images and get media_fbid
+    const media_fbids = [];
+    for (const imageUrl of images) {
+        const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                url: imageUrl,
+                published: false,
+                access_token: accessToken
+            })
+        });
+        const uploadData = await uploadRes.json();
+        if (uploadData.id) {
+            media_fbids.push(uploadData.id);
+        } else {
+            throw new Error(`Failed to upload image: ${JSON.stringify(uploadData)}`);
+        }
+    }
+
+    // 2. Publish feed post with attached_media
+    const attached_media = media_fbids.map(id => ({ media_fbid: id }));
+    const feedRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            message: message,
+            attached_media: attached_media,
+            access_token: accessToken
+        })
+    });
+    const feedData = await feedRes.json();
+
+    if (feedData.id) {
+        res.json({ success: true, postId: feedData.id });
+    } else {
+        res.status(500).json({ success: false, error: feedData.error || 'Failed to publish post' });
+    }
+
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
 // UPLOAD PRODUCT IMAGE API
 // Saves uploaded/optimized base64 images as disk files
 // ==========================================
