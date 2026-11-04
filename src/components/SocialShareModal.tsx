@@ -263,23 +263,40 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     
     const gridBlob = await generate2x2Grid(proxiedImages);
     
+    let clipboardSuccess = false;
     if (gridBlob) {
         try {
             await navigator.clipboard.write([
                 new ClipboardItem({ 'image/png': gridBlob })
             ]);
+            clipboardSuccess = true;
         } catch (err) {
             console.error('Clipboard image copy failed:', err);
         }
     }
     
-    // 2. Direct Graph API Photo Post if configured
+    // 2. Sequential download fallback if clipboard failed
+    if (!clipboardSuccess) {
+        for (let i = 0; i < proxiedImages.length; i++) {
+            const res = await fetch(proxiedImages[i]);
+            const blob = await res.blob();
+            const a = document.createElement('a');
+            a.href = URL.createObjectURL(blob);
+            a.download = `dbuy-product-${product.id}-${i + 1}.jpg`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            await new Promise(resolve => setTimeout(resolve, 350));
+        }
+    }
+    
+    // 3. Direct Graph API Photo Post if configured
     if (fbPageId && fbAccessToken) {
         try {
             setStatusMessage('Publishing to Facebook...');
             const apiResult = await publishFacebookPhotoPost({
-                imageUrls: getAllProductImages,
-                message: caption,
+                imageUrls: getAllProductImages, // Full array
+                message: caption,               // Full English ad text
                 accessToken: fbAccessToken,
                 pageId: fbPageId,
             });
@@ -294,7 +311,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
         }
     }
 
-    // 3. Copy caption & open Facebook
+    // 4. Copy caption & open Facebook
     try { await navigator.clipboard.writeText(caption); } catch {}
     
     setStatusMessage('✅ Ad text & photo copied! Just click inside Facebook and press Ctrl+V to paste your post!');
@@ -311,19 +328,33 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
   // 2. Share to Instagram (Copy formatted text + Download high-res ad image + Open Instagram)
   const handleShareInstagram = async () => {
+    // Enforce English ad copy
+    setLanguage('en');
+    
     try {
       await navigator.clipboard.writeText(caption);
     } catch {
       fallbackCopyText(caption);
     }
 
-    // Auto-trigger image download for quick posting to feed / story
-    // await handleDownloadImage();
+    // Auto-trigger image download for quick posting
+    const proxyUrl = (url: string) => `/api/image-proxy?url=${encodeURIComponent(url)}`;
+    const proxiedImages = getAllProductImages.map(proxyUrl);
+    
+    for (let i = 0; i < proxiedImages.length; i++) {
+        const res = await fetch(proxiedImages[i]);
+        const blob = await res.blob();
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `dbuy-product-${product.id}-${i + 1}.jpg`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        await new Promise(resolve => setTimeout(resolve, 350));
+    }
 
     showToast(
-      language === 'ka'
-        ? 'სარეკლამო ტექსტი დაკოპირდა! შექმენით პოსტი Instagram-ზე.'
-        : 'Caption copied! Ready to publish on Instagram.',
+      'Caption copied and images downloaded! Ready to publish on Instagram.',
       'ig'
     );
 
