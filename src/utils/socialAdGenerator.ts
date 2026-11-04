@@ -23,9 +23,6 @@ export function getProductShareUrl(product: Product, customBaseUrl?: string, lan
     origin = customBaseUrl;
   } else if (typeof window !== 'undefined') {
     const host = window.location.hostname;
-    // When running on custom live domain (e.g. dbuystore.com), use window.location.origin.
-    // When running on dev/preview container (run.app, localhost), fallback to public domain https://dbuystore.com
-    // so Facebook, Instagram, Telegram and other external crawlers can access the public Open Graph tags and images!
     if (host && !host.includes('localhost') && !host.includes('run.app') && !host.includes('127.0.0.1')) {
       origin = window.location.origin;
     }
@@ -48,111 +45,97 @@ export function generateSocialAdPost(options: SocialAdOptions): {
   shareUrl: string;
   hashtags: string[];
 } {
-  const { product, style, language } = options;
-  const isKa = language === 'ka';
-  const shareUrl = getProductShareUrl(product, options.baseUrl, options.language);
-
-  // Title selection
-  const title = isKa
-    ? (product.titleKa || product.title_ka || product.title)
-    : (product.title_en || product.title || product.titleKa || 'Product');
-
-  // Features selection
-  let features: string[] = [];
-  if (isKa) {
-    if (product.features_ka && product.features_ka.length > 0) {
-      features = product.features_ka.filter(Boolean);
-    } else if (product.features && product.features.length > 0) {
-      features = product.features.filter(Boolean);
+  try {
+    if (!options || !options.product || !options.product.id) {
+        throw new Error('Invalid product');
     }
-  } else {
-    if (product.features_en && product.features_en.length > 0) {
-      features = product.features_en.filter(Boolean);
-    } else if (product.features && product.features.length > 0) {
-      features = product.features.filter(Boolean);
-    }
-  }
+    const { product, style, language } = options;
+    const isKa = language === 'ka';
+    const shareUrl = getProductShareUrl(product, options.baseUrl, options.language);
 
-  // Localization & Currency Logic:
-  // If Georgian is selected: Generate the ad copy in Georgian. Fetch the original USD price
-  // and automatically convert it to Georgian Lari (₾ / GEL) using the current exchange rate.
-  // Perform the exact mathematical conversion—do not simply replace the currency symbol.
-  // If English is selected: Generate the ad copy in English and keep the original price in USD ($).
-  // Strict Constraint: This localization and conversion logic applies ONLY to the generated ad copy
-  // and price display. Do NOT alter, translate, or modify product names, images, or base product descriptions.
-  const rawUsdPrice = product.price || 0;
-  const rawUsdOrigPrice = product.origPrice && product.origPrice > rawUsdPrice ? product.origPrice : null;
-  const exchangeRate = options.exchangeRateGEL && options.exchangeRateGEL > 0
-    ? options.exchangeRateGEL
-    : getCachedGelRate();
+    // Title selection with safe fallback
+    const title = (isKa
+      ? (product.titleKa || product.title_ka || product.title)
+      : (product.title_en || product.title || product.titleKa)) || 'Premium Product';
 
-  let price: number;
-  let origPrice: number | null = null;
-  let savings: number = 0;
-  let currencySymbol: string;
-
-  if (isKa) {
-    // Exact mathematical conversion USD -> GEL
-    price = Math.round(rawUsdPrice * exchangeRate * 100) / 100;
-    if (rawUsdOrigPrice) {
-      origPrice = Math.round(rawUsdOrigPrice * exchangeRate * 100) / 100;
-      savings = Math.round((origPrice - price) * 100) / 100;
-    }
-    currencySymbol = '₾';
-  } else {
-    // Keep original price in USD ($)
-    price = rawUsdPrice;
-    if (rawUsdOrigPrice) {
-      origPrice = rawUsdOrigPrice;
-      savings = Math.round((origPrice - price) * 100) / 100;
-    }
-    currencySymbol = '$';
-  }
-
-  const discountPercent = origPrice && origPrice > price
-    ? Math.round(((origPrice - price) / origPrice) * 100)
-    : 0;
-
-  // Category hashtag mapping
-  const categoryTagsKa: Record<string, string> = {
-    tech: '#ტექნიკა #გაჯეტები',
-    fitness: '#ფიტნესი #ვარჯიში #ჯანსაღიცხოვრება',
-    everyday: '#ყოველდღიური #აქსესუარები',
-    accessories: '#აქსესუარები #სტილი',
-  };
-  const categoryTagsEn: Record<string, string> = {
-    tech: '#Tech #Gadgets #Technology',
-    fitness: '#Fitness #Workout #HealthyLife',
-    everyday: '#Lifestyle #DailyEssentials',
-    accessories: '#Accessories #Style',
-  };
-
-  const extraTags = isKa
-    ? (categoryTagsKa[product.category] || '#შოპინგი')
-    : (categoryTagsEn[product.category] || '#Shopping');
-
-  const defaultHashtags = isKa
-    ? ['#DBUY', '#ონლაინშოპინგი', '#ფასდაკლება', '#საქართველო', ...extraTags.split(' ')]
-    : ['#DBUY', '#OnlineStore', '#DealOfTheDay', '#Sale', ...extraTags.split(' ')];
-
-  // 1. FULL HIGH-CONVERTING SALES COPY
-  if (style === 'sales') {
+    // Features selection with safe fallback
+    let features: string[] = [];
     if (isKa) {
-      const headline = `🔥 ${title} — სპეციალური შეთავაზება DBUY-ში!`;
-      const priceSection = origPrice
-        ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
-        : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
+      features = (product.features_ka || product.features || []).filter(Boolean);
+    } else {
+      features = (product.features_en || product.features || []).filter(Boolean);
+    }
 
-      const featureBullets = features.length > 0
-        ? features.slice(0, 4).map((f, i) => {
-            const emojis = ['✨', '⭐', '🎯', '🚀'];
-            const emoji = emojis[i % emojis.length];
-            const clean = f.replace(/^[•\-\*\s]+/, '').trim();
-            return `${emoji} ${clean}`;
-          }).join('\n')
-        : '✨ უმაღლესი პრემიუმ ხარისხი\n⭐ პრაქტიკული და ერგონომიული დიზაინი\n🎯 გარანტირებული საიმედოობა';
+    const rawUsdPrice = typeof product.price === 'number' ? product.price : 0;
+    const rawUsdOrigPrice = (typeof product.origPrice === 'number' && product.origPrice > rawUsdPrice) ? product.origPrice : null;
+    const exchangeRate = (typeof options.exchangeRateGEL === 'number' && options.exchangeRateGEL > 0)
+      ? options.exchangeRateGEL
+      : getCachedGelRate();
 
-      const caption = `${headline}
+    let price: number;
+    let origPrice: number | null = null;
+    let savings: number = 0;
+    let currencySymbol: string;
+
+    if (isKa) {
+      price = Math.round(rawUsdPrice * exchangeRate * 100) / 100;
+      if (rawUsdOrigPrice) {
+        origPrice = Math.round(rawUsdOrigPrice * exchangeRate * 100) / 100;
+        savings = Math.round((origPrice - price) * 100) / 100;
+      }
+      currencySymbol = '₾';
+    } else {
+      price = rawUsdPrice;
+      if (rawUsdOrigPrice) {
+        origPrice = rawUsdOrigPrice;
+        savings = Math.round((origPrice - price) * 100) / 100;
+      }
+      currencySymbol = '$';
+    }
+
+    const discountPercent = origPrice && origPrice > price
+      ? Math.round(((origPrice - price) / origPrice) * 100)
+      : 0;
+
+    const categoryTagsKa: Record<string, string> = {
+      tech: '#ტექნიკა #გაჯეტები',
+      fitness: '#ფიტნესი #ვარჯიში #ჯანსაღიცხოვრება',
+      everyday: '#ყოველდღიური #აქსესუარები',
+      accessories: '#აქსესუარები #სტილი',
+    };
+    const categoryTagsEn: Record<string, string> = {
+      tech: '#Tech #Gadgets #Technology',
+      fitness: '#Fitness #Workout #HealthyLife',
+      everyday: '#Lifestyle #DailyEssentials',
+      accessories: '#Accessories #Style',
+    };
+
+    const extraTags = isKa
+      ? (categoryTagsKa[product.category || ''] || '#შოპინგი')
+      : (categoryTagsEn[product.category || ''] || '#Shopping');
+
+    const defaultHashtags = isKa
+      ? ['#DBUY', '#ონლაინშოპინგი', '#ფასდაკლება', '#საქართველო', ...extraTags.split(' ')]
+      : ['#DBUY', '#OnlineStore', '#DealOfTheDay', '#Sale', ...extraTags.split(' ')];
+
+    // 1. FULL HIGH-CONVERTING SALES COPY
+    if (style === 'sales') {
+      if (isKa) {
+        const headline = `🔥 ${title} — სპეციალური შეთავაზება DBUY-ში!`;
+        const priceSection = origPrice
+          ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
+          : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
+
+        const featureBullets = features.length > 0
+          ? features.slice(0, 4).map((f, i) => {
+              const emojis = ['✨', '⭐', '🎯', '🚀'];
+              const emoji = emojis[i % emojis.length];
+              const clean = f.replace(/^[•\-\*\s]+/, '').trim();
+              return `${emoji} ${clean}`;
+            }).join('\n')
+          : '✨ უმაღლესი პრემიუმ ხარისხი\n⭐ პრაქტიკული და ერგონომიული დიზაინი\n🎯 გარანტირებული საიმედოობა';
+
+        const caption = `${headline}
 
 ${priceSection}
 
@@ -172,23 +155,23 @@ ${shareUrl}
 
 ${defaultHashtags.join(' ')}`;
 
-      return { headline, caption, shareUrl, hashtags: defaultHashtags };
-    } else {
-      const headline = `🔥 ${title} — Special Offer at DBUY Store!`;
-      const priceSection = origPrice
-        ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
-        : `💰 Price: Only ${currencySymbol}${price}`;
+        return { headline, caption, shareUrl, hashtags: defaultHashtags };
+      } else {
+        const headline = `🔥 ${title} — Special Offer at DBUY Store!`;
+        const priceSection = origPrice
+          ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
+          : `💰 Price: Only ${currencySymbol}${price}`;
 
-      const featureBullets = features.length > 0
-        ? features.slice(0, 4).map((f, i) => {
-            const emojis = ['✨', '⭐', '🎯', '🚀'];
-            const emoji = emojis[i % emojis.length];
-            const clean = f.replace(/^[•\-\*\s]+/, '').trim();
-            return `${emoji} ${clean}`;
-          }).join('\n')
-        : '✨ Premium Build Quality & Engineering\n⭐ Sleek Modern Ergonomic Aesthetics\n🎯 Tested Daily Durability';
+        const featureBullets = features.length > 0
+          ? features.slice(0, 4).map((f, i) => {
+              const emojis = ['✨', '⭐', '🎯', '🚀'];
+              const emoji = emojis[i % emojis.length];
+              const clean = f.replace(/^[•\-\*\s]+/, '').trim();
+              return `${emoji} ${clean}`;
+            }).join('\n')
+          : '✨ Premium Build Quality & Engineering\n⭐ Sleek Modern Ergonomic Aesthetics\n🎯 Tested Daily Durability';
 
-      const caption = `${headline}
+        const caption = `${headline}
 
 ${priceSection}
 
@@ -208,19 +191,19 @@ ${shareUrl}
 
 ${defaultHashtags.join(' ')}`;
 
-      return { headline, caption, shareUrl, hashtags: defaultHashtags };
+        return { headline, caption, shareUrl, hashtags: defaultHashtags };
+      }
     }
-  }
 
-  // 2. SHORT / STORY / REELS FORMAT
-  if (style === 'story') {
-    if (isKa) {
-      const headline = `⚡ ${title}`;
-      const priceSection = origPrice
-        ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
-        : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
+    // 2. SHORT / STORY / REELS FORMAT
+    if (style === 'story') {
+      if (isKa) {
+        const headline = `⚡ ${title}`;
+        const priceSection = origPrice
+          ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
+          : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
 
-      const caption = `🔥 ${title} — სპეციალური შეთავაზება DBUY-ში!
+        const caption = `🔥 ${title} — სპეციალური შეთავაზება DBUY-ში!
 
 ${priceSection}
 
@@ -239,14 +222,14 @@ ${shareUrl}
 
 ${defaultHashtags.slice(0, 4).join(' ')}`;
 
-      return { headline, caption, shareUrl, hashtags: defaultHashtags.slice(0, 4) };
-    } else {
-      const headline = `⚡ ${title}`;
-      const priceSection = origPrice
-        ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
-        : `💰 Price: Only ${currencySymbol}${price}`;
+        return { headline, caption, shareUrl, hashtags: defaultHashtags.slice(0, 4) };
+      } else {
+        const headline = `⚡ ${title}`;
+        const priceSection = origPrice
+          ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
+          : `💰 Price: Only ${currencySymbol}${price}`;
 
-      const caption = `🔥 ${title} — Special Offer at DBUY Store!
+        const caption = `🔥 ${title} — Special Offer at DBUY Store!
 
 ${priceSection}
 
@@ -265,18 +248,18 @@ ${shareUrl}
 
 ${defaultHashtags.slice(0, 4).join(' ')}`;
 
-      return { headline, caption, shareUrl, hashtags: defaultHashtags.slice(0, 4) };
+        return { headline, caption, shareUrl, hashtags: defaultHashtags.slice(0, 4) };
+      }
     }
-  }
 
-  // 3. SPECIAL PROMO / URGENT DEAL
-  if (isKa) {
-    const headline = `🚨 შეზღუდული აქცია! ${title} — ${discountPercent > 0 ? `-${discountPercent}%` : 'საუკეთესო ფასად'}`;
-    const priceSection = origPrice
-      ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
-      : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
+    // 3. SPECIAL PROMO / URGENT DEAL
+    if (isKa) {
+      const headline = `🚨 შეზღუდული აქცია! ${title} — ${discountPercent > 0 ? `-${discountPercent}%` : 'საუკეთესო ფასად'}`;
+      const priceSection = origPrice
+        ? `💰 ფასი: მხოლოდ ${price} ${currencySymbol} (ძველი ფასი: ${origPrice} ${currencySymbol} — დაზოგეთ ${savings} ${currencySymbol}! 🎉)`
+        : `💰 ფასი: მხოლოდ ${price} ${currencySymbol}`;
 
-    const caption = `🔥 ${title} — სპეციალური შეთავაზება DBUY-ში!
+      const caption = `🔥 ${title} — სპეციალური შეთავაზება DBUY-ში!
 
 ${priceSection}
 
@@ -297,14 +280,14 @@ ${shareUrl}
 
 ${defaultHashtags.join(' ')}`;
 
-    return { headline, caption, shareUrl, hashtags: defaultHashtags };
-  } else {
-    const headline = `🚨 Limited Time Flash Deal! ${title}`;
-    const priceSection = origPrice
-      ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
-      : `💰 Price: Only ${currencySymbol}${price}`;
+      return { headline, caption, shareUrl, hashtags: defaultHashtags };
+    } else {
+      const headline = `🚨 Limited Time Flash Deal! ${title}`;
+      const priceSection = origPrice
+        ? `💰 Price: Only ${currencySymbol}${price} (Regular: ${currencySymbol}${origPrice} — Save ${currencySymbol}${savings}! 🎉)`
+        : `💰 Price: Only ${currencySymbol}${price}`;
 
-    const caption = `🔥 ${title} — Special Offer at DBUY Store!
+      const caption = `🔥 ${title} — Special Offer at DBUY Store!
 
 ${priceSection}
 
@@ -325,6 +308,15 @@ ${shareUrl}
 
 ${defaultHashtags.join(' ')}`;
 
-    return { headline, caption, shareUrl, hashtags: defaultHashtags };
+      return { headline, caption, shareUrl, hashtags: defaultHashtags };
+    }
+  } catch (err) {
+    console.error('Ad Gen Error:', err);
+    return {
+      headline: 'Amazing Product Available Now!',
+      caption: `Check out this amazing product at ${options?.product?.title || 'our store'}. Get yours now with Worldwide Shipping! 📦`,
+      shareUrl: options?.product ? getProductShareUrl(options.product, options.baseUrl, options.language) : '#',
+      hashtags: ['#DBUY', '#WorldwideShipping']
+    };
   }
 }
