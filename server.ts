@@ -4639,6 +4639,69 @@ async function setupFrontend() {
     });
   }
 
+
+// ==========================================
+// GEMINI MULTIMODAL AD GENERATOR ENDPOINT
+// Analyzes product images and details to generate FB ad copy
+// ==========================================
+app.post('/api/gemini/generate-ad', async (req, res) => {
+  const { product, style, language } = req.body;
+  if (!product) return res.status(400).json({ success: false, error: 'Product data required' });
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+    
+    // Construct multimodal prompt
+    const prompt = `You are a professional Facebook Ad Copywriter. Write a unique, high-converting Facebook ad copy in English based on the following product details and images.
+    
+    Product Title: ${product.title}
+    Price: ${product.price}
+    Features: ${JSON.stringify(product.features || [])}
+    
+    Ad Structure Requirements:
+    1. Scroll-Stopping Hook (Line 1): Bold, attention-grabbing opening (1 emoji max).
+    2. Visual & Functional Highlights (3–4 bullet points): Use ✦ or ✔ to highlight build, design, and benefits based on the provided images.
+    3. Offer & Global Trust Block: 
+       - Special Price: $${product.price} ${product.origPrice ? `(Was $${product.origPrice})` : ''}
+       - Include: 🌍 Fast & Secure Worldwide Shipping
+    4. Clear Call-To-Action (CTA): 👉 Tap the link to order yours today: [link]
+    5. Targeted Hashtags: 3-5 relevant hashtags.
+    
+    Tone: Premium, persuasive, modern e-commerce brand voice. Avoid generic robotic phrases.`;
+
+    // Fetch images to pass to Gemini
+    const imageParts = [];
+    const imageUrls = [product.image, ...(Array.isArray(product.images) ? product.images : [])].filter(Boolean);
+    
+    for (const url of imageUrls) {
+        try {
+            const response = await fetch(url);
+            const blob = await response.blob();
+            const buffer = Buffer.from(await blob.arrayBuffer());
+            imageParts.push({
+                inlineData: {
+                    data: buffer.toString('base64'),
+                    mimeType: 'image/jpeg',
+                },
+            });
+        } catch (e) {
+            console.warn('Failed to fetch image for Gemini:', e);
+        }
+    }
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.0-flash', 
+      contents: [{ role: 'user', parts: [prompt, ...imageParts] }],
+    });
+
+    const caption = result.text();
+    res.json({ success: true, caption });
+  } catch (error: any) {
+    console.error('Gemini Ad Gen Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`DBUY Store server running at http://0.0.0.0:${PORT}`);
   });
