@@ -184,58 +184,15 @@ export function injectProductOpenGraphResponse(
   const url = new URL(requestUrl);
   const siteTitle = 'DBUY Store';
 
-  const langParam = (url.searchParams.get('lang') || 'ka').toLowerCase();
-  const isEn = langParam === 'en';
-
   const rawPrice = product.price || 0;
-  const rawOrigPrice = product.origPrice && product.origPrice > rawPrice ? product.origPrice : 0;
+  
+  currencyCode = 'USD';
+  priceAmount = rawPrice;
+  displayTitle = product.titleEn || product.title;
 
-  let seoTitle = '';
-  let seoDesc = '';
-  let currencyCode = 'GEL';
-  let priceAmount = 0;
-  let displayTitle = '';
+  seoTitle = `🔥 ${displayTitle} — Only $${rawPrice} | Worldwide Shipping 🌍`;
+  seoDesc = `Premium quality at direct value. Order now at DBUY Store with Fast & Secure Worldwide Shipping!`;
 
-  if (isEn) {
-    currencyCode = 'USD';
-    priceAmount = rawPrice;
-    displayTitle = product.titleEn || product.title;
-
-    const formattedUsdPrice = rawPrice > 0 ? `$${rawPrice}` : '';
-
-    seoTitle = rawPrice > 0
-      ? `🔥 ${displayTitle} — Only ${formattedUsdPrice} at DBUY!`
-      : `${displayTitle} — ${siteTitle}`;
-
-    const savingsUsd = rawOrigPrice > rawPrice ? Math.round(rawOrigPrice - rawPrice) : 0;
-    const defaultDescEn = `💰 Price: Only $${rawPrice}${rawOrigPrice ? ` (Regular: $${rawOrigPrice} — Save $${savingsUsd}! 🎉)` : ''} | 📦 Fast Worldwide Delivery • 🛡️ Official Guarantee • Order Online at DBUY Store`;
-
-    const descEn = product.descriptionEn || product.description;
-    seoDesc = descEn && descEn.length > 15
-      ? `${descEn.substring(0, 180)} | ${formattedUsdPrice ? `Price: ${formattedUsdPrice} • ` : ''}📦 Fast Worldwide Delivery`
-      : defaultDescEn;
-
-  } else {
-    currencyCode = 'GEL';
-    const gelPrice = rawPrice > 0 ? Math.round(rawPrice * exchangeRate * 100) / 100 : 0;
-    const gelOrigPrice = rawOrigPrice > 0 ? Math.round(rawOrigPrice * exchangeRate * 100) / 100 : 0;
-    const savingsGel = gelOrigPrice > gelPrice ? Math.round(gelOrigPrice - gelPrice) : 0;
-    priceAmount = gelPrice;
-
-    displayTitle = product.titleKa || product.title;
-    const formattedGelPrice = gelPrice > 0 ? `${gelPrice} ₾` : '';
-
-    seoTitle = gelPrice > 0
-      ? `🔥 ${displayTitle} — მხოლოდ ${formattedGelPrice} DBUY-ში!`
-      : `${displayTitle} — ${siteTitle}`;
-
-    const defaultDescKa = `💰 ფასი: მხოლოდ ${formattedGelPrice}${gelOrigPrice ? ` (ძველი ფასი: ${gelOrigPrice} ₾ — დაზოგეთ ${savingsGel} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში • 🛡️ ოფიციალური გარანტია • შეუკვეთეთ ონლაინ`;
-
-    const descKa = product.descriptionKa || product.description;
-    seoDesc = descKa && descKa.length > 15
-      ? `${descKa.substring(0, 180)} | ${formattedGelPrice ? `ფასი: ${formattedGelPrice} • ` : ''}🚚 მიწოდება მთელ საქართველოში`
-      : defaultDescKa;
-  }
 
   // Facebook & Social Crawlers strictly require absolute URLs with https://
   let seoImage = 'https://dbuystore.com/icon.png';

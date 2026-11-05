@@ -4538,25 +4538,11 @@ async function setupFrontend() {
             seoDesc = cleanDescEn && cleanDescEn.length > 15
               ? `${cleanDescEn.substring(0, 180)} | Price: $${rawUsdPrice} • 📦 Fast Worldwide Delivery`
               : defaultDescEn;
-          } else {
-            currencyCode = 'GEL';
-            const exchangeRate = 2.60;
-            const gelPrice = rawUsdPrice > 0 ? Math.round(rawUsdPrice * exchangeRate * 100) / 100 : 0;
-            const gelOrigPrice = rawUsdOrigPrice ? Math.round(rawUsdOrigPrice * exchangeRate * 100) / 100 : null;
-            const savingsGel = gelOrigPrice ? Math.round(gelOrigPrice - gelPrice) : 0;
-            priceAmount = gelPrice;
-
-            seoTitle = gelPrice > 0
-              ? `🔥 ${rawTitleKa} — მხოლოდ ${gelPrice} ₾ DBUY-ში!`
-              : `${rawTitleKa} — DBUY Store`;
-
-            const defaultDescKa = `💰 ფასი: მხოლოდ ${gelPrice} ₾${gelOrigPrice ? ` (ძველი ფასი: ${gelOrigPrice} ₾ — დაზოგეთ ${savingsGel} ₾! 🎉)` : ''} | 🚚 სწრაფი მიწოდება მთელ საქართველოში | 🛡️ ოფიციალური გარანტია | შეუკვეთეთ ონლაინ DBUY Store-ში`;
-            const rawDescKa = matchedProduct.description_ka || matchedProduct.descriptionKa || matchedProduct.description || '';
-            const cleanDescKa = rawDescKa.replace(/<[^>]*>/g, '').trim();
-
-            seoDesc = cleanDescKa && cleanDescKa.length > 15
-              ? `${cleanDescKa.substring(0, 180)} | ფასი: ${gelPrice} ₾ • 🚚 მიწოდება მთელ საქართველოში`
-              : defaultDescKa;
+           } else {
+            currencyCode = 'USD';
+            priceAmount = rawUsdPrice;
+            seoTitle = `🔥 ${rawTitleEn || rawTitleKa || 'Product'} — Only $${rawUsdPrice} | Worldwide Shipping 🌍`;
+            seoDesc = `Premium quality at direct value. Order now at DBUY Store with Fast & Secure Worldwide Shipping!`;
           }
 
           if (matchedProduct.image) {
