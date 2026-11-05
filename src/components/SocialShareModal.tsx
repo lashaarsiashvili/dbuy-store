@@ -58,6 +58,10 @@ const buildHighConvertingAdCopy = (product: Product, variantIndex = 0) => {
     `#DBUY #WorldwideShipping #LuxuryStyle #DealOfTheDay #TrendingNow`;
 };
 
+const FB_APP_ID = "1653741686157296";
+const FB_PAGE_TOKEN = "EAAXgEb3A7ZCABS1dkA4rhejoXgwWsDWLmZBIuv4UeVmEprMOuEM3o9YPdKKI0NnURobrXx89dsIj9qufVFZBdMW4htKGd8OeZCNZAsQvfVtxqMsGfzefwRURd7jdHd9byYipbYG6Bk1si192BLRl06lnXQ6XEaiSdZBaD7iy2eHgUd0JdxmDyLgsyX7C4LM8ZCAERPUxEn82S8aDK7HboNCZAA6IRhWIPis2n2FI2aC01KjlaLihZA8K5GkOCm3Io5BYuNlf8jC5JdKVZCLFnq";
+const FB_PAGE_URL = "https://www.facebook.com/Dbuystore";
+
 export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isOpen, onClose }) => {
   if (!isOpen || !product) return null;
 
@@ -65,17 +69,20 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const [buttonText, setButtonText] = useState<string>('🚀 Publish Gallery & Ad to Facebook');
   const [buttonColor, setButtonColor] = useState<string>('#1877F2');
   const [variant, setVariant] = useState(0);
+  const [pageId, setPageId] = useState<string>(localStorage.getItem('dbuy_fb_page_id') || '');
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [images, setImages] = useState<string[]>([]);
   const [showTip, setShowTip] = useState<boolean>(false);
-  
-  // Facebook Auth State
-  const [rawToken, setRawToken] = useState<string>(localStorage.getItem('dbuy_fb_raw_token') || '');
-  const [pageToken, setPageToken] = useState<string>(localStorage.getItem('dbuy_fb_page_token') || '');
-  const [pageId, setPageId] = useState<string>(localStorage.getItem('dbuy_fb_page_id') || '');
 
   useEffect(() => {
+    // Resolve Page ID if missing
+    if (!pageId) {
+        fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}`)
+            .then(r => r.json())
+            .then(data => { if(data.id) { setPageId(data.id); localStorage.setItem('dbuy_fb_page_id', data.id); } });
+    }
+
     const urls = new Set<string>();
     const addUrl = (u: any) => {
       if (typeof u === 'string' && u.trim().startsWith('http')) urls.add(u.trim());
@@ -92,27 +99,6 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     setImages([main, ...newImages]);
   };
 
-  const handleTokenChange = async (token: string) => {
-    setRawToken(token);
-    localStorage.setItem('dbuy_fb_raw_token', token);
-    
-    if (token.startsWith('EAA')) {
-        try {
-            const res = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${token}`);
-            const data = await res.json();
-            if (data.data) {
-                const page = data.data.find((p: any) => p.name.toLowerCase().includes("dbuy"));
-                if (page) {
-                    setPageToken(page.access_token);
-                    setPageId(page.id);
-                    localStorage.setItem('dbuy_fb_page_token', page.access_token);
-                    localStorage.setItem('dbuy_fb_page_id', page.id);
-                }
-            }
-        } catch (e) { console.error("Token exchange failed", e); }
-    }
-  };
-
   const regenerate = () => {
     setVariant(v => v + 1);
     setCaption(buildHighConvertingAdCopy(product, variant + 1));
@@ -123,10 +109,10 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const publishToFacebook = async () => {
     setButtonText('⏳ Processing...');
 
-    // 1. Copy Ad Copy safely
+    // 1. Copy Ad Copy
     await copyTextSafely(caption, textareaRef.current);
 
-    // 2. Download images via Proxy
+    // 2. Download images
     for (let i = 0; i < images.length; i++) {
         const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(images[i])}&output=jpg`;
         const a = document.createElement('a');
@@ -139,42 +125,43 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         await new Promise(r => setTimeout(r, 300));
     }
 
-    // 3. Attempt API Upload if page token exists
-    if (pageToken && pageId) {
+    // 3. Automated API Upload
+    if (pageId) {
         try {
             setButtonText('⏳ Uploading photos...');
-            const uploadedMediaIds: string[] = [];
+            const uploadedMediaIds: any[] = [];
             for (let i = 0; i < images.length; i++) {
                 const fbRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ url: images[i], published: 'false', access_token: pageToken }).toString()
+                    body: new URLSearchParams({ url: images[i], published: 'false', access_token: FB_PAGE_TOKEN }).toString()
                 });
                 const data = await fbRes.json() as any;
-                if (data.id) uploadedMediaIds.push(data.id);
+                if (data.id) uploadedMediaIds.push({ media_fbid: data.id });
             }
 
             setButtonText('🚀 Publishing Gallery...');
             const feedRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: caption, attached_media: uploadedMediaIds.map(id => ({ media_fbid: id })), access_token: pageToken })
+                body: JSON.stringify({ message: caption, attached_media: uploadedMediaIds, access_token: FB_PAGE_TOKEN })
             });
             const feedData = await feedRes.json() as any;
 
             if (feedData.id) {
-                setButtonText('✅ Published Automatically!');
+                setButtonText('✅ Multi-Photo Gallery Published Successfully!');
                 setButtonColor('#10B981');
+                
+                const link = document.createElement('a');
+                link.href = `https://www.facebook.com/${feedData.id}`;
+                link.target = '_blank';
+                link.textContent = '🔗 View Live Post on @Dbuystore ↗';
+                link.className = 'block mt-2 text-blue-500 font-bold text-center';
+                textareaRef.current?.parentElement?.appendChild(link);
                 return;
             }
         } catch (e) { console.error("API upload failed", e); }
     }
-
-    // Fallback: Open Facebook page
-    window.open('https://www.facebook.com/Dbuystore', '_blank');
-    setButtonText('✅ Ad Copied & Photos Downloaded! Upload & Paste (Ctrl+V) on @Dbuystore');
-    setButtonColor('#10B981');
-    setShowTip(true);
   };
 
   return (
@@ -187,7 +174,9 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
             <button onClick={onClose}><X className="w-5 h-5"/></button>
         </div>
         <div className="p-5 overflow-y-auto flex-1 space-y-5">
-            <input type="text" placeholder="Paste FB Access Token (User/Page EAA...)" value={rawToken} onChange={e => handleTokenChange(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"/>
+            <div className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-200">
+                <span>✅ Connected to @Dbuystore (Auto-Gallery Posting Active)</span>
+            </div>
             
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                 <h4 className="text-sm font-bold mb-2">Select Main Photo</h4>
@@ -203,7 +192,6 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                 <Megaphone className="w-5 h-5"/>
                 {buttonText}
             </button>
-            {showTip && <p className="text-xs text-slate-500 mt-2 text-center">💡 Paste copied ad text & upload downloaded photos on @Dbuystore.</p>}
         </div>
       </div>
     </div>
