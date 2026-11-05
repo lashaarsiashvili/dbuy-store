@@ -69,6 +69,11 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [images, setImages] = useState<string[]>([]);
   const [showTip, setShowTip] = useState<boolean>(false);
+  
+  // Facebook Auth State
+  const [rawToken, setRawToken] = useState<string>(localStorage.getItem('dbuy_fb_raw_token') || '');
+  const [pageToken, setPageToken] = useState<string>(localStorage.getItem('dbuy_fb_page_token') || '');
+  const [pageId, setPageId] = useState<string>(localStorage.getItem('dbuy_fb_page_id') || '');
 
   useEffect(() => {
     const urls = new Set<string>();
@@ -87,6 +92,27 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     setImages([main, ...newImages]);
   };
 
+  const handleTokenChange = async (token: string) => {
+    setRawToken(token);
+    localStorage.setItem('dbuy_fb_raw_token', token);
+    
+    if (token.startsWith('EAA')) {
+        try {
+            const res = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${token}`);
+            const data = await res.json();
+            if (data.data) {
+                const page = data.data.find((p: any) => p.name.toLowerCase().includes("dbuy"));
+                if (page) {
+                    setPageToken(page.access_token);
+                    setPageId(page.id);
+                    localStorage.setItem('dbuy_fb_page_token', page.access_token);
+                    localStorage.setItem('dbuy_fb_page_id', page.id);
+                }
+            }
+        } catch (e) { console.error("Token exchange failed", e); }
+    }
+  };
+
   const regenerate = () => {
     setVariant(v => v + 1);
     setCaption(buildHighConvertingAdCopy(product, variant + 1));
@@ -95,38 +121,58 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   useEffect(() => { if (isOpen && !caption) regenerate(); }, [isOpen, caption]);
 
   const publishToFacebook = async () => {
-    // 1. MUST happen synchronously on line 1 so Chrome opens Facebook Page immediately
-    window.open('https://www.facebook.com/Dbuystore', '_blank', 'noopener,noreferrer');
+    setButtonText('⏳ Processing...');
 
-    setButtonText('⏳ Preparing Gallery & Ad...');
-
-    // 2. Copy Ad Copy safely
+    // 1. Copy Ad Copy safely
     await copyTextSafely(caption, textareaRef.current);
 
-    // 3. Download images ONLY via Blob URL (NEVER click a raw R2 URL!)
+    // 2. Download images via Proxy
     for (let i = 0; i < images.length; i++) {
-        try {
-            const response = await fetch(images[i], { mode: 'cors' });
-            if (response.ok) {
-                const blob = await response.blob();
-                const blobUrl = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = blobUrl;
-                link.download = `dbuy-product-${i + 1}.jpg`;
-                link.style.display = 'none';
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-                // Clean up blob URL
-                setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
-            }
-        } catch (err) {
-            console.error("Failed to download image", err);
-        }
+        const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(images[i])}&output=jpg`;
+        const a = document.createElement('a');
+        a.href = proxyUrl;
+        a.download = `dbuy-photo-${i + 1}.jpg`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
         await new Promise(r => setTimeout(r, 300));
     }
 
-    setButtonText('✅ Ad Copied & Photos Downloaded! Upload Photos & Paste (Ctrl+V) on @Dbuystore');
+    // 3. Attempt API Upload if page token exists
+    if (pageToken && pageId) {
+        try {
+            setButtonText('⏳ Uploading photos...');
+            const uploadedMediaIds: string[] = [];
+            for (let i = 0; i < images.length; i++) {
+                const fbRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ url: images[i], published: 'false', access_token: pageToken }).toString()
+                });
+                const data = await fbRes.json() as any;
+                if (data.id) uploadedMediaIds.push(data.id);
+            }
+
+            setButtonText('🚀 Publishing Gallery...');
+            const feedRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: caption, attached_media: uploadedMediaIds.map(id => ({ media_fbid: id })), access_token: pageToken })
+            });
+            const feedData = await feedRes.json() as any;
+
+            if (feedData.id) {
+                setButtonText('✅ Published Automatically!');
+                setButtonColor('#10B981');
+                return;
+            }
+        } catch (e) { console.error("API upload failed", e); }
+    }
+
+    // Fallback: Open Facebook page
+    window.open('https://www.facebook.com/Dbuystore', '_blank');
+    setButtonText('✅ Ad Copied & Photos Downloaded! Upload & Paste (Ctrl+V) on @Dbuystore');
     setButtonColor('#10B981');
     setShowTip(true);
   };
@@ -137,22 +183,19 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         <div className="p-5 border-b border-slate-100 flex justify-between">
             <div>
                 <h3 className="text-lg font-black">Facebook Gallery Ad Publisher</h3>
-                <p className="text-xs text-slate-500">Auto-publish multi-photo gallery to Facebook Page</p>
             </div>
             <button onClick={onClose}><X className="w-5 h-5"/></button>
         </div>
         <div className="p-5 overflow-y-auto flex-1 space-y-5">
+            <input type="text" placeholder="Paste FB Access Token (User/Page EAA...)" value={rawToken} onChange={e => handleTokenChange(e.target.value)} className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-sm"/>
+            
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                <h4 className="text-sm font-bold mb-2">Select Main Photo (Click to reorder)</h4>
+                <h4 className="text-sm font-bold mb-2">Select Main Photo</h4>
                 <div className="grid grid-cols-4 gap-2">
                     {images.map((url, i) => <img key={i} src={url} onClick={() => toggleMainPhoto(i)} className={`w-full aspect-square object-cover rounded-lg border-2 ${i === 0 ? 'border-blue-500' : 'border-transparent'} cursor-pointer`}/>)}
                 </div>
             </div>
             
-            <div className="flex justify-between items-center">
-                <label className="text-sm font-bold">Social Ad Copy (Editable):</label>
-                <button onClick={regenerate} className="text-xs flex items-center gap-1 font-bold text-[#1877F2]"><RefreshCw className="w-3 h-3"/> Regenerate</button>
-            </div>
             <textarea ref={textareaRef} value={caption} onChange={e => setCaption(e.target.value)} className="w-full p-3 h-32 rounded-xl bg-slate-50 border border-slate-200 text-sm"/>
         </div>
         <div className="p-5 border-t">
@@ -160,7 +203,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                 <Megaphone className="w-5 h-5"/>
                 {buttonText}
             </button>
-            {showTip && <p className="text-xs text-slate-500 mt-2 text-center">💡 Tip: When pasting on Facebook, select the downloaded photos first so Facebook creates the multi-photo gallery instead of a single link card.</p>}
+            {showTip && <p className="text-xs text-slate-500 mt-2 text-center">💡 Paste copied ad text & upload downloaded photos on @Dbuystore.</p>}
         </div>
       </div>
     </div>
