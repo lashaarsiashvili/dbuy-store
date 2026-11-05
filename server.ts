@@ -1699,7 +1699,10 @@ app.post('/api/facebook/publish', async (req, res) => {
                 access_token: accessToken
             })
         });
-        const uploadData = await uploadRes.json();
+        const text = await uploadRes.text();
+        let uploadData;
+        try { uploadData = JSON.parse(text); } catch { throw new Error('Facebook API returned invalid JSON'); }
+        
         if (uploadData.id) {
             media_fbids.push(uploadData.id);
         } else {
@@ -1718,12 +1721,14 @@ app.post('/api/facebook/publish', async (req, res) => {
             access_token: accessToken
         })
     });
-    const feedData = await feedRes.json();
+    const text = await feedRes.text();
+    let feedData;
+    try { feedData = JSON.parse(text); } catch { throw new Error('Facebook API returned invalid JSON'); }
 
     if (feedData.id) {
         res.json({ success: true, postId: feedData.id });
     } else {
-        res.status(500).json({ success: false, error: feedData.error || 'Failed to publish post' });
+        res.status(500).json({ success: false, error: feedData.error?.message || 'Failed to publish post' });
     }
 
   } catch (error: any) {

@@ -35,22 +35,40 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
 
   const generateAd = async () => {
     setIsGenerating(true);
-    setStatusMessage('Analyzing product and generating ad copy...');
+    setCaption('✨ Generating high-converting Facebook ad copy...');
     try {
         const response = await fetch('/api/gemini/generate-ad', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ product, style: 'sales', language: 'en' })
         });
-        const data = await response.json();
+        
+        const text = await response.text();
+        let data;
+        try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON response from server'); }
+
         if (data.success) {
             setCaption(data.caption);
-            setStatusMessage('');
         } else {
             throw new Error(data.error);
         }
     } catch (e: any) {
-        setStatusMessage('Error generating ad: ' + e.message);
+        console.error('Ad Gen Error:', e);
+        // Robust Fallback Template
+        const fallbackAd = `🔥 ${product.title} — Special Offer at DBUY Store!
+
+✦ Premium quality and modern design
+✦ Perfect for everyday use
+✦ High-quality craftsmanship
+
+🔥 Exclusive Price: $${product.price} ${product.origPrice ? `(Was $${product.origPrice})` : ''}
+🌍 Fast & Secure Worldwide Shipping
+
+👉 Order yours now: ${getProductShareUrl(product)}
+
+#DBUY #WorldwideShipping #DealOfTheDay #Sale`;
+        setCaption(fallbackAd);
+        setStatusMessage('Used fallback ad template.');
     } finally {
         setIsGenerating(false);
     }
@@ -69,7 +87,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
     try {
         if (!fbPageId || !fbAccessToken) throw new Error('Facebook credentials not configured');
         
-        setStatusMessage('Uploading gallery images...');
+        setStatusMessage('Uploading gallery...');
         const response = await fetch('/api/facebook/publish', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -80,15 +98,23 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 images: getAllProductImages
             })
         });
-        const data = await response.json();
+        
+        const text = await response.text();
+        let data;
+        try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON response from server'); }
+
         if (data.success) {
             setStatusMessage('Published Successfully! ✅');
             setTimeout(onClose, 2000);
         } else {
-            throw new Error(data.error);
+            throw new Error(data.error || 'Failed to publish post');
         }
     } catch (err: any) {
+        console.error('Publish Error:', err);
         setStatusMessage('Error publishing: ' + err.message);
+        // Fallback for publish failure
+        await navigator.clipboard.writeText(caption);
+        window.open('https://www.facebook.com/', '_blank');
         setIsPublishing(false);
     }
   };
@@ -134,6 +160,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                     onChange={e => setCaption(e.target.value)}
                     className="w-full p-3 h-40 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 text-sm"
                 />
+                {statusMessage && <p className="text-xs text-blue-600 font-bold">{statusMessage}</p>}
             </div>
         </div>
 
@@ -145,7 +172,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({
                 className="w-full py-4 bg-[#1877F2] hover:bg-[#166fe5] text-white font-bold rounded-2xl flex items-center justify-center gap-2"
             >
                 {isPublishing ? <Loader2 className="animate-spin w-5 h-5"/> : <Megaphone className="w-5 h-5"/>}
-                {statusMessage || '🚀 Publish Gallery & Ad to Facebook'}
+                {isPublishing ? 'Publishing...' : '🚀 Publish Gallery & Ad to Facebook'}
             </button>
         </div>
       </div>
