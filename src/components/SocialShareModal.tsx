@@ -112,60 +112,9 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         await new Promise(r => setTimeout(r, 300));
     }
 
-    // 3. Attempt Graph API Upload
-    const token = localStorage.getItem('dbuy_fb_page_token');
-    if (token) {
-        try {
-            setButtonText('⏳ Uploading photos to Facebook...');
-            const uploadedMediaIds: string[] = [];
-            for (let i = 0; i < images.length; i++) {
-                const fbRes = await fetch(`https://graph.facebook.com/v19.0/Dbuystore/photos`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({
-                        url: images[i],
-                        published: 'false',
-                        access_token: token
-                    }).toString()
-                });
-                const data = await fbRes.json() as any;
-                if (data.id) {
-                    uploadedMediaIds.push(data.id);
-                }
-            }
-
-            setButtonText('🚀 Publishing Multi-Photo Gallery Post...');
-            const feedRes = await fetch(`https://graph.facebook.com/v19.0/Dbuystore/feed`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    message: caption,
-                    attached_media: uploadedMediaIds.map(id => ({ media_fbid: id })),
-                    access_token: token
-                })
-            });
-            const feedData = await feedRes.json() as any;
-
-            if (feedData.id) {
-                setButtonText('✅ Published Automatically to Facebook!');
-                setButtonColor('#10B981');
-                const postUrl = `https://www.facebook.com/${feedData.id}`;
-                const link = document.createElement('a');
-                link.href = postUrl;
-                link.target = '_blank';
-                link.textContent = '🔗 View Live Post on Facebook ↗';
-                link.className = 'block mt-2 text-blue-500 font-bold';
-                textareaRef.current?.parentElement?.appendChild(link);
-                return;
-            }
-        } catch (err) {
-            console.error("API post failed", err);
-        }
-    }
-
-    // Fallback: Open Facebook page
+    // 3. Open Facebook page
     window.open('https://www.facebook.com/Dbuystore', '_blank');
-    setButtonText('✅ Ad Text Copied & All Gallery Photos Downloaded! Select Photos + Press Ctrl+V on @Dbuystore');
+    setButtonText('✅ Ad Copied & Photos Downloaded! Upload Photos & Paste (Ctrl+V) on @Dbuystore');
     setButtonColor('#10B981');
     setShowTip(true);
   };
