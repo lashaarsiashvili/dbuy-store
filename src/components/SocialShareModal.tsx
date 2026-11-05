@@ -95,25 +95,37 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   useEffect(() => { if (isOpen && !caption) regenerate(); }, [isOpen, caption]);
 
   const publishToFacebook = async () => {
+    // 1. MUST happen synchronously on line 1 so Chrome opens Facebook Page immediately
+    window.open('https://www.facebook.com/Dbuystore', '_blank', 'noopener,noreferrer');
+
     setButtonText('⏳ Preparing Gallery & Ad...');
-    
-    // 1. Copy Ad Text
+
+    // 2. Copy Ad Copy safely
     await copyTextSafely(caption, textareaRef.current);
 
-    // 2. Auto-Download All Photos
+    // 3. Download images ONLY via Blob URL (NEVER click a raw R2 URL!)
     for (let i = 0; i < images.length; i++) {
-        const a = document.createElement('a');
-        a.href = images[i];
-        a.download = `dbuy-product-${i + 1}.jpg`;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
+        try {
+            const response = await fetch(images[i], { mode: 'cors' });
+            if (response.ok) {
+                const blob = await response.blob();
+                const blobUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = blobUrl;
+                link.download = `dbuy-product-${i + 1}.jpg`;
+                link.style.display = 'none';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                // Clean up blob URL
+                setTimeout(() => URL.revokeObjectURL(blobUrl), 100);
+            }
+        } catch (err) {
+            console.error("Failed to download image", err);
+        }
         await new Promise(r => setTimeout(r, 300));
     }
 
-    // 3. Open Facebook page
-    window.open('https://www.facebook.com/Dbuystore', '_blank');
     setButtonText('✅ Ad Copied & Photos Downloaded! Upload Photos & Paste (Ctrl+V) on @Dbuystore');
     setButtonColor('#10B981');
     setShowTip(true);
