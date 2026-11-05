@@ -181,7 +181,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
             <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
                 <h4 className="text-sm font-bold mb-2">Select Main Photo</h4>
                 <div className="grid grid-cols-4 gap-2">
-                    {images.map((url, i) => <img key={i} src={url} onClick={() => toggleMainPhoto(i)} className={`w-full aspect-square object-cover rounded-lg border-2 ${i === 0 ? 'border-blue-500' : 'border-transparent'} cursor-pointer`}/>)}
+                    {images.map((url, i) => <img key={i} src={url} onClick={(e) => { e.stopPropagation(); toggleMainPhoto(i); }} className={`w-full aspect-square object-cover rounded-lg border-2 ${i === 0 ? 'border-blue-500' : 'border-transparent'} cursor-pointer`}/>)}
                 </div>
             </div>
             
