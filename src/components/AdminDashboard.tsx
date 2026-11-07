@@ -11,6 +11,7 @@ import { UnifiedAdminPanel, reviewService } from './ProductReviewsSection';
 import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
+import { ThemeCustomizer } from './ThemeCustomizer';
 
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
 import { compressImageForUpload, uploadImageToR2 } from '../utils/imageUpload';
@@ -2101,6 +2102,7 @@ export const AdminDashboard: React.FC = () => {
 
         {/* TAB 0: TRAFFIC & COUNTRY ANALYTICS */}
         {activeTab === 'analytics' && <AdminAnalytics />}
+        {activeTab === 'theme' && <ThemeCustomizer />}
 
         {/* TAB 1: PRODUCTS CATALOG */}
         {activeTab === 'products' && (
