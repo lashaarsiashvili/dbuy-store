@@ -181,6 +181,7 @@ export interface RegisteredUser {
   phone?: string;
   createdAt: string;
   role: 'customer' | 'admin';
+  faceSignature?: string;
 }
 
 export interface ToastMessage {

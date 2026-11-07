@@ -183,6 +183,7 @@ export const AuthModal: React.FC = () => {
   const [zip, setZip] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
+  const [faceSignature, setFaceSignature] = useState<string | undefined>();
 
   // Security / Lockout State
   const [lockoutSec, setLockoutSec] = useState<number>(0);
@@ -575,6 +576,7 @@ export const AuthModal: React.FC = () => {
         zip: sanitizeInput(zip) || "",
         address: sanitizeInput(address) || "",
         phone: sanitizeInput(phone) || "",
+        faceSignature: faceSignature,
       });
     } finally {
       setIsSubmittingReg(false);
@@ -883,7 +885,26 @@ export const AuthModal: React.FC = () => {
 
                     <p ref={statusTextRef} className="text-center text-xs text-gray-400">Position your face within the frame.</p>
 
-                    <button type="button" onClick={startCameraScan} className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer">
+                    <button type="button" onClick={async () => {
+                      await startCameraScan();
+                      const video = videoRef.current;
+                      if (!video) return;
+                      const canvas = document.createElement('canvas');
+                      canvas.width = 160;
+                      canvas.height = 160;
+                      canvas.getContext('2d')?.drawImage(video, 0, 0, 160, 160);
+                      const signature = canvas.toDataURL('image/jpeg', 0.5);
+                      
+                      // Login Logic
+                      const user = registeredUsers.find(u => u.faceSignature === signature);
+                      if (user) {
+                        loginUser(user.email);
+                        addToast(`✅ Welcome back, ${user.name}! Face Verified.`, 'success');
+                        setIsAuthModalOpen(false);
+                      } else {
+                        addToast("⚠️ No Face ID registered yet or mismatch. Please link your face in the Register tab.", "warning");
+                      }
+                    }} className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer">
                         <span>Start Biometric Scan</span>
                     </button>
                 </div>
