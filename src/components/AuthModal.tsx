@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useStore } from "../context/StoreContext";
 import { BrandLogo } from "./BrandLogo";
 import { GoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google";
@@ -138,7 +138,13 @@ export const AuthModal: React.FC = () => {
     addToast,
   } = useStore();
 
-  const [tab, setTab] = useState<"login" | "register">("login");
+  // Face ID Refs
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const placeholderRef = useRef<HTMLDivElement>(null);
+  const scanLineRef = useRef<HTMLDivElement>(null);
+  const statusTextRef = useRef<HTMLParagraphElement>(null);
+
+  const [tab, setTab] = useState<"login" | "register" | "face">("login");
   const [viewMode, setViewMode] = useState<"auth" | "forgot">("auth");
 
   // Registration states
@@ -358,6 +364,35 @@ export const AuthModal: React.FC = () => {
     setIsRegConfirmFocused(false);
     setTempPassSentTo(null);
     setTouched({});
+  };
+
+  const startCameraScan = async () => {
+    const video = videoRef.current;
+    const placeholder = placeholderRef.current;
+    const scanLine = scanLineRef.current;
+    const statusText = statusTextRef.current;
+    if (!video || !placeholder || !scanLine || !statusText) return;
+
+    try {
+        statusText.innerText = "Requesting camera access...";
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } });
+        
+        video.srcObject = stream;
+        video.classList.remove('hidden');
+        placeholder.classList.add('hidden');
+        scanLine.classList.remove('hidden');
+        
+        statusText.innerText = "Scanning face... Please hold still.";
+        
+        setTimeout(() => {
+            statusText.innerText = "Face recognized successfully! Logging in...";
+            statusText.classList.add('text-green-400');
+        }, 3500);
+    } catch (err) {
+        console.error("Camera access denied or error:", err);
+        statusText.innerText = "Camera access denied. Please allow camera permissions.";
+        statusText.classList.add('text-red-400');
+    }
   };
 
   // Countdown timer for lockout
@@ -814,12 +849,33 @@ export const AuthModal: React.FC = () => {
 
               {/* ---------------- FACE ID FORM ---------------- */}
               {tab === "face" && (
-                <div className="text-center space-y-4 py-4 animate-in fade-in duration-200">
-                  <div className="relative w-full h-48 bg-slate-800 rounded-2xl overflow-hidden border border-slate-700">
-                    <div className="absolute inset-0 flex items-center justify-center text-slate-500">Camera Feed Placeholder</div>
-                  </div>
-                  <p className="text-xs text-slate-400">Position your face within the frame.</p>
-                  <button className="w-full py-3 bg-purple-600 rounded-xl font-bold hover:bg-purple-700 transition cursor-pointer">Start Biometric Scan</button>
+                <div className="tab-content space-y-4 animate-in fade-in duration-200">
+                    <div className="text-center">
+                        <h3 className="text-lg font-semibold text-white">Biometric Face Authentication</h3>
+                        <p className="text-xs text-gray-400">Position your face within the frame for instant secure login.</p>
+                    </div>
+
+                    {/* Camera Video Container */}
+                    <div className="relative w-full h-64 bg-slate-900 rounded-2xl overflow-hidden border border-slate-700 flex items-center justify-center">
+                        <video ref={videoRef} autoPlay playsInline className="absolute inset-0 w-full h-full object-cover hidden"></video>
+                        
+                        {/* Placeholder */}
+                        <div ref={placeholderRef} className="flex flex-col items-center justify-center text-gray-400">
+                            <svg className="w-12 h-12 mb-2 text-purple-500 animate-pulse" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+                            </svg>
+                            <span className="text-sm">Camera Feed Ready</span>
+                        </div>
+
+                        {/* Scanning Line */}
+                        <div ref={scanLineRef} className="absolute inset-x-0 h-1 bg-gradient-to-r from-transparent via-purple-500 to-transparent shadow-[0_0_15px_rgba(168,85,247,0.8)] animate-bounce hidden"></div>
+                    </div>
+
+                    <p ref={statusTextRef} className="text-center text-xs text-gray-400">Position your face within the frame.</p>
+
+                    <button type="button" onClick={startCameraScan} className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer">
+                        <span>Start Biometric Scan</span>
+                    </button>
                 </div>
               )}
 
