@@ -1,8 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
 import { X, CheckCircle2, Loader2 } from 'lucide-react';
-import * as faceapi from '@vladmandic/face-api';
-import { loadModels, getBiometricVault, saveBiometricVault } from '../utils/biometric';
+import { getBiometricVault, saveBiometricVault } from '../utils/biometric';
 
 export const FaceIdSetupModal: React.FC = () => {
   const { isFaceSetupOpen, setIsFaceSetupOpen, user, addToast } = useStore();
@@ -14,7 +13,7 @@ export const FaceIdSetupModal: React.FC = () => {
 
   useEffect(() => {
     if (isFaceSetupOpen) {
-      loadModels().then(startCamera);
+      startCamera();
     } else {
       stopCamera();
     }
@@ -41,28 +40,15 @@ export const FaceIdSetupModal: React.FC = () => {
     if (!videoRef.current || !canvasRef.current) return;
     setIsProcessing(true);
     
-    // TinyFaceDetector
-    const detection = await faceapi.detectSingleFace(videoRef.current, new faceapi.TinyFaceDetectorOptions())
-      .withFaceLandmarks()
-      .withFaceDescriptor();
-
-    if (!detection) {
-      addToast('No face detected. Please position your face clearly.', 'error');
-      setIsProcessing(false);
-      return;
-    }
-
-    // Liveness check (simple check for now, can be expanded)
-    const { landmarks } = detection;
-    const eyeOpen = landmarks.getLeftEye()[0].y < landmarks.getNose()[0].y; // Simplistic
-    if (!eyeOpen) {
-      addToast('Please blink or look at the camera.', 'warning');
-      setIsProcessing(false);
-      return;
-    }
+    // Canvas capture
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth;
+    canvas.height = videoRef.current.videoHeight;
+    canvas.getContext('2d')?.drawImage(videoRef.current, 0, 0);
+    const imageBase64 = canvas.toDataURL('image/jpeg');
 
     const vault = getBiometricVault();
-    vault[user.email] = Array.from(detection.descriptor);
+    vault[user.email] = imageBase64;
     saveBiometricVault(vault);
     
     setIsEnrolled(true);

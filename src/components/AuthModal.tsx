@@ -35,8 +35,6 @@ import {
 import { smartApiFetch } from "../lib/api";
 import { ALL_COUNTRIES } from "../data/countries";
 import { getBiometricVault, calculateEuclideanDistance } from "../utils/biometric";
-import * as faceapi from '@vladmandic/face-api';
-import { loadModels } from "../utils/biometric";
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
@@ -199,10 +197,6 @@ export const AuthModal: React.FC = () => {
 
   // Password Strength
   const pwdStrength = evaluatePasswordStrength(password);
-
-  useEffect(() => {
-    loadModels();
-  }, []);
 
   // Password Strength Label
   const getStrengthLabel = (score: number) => {
@@ -909,42 +903,26 @@ export const AuthModal: React.FC = () => {
                       const signature = canvas.toDataURL('image/jpeg', 0.5);
                       
                       // Login Logic
-                      const loginVideo = videoRef.current;
-                      if (!loginVideo) return;
-
-                      // Detect face and extract descriptor
-                      const detection = await faceapi.detectSingleFace(loginVideo, new faceapi.TinyFaceDetectorOptions())
-                        .withFaceLandmarks()
-                        .withFaceDescriptor();
-
-                      if (!detection) {
-                        addToast("⚠️ No face detected. Please ensure good lighting.", "warning");
-                        return;
-                      }
+                      const loginCanvas = document.createElement('canvas');
+                      loginCanvas.width = 160;
+                      loginCanvas.height = 160;
+                      loginCanvas.getContext('2d')?.drawImage(videoRef.current!, 0, 0, 160, 160);
+                      const currentSignature = loginCanvas.toDataURL('image/jpeg', 0.5);
 
                       const vault = getBiometricVault();
-                      let bestMatch = null;
-                      let minDistance = 1; // Default higher than threshold
+                      const matchedEmail = Object.keys(vault).find(email => 
+                        calculateEuclideanDistance(vault[email], currentSignature) === 0
+                      );
 
-                      for (const [email, descriptorArray] of Object.entries(vault)) {
-                        const descriptor = new Float32Array(descriptorArray as number[]);
-                        const distance = calculateEuclideanDistance(descriptor, detection.descriptor);
-                        
-                        if (distance < minDistance) {
-                          minDistance = distance;
-                          bestMatch = email;
-                        }
-                      }
-
-                      if (bestMatch && minDistance < 0.45) {
-                        const userMatch = registeredUsers.find(u => u.email === bestMatch);
+                      if (matchedEmail) {
+                        const userMatch = registeredUsers.find(u => u.email === matchedEmail);
                         if (userMatch) {
                           loginUser(userMatch.email);
-                          addToast(`✅ Biometric Match: ${(100 - minDistance * 100).toFixed(1)}% | Welcome back, ${userMatch.email}!`, 'success');
+                          addToast(`✅ Face Verified: Welcome back, ${userMatch.email}!`, 'success');
                           setIsAuthModalOpen(false);
                         }
                       } else {
-                        addToast(`❌ Biometric Mismatch: Distance ${minDistance.toFixed(3)}. Face does not match registered account.`, "error");
+                        addToast(`❌ Biometric Mismatch. Face does not match registered account.`, "error");
                       }
                     }} className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer">
                         <span>Start Biometric Scan</span>

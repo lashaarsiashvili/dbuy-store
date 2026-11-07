@@ -360,7 +360,7 @@ export function App() {
             clientId: paypalClientId,
             currency: 'USD',
             intent: 'capture',
-            components: 'buttons',
+            components: 'buttons,applepay',
             enableFunding: 'card,paylater,venmo',
           }}
         >
