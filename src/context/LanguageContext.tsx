@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { Language } from '../types';
-import { getSavedLanguage, getTranslation, changeLanguage } from '../utils/i18n';
+import { getTranslation } from '../utils/i18n';
 
 interface LanguageContextType {
   language: Language;
@@ -11,32 +11,30 @@ interface LanguageContextType {
 const LanguageContext = createContext<LanguageContextType | undefined>(undefined);
 
 export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [language, setLanguageState] = useState<Language>(() => getSavedLanguage());
+  const [language, setLanguageState] = useState<Language>(() => {
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('dbuy_lang');
+      if (saved && (['en', 'ka', 'es', 'fr', 'de'] as string[]).includes(saved)) {
+        return saved as Language;
+      }
+    }
+    return 'en';
+  });
 
   const setLanguage = (lang: Language) => {
-    const updatedLang = changeLanguage(lang);
-    setLanguageState(updatedLang);
-    localStorage.setItem('dbuy_lang', updatedLang);
+    setLanguageState(lang);
+    try {
+      localStorage.setItem('dbuy_lang', lang);
+    } catch {}
     
-    // Dispatch event to synchronize with other contexts/components
-    window.dispatchEvent(new CustomEvent('languageChange', { detail: updatedLang }));
+    if (typeof document !== 'undefined') {
+      document.documentElement.lang = lang;
+    }
   };
-
-  useEffect(() => {
-    const handleLanguageChange = (event: Event) => {
-      const customEvent = event as CustomEvent;
-      const newLang = customEvent.detail;
-      setLanguageState(newLang);
-    };
-
-    window.addEventListener('languageChange', handleLanguageChange);
-    return () => window.removeEventListener('languageChange', handleLanguageChange);
-  }, []);
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.documentElement.lang = language;
-      changeLanguage(language);
     }
   }, [language]);
 

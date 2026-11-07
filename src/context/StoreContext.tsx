@@ -21,7 +21,7 @@ import productsData from '../data/products.json';
 import { initialBillboards } from '../data/initialBillboards';
 import { categoryIdToSlug, slugToCategoryId } from '../data/categoryNavigationData';
 import { translations } from '../data/translations';
-import { getSavedLanguage, getTranslation, changeLanguage } from '../utils/i18n';
+import { getTranslation } from '../utils/i18n';
 import { loadImageBackupsIDB, preloadProductImages } from '../utils/imageStorage';
 import { 
   loadVisitorLogs, 
@@ -376,34 +376,29 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // Reactive Multi-language State with robust fallback
   const [language, setLanguageState] = useState<Language>(() => {
-    const saved = localStorage.getItem('dbuy_lang');
-    if (saved === 'ka' || saved === 'en' || saved === 'ru' || saved === 'es' || saved === 'de' || saved === 'fr' || saved === 'it' || saved === 'zh') {
-      return saved as Language;
+    if (typeof localStorage !== 'undefined') {
+      const saved = localStorage.getItem('dbuy_lang');
+      if (saved && (['en', 'ka', 'es', 'fr', 'de'] as string[]).includes(saved)) {
+        return saved as Language;
+      }
     }
-    return getSavedLanguage();
+    return 'en';
   });
 
   const setLanguage = (lang: Language) => {
-    const updatedLang = changeLanguage(lang);
-    setLanguageState(updatedLang);
+    setLanguageState(lang);
     try {
-      localStorage.setItem('dbuy_lang', updatedLang);
+      localStorage.setItem('dbuy_lang', lang);
     } catch {}
     
     if (typeof document !== 'undefined') {
-      document.documentElement.lang = updatedLang;
-    }
-
-    // Trigger window custom event for reactive UI update
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('languageChange', { detail: updatedLang }));
+      document.documentElement.lang = lang;
     }
   };
 
   useEffect(() => {
     if (typeof document !== 'undefined') {
       document.documentElement.lang = language;
-      changeLanguage(language);
     }
   }, [language]);
 

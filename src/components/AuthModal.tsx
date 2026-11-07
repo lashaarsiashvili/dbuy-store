@@ -126,6 +126,7 @@ export const AuthModal: React.FC = () => {
   const {
     t,
     language,
+    setLanguage,
     isAuthModalOpen,
     setIsAuthModalOpen,
     loginUser,
@@ -612,6 +613,15 @@ export const AuthModal: React.FC = () => {
 
           {/* Brand Header */}
           <div className="flex flex-col items-center justify-center mb-5 pt-1">
+            <div className="absolute top-4 left-4">
+               <select value={language} onChange={(e) => setLanguage(e.target.value as any)} className="bg-slate-800 text-white text-xs p-2 rounded-lg border border-slate-700 cursor-pointer">
+                  <option value="en">ENG</option>
+                  <option value="ka">GEO</option>
+                  <option value="es">ESP</option>
+                  <option value="fr">FRA</option>
+                  <option value="de">DEU</option>
+               </select>
+            </div>
             <BrandLogo
               size="md"
               variant={isDarkMode ? 'dark' : 'light'}

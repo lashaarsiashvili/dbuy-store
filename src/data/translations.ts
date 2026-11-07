@@ -183,8 +183,29 @@ export const translations: Record<string, Record<string, string>> = {
     "nav.adminDash": "ადმინ პანელი",
     "nav.signOut": "გამოსვლა"
   },
-  "es": {},
-  "it": {},
-  "de": {},
+  "es": {
+    "nav.home": "Inicio",
+    "nav.about": "Acerca de",
+    "nav.contact": "Contacto",
+    "products.addToCart": "Añadir al carrito",
+    "top.signIn": "Iniciar sesión",
+    "top.selectLanguage": "Seleccionar idioma"
+  },
+  "fr": {
+    "nav.home": "Accueil",
+    "nav.about": "À propos",
+    "nav.contact": "Contact",
+    "products.addToCart": "Ajouter au panier",
+    "top.signIn": "Connexion",
+    "top.selectLanguage": "Choisir la langue"
+  },
+  "de": {
+    "nav.home": "Startseite",
+    "nav.about": "Über uns",
+    "nav.contact": "Kontakt",
+    "products.addToCart": "In den Warenkorb",
+    "top.signIn": "Anmelden",
+    "top.selectLanguage": "Sprache auswählen"
+  },
   "zh": {}
 };
