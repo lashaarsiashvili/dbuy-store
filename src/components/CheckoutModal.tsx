@@ -756,171 +756,112 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               </div>
 
-               {/* eBay-Style Multi-Payment Selection Grid (PayPal, Debit/Credit Card, Google Pay, Apple Pay) */}
-              <div className="space-y-3">
-                <div className="flex items-center justify-between px-1">
-                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                    {language === "ka"
-                      ? "აირჩიეთ გადახდის მეთოდი (eBay Style Checkout)"
-                      : "Select Payment Method"}
-                  </span>
-                  <div className="flex items-center space-x-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                    <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                    <span>256-bit SSL</span>
-                  </div>
-                </div>
+               {/* Apple Pay & Google Pay 2-Column Row */}
+               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                 {/* Apple Pay Card */}
+                 <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                   <button
+                     type="button"
+                     onClick={handleApplePaySubmit}
+                     disabled={isProcessingPayment}
+                     className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer select-none"
+                     aria-label="Buy with Apple Pay"
+                   >
+                     <span
+                       className="text-[16px] font-medium tracking-normal leading-none text-white"
+                       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif' }}
+                     >
+                       Buy with
+                     </span>
+                     <svg
+                       className="h-[19px] w-auto fill-white -mt-[2px] ml-0.5"
+                       viewBox="0 0 384 512"
+                       xmlns="http://www.w3.org/2000/svg"
+                     >
+                       <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+                     </svg>
+                     <span
+                       className="text-[19px] font-semibold tracking-tight leading-none text-white -ml-0.5"
+                       style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif' }}
+                     >
+                       Pay
+                     </span>
+                   </button>
+                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                  {/* 1. PayPal Tab */}
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("paypal")}
-                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
-                      activePaymentMethod === "paypal"
-                        ? "border-[#003087] bg-[#003087] text-white shadow-md ring-2 ring-[#003087]/25"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs text-slate-800 dark:text-slate-200"
-                    }`}
-                  >
-                    <div className="h-5 flex items-center justify-center mb-1">
-                      <PayPalLogo
-                        className="h-4 w-auto"
-                        isWhite={activePaymentMethod === "paypal"}
-                      />
-                    </div>
-                    <span className="text-[10px] font-bold tracking-tight">PayPal</span>
-                  </button>
+                 {/* Google Pay Card */}
+                 <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                   <button
+                     type="button"
+                     onClick={async () => {
+                       setIsProcessingPayment(true);
+                       try {
+                         await startPayPalV6GooglePayCheckout({
+                           amountUSD: totalAmountUSD,
+                           label: "DBUY Store Checkout",
+                           customerInfo: formData,
+                           onSuccess: (details) => {
+                             const orderID = details.orderId || details.transactionId;
+                             setIsProcessingPayment(false);
+                             placeOrder({
+                               customerName: (details?.payer?.name || formData.name).trim() || "Google Pay Customer",
+                               email: (details?.payer?.email || formData.email).trim() || "customer@dbuystore.com",
+                               address: (details?.payer?.address || formData.address).trim() || "Global Address",
+                               city: (details?.payer?.city || formData.city).trim() || "Tbilisi",
+                               zip: (details?.payer?.zip || formData.zip).trim() || "0100",
+                               country: (details?.payer?.country || formData.country).trim() || "United States",
+                               paymentMethod: "googlepay",
+                               googlePayTransactionId: orderID,
+                             });
+                             setStep(3);
+                             addToast("Google Pay processed successfully!", "success");
+                           },
+                           onError: () => {
+                             setIsProcessingPayment(false);
+                             addToast("Google Pay payment failed", "error");
+                           },
+                           onCancel: () => {
+                             setIsProcessingPayment(false);
+                           }
+                         });
+                       } catch (err) {
+                         setIsProcessingPayment(false);
+                       }
+                     }}
+                     disabled={isProcessingPayment}
+                     className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                     aria-label="Buy with Google Pay"
+                   >
+                     <span className="text-[16px] font-medium tracking-normal leading-none text-white" style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}>
+                       Buy with
+                     </span>
+                     <svg className="h-[20px] w-auto" viewBox="0 0 41 17" fill="none" xmlns="http://www.w3.org/2000/svg">
+                       <path d="M13.09 8.18c0-.57-.05-1.12-.14-1.65H6.66v3.12h3.61a3.09 3.09 0 0 1-1.34 2.03v2.02h2.17c1.27-1.17 1.99-2.89 1.99-5.52Z" fill="#4285F4"/>
+                       <path d="M6.66 14.73c1.81 0 3.33-.6 4.44-1.62l-2.17-1.68c-.6.4-1.37.64-2.27.64-1.74 0-3.22-1.18-3.75-2.76H.67v1.73a6.66 6.66 0 0 0 5.99 3.69Z" fill="#34A853"/>
+                       <path d="M2.91 9.31a4.01 4.01 0 0 1 0-2.54V5.04H.67a6.67 6.67 0 0 0 0 5.99l2.24-1.72Z" fill="#FBBC04"/>
+                       <path d="M6.66 4.06c.98 0 1.87.34 2.56 1l1.92-1.92C9.98 2.05 8.47 1.4 6.66 1.4A6.66 6.66 0 0 0 .67 5.04l2.24 1.73c.53-1.58 2.01-2.71 3.75-2.71Z" fill="#EA4335"/>
+                       <path d="M18.66 9.33v4.4h-1.4v-11h3.73c.94 0 1.75.31 2.42.93.68.62 1.02 1.38 1.02 2.28 0 .92-.34 1.68-1.02 2.3-.66.61-1.48.92-2.42.92h-2.33v.17Zm0-4.96v3.63h2.36c.56 0 1.03-.18 1.4-.55.38-.37.57-.81.57-1.33 0-.51-.19-.95-.57-1.31-.37-.37-.84-.54-1.4-.54h-2.36ZM28.32 5.95c1.04 0 1.86.28 2.46.83.6.55.9 1.31.9 2.27v4.68h-1.34v-1.05h-.06c-.58.86-1.35 1.29-2.31 1.29-.82 0-1.51-.24-2.06-.73-.55-.49-.82-1.1-.82-1.84 0-.78.29-1.4.87-1.87.58-.47 1.36-.7 2.33-.7.83 0 1.51.15 2.04.46v-.32c0-.5-.2-.92-.59-1.26-.39-.34-.88-.51-1.46-.51-.84 0-1.51.36-1.99 1.07l-1.24-.78c.68-.98 1.68-1.54 3.27-1.54Zm-1.81 5.5c0 .37.16.69.47.94.32.25.69.38 1.12.38.6 0 1.14-.22 1.61-.67.47-.45.7-.98.7-1.58-.44-.35-1.05-.52-1.83-.52-.57 0-1.05.14-1.44.42-.39.28-.63.62-.63 1.03ZM40.75 6.19l-4.71 10.84h-1.45l1.75-3.79-3.1-7.05h1.53l2.24 5.4h.03l2.18-5.4h1.53Z" fill="#FFFFFF"/>
+                     </svg>
+                   </button>
+                 </div>
+               </div>
 
-                  {/* 2. Debit or Credit Card Tab */}
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("card")}
-                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
-                      activePaymentMethod === "card"
-                        ? "border-slate-900 bg-slate-900 text-white dark:border-blue-600 dark:bg-blue-600 shadow-md ring-2 ring-slate-900/25"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs text-slate-800 dark:text-slate-200"
-                    }`}
-                  >
-                    <div className="h-5 flex items-center justify-center mb-1">
-                      <CreditCard className="w-4 h-4" />
-                    </div>
-                    <span className="text-[10px] font-bold tracking-tight">
-                      {language === "ka" ? "ბარათი" : "Card"}
-                    </span>
-                  </button>
-
-                  {/* 3. Google Pay Tab */}
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("googlepay")}
-                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
-                      activePaymentMethod === "googlepay"
-                        ? "border-blue-600 bg-white dark:bg-slate-800 shadow-sm ring-2 ring-blue-500/20"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs"
-                    }`}
-                  >
-                    <div className="h-5 flex items-center justify-center mb-1">
-                      <OfficialGooglePayMark height={24} />
-                    </div>
-                    <span className="text-[10px] font-bold tracking-tight notranslate text-slate-800 dark:text-slate-200">Google Pay</span>
-                  </button>
-
-                  {/* 4. Apple Pay Tab (Shows when Apple Pay supported or as quick option in Safari) */}
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("applepay")}
-                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
-                      activePaymentMethod === "applepay"
-                        ? "border-black bg-black text-white shadow-md ring-2 ring-black/25"
-                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs text-slate-800 dark:text-slate-200"
-                    }`}
-                  >
-                    <div className="h-5 flex items-center justify-center mb-1">
-                      <AppleLogoIcon className={`w-4 h-4 ${activePaymentMethod === "applepay" ? "fill-white" : "fill-slate-900 dark:fill-white"}`} />
-                    </div>
-                    <span className="text-[10px] font-bold tracking-tight">Apple Pay</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Processing State Indicator */}
-              {isProcessingPayment && (
-                <div className="p-4 bg-blue-50/80 rounded-2xl border border-blue-100 flex items-center justify-center space-x-2 text-xs font-semibold text-blue-700">
-                  <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
-                  <span>
-                    {language === "ka"
-                      ? "გადახდა მუშავდება და მოწმდება..."
-                      : "Verifying & processing transaction..."}
-                  </span>
-                </div>
-              )}
-
-              {/* TAB 1: APPLE PAY */}
-              {activePaymentMethod === "applepay" && (
-                <div className="p-4 bg-slate-50/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <div className="w-8 h-8 rounded-full bg-black text-white flex items-center justify-center">
-                        <AppleLogoIcon className="w-4 h-4 fill-white" />
-                      </div>
-                      <div>
-                        <h4 className="text-xs font-bold text-slate-900 dark:text-white">
-                          Apple Pay Express Checkout
-                        </h4>
-                        <p className="text-[10px] text-slate-500 dark:text-slate-400">
-                          Biometric Touch ID / Face ID & Apple Wallet
-                        </p>
-                      </div>
-                    </div>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-700 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
-                      ⚡ 1-Touch
-                    </span>
-                  </div>
-
-                  <OfficialApplePayButton
-                    onClick={handleApplePaySubmit}
-                    disabled={isProcessingPayment}
-                    loading={isProcessingPayment}
-                    buttonStyle="black"
-                    buttonType="buy"
-                    formatAmount={formatPrice(totalAmountUSD)}
-                    height={50}
-                  />
-
-                  <div className="flex items-center justify-center space-x-4 text-[11px] text-slate-500 font-medium pt-1">
-                    <div className="flex items-center space-x-1">
-                      <Fingerprint className="w-3.5 h-3.5 text-slate-600 dark:text-slate-300" />
-                      <span>Touch ID / Face ID</span>
-                    </div>
-                    <span>•</span>
-                    <div className="flex items-center space-x-1">
-                      <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Apple Secure Enclave</span>
-                    </div>
-                  </div>
-
-                  {/* Direct Gateway Options */}
-                  <div className="pt-2 border-t border-slate-200 space-y-2">
-                    <p className="text-[10px] uppercase font-extrabold tracking-wider text-slate-400 text-center">
-                      {language === "ka"
-                        ? "ან გადაიხადეთ საბანკო ბარათით / PayPal-ით"
-                        : "Or Pay Directly With Debit/Credit Card or PayPal"}
-                    </p>
-                    <div className="relative min-h-[44px]">
-                      <PayPalButtons
-                        style={{
-                          layout: "vertical",
-                          color: "gold",
-                          shape: "rect",
-                          height: 44,
-                        }}
-                        disabled={isProcessingPayment}
-                        createOrder={createPayPalOrderHandler}
-                        onApprove={handlePayPalApprove}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
+               {/* PayPal Secure Checkout Below */}
+               <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2">
+                 <div className="relative min-h-[48px]">
+                   <PayPalButtons
+                     style={{
+                       layout: "vertical",
+                       color: "gold",
+                       shape: "rect",
+                       height: 48,
+                     }}
+                     disabled={isProcessingPayment}
+                     createOrder={createPayPalOrderHandler}
+                     onApprove={handlePayPalApprove}
+                   />
+                 </div>
+               </div>
 
               {/* TAB 2: GOOGLE PAY (Dev/Test Only) */}
               {isGPayAvailable && activePaymentMethod === "googlepay" && (

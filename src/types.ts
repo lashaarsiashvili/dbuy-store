@@ -170,9 +170,11 @@ export interface User {
 }
 
 export interface RegisteredUser {
+  id?: string;
   name: string;
   email: string;
   provider?: 'email' | 'google';
+  authProvider?: 'email' | 'google';
   picture?: string;
   country?: string;
   city?: string;

@@ -902,9 +902,209 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOption, setSortOption] = useState('featured');
 
-  const [cart, setCart] = useState<CartItem[]>([]);
+  const [isWishlistOpen, setIsWishlistOpen] = useState(false);
+  const [isCartOpen, setIsCartOpen] = useState(false);
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isFaceSetupOpen, setIsFaceSetupOpen] = useState(false);
+  const [activeAuthTab, setActiveAuthTab] = useState<'login' | 'register' | 'face'>('login');
+  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoDiscountPercent, setPromoDiscountPercent] = useState(0);
+  const [lastPlacedOrder, setLastPlacedOrder] = useState<Order | null>(null);
+
+  const refreshServerStore = async (force?: boolean) => {};
+  const syncWithRemoteStore = async (remoteUrl: string) => ({ success: true, message: 'Synced' });
+  const exportFullDatabase = () => {};
+  const importFullDatabase = async (jsonContent: string) => ({ success: true, message: 'Imported' });
+  const persistCatalogToCode = async () => ({ success: true, message: 'Persisted' });
+
+  const [adminPassword, setAdminPassword] = useState<string>('h_001f10c9bd0fb314');
+  const [user, setUser] = useState<User>(() => loadSession() || defaultUser);
+
+  const isAdmin = user.isLoggedIn && (user.role === 'admin' || user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com');
+
+  const getUserKey = (prefix: string, email?: string) => `${prefix}_${email ? email.toLowerCase().trim() : 'guest'}`;
+
+  const [cart, setCart] = useState<CartItem[]>(() => {
+    try {
+      const key = getUserKey('dbuy_cart', user.isLoggedIn ? user.email : undefined);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  const [wishlist, setWishlist] = useState<string[]>(() => {
+    try {
+      const key = getUserKey('dbuy_wishlist', user.isLoggedIn ? user.email : undefined);
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  // Save cart & wishlist whenever they update
+  useEffect(() => {
+    try {
+      const key = getUserKey('dbuy_cart', user.isLoggedIn ? user.email : undefined);
+      localStorage.setItem(key, JSON.stringify(cart));
+    } catch (e) {}
+  }, [cart, user]);
+
+  useEffect(() => {
+    try {
+      const key = getUserKey('dbuy_wishlist', user.isLoggedIn ? user.email : undefined);
+      localStorage.setItem(key, JSON.stringify(wishlist));
+    } catch (e) {}
+  }, [wishlist, user]);
+
+  const [orders, setOrders] = useState<Order[]>(() => {
+    try {
+      const saved = localStorage.getItem('dbuy_orders');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) return parsed;
+      }
+    } catch (e) {}
+    return [];
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('dbuy_orders', JSON.stringify(orders));
+    } catch (e) {}
+  }, [orders]);
+
+  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>(() => {
+    try {
+      const saved = localStorage.getItem('dbuy_registered_users');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return [
+      { id: 'user-admin', name: 'Lasha Arsiashvili', email: 'lashaarsiashvili@gmail.com', role: 'admin', authProvider: 'google', createdAt: new Date().toISOString() }
+    ];
+  });
+
+  const upsertRegisteredUser = (userData: { email: string; name: string; authProvider?: string; [key: string]: any }) => {
+    setRegisteredUsers(prev => {
+      const cleanEmail = userData.email.toLowerCase().trim();
+      const existingIndex = prev.findIndex(u => u.email.toLowerCase().trim() === cleanEmail);
+      const newRecord: RegisteredUser = {
+        id: existingIndex >= 0 ? prev[existingIndex].id : ('user-' + Date.now()),
+        name: userData.name || 'Customer',
+        email: cleanEmail,
+        role: cleanEmail === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer',
+        createdAt: existingIndex >= 0 ? prev[existingIndex].createdAt : new Date().toISOString(),
+        ...userData,
+        authProvider: (userData.authProvider as 'email' | 'google') || 'email',
+      };
+      let next;
+      if (existingIndex >= 0) {
+        next = [...prev];
+        next[existingIndex] = { ...next[existingIndex], ...newRecord };
+      } else {
+        next = [newRecord, ...prev];
+      }
+      localStorage.setItem('dbuy_registered_users', JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleSuccessfulAuth = (email: string, name: string, authProvider = 'email') => {
+    upsertRegisteredUser({ email, name, authProvider });
+    const newUser: User = { name, email, isLoggedIn: true, role: email.toLowerCase().trim() === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer' };
+    setUser(newUser);
+    saveSession(newUser);
+
+    // Load user's saved cart & merge guest cart if any
+    try {
+      const userCartKey = `dbuy_cart_${email.toLowerCase()}`;
+      const existingUserCartSaved = localStorage.getItem(userCartKey);
+      let userCart: CartItem[] = existingUserCartSaved ? JSON.parse(existingUserCartSaved) : [];
+
+      const guestCartSaved = localStorage.getItem('dbuy_cart_guest');
+      if (guestCartSaved) {
+        const guestCart: CartItem[] = JSON.parse(guestCartSaved);
+        if (Array.isArray(guestCart) && guestCart.length > 0) {
+          const merged = [...userCart];
+          for (const gItem of guestCart) {
+            const found = merged.find(i => i.product.id === gItem.product.id && i.selectedOption === gItem.selectedOption);
+            if (found) {
+              found.quantity += gItem.quantity;
+            } else {
+              merged.push(gItem);
+            }
+          }
+          userCart = merged;
+          localStorage.removeItem('dbuy_cart_guest');
+        }
+      }
+      setCart(userCart);
+      localStorage.setItem(userCartKey, JSON.stringify(userCart));
+    } catch (e) {}
+
+    // Load user's saved wishlist & merge guest wishlist if any
+    try {
+      const userWishlistKey = `dbuy_wishlist_${email.toLowerCase()}`;
+      const existingUserWishlistSaved = localStorage.getItem(userWishlistKey);
+      let userWishlist: string[] = existingUserWishlistSaved ? JSON.parse(existingUserWishlistSaved) : [];
+
+      const guestWishlistSaved = localStorage.getItem('dbuy_wishlist_guest');
+      if (guestWishlistSaved) {
+        const guestWishlist: string[] = JSON.parse(guestWishlistSaved);
+        if (Array.isArray(guestWishlist) && guestWishlist.length > 0) {
+          userWishlist = Array.from(new Set([...userWishlist, ...guestWishlist]));
+          localStorage.removeItem('dbuy_wishlist_guest');
+        }
+      }
+      setWishlist(userWishlist);
+      localStorage.setItem(userWishlistKey, JSON.stringify(userWishlist));
+    } catch (e) {}
+
+    setIsAuthModalOpen(false);
+    addToast(language === 'ka' ? 'მოვრძანდით!' : 'Welcome back!', 'success');
+  };
+
+  const loginUser = (email: string, name = 'User') => {
+    handleSuccessfulAuth(email, name, 'email');
+    return true;
+  };
+
+  const loginWithGoogleProfile = (profile: any) => {
+    handleSuccessfulAuth(profile.email, profile.name || 'Google Customer', 'google');
+    return { isComplete: true, user: loadSession() };
+  };
+
+  const demoLogin = () => {
+    handleSuccessfulAuth('demo@dbuy.com', 'Demo User', 'email');
+  };
+
+  const logoutUser = () => {
+    setUser(defaultUser);
+    clearSession();
+    setCart([]);
+    setWishlist([]);
+    addToast(language === 'ka' ? 'გახვიდეთ სისტემიდან' : 'Logged out', 'info');
+  };
+
+  const registerUser = (userData: { name: string; email: string; provider?: string }) => {
+    handleSuccessfulAuth(userData.email, userData.name, userData.provider || 'email');
+    return true;
+  };
+
+  const resetUserPassword = () => true;
+  const changeAdminPassword = () => true;
+  const changeUserPassword = async () => true;
 
   const addToCart = (product: Product, quantity = 1, selectedOption?: string) => {
     setCart(prev => {
@@ -959,9 +1159,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const cartTotalCount = cart.reduce((acc, item) => acc + item.quantity, 0);
   const cartSubtotalUSD = cart.reduce((acc, item) => acc + item.product.price * item.quantity, 0);
 
-  const [wishlist, setWishlist] = useState<string[]>([]);
-  const [isWishlistOpen, setIsWishlistOpen] = useState(false);
-
   const isInWishlist = (productId: string) => wishlist.includes(productId);
 
   const toggleWishlist = (product: Product) => {
@@ -983,16 +1180,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const wishlistCount = wishlist.length;
 
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
-  const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [isFaceSetupOpen, setIsFaceSetupOpen] = useState(false);
-  const [activeAuthTab, setActiveAuthTab] = useState<'login' | 'register' | 'face'>('login');
-  const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
-
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [lastPlacedOrder, setLastPlacedOrder] = useState<Order | null>(null);
-
   const placeOrder = (orderDetails: any): Order => {
     const subtotal = cartSubtotalUSD;
     const discount = (subtotal * promoDiscountPercent) / 100;
@@ -1004,6 +1191,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       id: `DBUY-${Math.floor(10000 + Math.random() * 90000)}`,
       date: new Date().toISOString().split('T')[0],
       ...orderDetails,
+      userId: user.isLoggedIn && user.email ? user.email.toLowerCase().trim() : 'guest',
+      email: orderDetails.email || user.email || 'customer@dbuystore.com',
       items: cart.map(i => ({ productId: i.product.id, title: i.product.title, price: i.product.price, quantity: i.quantity, image: i.product.image })),
       subtotal, discount, shipping, tax, total,
       currency,
@@ -1033,18 +1222,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders([]);
   };
 
-  const [adminPassword, setAdminPassword] = useState<string>('h_001f10c9bd0fb314');
-  const [user, setUser] = useState<User>(() => loadSession() || defaultUser);
-
-  const isAdmin = user.isLoggedIn && (user.role === 'admin' || user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com');
-
-  const [registeredUsers, setRegisteredUsers] = useState<RegisteredUser[]>([]);
-
-  const refreshServerStore = async () => {};
-  const syncWithRemoteStore = async () => ({ success: true, message: 'Synced' });
-  const exportFullDatabase = () => {};
-  const importFullDatabase = async () => ({ success: true, message: 'Imported' });
-  const persistCatalogToCode = async () => ({ success: true, message: 'Persisted' });
   const deleteRegisteredUser = (email: string) => {
     setRegisteredUsers(prev => prev.filter(u => u.email.toLowerCase() !== email.toLowerCase()));
   };
@@ -1056,42 +1233,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
     addToast(language === 'ka' ? '✅ Face ID წარმატებით დაუკავშირდა!' : '✅ Face ID successfully linked!', 'success');
   };
-
-  const loginUser = (email: string) => {
-    const newUser: User = { name: 'User', email, isLoggedIn: true, role: email === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer' };
-    setUser(newUser);
-    saveSession(newUser);
-    setIsAuthModalOpen(false);
-    addToast(language === 'ka' ? 'მოვრძანდით!' : 'Welcome back!', 'success');
-    return true;
-  };
-
-  const loginWithGoogleProfile = (profile: any) => {
-    const newUser: User = { name: profile.name, email: profile.email, isLoggedIn: true, role: 'customer' };
-    setUser(newUser);
-    saveSession(newUser);
-    setIsAuthModalOpen(false);
-    return { isComplete: true };
-  };
-
-  const demoLogin = () => {
-    const newUser: User = { name: 'Demo User', email: 'demo@dbuy.com', isLoggedIn: true, role: 'customer' };
-    setUser(newUser);
-    saveSession(newUser);
-  };
-
-  const logoutUser = () => {
-    setUser(defaultUser);
-    clearSession();
-    setCart([]);
-    setWishlist([]);
-    addToast(language === 'ka' ? 'გახვიდეთ სისტემიდან' : 'Logged out', 'info');
-  };
-
-  const registerUser = () => true;
-  const resetUserPassword = () => true;
-  const changeAdminPassword = () => true;
-  const changeUserPassword = async () => true;
 
   const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([]);
   const [excludeAdminVisits, setExcludeAdminVisits] = useState(false);

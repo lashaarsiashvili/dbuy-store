@@ -23,6 +23,7 @@ import { startPayPalV6ApplePayCheckout, startPayPalV6GooglePayCheckout } from '.
 import {
   AppleLogoIcon,
   GooglePayMark,
+  GooglePayVector,
   PayPalLogo,
   VisaLogo,
   MastercardLogo,
@@ -375,51 +376,58 @@ export const CheckoutPage: React.FC = () => {
               
               {/* TOP: Express Checkout Bar (Apple Pay, Google Pay) */}
               <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
-                    ⚡ Express Checkout (Instant Pay)
-                  </h3>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
-                  {/* Apple Pay Button Card */}
-                  <div className="w-full p-2.5 bg-slate-50/80 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-center">
-                    <OfficialApplePayButton
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {/* Apple Pay Card */}
+                  <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                    <button
+                      type="button"
                       onClick={handleApplePaySubmit}
                       disabled={isProcessingPayment}
-                      loading={isProcessingPayment}
-                      buttonStyle="black"
-                      buttonType="buy"
-                      height={48}
-                    />
+                      className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer select-none"
+                      aria-label="Buy with Apple Pay"
+                    >
+                      <span
+                        className="text-[16px] font-medium tracking-normal leading-none text-white"
+                        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif' }}
+                      >
+                        Buy with
+                      </span>
+                      <svg
+                        className="h-[19px] w-auto fill-white -mt-[2px] ml-0.5"
+                        viewBox="0 0 384 512"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+                      </svg>
+                      <span
+                        className="text-[19px] font-semibold tracking-tight leading-none text-white -ml-0.5"
+                        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif' }}
+                      >
+                        Pay
+                      </span>
+                    </button>
                   </div>
 
-                  {/* Google Pay Button Card */}
-                  <div className="w-full p-2.5 bg-slate-50/80 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-center">
-                    <OfficialGooglePayButton
-                      amount={currency === 'USD' ? totalAmountUSD : convertPrice(totalAmountUSD)}
-                      currencyCode={currency}
-                      onSuccess={(paymentData) => {
-                        const orderID = "GPAY-" + Date.now();
-                        placeOrder({
-                          customerName: paymentData?.shippingAddress?.name || formData.name.trim() || "Google Pay Customer",
-                          email: paymentData?.email || formData.email.trim() || "customer@dbuystore.com",
-                          address: paymentData?.shippingAddress?.address1 || formData.address.trim() || "Global Address",
-                          city: paymentData?.shippingAddress?.locality || formData.city.trim() || "Tbilisi",
-                          zip: paymentData?.shippingAddress?.postalCode || formData.zip.trim() || "0100",
-                          country: paymentData?.shippingAddress?.countryCode || formData.country.trim() || "United States",
-                          paymentMethod: "googlepay",
-                          googlePayTransactionId: orderID,
-                        });
-                        setStep(2);
-                        addToast("Google Pay order completed successfully!", "success");
-                      }}
-                      onError={() => addToast("Google Pay failed", "error")}
+                  {/* Google Pay Card */}
+                  <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+                    <button
+                      type="button"
+                      onClick={handleGooglePaySubmit}
                       disabled={isProcessingPayment}
-                      buttonColor="black"
-                      buttonType="buy"
-                      height={48}
-                    />
+                      className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      aria-label="Buy with Google Pay"
+                    >
+                      <span className="text-[16px] font-medium tracking-normal leading-none text-white" style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}>
+                        Buy with
+                      </span>
+                      <svg className="h-[20px] w-auto" viewBox="0 0 41 17" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M13.09 8.18c0-.57-.05-1.12-.14-1.65H6.66v3.12h3.61a3.09 3.09 0 0 1-1.34 2.03v2.02h2.17c1.27-1.17 1.99-2.89 1.99-5.52Z" fill="#4285F4"/>
+                        <path d="M6.66 14.73c1.81 0 3.33-.6 4.44-1.62l-2.17-1.68c-.6.4-1.37.64-2.27.64-1.74 0-3.22-1.18-3.75-2.76H.67v1.73a6.66 6.66 0 0 0 5.99 3.69Z" fill="#34A853"/>
+                        <path d="M2.91 9.31a4.01 4.01 0 0 1 0-2.54V5.04H.67a6.67 6.67 0 0 0 0 5.99l2.24-1.72Z" fill="#FBBC04"/>
+                        <path d="M6.66 4.06c.98 0 1.87.34 2.56 1l1.92-1.92C9.98 2.05 8.47 1.4 6.66 1.4A6.66 6.66 0 0 0 .67 5.04l2.24 1.73c.53-1.58 2.01-2.71 3.75-2.71Z" fill="#EA4335"/>
+                        <path d="M18.66 9.33v4.4h-1.4v-11h3.73c.94 0 1.75.31 2.42.93.68.62 1.02 1.38 1.02 2.28 0 .92-.34 1.68-1.02 2.3-.66.61-1.48.92-2.42.92h-2.33v.17Zm0-4.96v3.63h2.36c.56 0 1.03-.18 1.4-.55.38-.37.57-.81.57-1.33 0-.51-.19-.95-.57-1.31-.37-.37-.84-.54-1.4-.54h-2.36ZM28.32 5.95c1.04 0 1.86.28 2.46.83.6.55.9 1.31.9 2.27v4.68h-1.34v-1.05h-.06c-.58.86-1.35 1.29-2.31 1.29-.82 0-1.51-.24-2.06-.73-.55-.49-.82-1.1-.82-1.84 0-.78.29-1.4.87-1.87.58-.47 1.36-.7 2.33-.7.83 0 1.51.15 2.04.46v-.32c0-.5-.2-.92-.59-1.26-.39-.34-.88-.51-1.46-.51-.84 0-1.51.36-1.99 1.07l-1.24-.78c.68-.98 1.68-1.54 3.27-1.54Zm-1.81 5.5c0 .37.16.69.47.94.32.25.69.38 1.12.38.6 0 1.14-.22 1.61-.67.47-.45.7-.98.7-1.58-.44-.35-1.05-.52-1.83-.52-.57 0-1.05.14-1.44.42-.39.28-.63.62-.63 1.03ZM40.75 6.19l-4.71 10.84h-1.45l1.75-3.79-3.1-7.05h1.53l2.24 5.4h.03l2.18-5.4h1.53Z" fill="#FFFFFF"/>
+                      </svg>
+                    </button>
                   </div>
                 </div>
               </div>

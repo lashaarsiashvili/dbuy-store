@@ -648,668 +648,225 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
         
       </div>
 
-      {/* PAYMENT METHOD SELECTOR - Only shown when multiple methods are active (e.g. Google Pay review/test mode) */}
-      {isGPayAvailable && (
-        <div className="space-y-2.5">
-          <div className="flex items-center justify-between">
-            <label className="block text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-200">
-              {isKa ? "აირჩიეთ გადახდის მეთოდი:" : "Select Payment Method:"}
-            </label>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
-            {/* Button 1: PayPal */}
-            <button
-              type="button"
-              id="payment-method-paypal"
-              onClick={() => {
-                setActiveMethod("paypal");
-                setPendingOrderId(null);
-              }}
-              className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
-                activeMethod === "paypal"
-                  ? "bg-[#003087] text-white border-[#003087] ring-4 ring-blue-500/25 scale-[1.02] shadow-md"
-                  : "bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:bg-blue-50/40 active:scale-95"
-              }`}
-            >
-              {activeMethod === "paypal" && (
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-sky-300 ring-2 ring-white"></span>
-              )}
-              <div className="h-6 flex items-center justify-center">
-                <PayPalLogo
-                  className="h-5 w-auto"
-                  isWhite={activeMethod === "paypal"}
-                />
-              </div>
-              <span
-                className={`text-[11px] font-bold tracking-tight ${
-                  activeMethod === "paypal" ? "text-blue-100" : "text-slate-600 dark:text-slate-300"
-                }`}
-              >
-                PayPal
-              </span>
-            </button>
-
-            {/* Button 3: Google Pay (Official Rounded Capsule Badge Design) */}
-            <button
-              type="button"
-              id="payment-method-googlepay"
-              onClick={() => {
-                setActiveMethod("googlepay");
-                setPendingOrderId(null);
-              }}
-              className={`min-h-[78px] sm:min-h-[86px] px-3 py-3 rounded-2xl font-bold transition-all flex flex-col items-center justify-center space-y-1.5 cursor-pointer border-2 shadow-xs select-none relative ${
-                activeMethod === "googlepay"
-                  ? "bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-white border-blue-600 ring-4 ring-blue-500/15 scale-[1.02] shadow-md"
-                  : "bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-slate-200 dark:border-slate-700 hover:border-slate-400 hover:bg-slate-50 dark:hover:bg-slate-700 active:scale-95"
-              }`}
-            >
-              {activeMethod === "googlepay" && (
-                <span className="absolute top-2 right-2 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white"></span>
-              )}
-              <div className="h-6 flex items-center justify-center">
-                <div className="gpay-capsule-badge inline-flex items-center justify-center bg-white px-3 py-0.5 rounded-full border border-[#DADCE0] shadow-2xs">
-                  <GooglePayVector className="h-4.5 w-auto" isDark={false} />
-                </div>
-              </div>
-              <span className="text-[11px] font-bold tracking-tight text-slate-800 dark:text-slate-200">
-                Google Pay
-              </span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* PENDING GATEWAY STATUS BANNER (When PayPal window is open) */}
-      {pendingOrderId && (
-        <div className="p-4 rounded-2xl bg-amber-50 border-2 border-amber-200 space-y-3 animate-in fade-in">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start space-x-3">
-              <div className="p-2 bg-amber-100 text-amber-800 rounded-xl shrink-0 mt-0.5">
-                <ExternalLink className="w-5 h-5" />
-              </div>
-              <div>
-                <h4 className="text-xs sm:text-sm font-black text-amber-900">
-                  {isKa
-                    ? "PayPal უსაფრთხო კარიბჭე გახსნილია"
-                    : "PayPal Secure Gateway Active"}
-                </h4>
-                <p className="text-xs text-amber-700 font-medium mt-0.5">
-                  {gatewayMessage ||
-                    (isKa
-                      ? "გთხოვთ დაასრულოთ გადახდა გახსნილ ფანჯარაში. დასრულების შემდეგ შეკვეთა ავტომატურად დადასტურდება."
-                      : "Please complete payment in the PayPal window. Order will automatically confirm upon completion.")}
-                </p>
-              </div>
-            </div>
-            <button
-              type="button"
-              onClick={() => setPendingOrderId(null)}
-              className="text-slate-400 hover:text-slate-600 dark:text-slate-300 p-1"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {pendingApproveUrl && (
-              <a
-                href={pendingApproveUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="px-3.5 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center space-x-1.5 shadow-xs transition-colors"
-              >
-                <span>
-                  {isKa ? "ფანჯრის ხელახლა გახსნა" : "Re-open Payment Gateway"}
-                </span>
-                <ExternalLink className="w-3.5 h-3.5" />
-              </a>
-            )}
-
-            <button
-              type="button"
-              onClick={() => handleVerifyPendingOrder()}
-              disabled={isVerifyingCapture}
-              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-black text-white font-bold text-xs flex items-center space-x-1.5 shadow-xs transition-colors cursor-pointer disabled:opacity-60"
-            >
-              {isVerifyingCapture ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>{isKa ? "მოწმდება..." : "Verifying..."}</span>
-                </>
-              ) : (
-                <>
-                  <RefreshCw className="w-3.5 h-3.5" />
-                  <span>
-                    {isKa
-                      ? "გადავიხადე — შეკვეთის დადასტურება"
-                      : "I've Paid — Confirm Order"}
-                  </span>
-                </>
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* ACTIVE METHOD PAYMENT INTERFACE BOX */}
       <div className="rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-4">
-        {/* Method 1: REAL PAYPAL SMART BUTTONS */}
-        {activeMethod === "paypal" && (
-          <div className="space-y-3.5 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <div className="flex items-center space-x-2">
-                <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                  {isKa
-                    ? "PayPal-ით უსაფრთხო გადახდა"
-                    : "Pay with PayPal Gateway"}
-                </span>
-              </div>
-              <span className="text-sm font-black text-blue-700 dark:text-blue-400">
-                {formatPrice(totalAmountUSD)}
+        
+        {/* Apple Pay & Google Pay 2-Column Row */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* Apple Pay Card */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <button
+              type="button"
+              onClick={handleApplePaySubmit}
+              disabled={isProcessing}
+              className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer select-none"
+              aria-label="Buy with Apple Pay"
+            >
+              <span
+                className="text-[16px] font-medium tracking-normal leading-none text-white"
+                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif' }}
+              >
+                Buy with
+              </span>
+              <svg
+                className="h-[19px] w-auto fill-white -mt-[2px] ml-0.5"
+                viewBox="0 0 384 512"
+                xmlns="http://www.w3.org/2000/svg"
+              >
+                <path d="M318.7 268.7c-.2-36.7 16.4-64.4 50-84.8-18.8-26.9-47.2-41.7-84.7-44.6-35.5-2.8-74.3 20.7-88.5 20.7-15 0-49.4-19.7-76.4-19.7C63.3 141.2 4 184.8 4 273.5q0 39.3 14.4 81.2c12.8 36.7 59 126.7 107.2 125.2 25.2-.6 43-17.9 75.8-17.9 31.8 0 48.3 17.9 76.4 17.9 48.6-.7 90.4-82.5 102.6-119.3-65.2-30.7-61.7-90-61.7-91.9zm-56.6-164.2c27.3-32.4 24.8-61.9 24-72.5-24.1 1.4-52 16.4-67.9 34.9-17.5 19.8-27.8 44.3-25.6 71.9 26.1 2 49.9-11.4 69.5-34.3z" />
+              </svg>
+              <span
+                className="text-[19px] font-semibold tracking-tight leading-none text-white -ml-0.5"
+                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, sans-serif' }}
+              >
+                Pay
+              </span>
+            </button>
+          </div>
+
+          {/* Google Pay Card */}
+          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <button
+              type="button"
+              onClick={handleGooglePaySubmit}
+              disabled={isProcessing}
+              className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+              aria-label="Buy with Google Pay"
+            >
+              <span className="text-[16px] font-medium tracking-normal leading-none text-white" style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}>
+                Buy with
+              </span>
+              <svg className="h-[20px] w-auto" viewBox="0 0 41 17" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13.09 8.18c0-.57-.05-1.12-.14-1.65H6.66v3.12h3.61a3.09 3.09 0 0 1-1.34 2.03v2.02h2.17c1.27-1.17 1.99-2.89 1.99-5.52Z" fill="#4285F4"/>
+                <path d="M6.66 14.73c1.81 0 3.33-.6 4.44-1.62l-2.17-1.68c-.6.4-1.37.64-2.27.64-1.74 0-3.22-1.18-3.75-2.76H.67v1.73a6.66 6.66 0 0 0 5.99 3.69Z" fill="#34A853"/>
+                <path d="M2.91 9.31a4.01 4.01 0 0 1 0-2.54V5.04H.67a6.67 6.67 0 0 0 0 5.99l2.24-1.72Z" fill="#FBBC04"/>
+                <path d="M6.66 4.06c.98 0 1.87.34 2.56 1l1.92-1.92C9.98 2.05 8.47 1.4 6.66 1.4A6.66 6.66 0 0 0 .67 5.04l2.24 1.73c.53-1.58 2.01-2.71 3.75-2.71Z" fill="#EA4335"/>
+                <path d="M18.66 9.33v4.4h-1.4v-11h3.73c.94 0 1.75.31 2.42.93.68.62 1.02 1.38 1.02 2.28 0 .92-.34 1.68-1.02 2.3-.66.61-1.48.92-2.42.92h-2.33v.17Zm0-4.96v3.63h2.36c.56 0 1.03-.18 1.4-.55.38-.37.57-.81.57-1.33 0-.51-.19-.95-.57-1.31-.37-.37-.84-.54-1.4-.54h-2.36ZM28.32 5.95c1.04 0 1.86.28 2.46.83.6.55.9 1.31.9 2.27v4.68h-1.34v-1.05h-.06c-.58.86-1.35 1.29-2.31 1.29-.82 0-1.51-.24-2.06-.73-.55-.49-.82-1.1-.82-1.84 0-.78.29-1.4.87-1.87.58-.47 1.36-.7 2.33-.7.83 0 1.51.15 2.04.46v-.32c0-.5-.2-.92-.59-1.26-.39-.34-.88-.51-1.46-.51-.84 0-1.51.36-1.99 1.07l-1.24-.78c.68-.98 1.68-1.54 3.27-1.54Zm-1.81 5.5c0 .37.16.69.47.94.32.25.69.38 1.12.38.6 0 1.14-.22 1.61-.67.47-.45.7-.98.7-1.58-.44-.35-1.05-.52-1.83-.52-.57 0-1.05.14-1.44.42-.39.28-.63.62-.63 1.03ZM40.75 6.19l-4.71 10.84h-1.45l1.75-3.79-3.1-7.05h1.53l2.24 5.4h.03l2.18-5.4h1.53Z" fill="#FFFFFF"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Right above the yellow PayPal Buy Now button */}
+        <div className="space-y-3.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+              {isKa ? "PayPal-ით უსაფრთხო გადახდა" : "Pay with PayPal"}
+            </span>
+            <span className="text-sm font-black text-blue-700 dark:text-blue-400">
+              {formatPrice(totalAmountUSD)}
+            </span>
+          </div>
+
+          {isProcessing && (
+            <div className="p-3 bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-200 rounded-xl flex items-center justify-center space-x-2 text-xs font-bold border border-blue-200 dark:border-blue-900 animate-pulse">
+              <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+              <span>
+                {isKa
+                  ? "PayPal ტრანზაქციის დამუშავება..."
+                  : "Processing PayPal Transaction..."}
               </span>
             </div>
+          )}
 
-            {isProcessing && (
-              <div className="p-3 bg-blue-50 dark:bg-blue-950/60 text-blue-800 dark:text-blue-200 rounded-xl flex items-center justify-center space-x-2 text-xs font-bold border border-blue-200 dark:border-blue-900 animate-pulse">
-                <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
-                <span>
-                  {isKa
-                    ? "PayPal ტრანზაქციის დამუშავება..."
-                    : "Processing PayPal Transaction..."}
-                </span>
-              </div>
-            )}
+          {/* Official PayPal Buttons */}
+          <div className="relative min-h-[50px] overflow-hidden rounded-xl">
+            <PayPalButtons
+              style={{
+                layout: "vertical",
+                color: "gold",
+                shape: "rect",
+                label: "buynow",
+                height: 48,
+              }}
+              disabled={isProcessing}
+              createOrder={async (data, actions) => {
+                const itemDesc = `DBUY Store: ${product.title} (x${quantity})`;
+                try {
+                  const { data: serverOrder } = await safeApiFetch(
+                    "/api/paypal/create-order",
+                    {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        amount: totalAmountUSD,
+                        currency: "USD",
+                        description: itemDesc,
+                        shippingPreference: "GET_FROM_FILE",
+                      }),
+                    },
+                  );
+                  if (
+                    serverOrder?.success &&
+                    serverOrder.id &&
+                    !serverOrder.testMode
+                  ) {
+                    return serverOrder.id;
+                  }
+                } catch (err) {
+                  console.warn("Backend PayPal order create fallback:", err);
+                }
 
-            {/* Official PayPal Buttons */}
-            <div className="relative min-h-[50px] overflow-hidden rounded-xl">
-              <PayPalButtons
-                style={{
-                  layout: "vertical",
-                  color: "gold",
-                  shape: "rect",
-                  label: "buynow",
-                  height: 48,
-                }}
-                disabled={isProcessing}
-                createOrder={async (data, actions) => {
-                  const itemDesc = `DBUY Store: ${product.title} (x${quantity})`;
+                return actions.order.create({
+                  intent: "CAPTURE",
+                  application_context: {
+                    brand_name: "DBUY Store",
+                    shipping_preference: "GET_FROM_FILE",
+                    user_action: "PAY_NOW",
+                  },
+                  purchase_units: [
+                    {
+                      description: itemDesc,
+                      amount: {
+                        currency_code: "USD",
+                        value: totalAmountUSD.toFixed(2),
+                      },
+                    },
+                  ],
+                });
+              }}
+              onApprove={async (data, actions) => {
+                setIsProcessing(true);
+                try {
+                  let details: any = null;
                   try {
-                    const { data: serverOrder } = await safeApiFetch(
-                      "/api/paypal/create-order",
+                    const { data: captureRes } = await safeApiFetch(
+                      "/api/paypal/capture-order",
                       {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({
-                          amount: totalAmountUSD,
-                          currency: "USD",
-                          description: itemDesc,
-                          shippingPreference: "GET_FROM_FILE",
-                        }),
+                        body: JSON.stringify({ orderID: data.orderID }),
                       },
                     );
                     if (
-                      serverOrder?.success &&
-                      serverOrder.id &&
-                      !serverOrder.testMode
+                      captureRes?.success &&
+                      captureRes.capture &&
+                      !captureRes.capture.testMode
                     ) {
-                      return serverOrder.id;
+                      details = captureRes.capture;
                     }
-                  } catch (err) {
-                    console.warn("Backend PayPal order create fallback:", err);
+                  } catch (e) {
+                    console.warn("Backend capture fallback:", e);
                   }
 
-                  return actions.order.create({
-                    intent: "CAPTURE",
-                    application_context: {
-                      brand_name: "DBUY Store",
-                      shipping_preference: "GET_FROM_FILE",
-                      user_action: "PAY_NOW",
-                    },
-                    purchase_units: [
-                      {
-                        description: itemDesc,
-                        amount: {
-                          currency_code: "USD",
-                          value: totalAmountUSD.toFixed(2),
-                        },
-                      },
-                    ],
+                  if (!details && actions.order) {
+                    details = await actions.order.capture();
+                  }
+
+                  const txnId = details?.id || data.orderID;
+                  const payerName = details?.payer?.name?.given_name
+                    ? `${details.payer.name.given_name} ${details.payer.name.surname || ""}`.trim()
+                    : user?.name || "Verified Customer";
+                  const payerEmail =
+                    details?.payer?.email_address ||
+                    user?.email ||
+                    "buyer@email.com";
+
+                  const shipping = details?.purchase_units?.[0]?.shipping;
+                  const verifiedAddress = shipping?.address?.address_line_1
+                    ? `${shipping.address.address_line_1}${shipping.address.address_line_2 ? ", " + shipping.address.address_line_2 : ""}`
+                    : user?.address || "Verified Address";
+                  const verifiedCity =
+                    shipping?.address?.admin_area_2 ||
+                    user?.city ||
+                    "Tbilisi";
+                  const verifiedZip =
+                    shipping?.address?.postal_code || user?.zip || "0100";
+                  const verifiedCountry =
+                    shipping?.address?.country_code ||
+                    user?.country ||
+                    "Georgia";
+
+                  handleCompleteOrder("paypal", txnId, {
+                    name: payerName,
+                    email: payerEmail,
+                    address: verifiedAddress,
+                    city: verifiedCity,
+                    zip: verifiedZip,
+                    country: verifiedCountry,
                   });
-                }}
-                onApprove={async (data, actions) => {
-                  setIsProcessing(true);
-                  try {
-                    let details: any = null;
-                    try {
-                      const { data: captureRes } = await safeApiFetch(
-                        "/api/paypal/capture-order",
-                        {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ orderID: data.orderID }),
-                        },
-                      );
-                      if (
-                        captureRes?.success &&
-                        captureRes.capture &&
-                        !captureRes.capture.testMode
-                      ) {
-                        details = captureRes.capture;
-                      }
-                    } catch (e) {
-                      console.warn("Backend capture fallback:", e);
-                    }
-
-                    if (!details && actions.order) {
-                      details = await actions.order.capture();
-                    }
-
-                    const txnId = details?.id || data.orderID;
-                    const payerName = details?.payer?.name?.given_name
-                      ? `${details.payer.name.given_name} ${details.payer.name.surname || ""}`.trim()
-                      : user?.name || "Verified Customer";
-                    const payerEmail =
-                      details?.payer?.email_address ||
-                      user?.email ||
-                      "buyer@email.com";
-
-                    const shipping = details?.purchase_units?.[0]?.shipping;
-                    const verifiedAddress = shipping?.address?.address_line_1
-                      ? `${shipping.address.address_line_1}${shipping.address.address_line_2 ? ", " + shipping.address.address_line_2 : ""}`
-                      : user?.address || "Verified Address";
-                    const verifiedCity =
-                      shipping?.address?.admin_area_2 ||
-                      user?.city ||
-                      "Tbilisi";
-                    const verifiedZip =
-                      shipping?.address?.postal_code || user?.zip || "0100";
-                    const verifiedCountry =
-                      shipping?.address?.country_code ||
-                      user?.country ||
-                      "Georgia";
-
-                    handleCompleteOrder("paypal", txnId, {
-                      name: payerName,
-                      email: payerEmail,
-                      address: verifiedAddress,
-                      city: verifiedCity,
-                      zip: verifiedZip,
-                      country: verifiedCountry,
-                    });
-                  } catch (err) {
-                    console.error("PayPal Order capture error:", err);
-                    addToast(t("checkout.paypalError"), "error");
-                  } finally {
-                    setIsProcessing(false);
-                  }
-                }}
-                onError={(err) => {
-                  console.error("PayPal SDK Error:", err);
+                } catch (err) {
+                  console.error("PayPal Order capture error:", err);
                   addToast(t("checkout.paypalError"), "error");
-                }}
-              />
-            </div>
-
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center font-medium">
-              {isKa
-                ? "✓ გადახდა დაცულია PayPal Buyer Protection გარანტიით"
-                : "✓ Protected by PayPal Buyer Protection guarantee"}
-            </p>
-          </div>
-        )}
-
-        {/* Method 2: APPLE PAY 1-TOUCH DIRECT PAYMENT */}
-        {activeMethod === "applepay" && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <div className="flex items-center space-x-2">
-                <div className="w-6 h-6 rounded-lg bg-black text-white flex items-center justify-center">
-                  <AppleLogoIcon className="w-3.5 h-3.5 fill-current" />
-                </div>
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  Apple Pay Direct Gateway
-                </span>
-              </div>
-              <div className="flex items-center space-x-2">
-                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800">
-                  {isKa ? "✓ Apple Pay მზად არის" : "✓ Apple Pay Ready"}
-                </span>
-                <span className="text-sm font-black text-slate-900 dark:text-white">
-                  {formatPrice(totalAmountUSD)}
-                </span>
-              </div>
-            </div>
-
-            {/* Apple Pay Readiness & Security info */}
-            <div className="p-3.5 bg-zinc-900 text-white rounded-2xl space-y-1 text-xs shadow-inner">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center space-x-2">
-                  <Fingerprint className="w-4 h-4 text-emerald-400" />
-                  <span className="font-bold text-zinc-100">
-                    Touch ID / Face ID Biometric Protection
-                  </span>
-                </div>
-                <span className="text-[10px] bg-zinc-800 text-zinc-300 px-2 py-0.5 rounded-full font-mono">
-                  {isApplePaySupported ? "Safari Native" : "1-Touch Web Sheet"}
-                </span>
-              </div>
-              <p className="text-[11px] text-zinc-400 leading-relaxed">
-                {isKa
-                  ? "გადახდა სრულდება უსაფრთხო ბიომეტრიული დადასტურებით Apple Card-ის ან შენახული ბარათების მეშვეობით."
-                  : "Payment authorizes securely via Apple Card or verified wallet cards with biometric verification."}
-              </p>
-            </div>
-
-            {/* Recipient / Shipping Details for Apple Pay */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isKa ? "სახელი & გვარი" : "Full Name"}
-                </label>
-                <input
-                  type="text"
-                  value={walletCustomerName}
-                  onChange={(e) => setWalletCustomerName(e.target.value)}
-                  placeholder="Full Name"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-black dark:focus:ring-white focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isKa ? "მიწოდების მისამართი" : "Delivery Address"}
-                </label>
-                <input
-                  type="text"
-                  value={walletAddress}
-                  onChange={(e) => setWalletAddress(e.target.value)}
-                  placeholder="Delivery Address"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-black dark:focus:ring-white focus:outline-hidden"
-                />
-              </div>
-            </div>
-
-            {/* Notice about real PayPal deposit */}
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/80 rounded-xl border border-slate-200 dark:border-slate-700 text-[11px] text-slate-600 dark:text-slate-300 flex items-start space-x-2">
-              <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
-              <span>
-                {isKa
-                  ? "Apple Pay-ით გადახდა რეალურად სრულდება Touch ID / Face ID-ით და თანხა პირდაპირ ჩაირიცხება PayPal ანგარიშზე."
-                  : "Apple Pay authorizations are verified with Touch ID / Face ID and deposited directly into merchant PayPal account."}
-              </span>
-            </div>
-
-            {/* Official Apple Pay Action Button */}
-            <OfficialApplePayButton
-              onClick={handleApplePaySubmit}
-              disabled={isProcessing}
-              loading={isProcessing}
-              buttonStyle="black"
-              buttonType="buy"
-              formatAmount={formatPrice(totalAmountUSD)}
-              height={56}
+                } finally {
+                  setIsProcessing(false);
+                }
+              }}
+              onError={(err) => {
+                console.error("PayPal SDK Error:", err);
+                addToast(t("checkout.paypalError"), "error");
+              }}
             />
           </div>
-        )}
 
-        {/* Method 3: GOOGLE PAY 1-CLICK DIRECT PAYMENT (Dev/Test Only) */}
-        {isGPayAvailable && activeMethod === "googlepay" && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-2.5">
-              <div className="flex items-center space-x-2">
-                <GooglePayMark className="h-4.5 w-auto" />
-                <span className="text-xs font-bold text-slate-900 dark:text-white">
-                  Google Pay
-                </span>
-              </div>
-              <span className="text-sm font-black text-slate-900 dark:text-white">
-                {formatPrice(totalAmountUSD)}
-              </span>
-            </div>
-
-            {/* Recipient Details */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isKa ? "სახელი & გვარი" : "Full Name"}
-                </label>
-                <input
-                  type="text"
-                  value={walletCustomerName}
-                  onChange={(e) => setWalletCustomerName(e.target.value)}
-                  placeholder="Full Name"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                  {isKa ? "მიწოდების მისამართი" : "Delivery Address"}
-                </label>
-                <input
-                  type="text"
-                  value={walletAddress}
-                  onChange={(e) => setWalletAddress(e.target.value)}
-                  placeholder="Delivery Address"
-                  className="w-full px-3.5 py-2.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-xs font-medium text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:bg-white dark:focus:bg-slate-900 focus:ring-2 focus:ring-blue-500 focus:outline-hidden"
-                />
-              </div>
-            </div>
-
-            {/* Notice about real PayPal deposit */}
-            <div className="p-3 bg-blue-50/60 dark:bg-blue-950/40 rounded-xl border border-blue-200 dark:border-blue-900/60 text-[11px] text-blue-900 dark:text-blue-200 flex items-start space-x-2">
-              <ShieldCheck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
-              <span>
-                {isKa
-                  ? "Google Pay-ით გადახდა რეალურად სრულდება და თანხა პირდაპირ ჩაირიცხება PayPal ანგარიშზე."
-                  : "Google Pay is securely routed through PayPal Gateway and credited directly to merchant PayPal account."}
-              </span>
-            </div>
-
-            {/* Official Google Pay Action Button (Compliant with Google Brand Guidelines & Capsule Wrapper) */}
-            <div className="gpay-capsule-wrapper py-1.5 w-full">
-              <OfficialGooglePayButton
-                amount={currency === 'USD' ? totalAmountUSD : convertPrice(totalAmountUSD)}
-                currencyCode={currency}
-                onSuccess={(paymentData) => {
-                  const orderID = "GPAY-" + Date.now();
-                  setIsProcessing(false);
-                  setGatewayMessage("");
-                  handleCompleteOrder("googlepay", orderID, {
-                    name: paymentData?.shippingAddress?.name || walletCustomerName,
-                    email: paymentData?.email || walletCustomerEmail,
-                    address: paymentData?.shippingAddress?.address1 || walletAddress,
-                    city: paymentData?.shippingAddress?.locality || walletCity,
-                    zip: paymentData?.shippingAddress?.postalCode || walletZip,
-                    country: paymentData?.shippingAddress?.countryCode || walletCountry
-                  });
-                  addToast(
-                    isKa
-                      ? "Google Pay ტესტური გადახდა წარმატებით შესრულდა!"
-                      : "Google Pay test order completed successfully!",
-                    "success"
-                  );
-                }}
-                onError={(err) => {
-                  setIsProcessing(false);
-                  addToast(isKa ? "Google Pay-ით გადახდა ვერ მოხერხდა" : "Google Pay failed", "error");
-                }}
-                disabled={isProcessing}
-                loading={isProcessing}
-                buttonColor="default"
-                buttonType="buy"
-                formatAmount={formatPrice(totalAmountUSD)}
-                height={50}
-              />
-            </div>
-          </div>
-        )}
-
-        {/* Method 4: DEBIT & CREDIT CARD DIRECT PAYMENT */}
-        {activeMethod === "card" && (
-          <div className="space-y-4 animate-in fade-in duration-200">
-            {/* Official PayPal v6 Hosted Card Fields */}
-            <div className="p-4 bg-slate-50/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800">
-              <PayPalV6CardFields
-                amountUSD={totalAmountUSD}
-                postalCode={cardZip || "0100"}
-                cardholderName={cardName || walletCustomerName}
-                isKa={isKa}
-                onSuccess={({ orderId, capture }) => {
-                  handleCompleteOrder(
-                    "card",
-                    capture?.capture?.id || capture?.id || orderId,
-                    {
-                      name: cardName || walletCustomerName,
-                      email: walletCustomerEmail,
-                      address: walletAddress,
-                      city: walletCity,
-                      zip: cardZip,
-                      country: cardCountry,
-                    },
-                  );
-                  addToast(
-                    isKa
-                      ? "ბარათით გადახდა წარმატებით შესრულდა!"
-                      : "Card payment captured successfully!",
-                    "success",
-                  );
-                }}
-                onError={(err) => {
-                  console.warn("[PRODUCT-CARDFIELDS] v6 notice:", err);
-                }}
-                onFallbackDirect={() => {
-                  console.log("[PRODUCT-CARDFIELDS] Direct form active");
-                }}
-              />
-            </div>
-
-            {/* Direct Card Entry Form with 3D Secure Code input */}
-            <form
-              onSubmit={handleCardSubmit}
-              className="p-4 bg-slate-50/90 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-3"
-            >
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                  {isKa
-                    ? "პირდაპირი საბანკო ბარათი (Visa / Mastercard • 3D Secure)"
-                    : "Direct Bank Card (Visa / Mastercard • 3D Secure)"}
-                </span>
-                <span className="text-[10px] text-emerald-600 font-bold flex items-center space-x-1">
-                  <ShieldCheck className="w-3.5 h-3.5" />
-                  <span>256-Bit SSL</span>
-                </span>
-              </div>
-
-              <div className="space-y-2.5">
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    {isKa ? "ბარათის მფლობელი (სახელი, გვარი)" : "Cardholder Name"}
-                  </label>
-                  <input type="text"
-                    required
-                    value={cardName}
-                    onChange={(e) => setCardName(e.target.value)}
-                    placeholder={user?.name || "John Doe"}
-                    className="w-full px-3 py-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                    {isKa ? "ბარათის ნომერი" : "Card Number"}
-                  </label>
-                  <input type="text"
-                    required
-                    maxLength={19}
-                    value={cardNumber}
-                    onChange={(e) => {
-                      const val = e.target.value
-                        .replace(/\D/g, "")
-                        .replace(/(\d{4})/g, "$1 ")
-                        .trim();
-                      setCardNumber(val);
-                    }}
-                    placeholder="4000 1234 5678 9010"
-                    className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      {isKa ? "მოქმედების ვადა" : "Exp Date"}
-                    </label>
-                    <input type="text"
-                      required
-                      maxLength={5}
-                      value={cardExpiry}
-                      onChange={(e) => {
-                        let val = e.target.value.replace(/\D/g, "");
-                        if (val.length >= 3) {
-                          val = `${val.slice(0, 2)}/${val.slice(2, 4)}`;
-                        }
-                        setCardExpiry(val);
-                      }}
-                      placeholder="MM/YY"
-                      className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                      CVC / CVV
-                    </label>
-                    <input type="password"
-                      required
-                      maxLength={4}
-                      value={cardCvc}
-                      onChange={(e) => setCardCvc(e.target.value.replace(/\D/g, ""))}
-                      placeholder="•••"
-                      className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 text-center"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1 flex items-center justify-between">
-                    <span>{isKa ? "SMS / 3D Secure ბანკის კოდი (არასავალდებულო)" : "SMS / 3D Secure Bank Code (Optional)"}</span>
-                    <span className="text-[10px] text-blue-600 font-normal">{isKa ? "ბანკის SMS კოდი" : "Bank SMS OTP"}</span>
-                  </label>
-                  <input type="text"
-                    maxLength={8}
-                    value={cardSmsCode}
-                    onChange={(e) => setCardSmsCode(e.target.value.replace(/\D/g, ""))}
-                    placeholder={isKa ? "შეიყვანეთ SMS კოდი (მაგ: 123456)" : "Enter SMS code (e.g., 123456)"}
-                    className="w-full px-3 py-2 text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              <button
-                type="submit"
-                disabled={isProcessing}
-                className="w-full mt-3 py-3 px-4 bg-slate-900 hover:bg-black text-white rounded-xl font-bold text-xs flex items-center justify-between shadow-md transition-all active:scale-[0.99] cursor-pointer disabled:opacity-50"
-              >
-                <div className="flex items-center space-x-2">
-                  <Lock className="w-4 h-4 text-emerald-400" />
-                  <span>
-                    {isKa
-                      ? `ბარათით გადახდა ${formatPrice(totalAmountUSD)}`
-                      : `Pay ${formatPrice(totalAmountUSD)} with Card`}
-                  </span>
-                </div>
-                {isProcessing ? (
-                  <Loader2 className="w-4 h-4 animate-spin text-white" />
-                ) : (
-                  <CreditCard className="w-4 h-4 text-slate-300" />
-                )}
-              </button>
-            </form>
-          </div>
-        )}
+          <p className="text-[11px] text-slate-500 dark:text-slate-400 text-center font-medium">
+            {isKa
+              ? "✓ გადახდა დაცულია PayPal Buyer Protection გარანტიით"
+              : "✓ Protected by PayPal Buyer Protection guarantee"}
+          </p>
+        </div>
       </div>
+
 
       {/* Trust & Guarantee Micro-Bar */}
       <div className="pt-2 border-t border-slate-200/80 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 font-medium">
