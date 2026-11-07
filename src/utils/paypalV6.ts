@@ -38,7 +38,7 @@ export async function getPayPalV6Instance(
       const isGPay = isGooglePayAvailable();
       const primaryComponents = isGPay
         ? ['paypal-payments', 'applepay-payments', 'googlepay-payments', 'card-fields']
-        : ['paypal-payments', 'card-fields'];
+        : ['paypal-payments', 'applepay-payments', 'card-fields'];
       try {
         const sdkInstance = await (window as any).paypal.createInstance({
           clientId,
@@ -49,8 +49,8 @@ export async function getPayPalV6Instance(
       } catch (err) {
         try {
           const fallbackComponents = isGPay
-            ? ['paypal-payments', 'googlepay-payments', 'card-fields']
-            : ['paypal-payments', 'card-fields'];
+            ? ['paypal-payments', 'applepay-payments', 'googlepay-payments', 'card-fields']
+            : ['paypal-payments', 'applepay-payments', 'card-fields'];
           const fallbackInstance1 = await (window as any).paypal.createInstance({
             clientId,
             components: fallbackComponents,
@@ -61,7 +61,7 @@ export async function getPayPalV6Instance(
           try {
             const fallbackInstance2 = await (window as any).paypal.createInstance({
               clientId,
-              components: ['paypal-payments', 'card-fields'],
+              components: ['paypal-payments', 'applepay-payments', 'card-fields'],
               pageType: 'checkout',
             });
             return fallbackInstance2;
@@ -69,7 +69,7 @@ export async function getPayPalV6Instance(
             try {
               const minInstance = await (window as any).paypal.createInstance({
                 clientId,
-                components: ['paypal-payments'],
+                components: ['paypal-payments', 'applepay-payments'],
                 pageType: 'checkout',
               });
               return minInstance;
