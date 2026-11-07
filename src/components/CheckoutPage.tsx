@@ -92,12 +92,12 @@ export const CheckoutPage: React.FC = () => {
   });
 
   const [formData, setFormData] = useState({
-    name: user.isLoggedIn && user.name && user.name !== "Guest" ? user.name : "",
-    email: user.isLoggedIn && user.email ? user.email : "",
-    address: user.isLoggedIn && user.address ? user.address : "",
-    city: user.isLoggedIn && user.city ? user.city : "",
-    zip: user.isLoggedIn && user.zip ? user.zip : "",
-    country: user.isLoggedIn && user.country ? user.country : "United States",
+    name: "",
+    email: "",
+    address: "",
+    city: "",
+    zip: "",
+    country: "United States",
   });
 
   useEffect(() => {
@@ -373,86 +373,53 @@ export const CheckoutPage: React.FC = () => {
             {/* Left Column: Express Checkout & Form */}
             <div className="lg:col-span-7 space-y-6">
               
-              {/* TOP: Express Checkout Bar (Apple Pay, Google Pay, PayPal) */}
+              {/* TOP: Express Checkout Bar (Apple Pay, Google Pay) */}
               <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-xs font-extrabold uppercase tracking-wider text-slate-400">
                     ⚡ Express Checkout (Instant Pay)
                   </h3>
-                  <span className="text-[10px] bg-amber-100 text-amber-800 font-bold px-2 py-0.5 rounded-full">
-                    1-Click Fast
-                  </span>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-stretch">
                   {/* Apple Pay Button Card */}
-                  <div className="w-full flex flex-col justify-between p-3.5 bg-slate-50/80 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700">
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-white mb-2 flex items-center justify-between">
-                        <span>Apple Pay Express</span>
-                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md">1-TOUCH</span>
-                      </div>
-                      <OfficialApplePayButton
-                        onClick={handleApplePaySubmit}
-                        disabled={isProcessingPayment}
-                        loading={isProcessingPayment}
-                        buttonStyle="black"
-                        buttonType="buy"
-                        height={44}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 font-medium pt-2.5 mt-2.5 border-t border-slate-200/60">
-                      <div className="flex items-center space-x-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Apple Secure Enclave</span>
-                      </div>
-                      <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md border border-slate-200">
-                        SECURE
-                      </span>
-                    </div>
+                  <div className="w-full p-2.5 bg-slate-50/80 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                    <OfficialApplePayButton
+                      onClick={handleApplePaySubmit}
+                      disabled={isProcessingPayment}
+                      loading={isProcessingPayment}
+                      buttonStyle="black"
+                      buttonType="buy"
+                      height={48}
+                    />
                   </div>
 
                   {/* Google Pay Button Card */}
-                  <div className="w-full flex flex-col justify-between p-3.5 bg-slate-50/80 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700">
-                    <div>
-                      <div className="text-xs font-bold text-slate-900 dark:text-white mb-2 flex items-center justify-between">
-                        <span>Google Pay Express</span>
-                        <span className="text-[10px] bg-blue-100 text-blue-700 font-semibold px-2 py-0.5 rounded-md">INSTANT</span>
-                      </div>
-                      <OfficialGooglePayButton
-                        amount={currency === 'USD' ? totalAmountUSD : convertPrice(totalAmountUSD)}
-                        currencyCode={currency}
-                        onSuccess={(paymentData) => {
-                          const orderID = "GPAY-" + Date.now();
-                          placeOrder({
-                            customerName: paymentData?.shippingAddress?.name || formData.name.trim() || "Google Pay Customer",
-                            email: paymentData?.email || formData.email.trim() || "customer@dbuystore.com",
-                            address: paymentData?.shippingAddress?.address1 || formData.address.trim() || "Global Address",
-                            city: paymentData?.shippingAddress?.locality || formData.city.trim() || "Tbilisi",
-                            zip: paymentData?.shippingAddress?.postalCode || formData.zip.trim() || "0100",
-                            country: paymentData?.shippingAddress?.countryCode || formData.country.trim() || "United States",
-                            paymentMethod: "googlepay",
-                            googlePayTransactionId: orderID,
-                          });
-                          setStep(2);
-                          addToast("Google Pay order completed successfully!", "success");
-                        }}
-                        onError={() => addToast("Google Pay failed", "error")}
-                        disabled={isProcessingPayment}
-                        buttonColor="black"
-                        buttonType="buy"
-                        height={44}
-                      />
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-slate-500 px-1 font-medium pt-2.5 mt-2.5 border-t border-slate-200/60">
-                      <div className="flex items-center space-x-1.5">
-                        <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-                        <span>Google Pay Tokenization</span>
-                      </div>
-                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md border border-emerald-200">
-                        LIVE
-                      </span>
-                    </div>
+                  <div className="w-full p-2.5 bg-slate-50/80 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center justify-center">
+                    <OfficialGooglePayButton
+                      amount={currency === 'USD' ? totalAmountUSD : convertPrice(totalAmountUSD)}
+                      currencyCode={currency}
+                      onSuccess={(paymentData) => {
+                        const orderID = "GPAY-" + Date.now();
+                        placeOrder({
+                          customerName: paymentData?.shippingAddress?.name || formData.name.trim() || "Google Pay Customer",
+                          email: paymentData?.email || formData.email.trim() || "customer@dbuystore.com",
+                          address: paymentData?.shippingAddress?.address1 || formData.address.trim() || "Global Address",
+                          city: paymentData?.shippingAddress?.locality || formData.city.trim() || "Tbilisi",
+                          zip: paymentData?.shippingAddress?.postalCode || formData.zip.trim() || "0100",
+                          country: paymentData?.shippingAddress?.countryCode || formData.country.trim() || "United States",
+                          paymentMethod: "googlepay",
+                          googlePayTransactionId: orderID,
+                        });
+                        setStep(2);
+                        addToast("Google Pay order completed successfully!", "success");
+                      }}
+                      onError={() => addToast("Google Pay failed", "error")}
+                      disabled={isProcessingPayment}
+                      buttonColor="black"
+                      buttonType="buy"
+                      height={48}
+                    />
                   </div>
                 </div>
               </div>
