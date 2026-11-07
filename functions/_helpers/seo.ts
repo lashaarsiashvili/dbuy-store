@@ -9,6 +9,7 @@ export interface SeoProduct {
   descriptionKa?: string;
   descriptionEn?: string;
   image: string;
+  images?: string[];
   price?: number;
   origPrice?: number;
 }
@@ -131,13 +132,15 @@ export async function findProductForSeo(db: any, rawIdentifier: string): Promise
 
   // Resolve image (checking primary image and JSON arrays)
   let image = String(row.imageUrl || row.image || row.image_url || row.image_path || '').trim();
-  if (!image && (row.images || row.images_json)) {
+  let images: string[] = [image].filter(Boolean);
+  if (row.images || row.images_json) {
     try {
       const parsed = typeof row.images === 'string'
         ? JSON.parse(row.images)
         : (typeof row.images_json === 'string' ? JSON.parse(row.images_json) : row.images);
-      if (Array.isArray(parsed) && parsed.length > 0 && typeof parsed[0] === 'string') {
-        image = parsed[0].trim();
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        images = parsed.map((img: any) => String(img).trim());
+        if (!image) image = images[0];
       }
     } catch (e) {}
   }
@@ -154,6 +157,7 @@ export async function findProductForSeo(db: any, rawIdentifier: string): Promise
     descriptionKa: cleanDescKa,
     descriptionEn: cleanDescEn,
     image,
+    images,
     price,
     origPrice: origPrice > price ? origPrice : undefined,
   };
@@ -218,7 +222,7 @@ export function injectProductOpenGraphResponse(
     <meta property="og:title" content="${escapeHtml(seoTitle)}" id="og-title" />
     <meta property="og:description" content="${escapeHtml(seoDesc)}" id="og-description" />
     <meta property="og:url" content="${escapeHtml(seoUrl)}" id="og-url" />
-    ${product.image ? `<meta property="og:image" content="${escapeHtml(product.image)}" id="og-image" />` : ''}
+    ${(product.images || [product.image]).map(img => `<meta property="og:image" content="${escapeHtml(img)}" />`).join('\n    ')}
     <meta property="og:type" content="product" />
     <meta property="og:site_name" content="${escapeHtml(siteTitle)}" />
     <meta property="product:price:currency" content="${currencyCode}" id="og-price-currency" />

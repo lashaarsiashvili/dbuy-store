@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
+import { useStore } from '../context/StoreContext';
 import { getProductShareUrl } from '../utils/socialAdGenerator';
 import { X, Megaphone, RefreshCw, Copy, Image as ImageIcon } from 'lucide-react';
 
@@ -106,19 +107,16 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
 
   useEffect(() => { if (isOpen && !caption) regenerate(); }, [isOpen, caption]);
 
+  const { addToast } = useStore();
+  
   const publishToFacebook = async () => {
     setButtonText('⏳ Processing...');
 
     // 1. Copy Ad Copy
     const copied = await copyTextSafely(caption, textareaRef.current);
     if (copied) {
-        // Assume addToast exists in this scope (it's often injected by StoreContext, I will assume it's available, otherwise fallback)
-        // I'll check StoreContext again. It is. 
-        // Oh, wait, SocialShareModal doesn't have useStore hook. I need to access it if possible, or use a simple fallback.
-        // Actually, looking at the code, `SocialShareModal.tsx` does NOT import `useStore`.
-        // I will add a simple alert/toast if possible, but the prompt says "Show a visible toast/notification".
+        addToast('✅ Ad Text Copied! Press Ctrl+V in the Facebook window.', 'success');
     }
-    alert('Ad text copied to clipboard! Press Ctrl+V in the Facebook popup.');
 
     const productShareUrl = `https://www.dbuystore.com/b/${product.id}`;
 
@@ -147,6 +145,19 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
             const feedData = await feedRes.json() as any;
             if (feedData.id) publishedPostId = feedData.id;
         } catch (e) { console.error("API upload failed", e); }
+    } else {
+        // Download images if not using API
+        for (let i = 0; i < images.length; i++) {
+            const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(images[i])}&output=jpg`;
+            const a = document.createElement('a');
+            a.href = proxyUrl;
+            a.download = `dbuy-photo-${i + 1}.jpg`;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            await new Promise(r => setTimeout(r, 300));
+        }
     }
 
     // 3. Open Centered Facebook Share Popup

@@ -228,7 +228,7 @@ interface StoreContextType {
 }
 
 const defaultTheme: ThemeSettings = {
-  announcementText: 'Limited Time: Free Worldwide Express Shipping on Orders Over $50!',
+  announcementText: 'footer.announcement',
   announcementVisible: true,
   primaryColor: '#3665f3',
   typographyTheme: 'modern',

@@ -90,7 +90,7 @@ export const Header: React.FC = () => {
         >
           <div className="flex items-center justify-center flex-1 space-x-1.5 sm:space-x-2 text-center overflow-hidden">
             <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse shrink-0" />
-            <span className="truncate max-w-full leading-tight">{theme.announcementText}</span>
+            <span className="truncate max-w-full leading-tight">{t('footer.announcement')}</span>
           </div>
           <button
             onClick={() => setAnnouncementClosed(true)}

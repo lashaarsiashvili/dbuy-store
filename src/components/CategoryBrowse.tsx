@@ -492,7 +492,7 @@ export const CategoryBrowse: React.FC = () => {
                     <h3 className={`text-[10px] xs:text-[11px] sm:text-[10px] md:text-[11px] lg:text-xs font-medium leading-tight tracking-tight text-center text-balance w-full flex items-center justify-center transition-colors ${
                       isSelected ? 'text-sky-400 font-semibold' : 'text-slate-100 group-hover:text-sky-300'
                     }`}>
-                      {isKa ? card.titleKa : card.titleEn}
+                      {card.titleEn}
                     </h3>
                   </div>
 
