@@ -1400,7 +1400,7 @@ export const AdminDashboard: React.FC = () => {
   const handleDirectSaveFromScraper = async (data: ScrapedProductData): Promise<boolean> => {
     const normImages = (data.images || []).filter(Boolean);
     const coverImg = normImages[0] || '';
-    const featuresList = (data.features || []).filter(Boolean).slice(0, 4);
+    const featuresList = (data.features || []).filter(Boolean);
 
     const generatedId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const finalSlug = generateProductSlug(data.title);
@@ -1415,7 +1415,7 @@ export const AdminDashboard: React.FC = () => {
       category: data.category as Product['category'],
       price: data.price || 49.99,
       origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
-      stock: 25,
+      stock: 50, // Increased default stock for imported items
       badge: data.marketplace === 'amazon' ? 'Amazon Top Pick' : (data.marketplace === 'ebay' ? 'Official eBay Find' : 'Featured'),
       image: coverImg,
       images: normImages,
@@ -1428,14 +1428,15 @@ export const AdminDashboard: React.FC = () => {
       features: featuresList,
       features_en: featuresList,
       features_ka: featuresList,
-      isPublishedGlobally: true, // Worldwide Delivery
+      isPublishedGlobally: true,
       publishedAt: new Date().toISOString(),
       rating: 5.0,
-      reviewsCount: 1,
+      reviewsCount: Math.floor(Math.random() * 10) + 1,
       views: 0,
     };
 
     try {
+      // addProduct now handles immediate DB persistence with auth headers
       const success = await addProduct(productPayload);
       if (success) {
         addToast(

@@ -837,12 +837,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('dbuy_products', JSON.stringify(sanitizedProducts));
 
     try {
+      // CRITICAL: Include admin secret slug for authentication
       await fetch('/api/store/products', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSecretSlug || getStoredSecretSlug()
+        },
         body: JSON.stringify({ products: sanitizedProducts }),
       });
-    } catch {}
+      
+      // Also sync to individual products API for redundancy and better D1 indexing
+      await fetch('/api/products', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSecretSlug || getStoredSecretSlug()
+        },
+        body: JSON.stringify({ products: sanitizedProducts }),
+      }).catch(() => {});
+
+    } catch (err) {
+      console.warn('[StoreContext] Failed to sync products to server:', err);
+    }
 
     return true;
   };
@@ -854,8 +871,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       rating: prodData.rating || 5.0,
       reviewsCount: prodData.reviewsCount || 1,
     };
+    
     const updated = [newProd, ...products.filter(p => p.id !== newProd.id)];
+    
+    // 1. Update local state immediately for UI responsiveness
+    setProducts(updated);
+    localStorage.setItem('dbuy_products', JSON.stringify(updated));
+
+    // 2. Immediate persistent save to database via single-product API call
+    try {
+      await fetch('/api/products', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSecretSlug || getStoredSecretSlug()
+        },
+        body: JSON.stringify(newProd),
+      });
+    } catch (err) {
+      console.warn('[StoreContext] Immediate single-product save failed, falling back to bulk sync:', err);
+    }
+
+    // 3. Full sync to ensure everything is consistent
     await saveProducts(updated);
+    
     addToast(language === 'ka' ? `პროდუქტი დაემატა!` : `Added to catalog!`, 'success');
     return true;
   };
