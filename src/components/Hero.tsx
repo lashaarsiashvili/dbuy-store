@@ -12,6 +12,7 @@ export const Hero: React.FC = () => {
     navigateToProduct,
     billboards,
     billboardIntervalSeconds,
+    t
   } = useStore();
 
   const isKa = language === 'ka';
