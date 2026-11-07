@@ -163,7 +163,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     // 3. Open Centered Facebook Share Popup
     const shareUrl = publishedPostId 
       ? `https://www.facebook.com/${publishedPostId}`
-      : `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(productShareUrl)}&quote=${encodeURIComponent(caption)}`;
+      : `https://www.facebook.com/`;
     
     const width = 680;
     const height = 620;

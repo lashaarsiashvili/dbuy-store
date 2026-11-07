@@ -117,6 +117,8 @@ interface StoreContextType {
   setQuickViewProduct: (product: Product | null) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
+  activeAuthTab: 'login' | 'register' | 'face';
+  setActiveAuthTab: (tab: 'login' | 'register' | 'face') => void;
   isCheckoutOpen: boolean;
   setIsCheckoutOpen: (open: boolean) => void;
 
@@ -205,6 +207,7 @@ interface StoreContextType {
   isAdmin: boolean;
   registeredUsers: RegisteredUser[];
   deleteRegisteredUser: (email: string) => void;
+  updateUserFaceSignature: (email: string, signature: string) => void;
   refreshServerStore: (force?: boolean) => Promise<void>;
   syncWithRemoteStore: (remoteUrl: string) => Promise<{ success: boolean; message: string; count?: number }>;
   exportFullDatabase: () => void;
@@ -980,6 +983,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [activeAuthTab, setActiveAuthTab] = useState<'login' | 'register' | 'face'>('login');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
   const [orders, setOrders] = useState<Order[]>([]);
@@ -1037,7 +1041,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const exportFullDatabase = () => {};
   const importFullDatabase = async () => ({ success: true, message: 'Imported' });
   const persistCatalogToCode = async () => ({ success: true, message: 'Persisted' });
-  const deleteRegisteredUser = () => {};
+  const deleteRegisteredUser = (email: string) => {
+    setRegisteredUsers(prev => prev.filter(u => u.email.toLowerCase() !== email.toLowerCase()));
+  };
+
+  const updateUserFaceSignature = (email: string, signature: string) => {
+    setRegisteredUsers(prev => prev.map(u => u.email.toLowerCase() === email.toLowerCase() ? { ...u, faceSignature: signature } : u));
+    if (user.email.toLowerCase() === email.toLowerCase()) {
+      setUser(prev => ({...prev, faceSignature: signature}));
+    }
+    addToast(language === 'ka' ? '✅ Face ID წარმატებით დაუკავშირდა!' : '✅ Face ID successfully linked!', 'success');
+  };
 
   const loginUser = (email: string) => {
     setUser({ name: 'User', email, isLoggedIn: true, role: email === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer' });
@@ -1109,6 +1123,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cartTotalCount, cartSubtotalUSD, promoCode, promoDiscountPercent,
         applyPromoCode, clearPromoCode, isCartOpen, setIsCartOpen,
         quickViewProduct, setQuickViewProduct, isAuthModalOpen, setIsAuthModalOpen,
+        activeAuthTab, setActiveAuthTab,
         isCheckoutOpen, setIsCheckoutOpen,
         orders, placeOrder, updateOrderStatus, updateOrderTracking,
         deleteOrder, clearOrderHistory, lastPlacedOrder, setLastPlacedOrder,
@@ -1119,7 +1134,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         generateRandomAdminSlug, getAdminUrl, copyAdminUrl,
         loginUser, loginWithGoogleProfile, demoLogin, logoutUser,
         registerUser, changeAdminPassword, changeUserPassword, resetUserPassword,
-        isAdmin, registeredUsers, deleteRegisteredUser,
+        isAdmin, registeredUsers, deleteRegisteredUser, updateUserFaceSignature,
         refreshServerStore, syncWithRemoteStore, exportFullDatabase,
         importFullDatabase, persistCatalogToCode,
         toasts, addToast, removeToast,

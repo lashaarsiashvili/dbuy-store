@@ -23,6 +23,7 @@ import {
   Inbox,
   Loader2,
   Copy,
+  ScanFace
 } from "lucide-react";
 import {
   checkRateLimit,
@@ -137,7 +138,13 @@ export const AuthModal: React.FC = () => {
     theme,
     isDarkMode,
     addToast,
+    activeAuthTab,
+    setActiveAuthTab,
+    updateUserFaceSignature,
   } = useStore();
+
+  const tab = activeAuthTab;
+  const setTab = setActiveAuthTab;
 
   // Face ID Refs
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -145,7 +152,6 @@ export const AuthModal: React.FC = () => {
   const scanLineRef = useRef<HTMLDivElement>(null);
   const statusTextRef = useRef<HTMLParagraphElement>(null);
 
-  const [tab, setTab] = useState<"login" | "register" | "face">("login");
   const [viewMode, setViewMode] = useState<"auth" | "forgot">("auth");
 
   // Registration states
@@ -907,6 +913,26 @@ export const AuthModal: React.FC = () => {
                     }} className="w-full py-3 px-4 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-medium rounded-xl shadow-lg transition-all flex items-center justify-center space-x-2 cursor-pointer">
                         <span>Start Biometric Scan</span>
                     </button>
+
+                    <div className="mt-4 p-4 rounded-xl bg-slate-800 border border-slate-700">
+                        <label className="block text-xs font-semibold text-slate-300 mb-2">Link Existing Account</label>
+                        <input type="email" placeholder="Enter your registered email" className="w-full p-2 mb-2 rounded-lg bg-slate-900 border border-slate-700 text-white text-xs" id="link-email-input"/>
+                        <button type="button" onClick={async () => {
+                            const email = (document.getElementById('link-email-input') as HTMLInputElement).value;
+                            if(!email) { addToast("Enter an email first", "warning"); return; }
+                            await startCameraScan();
+                            const video = videoRef.current;
+                            if (!video) return;
+                            const canvas = document.createElement('canvas');
+                            canvas.width = 160;
+                            canvas.height = 160;
+                            canvas.getContext('2d')?.drawImage(video, 0, 0, 160, 160);
+                            const signature = canvas.toDataURL('image/jpeg', 0.5);
+                            updateUserFaceSignature(email, signature);
+                        }} className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] rounded-lg cursor-pointer">
+                          Scan & Link My Face
+                        </button>
+                    </div>
                 </div>
               )}
 
