@@ -24,6 +24,7 @@ import { translations } from '../data/translations';
 import { getTranslation } from '../utils/i18n';
 import { useLanguage } from './LanguageContext';
 import { loadImageBackupsIDB, preloadProductImages } from '../utils/imageStorage';
+import { saveSession, loadSession, clearSession } from '../utils/session';
 import { 
   loadVisitorLogs, 
   saveVisitorLogs, 
@@ -1033,7 +1034,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const [adminPassword, setAdminPassword] = useState<string>('h_001f10c9bd0fb314');
-  const [user, setUser] = useState<User>(defaultUser);
+  const [user, setUser] = useState<User>(() => loadSession() || defaultUser);
 
   const isAdmin = user.isLoggedIn && (user.role === 'admin' || user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com');
 
@@ -1057,24 +1058,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const loginUser = (email: string) => {
-    setUser({ name: 'User', email, isLoggedIn: true, role: email === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer' });
+    const newUser: User = { name: 'User', email, isLoggedIn: true, role: email === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer' };
+    setUser(newUser);
+    saveSession(newUser);
     setIsAuthModalOpen(false);
     addToast(language === 'ka' ? 'მოვრძანდით!' : 'Welcome back!', 'success');
     return true;
   };
 
   const loginWithGoogleProfile = (profile: any) => {
-    setUser({ name: profile.name, email: profile.email, isLoggedIn: true, role: 'customer' });
+    const newUser: User = { name: profile.name, email: profile.email, isLoggedIn: true, role: 'customer' };
+    setUser(newUser);
+    saveSession(newUser);
     setIsAuthModalOpen(false);
     return { isComplete: true };
   };
 
   const demoLogin = () => {
-    setUser({ name: 'Demo User', email: 'demo@dbuy.com', isLoggedIn: true, role: 'customer' });
+    const newUser: User = { name: 'Demo User', email: 'demo@dbuy.com', isLoggedIn: true, role: 'customer' };
+    setUser(newUser);
+    saveSession(newUser);
   };
 
   const logoutUser = () => {
     setUser(defaultUser);
+    clearSession();
     setCart([]);
     setWishlist([]);
     addToast(language === 'ka' ? 'გახვიდეთ სისტემიდან' : 'Logged out', 'info');
