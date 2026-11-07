@@ -36,7 +36,7 @@ import { ALL_COUNTRIES } from "../data/countries";
 
 const GOOGLE_CLIENT_ID =
   import.meta.env.VITE_GOOGLE_CLIENT_ID ||
-  "311692037075-dtpc8k6h5h6u01mthotlan7ba1fg1ni1.apps.googleusercontent.com";
+  "311692037075-h1j3314nqegnm57ppq3gjp1sraqjudvs.apps.googleusercontent.com";
 
 // Sub-component that actually uses the hook
 const GoogleSignInButton: React.FC<{
@@ -347,7 +347,7 @@ export const AuthModal: React.FC = () => {
     handleRegisterSubmit(e);
   };
 
-  const handleTabSwitch = (newTab: "login" | "register") => {
+  const handleTabSwitch = (newTab: "login" | "register" | "face") => {
     setTab(newTab);
     setViewMode("auth");
     setRegStep(1);
@@ -566,7 +566,7 @@ export const AuthModal: React.FC = () => {
           onClick={() => setIsAuthModalOpen(false)}
         />
 
-        <div className="relative w-full max-w-lg bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 my-auto">
+        <div className="relative w-full max-w-lg bg-slate-900/80 backdrop-blur-xl border border-slate-700/50 text-white rounded-3xl shadow-2xl z-10 p-6 sm:p-8 animate-in zoom-in-95 duration-200 my-auto">
           <button
             onClick={() => setIsAuthModalOpen(false)}
             className="absolute top-4 right-4 p-2 rounded-full text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
@@ -776,14 +776,14 @@ export const AuthModal: React.FC = () => {
           ) : (
             <>
               {/* Tab Switcher */}
-              <div className="flex border-b border-slate-200 dark:border-slate-800 mb-6">
+              <div className="flex border-b border-slate-700 mb-6">
                 <button
                   type="button"
                   onClick={() => handleTabSwitch("login")}
                   className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
                     tab === "login"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200"
+                      ? "border-blue-500 text-blue-400"
+                      : "border-transparent text-slate-400 hover:text-slate-200"
                   }`}
                 >
                   {t("auth.signInTab")}
@@ -793,13 +793,35 @@ export const AuthModal: React.FC = () => {
                   onClick={() => handleTabSwitch("register")}
                   className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
                     tab === "register"
-                      ? "border-blue-600 text-blue-600 dark:text-blue-400"
-                      : "border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-200 dark:hover:text-slate-200"
+                      ? "border-blue-500 text-blue-400"
+                      : "border-transparent text-slate-400 hover:text-slate-200"
                   }`}
                 >
                   {t("auth.registerTab")}
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setTab("face")}
+                  className={`flex-1 py-3 text-center text-xs sm:text-sm font-bold border-b-2 transition-all cursor-pointer ${
+                    tab === "face"
+                      ? "border-purple-500 text-purple-400"
+                      : "border-transparent text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  Face ID
+                </button>
               </div>
+
+              {/* ---------------- FACE ID FORM ---------------- */}
+              {tab === "face" && (
+                <div className="text-center space-y-4 py-4 animate-in fade-in duration-200">
+                  <div className="relative w-full h-48 bg-slate-800 rounded-2xl overflow-hidden border border-slate-700">
+                    <div className="absolute inset-0 flex items-center justify-center text-slate-500">Camera Feed Placeholder</div>
+                  </div>
+                  <p className="text-xs text-slate-400">Position your face within the frame.</p>
+                  <button className="w-full py-3 bg-purple-600 rounded-xl font-bold hover:bg-purple-700 transition cursor-pointer">Start Biometric Scan</button>
+                </div>
+              )}
 
               {/* ---------------- LOGIN FORM ---------------- */}
               {tab === "login" && (

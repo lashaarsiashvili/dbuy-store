@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Authentication | DBUY Store</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        .glass { background: rgba(255, 255, 255, 0.05); backdrop-filter: blur(10px); border: 1px solid rgba(255, 255, 255, 0.1); }
+        .tab-active { border-bottom: 2px solid #3b82f6; color: #3b82f6; }
+        #scan-line { animation: scan 2s linear infinite; }
+        @keyframes scan { 0% { top: 0; } 50% { top: 100%; } 100% { top: 0; } }
+    </style>
+</head>
+<body class="bg-slate-950 text-white min-h-screen flex items-center justify-center p-4">
+
+    <div class="max-w-5xl w-full grid md:grid-cols-2 gap-8 items-center">
+        <!-- Brand Side -->
+        <div class="hidden md:block p-12">
+            <h1 class="text-5xl font-black mb-6 bg-clip-text text-transparent bg-gradient-to-r from-blue-400 to-purple-500">DBUY Store</h1>
+            <p class="text-xl text-slate-400 mb-8">Premium quality, modern aesthetics, and worldwide shipping. Experience the future of shopping.</p>
+            <div class="glass p-6 rounded-2xl">
+                <h3 class="font-bold mb-2">Global Shipping</h3>
+                <p class="text-sm text-slate-400">Delivering excellence to your doorstep, anywhere on the planet.</p>
+            </div>
+        </div>
+
+        <!-- Auth Card -->
+        <div class="glass p-8 rounded-3xl w-full max-w-md mx-auto shadow-2xl">
+            <!-- Tabs -->
+            <div class="flex space-x-6 mb-8 border-b border-slate-700">
+                <button onclick="switchTab('signin')" id="btn-signin" class="pb-2 font-bold tab-active">Sign In</button>
+                <button onclick="switchTab('register')" id="btn-register" class="pb-2 font-bold text-slate-500">Register</button>
+                <button onclick="switchTab('face')" id="btn-face" class="pb-2 font-bold text-slate-500">Face Login</button>
+            </div>
+
+            <!-- Sign In Form -->
+            <div id="tab-signin" class="space-y-4">
+                <input type="email" placeholder="Email Address" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:border-blue-500">
+                <input type="password" placeholder="Password" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:border-blue-500">
+                <button class="w-full py-3 bg-blue-600 rounded-xl font-bold hover:bg-blue-700 transition">Sign In</button>
+            </div>
+
+            <!-- Register Form -->
+            <div id="tab-register" class="space-y-4 hidden">
+                <input type="text" placeholder="Full Name" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:border-blue-500">
+                <input type="email" placeholder="Email Address" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:border-blue-500">
+                <input type="password" placeholder="Create Password" class="w-full p-3 rounded-xl bg-slate-800 border border-slate-700 focus:outline-none focus:border-blue-500">
+                <button class="w-full py-3 bg-green-600 rounded-xl font-bold hover:bg-green-700 transition">Create Account</button>
+            </div>
+
+            <!-- Face ID Simulation -->
+            <div id="tab-face" class="hidden text-center space-y-4">
+                <div class="relative w-full h-48 bg-slate-800 rounded-2xl overflow-hidden border border-slate-700">
+                    <video id="webcam" autoplay playsinline class="w-full h-full object-cover"></video>
+                    <div id="scan-line" class="absolute w-full h-1 bg-blue-500 shadow-[0_0_15px_rgba(59,130,246,0.8)] opacity-70"></div>
+                </div>
+                <p class="text-sm text-slate-400">Position your face within the frame.</p>
+                <button onclick="startFaceAuth()" class="w-full py-3 bg-purple-600 rounded-xl font-bold hover:bg-purple-700 transition">Start Biometric Scan</button>
+            </div>
+
+            <!-- Socials -->
+            <div class="mt-8 pt-6 border-t border-slate-700 space-y-3">
+                <button class="w-full py-2 bg-white text-black rounded-xl font-bold flex items-center justify-center gap-3 hover:bg-slate-200 transition">
+                    <svg class="w-5 h-5" viewBox="0 0 24 24"><path fill="currentColor" d="M12.545 10.239v3.821h5.448c-0.712 1.815-2.642 3.165-5.448 3.165-3.084 0-5.578-2.494-5.578-5.578s2.494-5.578 5.578-5.578c1.666 0 3.153 0.702 4.195 1.826l2.871-2.871c-1.85-1.748-4.321-2.825-7.066-2.825-5.523 0-10 4.477-10 10s4.477 10 10 10c5.732 0 9.544-4.032 9.544-9.715 0-0.655-0.068-1.298-0.198-1.921z"/></svg>
+                    Continue with Google
+                </button>
+                <div class="grid grid-cols-2 gap-3">
+                    <button class="w-full py-2 bg-slate-800 rounded-xl font-bold hover:bg-slate-700 transition">Microsoft</button>
+                    <button class="w-full py-2 bg-blue-800 rounded-xl font-bold hover:bg-blue-900 transition">Facebook</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tab) {
+            document.querySelectorAll('[id^="tab-"]').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('[id^="btn-"]').forEach(el => {
+                el.classList.remove('tab-active');
+                el.classList.add('text-slate-500');
+            });
+            document.getElementById('tab-' + tab).classList.remove('hidden');
+            document.getElementById('btn-' + tab).classList.add('tab-active');
+            document.getElementById('btn-' + tab).classList.remove('text-slate-500');
+        }
+
+        async function startFaceAuth() {
+            const video = document.getElementById('webcam');
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                video.srcObject = stream;
+                setTimeout(() => {
+                    alert('Face Recognized! Redirecting to DBUY Store...');
+                }, 3000);
+            } catch (err) {
+                alert('Webcam access required for face recognition.');
+            }
+        }
+    </script>
+</body>
+</html>
