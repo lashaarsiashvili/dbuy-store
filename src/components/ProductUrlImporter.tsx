@@ -84,16 +84,22 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
 
       if (response.ok && resData.success && resData.data) {
         const item: ScrapedProductData = resData.data;
+        const cleanImgs = Array.from(new Set(
+          (item.images || [])
+            .map((u: string) => (typeof u === 'string' ? u.trim() : ''))
+            .filter((u: string) => u.startsWith('http'))
+        ));
+        item.images = cleanImgs;
         setExtractedData(item);
         setEditTitle(item.title);
         setEditPrice(item.price || 49.99);
         setEditOrigPrice(item.origPrice);
         setEditCategory(item.category || 'tech');
-        setGalleryImages(item.images || []);
+        setGalleryImages(cleanImgs);
         addToast(
           isKa 
             ? `პროდუქტი "${item.title.substring(0, 30)}..." წარმატებით ამოღებულია!` 
-            : `Extracted "${item.title.substring(0, 35)}..." with ${item.images?.length || 0} high-res images!`,
+            : `Extracted "${item.title.substring(0, 35)}..." with ${cleanImgs.length} high-res images!`,
           'success'
         );
       } else if (resData.isBotBlocked) {
@@ -109,12 +115,18 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
         if (htmlToUse) {
           const clientParsed = parseProductHtml(htmlToUse, trimmedUrl);
           if (clientParsed.title && clientParsed.title !== 'Imported Product') {
+            const cleanImgs = Array.from(new Set(
+              (clientParsed.images || [])
+                .map((u: string) => (typeof u === 'string' ? u.trim() : ''))
+                .filter((u: string) => u.startsWith('http'))
+            ));
+            clientParsed.images = cleanImgs;
             setExtractedData(clientParsed);
             setEditTitle(clientParsed.title);
             setEditPrice(clientParsed.price || 49.99);
             setEditOrigPrice(clientParsed.origPrice);
             setEditCategory(clientParsed.category || 'tech');
-            setGalleryImages(clientParsed.images || []);
+            setGalleryImages(cleanImgs);
             addToast('Successfully parsed product from provided HTML!', 'success');
             return;
           }
@@ -128,12 +140,18 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
       if (htmlToUse) {
         const clientParsed = parseProductHtml(htmlToUse, trimmedUrl);
         if (clientParsed.title && clientParsed.title !== 'Imported Product') {
+          const cleanImgs = Array.from(new Set(
+            (clientParsed.images || [])
+              .map((u: string) => (typeof u === 'string' ? u.trim() : ''))
+              .filter((u: string) => u.startsWith('http'))
+          ));
+          clientParsed.images = cleanImgs;
           setExtractedData(clientParsed);
           setEditTitle(clientParsed.title);
           setEditPrice(clientParsed.price || 49.99);
           setEditOrigPrice(clientParsed.origPrice);
           setEditCategory(clientParsed.category || 'tech');
-          setGalleryImages(clientParsed.images || []);
+          setGalleryImages(cleanImgs);
           addToast('Parsed directly via browser parser!', 'success');
           return;
         }
@@ -499,17 +517,37 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
                         : 'border-slate-700/80 hover:border-indigo-400 bg-slate-900/80'
                     }`}
                   >
-                    <div className="aspect-square w-full bg-slate-950 flex items-center justify-center overflow-hidden">
+                    <div className="aspect-square w-full bg-slate-950 flex items-center justify-center overflow-hidden relative">
                       <img
                         src={imgUrl}
                         alt={`Extracted thumbnail ${idx + 1}`}
                         className="w-full h-full object-contain p-1 group-hover:scale-105 transition-transform duration-300"
                         loading="lazy"
+                        referrerPolicy="no-referrer"
+                        crossOrigin="anonymous"
                         onError={(e) => {
-                          // Hide broken images gracefully
-                          (e.target as HTMLElement).style.display = 'none';
+                          const target = e.currentTarget;
+                          // If loaded with query parameters and failed, retry once with clean URL
+                          if (!target.dataset.triedClean && target.src.includes('?')) {
+                            target.dataset.triedClean = 'true';
+                            target.src = target.src.split('?')[0];
+                            return;
+                          }
+                          // Gracefully show visual placeholder rather than leaving empty black box
+                          target.style.display = 'none';
+                          const fallbackEl = target.nextElementSibling as HTMLElement | null;
+                          if (fallbackEl) {
+                            fallbackEl.style.display = 'flex';
+                          }
                         }}
                       />
+                      <div 
+                        style={{ display: 'none' }}
+                        className="flex-col items-center justify-center p-2 text-center text-slate-400 select-none"
+                      >
+                        <ImageIcon className="w-6 h-6 text-indigo-400/80 mb-1" />
+                        <span className="text-[10px] font-bold text-slate-300">Photo #{idx + 1}</span>
+                      </div>
                     </div>
 
                     {/* Top Badges */}

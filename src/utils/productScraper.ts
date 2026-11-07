@@ -53,16 +53,75 @@ export function normalizeAmazonImageUrl(url: string): string {
 
 /**
  * Upgrades eBay image URLs to maximum resolution (/s-l1600.jpg)
+ * and normalizes size modifiers (e.g. /s-l64.jpg, /s-l300.jpg, /s-l500.jpg, $_57.JPG)
+ * while filtering out placeholders, 1x2 GIFs, SVGs, and UI icons.
  */
-export function normalizeEbayImageUrl(url: string): string {
-  if (!url || typeof url !== 'string') return '';
-  let clean = url.trim();
-  // Upgrade s-l500.jpg, s-l300.webp, s-l64.jpg to s-l1600.jpg
-  clean = clean.replace(/\/s-l\d+\.(jpg|png|webp)/i, '/s-l1600.jpg');
-  if (clean.includes('ebaystatic.com') || clean.includes('blank.gif') || clean.includes('icon')) {
+export function normalizeEbayImageUrl(rawUrl: string): string {
+  if (!rawUrl || typeof rawUrl !== 'string') return '';
+  let url = rawUrl.trim();
+
+  // Strip enclosing quotes, whitespace, or escape backslashes
+  url = url.replace(/^["'\s\\]+|["'\s\\]+$/g, '');
+  url = url.replace(/\\/g, '');
+  url = url.replace(/&amp;/g, '&');
+  url = url.replace(/&#x2F;/g, '/');
+  url = url.replace(/&#47;/g, '/');
+
+  // Handle protocol-relative URLs
+  if (url.startsWith('//')) {
+    url = 'https:' + url;
+  }
+
+  // Must be a valid HTTP or HTTPS URL
+  if (!/^https?:\/\//i.test(url)) {
     return '';
   }
-  return clean;
+
+  const lower = url.toLowerCase();
+
+  // Filter out placeholder, tiny thumbnail, base64, SVG, and UI icons
+  if (
+    lower.startsWith('data:') ||
+    lower.includes('blank.gif') ||
+    lower.includes('s_1x2.gif') ||
+    lower.includes('s_1x1.gif') ||
+    lower.includes('transparent') ||
+    lower.includes('placeholder') ||
+    lower.includes('spinner') ||
+    lower.includes('/icon') ||
+    lower.includes('icon-') ||
+    lower.includes('-icon') ||
+    lower.includes('ebaystatic.com/cr/') || // internal eBay UI assets/sprites
+    lower.includes('ebaystatic.com/pictures/') || // internal eBay UI assets
+    lower.includes('badge') ||
+    lower.includes('arrow') ||
+    lower.endsWith('.svg') ||
+    lower.includes('.svg?')
+  ) {
+    return '';
+  }
+
+  // Upgrade eBay image assets (i.ebayimg.com, ir.ebaystatic.com)
+  if (lower.includes('i.ebayimg.com') || lower.includes('ir.ebaystatic.com')) {
+    // 1. Remove thumbnail subfolder if present: /thumbs/images/ -> /images/
+    url = url.replace(/\/thumbs\/images\//i, '/images/');
+
+    // 2. Upgrade smaller sizing modifiers (e.g. /s-l64.jpg, /s-l300.jpg, /s-l500.jpg, /s-l1600.webp) to /s-l1600.jpg
+    url = url.replace(/\/s-l\d+\.(?:jpg|jpeg|png|webp)/i, '/s-l1600.jpg');
+
+    // 3. Upgrade legacy size modifiers like /$_57.JPG, /$_12.JPG, /$_1.JPG to /s-l1600.jpg
+    url = url.replace(/\/\$_[0-9]+(?:\.[a-zA-Z]+)?(?:\?[^"'\s]*)?$/i, '/s-l1600.jpg');
+    url = url.replace(/\/\$_[0-9]+(?:\.[a-zA-Z]+)?\b/i, '/s-l1600.jpg');
+
+    // 4. Strip trailing query parameters if set_id is attached to s-l1600.jpg for clean URL
+    if (url.includes('/s-l1600.jpg')) {
+      url = url.split('?')[0];
+    }
+
+    return url;
+  }
+
+  return url;
 }
 
 /**
@@ -302,36 +361,149 @@ export function parseEbayProductHtml(html: string, sourceUrl: string = ''): Scra
   const imagesSet = new Set<string>();
   const features: string[] = [];
 
-  // 1. JSON-LD Extraction
+  // Helper to add normalized eBay image URL
+  const addImageUrl = (rawUrl: string | undefined | null) => {
+    if (!rawUrl || typeof rawUrl !== 'string') return;
+    const norm = normalizeEbayImageUrl(rawUrl);
+    if (norm && !imagesSet.has(norm)) {
+      imagesSet.add(norm);
+    }
+  };
+
+  // Helper to extract candidate URLs from an <img> tag in priority order
+  const extractUrlsFromImgTag = (imgTag: string) => {
+    if (!imgTag) return;
+
+    // 1. data-zoom-src (top priority full high-res)
+    const zoomMatch = imgTag.match(/data-zoom-src=["']([^"']+)["']/i);
+    if (zoomMatch && zoomMatch[1]) addImageUrl(zoomMatch[1]);
+
+    // 2. data-img-url
+    const dataImgMatch = imgTag.match(/data-img-url=["']([^"']+)["']/i);
+    if (dataImgMatch && dataImgMatch[1]) addImageUrl(dataImgMatch[1]);
+
+    // 3. data-src
+    const dataSrcMatch = imgTag.match(/data-src=["']([^"']+)["']/i);
+    if (dataSrcMatch && dataSrcMatch[1]) addImageUrl(dataSrcMatch[1]);
+
+    // 4. srcset
+    const srcsetMatch = imgTag.match(/srcset=["']([^"']+)["']/i);
+    if (srcsetMatch && srcsetMatch[1]) {
+      const entries = srcsetMatch[1].split(',');
+      for (const entry of entries) {
+        const u = entry.trim().split(/\s+/)[0];
+        if (u) addImageUrl(u);
+      }
+    }
+
+    // 5. src
+    const srcMatch = imgTag.match(/\bsrc=["']([^"']+)["']/i);
+    if (srcMatch && srcMatch[1]) addImageUrl(srcMatch[1]);
+  };
+
+  // -------------------------------------------------------------
+  // SOURCE A: <script type="application/ld+json"> (Product.image)
+  // -------------------------------------------------------------
   const jsonLdMatches = html.matchAll(/<script\s+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
   for (const m of jsonLdMatches) {
     try {
-      const parsed = JSON.parse(m[1].trim());
-      const productObj = parsed['@type'] === 'Product'
-        ? parsed
-        : (Array.isArray(parsed['@graph']) ? parsed['@graph'].find((item: any) => item['@type'] === 'Product') : null);
+      const rawText = m[1].trim();
+      if (!rawText) continue;
+      const parsed = JSON.parse(rawText);
 
-      if (productObj) {
-        if (!title && productObj.name) {
-          title = cleanHtmlText(productObj.name);
+      const candidates: any[] = [];
+      if (Array.isArray(parsed)) {
+        candidates.push(...parsed);
+      } else if (parsed && typeof parsed === 'object') {
+        if (Array.isArray(parsed['@graph'])) {
+          candidates.push(...parsed['@graph']);
+        } else {
+          candidates.push(parsed);
         }
-        if (!rawDesc && productObj.description) {
-          rawDesc = cleanHtmlText(productObj.description);
-        }
-        if (productObj.image) {
-          const imgs = Array.isArray(productObj.image) ? productObj.image : [productObj.image];
-          for (const img of imgs) {
-            const norm = normalizeEbayImageUrl(typeof img === 'string' ? img : img.url);
-            if (norm) imagesSet.add(norm);
+      }
+
+      for (const item of candidates) {
+        if (!item || typeof item !== 'object') continue;
+        const type = item['@type'];
+        if (type === 'Product' || type === 'IndividualProduct') {
+          if (!title && item.name) {
+            title = cleanHtmlText(String(item.name));
           }
-        }
-        if (productObj.offers) {
-          const offers = Array.isArray(productObj.offers) ? productObj.offers[0] : productObj.offers;
-          const p = parseFloat(String(offers.price || offers.lowPrice || '0'));
-          if (p > 0 && price === 0) price = p;
+          if (!rawDesc && item.description) {
+            rawDesc = cleanHtmlText(String(item.description));
+          }
+          if (item.image) {
+            const rawImages = Array.isArray(item.image) ? item.image : [item.image];
+            for (const imgEntry of rawImages) {
+              if (typeof imgEntry === 'string') {
+                addImageUrl(imgEntry);
+              } else if (imgEntry && typeof imgEntry === 'object') {
+                addImageUrl(imgEntry.url || imgEntry.contentUrl);
+              }
+            }
+          }
+          if (item.offers) {
+            const offers = Array.isArray(item.offers) ? item.offers[0] : item.offers;
+            if (offers) {
+              const p = parseFloat(String(offers.price || offers.lowPrice || '0'));
+              if (p > 0 && price === 0) price = p;
+            }
+          }
         }
       }
     } catch {}
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // SOURCE B: .ux-image-carousel-item img or .image-treatment img (src, data-src, data-zoom-src, data-img-url, srcset)
+  // ---------------------------------------------------------------------------------------
+  // B.1: Match entire carousel item or image-treatment blocks
+  const containerRegex = /<(?:div|li|span|button)[^>]*class=["'][^"']*(?:ux-image-carousel-item|image-treatment|ux-image-filmstrip-carousel-item|ux-image-grid-item)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|li|span|button)>/gi;
+  let matchContainer: RegExpExecArray | null;
+  while ((matchContainer = containerRegex.exec(html)) !== null) {
+    const block = matchContainer[1];
+    const imgMatches = block.matchAll(/<img[^>]+>/gi);
+    for (const imgMatch of imgMatches) {
+      extractUrlsFromImgTag(imgMatch[0]);
+    }
+  }
+
+  // B.2: Target any <img> tag with carousel / image-treatment class or data-zoom-src / data-img-url directly
+  const imgTagMatches = html.matchAll(/<img[^>]+(?:class=["'][^"']*(?:ux-image-carousel-item|image-treatment)[^"']*["']|data-zoom-src=|data-img-url=)[^>]*>/gi);
+  for (const imgM of imgTagMatches) {
+    extractUrlsFromImgTag(imgM[0]);
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // SOURCE C: Fallback gallery thumbnails from #icImg or .vi-image-gallery img
+  // ---------------------------------------------------------------------------------------
+  // C.1: Classic eBay #icImg
+  const icImgMatch = html.match(/<img[^>]*id=["']icImg["'][^>]*>/i);
+  if (icImgMatch) {
+    extractUrlsFromImgTag(icImgMatch[0]);
+  }
+
+  // C.2: .vi-image-gallery or #vi_main_img_fs
+  const galleryMatches = html.matchAll(/<(?:div|ul|table)[^>]*class=["'][^"']*(?:vi-image-gallery|vi_main_img_fs|gallery-content)[^"']*["'][^>]*>([\s\S]*?)<\/(?:div|ul|table)>/gi);
+  for (const gm of galleryMatches) {
+    const imgs = gm[1].matchAll(/<img[^>]+>/gi);
+    for (const im of imgs) {
+      extractUrlsFromImgTag(im[0]);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // SOURCE D: Scan for embedded eBay high-res image patterns in scripts & DOM
+  // ---------------------------------------------------------------------------------------
+  const globalEbayImgRegex = /(?:https?:)?(?:\\\/\\\/|\/\/|\\\/\\\/|https?:\/\/)(?:i\.ebayimg\.com|ir\.ebaystatic\.com)[^\s"'<>\\{}|[\]^`]+/gi;
+  const rawUrlsFound = html.matchAll(globalEbayImgRegex);
+  for (const rawM of rawUrlsFound) {
+    let candidate = rawM[0].replace(/\\/g, '');
+    if (candidate.startsWith('//')) candidate = 'https:' + candidate;
+    if (!candidate.startsWith('http')) candidate = 'https://' + candidate.replace(/^https?:\/\//, '');
+    if (candidate.includes('/images/') || candidate.includes('/00/s/')) {
+      addImageUrl(candidate);
+    }
   }
 
   // 2. Title fallback
@@ -354,21 +526,6 @@ export function parseEbayProductHtml(html: string, sourceUrl: string = ''): Scra
       const rawPrice = (priceMatch[1] || priceMatch[0]).replace(/[^0-9.]/g, '');
       price = parseFloat(rawPrice) || 0;
     }
-  }
-
-  // 4. High-Res Images Extraction
-  // A) .ux-image-carousel-item img (src, data-zoom-src, data-src)
-  const carouselMatches = html.matchAll(/class=["'][^"']*ux-image-carousel-item[^"']*["'][^>]*>[\s\S]*?<img[^>]+(?:src|data-zoom-src|data-src)=["']([^"']+)["']/gi);
-  for (const m of carouselMatches) {
-    const norm = normalizeEbayImageUrl(m[1]);
-    if (norm) imagesSet.add(norm);
-  }
-
-  // B) Scan for all i.ebayimg.com URLs
-  const ebayImgMatches = html.matchAll(/https:\/\/i\.ebayimg\.com\/images\/g\/[A-Za-z0-9_-]+\/s-l\d+\.(?:jpg|png|webp)/gi);
-  for (const m of ebayImgMatches) {
-    const norm = normalizeEbayImageUrl(m[0]);
-    if (norm) imagesSet.add(norm);
   }
 
   // 5. Item specifics (.ux-labels-values)
@@ -414,7 +571,7 @@ export function parseEbayProductHtml(html: string, sourceUrl: string = ''): Scra
     origPrice: price > 0 ? Math.round(price * 1.25 * 100) / 100 : undefined,
     description: finalDescription,
     features: features.slice(0, 4),
-    images: Array.from(imagesSet).slice(0, 10),
+    images: Array.from(imagesSet).slice(0, 12),
     sourceUrl,
     marketplace: 'ebay',
   };
