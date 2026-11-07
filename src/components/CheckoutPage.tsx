@@ -558,12 +558,12 @@ export const CheckoutPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Standard Payment Method Selection (Cards / PayPal) */}
+              {/* Standard Payment Method Selection (PayPal / Cards via PayPal) */}
               <div className="bg-white dark:bg-slate-900 p-6 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center space-x-2">
-                    <CreditCard className="w-4 h-4 text-blue-600" />
-                    <span>Standard Payment (Debit or Credit Card / PayPal)</span>
+                    <PayPalLogo className="h-5 w-auto" />
+                    <span>PayPal Secure Checkout</span>
                   </h3>
                   <div className="flex items-center space-x-1.5">
                     <VisaLogo className="h-4 w-auto" />
@@ -572,135 +572,17 @@ export const CheckoutPage: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("card")}
-                    className={`p-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
-                      activePaymentMethod === "card"
-                        ? "border-blue-600 bg-blue-50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-2 ring-blue-500/20"
-                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100"
-                    }`}
-                  >
-                    <CreditCard className="w-4 h-4" />
-                    <span>Credit / Debit Card</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setActivePaymentMethod("paypal")}
-                    className={`p-3 rounded-2xl border text-xs font-bold transition-all cursor-pointer flex items-center justify-center space-x-2 ${
-                      activePaymentMethod === "paypal"
-                        ? "border-[#003087] bg-[#003087] text-white shadow-md ring-2 ring-[#003087]/25"
-                        : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-100"
-                    }`}
-                  >
-                    <PayPalLogo className="h-4 w-auto" isWhite={activePaymentMethod === "paypal"} />
-                    <span>PayPal Account</span>
-                  </button>
-                </div>
-
-                {activePaymentMethod === "paypal" ? (
-                  <div className="pt-3">
-                    <div className="relative min-h-[50px] rounded-2xl p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                      <PayPalButtons
-                        style={{ layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal', height: 44 }}
-                        disabled={isProcessingPayment}
-                        createOrder={createPayPalOrderHandler}
-                        onApprove={handlePayPalApprove}
-                      />
-                    </div>
-                  </div>
-                ) : (
-                  <form onSubmit={handleCardSubmit} className="space-y-3 pt-2">
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Cardholder Name
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        value={cardData.name}
-                        onChange={(e) => setCardData({ ...cardData, name: e.target.value })}
-                        placeholder={formData.name || "John Doe"}
-                        className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Card Number
-                      </label>
-                      <input
-                        type="text"
-                        required
-                        maxLength={19}
-                        value={cardData.number}
-                        onChange={(e) => {
-                          const val = e.target.value.replace(/\D/g, "").replace(/(\d{4})/g, "$1 ").trim();
-                          setCardData({ ...cardData, number: val });
-                        }}
-                        placeholder="4000 1234 5678 9010"
-                        className="w-full px-3 py-2 text-xs font-mono bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Exp Date
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          maxLength={5}
-                          value={cardData.expiry}
-                          onChange={(e) => {
-                            let val = e.target.value.replace(/\D/g, "");
-                            if (val.length >= 3) val = `${val.slice(0, 2)}/${val.slice(2, 4)}`;
-                            setCardData({ ...cardData, expiry: val });
-                          }}
-                          placeholder="MM/YY"
-                          className="w-full px-3 py-2 text-xs font-mono text-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          CVC / CVV
-                        </label>
-                        <input
-                          type="password"
-                          required
-                          maxLength={4}
-                          value={cardData.cvc}
-                          onChange={(e) => setCardData({ ...cardData, cvc: e.target.value.replace(/\D/g, "") })}
-                          placeholder="•••"
-                          className="w-full px-3 py-2 text-xs font-mono text-center bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white"
-                        />
-                      </div>
-                    </div>
-
-                    <button
-                      type="submit"
+                <div className="pt-2">
+                  <div className="relative min-h-[50px] rounded-2xl p-2 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                    <PayPalButtons
+                      style={{ layout: 'vertical', color: 'gold', shape: 'rect', label: 'paypal', height: 44 }}
                       disabled={isProcessingPayment}
-                      className="w-full mt-2 py-3 px-5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs flex items-center justify-center space-x-2 shadow-md cursor-pointer disabled:opacity-50"
-                    >
-                      {isProcessingPayment ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          <span>Processing Payment...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Lock className="w-4 h-4" />
-                          <span>Complete Secure Payment ({formatPrice(totalAmountUSD)})</span>
-                        </>
-                      )}
-                    </button>
-                  </form>
-                )}
+                      createOrder={createPayPalOrderHandler}
+                      onApprove={handlePayPalApprove}
+                    />
+                  </div>
+                </div>
               </div>
-
             </div>
 
             {/* Right Column: Order Summary */}
