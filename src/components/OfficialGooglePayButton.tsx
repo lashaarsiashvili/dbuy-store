@@ -139,7 +139,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
 
         if (!paymentsClientRef.current) {
           paymentsClientRef.current = new google.payments.api.PaymentsClient({
-            environment: 'TEST',
+            environment: 'PRODUCTION',
           });
         }
 
@@ -205,7 +205,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
         }
         if ((window as any).google?.payments?.api?.PaymentsClient) {
           paymentsClientRef.current = new (window as any).google.payments.api.PaymentsClient({
-            environment: 'TEST',
+            environment: 'PRODUCTION',
           });
         }
       }
