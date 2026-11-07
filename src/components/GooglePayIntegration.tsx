@@ -84,7 +84,7 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
 
       if (!paymentsClientRef.current) {
         paymentsClientRef.current = new google.payments.api.PaymentsClient({
-          environment: 'TEST', // Set to 'TEST' for test mode screenshots & verification
+          environment: 'PRODUCTION', // Live production environment
         });
       }
 

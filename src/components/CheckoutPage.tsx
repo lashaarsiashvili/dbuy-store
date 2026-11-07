@@ -449,8 +449,8 @@ export const CheckoutPage: React.FC = () => {
                         <ShieldCheck className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
                         <span>Google Pay Tokenization</span>
                       </div>
-                      <span className="text-[10px] bg-slate-100 text-slate-700 font-semibold px-2 py-0.5 rounded-md border border-slate-200">
-                        TEST MODE
+                      <span className="text-[10px] bg-emerald-100 text-emerald-800 font-semibold px-2 py-0.5 rounded-md border border-emerald-200">
+                        LIVE
                       </span>
                     </div>
                   </div>
