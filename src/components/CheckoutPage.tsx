@@ -297,6 +297,9 @@ export const CheckoutPage: React.FC = () => {
     }
   };
 
+  const handleApplePay = handleApplePaySubmit;
+  const handleGooglePay = handleGooglePaySubmit;
+
   const handleCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.name.trim() || !formData.email.trim() || !formData.address.trim()) {
@@ -377,12 +380,11 @@ export const CheckoutPage: React.FC = () => {
               {/* TOP: Express Checkout Bar (Apple Pay, Google Pay) */}
               <div className="bg-white dark:bg-slate-900 p-5 rounded-3xl border border-slate-200 dark:border-slate-800 shadow-sm space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {/* Apple Pay Card */}
+                  {/* Left Card: Apple Pay */}
                   <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
                     <button
                       type="button"
-                      onClick={handleApplePaySubmit}
-                      disabled={isProcessingPayment}
+                      onClick={handleApplePay}
                       className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer select-none"
                       aria-label="Buy with Apple Pay"
                     >
@@ -408,16 +410,18 @@ export const CheckoutPage: React.FC = () => {
                     </button>
                   </div>
 
-                  {/* Google Pay Card */}
+                  {/* Right Card: Google Pay - UNCONDITIONAL RENDER */}
                   <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
                     <button
                       type="button"
-                      onClick={handleGooglePaySubmit}
-                      disabled={isProcessingPayment}
-                      className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                      onClick={handleGooglePay}
+                      className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer select-none"
                       aria-label="Buy with Google Pay"
                     >
-                      <span className="text-[16px] font-medium tracking-normal leading-none text-white" style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}>
+                      <span
+                        className="text-[16px] font-medium tracking-normal leading-none text-white"
+                        style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}
+                      >
                         Buy with
                       </span>
                       <svg className="h-[20px] w-auto" viewBox="0 0 41 17" fill="none" xmlns="http://www.w3.org/2000/svg">

@@ -3,7 +3,6 @@ import { useStore } from '../context/StoreContext';
 import { getProductFeatures } from '../utils/productFeatures';
 import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
-import { ProductPaymentModule } from './ProductPaymentModule';
 import { analytics } from './AdminAnalyticsDashboard';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { 
@@ -35,6 +34,7 @@ export const QuickViewModal: React.FC = () => {
     isInWishlist,
     toggleWishlist,
     setIsCheckoutOpen,
+    setCurrentPage,
     incrementProductViews,
     user,
     isAdmin,
@@ -263,7 +263,8 @@ export const QuickViewModal: React.FC = () => {
     analytics.trackCheckoutAttempt(isCurrentAdmin);
     addToCart(quickViewProduct, quantity);
     setQuickViewProduct(null);
-    setIsCheckoutOpen(true);
+    setCurrentPage('checkout');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   const discountPercent = quickViewProduct.origPrice
@@ -551,9 +552,16 @@ export const QuickViewModal: React.FC = () => {
                 </button>
               </div>
 
-              {/* REAL PAYMENT MODULE (PAYPAL, APPLE PAY, GOOGLE PAY & CARD) */}
+              {/* Stacked Full-Width BUY NOW Button */}
               <div className="pt-2">
-                <ProductPaymentModule product={quickViewProduct} quantity={quantity} />
+                <button
+                  type="button"
+                  onClick={handleBuyNow}
+                  disabled={quickViewProduct.stock <= 0}
+                  className="bg-[#FFB800] hover:bg-[#F2AE00] text-black font-bold uppercase tracking-wide h-12 w-full rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  <span>{language === 'ka' ? 'ახლავე ყიდვა' : 'BUY NOW'}</span>
+                </button>
               </div>
             </div>
           </div>

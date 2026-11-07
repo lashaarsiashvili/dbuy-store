@@ -924,15 +924,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const isAdmin = user.isLoggedIn && (user.role === 'admin' || user.email?.toLowerCase().trim() === 'lashaarsiashvili@gmail.com');
 
-  const getUserKey = (prefix: string, email?: string) => `${prefix}_${email ? email.toLowerCase().trim() : 'guest'}`;
-
   const [cart, setCart] = useState<CartItem[]>(() => {
     try {
-      const key = getUserKey('dbuy_cart', user.isLoggedIn ? user.email : undefined);
-      const saved = localStorage.getItem(key);
+      const saved = localStorage.getItem('dbuy_cart_v1');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
+      }
+      // Fallback legacy keys if v1 is empty
+      const legacy = localStorage.getItem('dbuy_cart_guest');
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
     return [];
@@ -940,30 +943,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [wishlist, setWishlist] = useState<string[]>(() => {
     try {
-      const key = getUserKey('dbuy_wishlist', user.isLoggedIn ? user.email : undefined);
-      const saved = localStorage.getItem(key);
+      const saved = localStorage.getItem('dbuy_wishlist_v1');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) return parsed;
+      }
+      const legacy = localStorage.getItem('dbuy_wishlist_guest');
+      if (legacy) {
+        const parsed = JSON.parse(legacy);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
       }
     } catch (e) {}
     return [];
   });
 
-  // Save cart & wishlist whenever they update
+  // Immediate persistence on update & via useEffect
   useEffect(() => {
     try {
-      const key = getUserKey('dbuy_cart', user.isLoggedIn ? user.email : undefined);
-      localStorage.setItem(key, JSON.stringify(cart));
+      localStorage.setItem('dbuy_cart_v1', JSON.stringify(cart));
     } catch (e) {}
-  }, [cart, user]);
+  }, [cart]);
 
   useEffect(() => {
     try {
-      const key = getUserKey('dbuy_wishlist', user.isLoggedIn ? user.email : undefined);
-      localStorage.setItem(key, JSON.stringify(wishlist));
+      localStorage.setItem('dbuy_wishlist_v1', JSON.stringify(wishlist));
     } catch (e) {}
-  }, [wishlist, user]);
+  }, [wishlist]);
 
   const [orders, setOrders] = useState<Order[]>(() => {
     try {
@@ -1026,49 +1031,41 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setUser(newUser);
     saveSession(newUser);
 
-    // Load user's saved cart & merge guest cart if any
+    // Merge any user-specific saved cart/wishlist with dbuy_cart_v1 / dbuy_wishlist_v1 without overwriting
     try {
-      const userCartKey = `dbuy_cart_${email.toLowerCase()}`;
-      const existingUserCartSaved = localStorage.getItem(userCartKey);
-      let userCart: CartItem[] = existingUserCartSaved ? JSON.parse(existingUserCartSaved) : [];
-
-      const guestCartSaved = localStorage.getItem('dbuy_cart_guest');
-      if (guestCartSaved) {
-        const guestCart: CartItem[] = JSON.parse(guestCartSaved);
-        if (Array.isArray(guestCart) && guestCart.length > 0) {
-          const merged = [...userCart];
-          for (const gItem of guestCart) {
-            const found = merged.find(i => i.product.id === gItem.product.id && i.selectedOption === gItem.selectedOption);
-            if (found) {
-              found.quantity += gItem.quantity;
-            } else {
-              merged.push(gItem);
+      const userCartKey = `dbuy_cart_user_${email.toLowerCase()}`;
+      const savedUserCart = localStorage.getItem(userCartKey);
+      if (savedUserCart) {
+        const parsed: CartItem[] = JSON.parse(savedUserCart);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setCart(prev => {
+            const merged = [...prev];
+            for (const item of parsed) {
+              const found = merged.find(i => i.product.id === item.product.id && i.selectedOption === item.selectedOption);
+              if (!found) {
+                merged.push(item);
+              }
             }
-          }
-          userCart = merged;
-          localStorage.removeItem('dbuy_cart_guest');
+            localStorage.setItem('dbuy_cart_v1', JSON.stringify(merged));
+            return merged;
+          });
         }
       }
-      setCart(userCart);
-      localStorage.setItem(userCartKey, JSON.stringify(userCart));
     } catch (e) {}
 
-    // Load user's saved wishlist & merge guest wishlist if any
     try {
-      const userWishlistKey = `dbuy_wishlist_${email.toLowerCase()}`;
-      const existingUserWishlistSaved = localStorage.getItem(userWishlistKey);
-      let userWishlist: string[] = existingUserWishlistSaved ? JSON.parse(existingUserWishlistSaved) : [];
-
-      const guestWishlistSaved = localStorage.getItem('dbuy_wishlist_guest');
-      if (guestWishlistSaved) {
-        const guestWishlist: string[] = JSON.parse(guestWishlistSaved);
-        if (Array.isArray(guestWishlist) && guestWishlist.length > 0) {
-          userWishlist = Array.from(new Set([...userWishlist, ...guestWishlist]));
-          localStorage.removeItem('dbuy_wishlist_guest');
+      const userWishlistKey = `dbuy_wishlist_user_${email.toLowerCase()}`;
+      const savedUserWishlist = localStorage.getItem(userWishlistKey);
+      if (savedUserWishlist) {
+        const parsed: string[] = JSON.parse(savedUserWishlist);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setWishlist(prev => {
+            const merged = Array.from(new Set([...prev, ...parsed]));
+            localStorage.setItem('dbuy_wishlist_v1', JSON.stringify(merged));
+            return merged;
+          });
         }
       }
-      setWishlist(userWishlist);
-      localStorage.setItem(userWishlistKey, JSON.stringify(userWishlist));
     } catch (e) {}
 
     setIsAuthModalOpen(false);
@@ -1092,8 +1089,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const logoutUser = () => {
     setUser(defaultUser);
     clearSession();
-    setCart([]);
-    setWishlist([]);
+    // Do NOT clear cart or wishlist on logout per requirements (dbuy_cart_v1 and dbuy_wishlist_v1 persist across refreshes and logouts)
     addToast(language === 'ka' ? 'გახვიდეთ სისტემიდან' : 'Logged out', 'info');
   };
 
@@ -1109,14 +1105,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addToCart = (product: Product, quantity = 1, selectedOption?: string) => {
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id && item.selectedOption === selectedOption);
+      let next: CartItem[];
       if (existing) {
-        return prev.map(item =>
+        next = prev.map(item =>
           (item.product.id === product.id && item.selectedOption === selectedOption)
             ? { ...item, quantity: item.quantity + quantity }
             : item
         );
+      } else {
+        next = [...prev, { product, quantity, selectedOption }];
       }
-      return [...prev, { product, quantity, selectedOption }];
+      try {
+        localStorage.setItem('dbuy_cart_v1', JSON.stringify(next));
+      } catch (e) {}
+      return next;
     });
     addToast(language === 'ka' ? `დაემატა კალათაში!` : `Added to cart!`, 'success');
   };
@@ -1126,11 +1128,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       removeFromCart(productId);
       return;
     }
-    setCart(prev => prev.map(item => item.product.id === productId ? { ...item, quantity } : item));
+    setCart(prev => {
+      const next = prev.map(item => item.product.id === productId ? { ...item, quantity } : item);
+      try {
+        localStorage.setItem('dbuy_cart_v1', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
   };
 
   const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId));
+    setCart(prev => {
+      const next = prev.filter(item => item.product.id !== productId);
+      try {
+        localStorage.setItem('dbuy_cart_v1', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
     addToast('Item removed from cart', 'info');
   };
 
@@ -1138,6 +1152,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setCart([]);
     setPromoCode('');
     setPromoDiscountPercent(0);
+    try {
+      localStorage.setItem('dbuy_cart_v1', JSON.stringify([]));
+    } catch (e) {}
   };
 
   const applyPromoCode = (code: string): boolean => {
@@ -1164,18 +1181,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const toggleWishlist = (product: Product) => {
     setWishlist(prev => {
       const exists = prev.includes(product.id);
+      let next: string[];
       if (exists) {
         addToast(t('wishlist.removed'), 'info');
-        return prev.filter(id => id !== product.id);
+        next = prev.filter(id => id !== product.id);
       } else {
         addToast(t('wishlist.added'), 'success');
-        return [...prev, product.id];
+        next = [...prev, product.id];
       }
+      try {
+        localStorage.setItem('dbuy_wishlist_v1', JSON.stringify(next));
+      } catch (e) {}
+      return next;
     });
   };
 
   const removeFromWishlist = (productId: string) => {
-    setWishlist(prev => prev.filter(id => id !== productId));
+    setWishlist(prev => {
+      const next = prev.filter(id => id !== productId);
+      try {
+        localStorage.setItem('dbuy_wishlist_v1', JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
   };
 
   const wishlistCount = wishlist.length;
@@ -1202,6 +1230,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setOrders(prev => [newOrder, ...prev]);
     setLastPlacedOrder(newOrder);
     setCart([]);
+    try {
+      localStorage.setItem('dbuy_cart_v1', JSON.stringify([]));
+    } catch (e) {}
     addToast(language === 'ka' ? 'შეკვეთა წარმატებით განთავსდა!' : 'Order placed successfully!', 'success');
     return newOrder;
   };

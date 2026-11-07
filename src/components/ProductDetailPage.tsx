@@ -4,7 +4,6 @@ import { Product } from '../types';
 import { getProductFeatures } from '../utils/productFeatures';
 import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
-import { ProductPaymentModule } from './ProductPaymentModule';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
 import { analytics } from './AdminAnalyticsDashboard';
 import { ProductReviewsSection } from './ProductReviewsSection';
@@ -92,6 +91,17 @@ export const ProductDetailPage: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
+
+  // Dynamic estimated delivery date (+ 7 days from now)
+  const estimatedDeliveryDate = React.useMemo(() => {
+    const targetDate = new Date();
+    targetDate.setDate(targetDate.getDate() + 7);
+    return targetDate.toLocaleDateString(language === 'ka' ? 'ka-GE' : 'en-US', {
+      weekday: 'short',
+      month: 'short',
+      day: 'numeric',
+    });
+  }, [language]);
 
   // Strictly manual zoom & Lightbox state (Default state is static 1x)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -742,6 +752,16 @@ export const ProductDetailPage: React.FC = () => {
             </div>
           </div>
 
+          {/* Estimated Delivery Text */}
+          <div className="flex items-center space-x-2 text-sm font-semibold text-[#007663] dark:text-[#00A882]">
+            <Truck className="w-4 h-4 shrink-0 text-[#007663] dark:text-[#00A882]" />
+            <span>
+              {language === 'ka' 
+                ? `შეუკვეთეთ ახლა და მიიღეთ დაახლოებით ${estimatedDeliveryDate}`
+                : `Order now and get it around ${estimatedDeliveryDate}`}
+            </span>
+          </div>
+
           {/* Single Functional Amazon-Style Color Variant Selector */}
           {variants.length > 0 && (
             <div className="space-y-2 py-1">
@@ -796,8 +816,107 @@ export const ProductDetailPage: React.FC = () => {
             </div>
           )}
 
+          {/* Clean Product Purchase Section */}
+          <div className="space-y-4 pt-1">
+            {/* Quantity Selector Row */}
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-sm text-slate-900 dark:text-slate-100 uppercase tracking-wide">
+                QTY:
+              </span>
+              <div className="flex items-center border border-gray-300 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 overflow-hidden shadow-2xs">
+                <button
+                  type="button"
+                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                  className="w-10 h-10 flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-lg select-none"
+                  aria-label="Decrease quantity"
+                >
+                  -
+                </button>
+                <span className="w-12 text-center font-bold text-sm text-slate-900 dark:text-slate-100 select-none">
+                  {quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setQuantity(q => Math.min(product.stock ?? 99, q + 1))}
+                  className="w-10 h-10 flex items-center justify-center font-bold text-slate-700 dark:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-lg select-none"
+                  aria-label="Increase quantity"
+                >
+                  +
+                </button>
+              </div>
+
+              {/* Wishlist Heart Button next to it */}
+              <button
+                type="button"
+                onClick={() => toggleWishlist(product)}
+                className={`w-10 h-10 rounded-lg border transition-all cursor-pointer flex items-center justify-center shadow-2xs ${
+                  isFavorite
+                    ? 'bg-red-50 dark:bg-red-950/60 border-red-200 dark:border-red-900 text-red-500'
+                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-red-500 hover:border-red-300'
+                }`}
+                title={isFavorite ? 'Remove from Wishlist' : 'Add to Wishlist'}
+                aria-label="Wishlist"
+              >
+                <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+              </button>
+            </div>
+
+            {/* Two Stacked Full-Width Action Buttons */}
+            <div className="flex flex-col gap-3 w-full">
+              {/* ADD TO CART */}
+              <button
+                type="button"
+                onClick={handleAddToCart}
+                className="bg-[#111111] hover:bg-black text-white font-bold uppercase tracking-wide h-12 w-full rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+              >
+                {justAdded ? (
+                  <span className="flex items-center space-x-2 text-emerald-400">
+                    <Check className="w-5 h-5 animate-check-pop" />
+                    <span>{language === 'ka' ? 'დაემატა კალათაში!' : 'ADD TO CART'}</span>
+                  </span>
+                ) : (
+                  <span>{language === 'ka' ? 'კალათაში დამატება' : 'ADD TO CART'}</span>
+                )}
+              </button>
+
+              {/* BUY NOW */}
+              <button
+                type="button"
+                onClick={handleBuyNow}
+                className="bg-[#FFB800] hover:bg-[#F2AE00] text-black font-bold uppercase tracking-wide h-12 w-full rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <span>{language === 'ka' ? 'ახლავე ყიდვა' : 'BUY NOW'}</span>
+              </button>
+            </div>
+
+            {/* Secured Transaction Trust Box */}
+            <div className="rounded-lg border border-gray-200 dark:border-slate-800 bg-[#FAFAFA] dark:bg-slate-900/60 p-4 mt-4">
+              <div className="flex items-center gap-1.5 text-sm font-bold text-gray-800 dark:text-gray-100">
+                <span>{language === 'ka' ? 'დაცული ტრანზაქცია' : 'Secured transaction'}</span>
+                <svg 
+                  className="w-4 h-4 text-[#008A4B]" 
+                  viewBox="0 0 24 24" 
+                  fill="none" 
+                  stroke="#008A4B" 
+                  strokeWidth="2.2" 
+                  strokeLinecap="round" 
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                >
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                </svg>
+              </div>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1.5 leading-relaxed">
+                {language === 'ka'
+                  ? 'PCI DSS შესაბამისობა და ISO 27001:2022 სერტიფიცირება, დაშიფრული გადახდები და მყიდველის სრული დაცვა თითოეულ შეკვეთაზე.'
+                  : 'PCI DSS compliant and ISO 27001:2022 certified, with encrypted payments and full buyer protection on every order.'}
+              </p>
+            </div>
+          </div>
+
           {/* Description */}
-          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed">
+          <p className="text-sm sm:text-base text-slate-600 dark:text-slate-300 leading-relaxed pt-2">
             {displayDesc}
           </p>
 
@@ -826,71 +945,6 @@ export const ProductDetailPage: React.FC = () => {
               </div>
             );
           })()}
-
-          {/* Quantity & Actions Bar */}
-          <div className="space-y-4 pt-4 border-t border-slate-100 dark:border-slate-800">
-            <div className="flex items-center space-x-4">
-              {/* Quantity Selector */}
-              <div className="flex items-center border-2 border-slate-200 dark:border-slate-800 rounded-2xl bg-white dark:bg-slate-900 p-1 shadow-2xs">
-                <button
-                  onClick={() => setQuantity(q => Math.max(1, q - 1))}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-base"
-                >
-                  -
-                </button>
-                <span className="w-12 text-center font-black text-sm text-slate-900 dark:text-slate-100">
-                  {quantity}
-                </span>
-                <button
-                  onClick={() => setQuantity(q => Math.min(product.stock, q + 1))}
-                  className="w-9 h-9 rounded-xl flex items-center justify-center font-bold text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer text-base"
-                >
-                  +
-                </button>
-              </div>
-
-              {/* Add to Cart Button */}
-              <button
-                onClick={handleAddToCart}
-                className={`flex-1 py-3.5 px-6 rounded-2xl font-black text-sm flex items-center justify-center space-x-2 transition-all cursor-pointer shadow-lg active:scale-95 duration-200 ${
-                  justAdded
-                    ? 'animate-cart-pulse bg-emerald-600 text-white shadow-emerald-500/30 ring-4 ring-emerald-400/40'
-                    : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-500/25 hover:shadow-blue-500/35 hover:-translate-y-0.5'
-                }`}
-              >
-                {justAdded ? (
-                  <>
-                    <Check className="w-5 h-5 animate-check-pop text-white" />
-                    <span className="font-extrabold tracking-wide">{language === 'ka' ? 'დაემატა კალათაში!' : 'Added to Cart!'}</span>
-                  </>
-                ) : (
-                  <>
-                    <ShoppingCart className="w-5 h-5 transition-transform group-hover:scale-110" />
-                    <span data-i18n="add_to_cart">{t('add_to_cart')}</span>
-                  </>
-                )}
-              </button>
-
-              {/* Wishlist Button */}
-              <button
-                onClick={() => toggleWishlist(product)}
-                className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer shadow-2xs ${
-                  isFavorite
-                    ? 'bg-red-50 dark:bg-red-950/60 border-red-200 dark:border-red-900 text-red-500'
-                    : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:text-red-500 hover:border-red-200'
-                }`}
-                title={isFavorite ? 'Remove from Wishlist' : 'Add to Wishlist'}
-                aria-label="Wishlist"
-              >
-                <Heart className={`w-5 h-5 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
-              </button>
-            </div>
-
-            {/* REAL INTERACTIVE PAYPAL, APPLE PAY, GOOGLE PAY & CARD MODULE */}
-            <div className="pt-2">
-              <ProductPaymentModule product={product} quantity={quantity} />
-            </div>
-          </div>
 
           {/* Trust Guarantees */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4">

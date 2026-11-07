@@ -450,6 +450,9 @@ export const CheckoutModal: React.FC = () => {
     }
   };
 
+  const handleApplePay = handleApplePaySubmit;
+  const handleGooglePay = handleGooglePaySubmit;
+
   // Card execution with direct order registration
   const handleCardSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -758,12 +761,11 @@ export const CheckoutModal: React.FC = () => {
 
                {/* Apple Pay & Google Pay 2-Column Row */}
                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                 {/* Apple Pay Card */}
+                 {/* Left Card: Apple Pay */}
                  <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
                    <button
                      type="button"
-                     onClick={handleApplePaySubmit}
-                     disabled={isProcessingPayment}
+                     onClick={handleApplePay}
                      className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-1.5 transition-colors cursor-pointer select-none"
                      aria-label="Buy with Apple Pay"
                    >
@@ -789,50 +791,18 @@ export const CheckoutModal: React.FC = () => {
                    </button>
                  </div>
 
-                 {/* Google Pay Card */}
+                 {/* Right Card: Google Pay - UNCONDITIONAL RENDER */}
                  <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
                    <button
                      type="button"
-                     onClick={async () => {
-                       setIsProcessingPayment(true);
-                       try {
-                         await startPayPalV6GooglePayCheckout({
-                           amountUSD: totalAmountUSD,
-                           label: "DBUY Store Checkout",
-                           customerInfo: formData,
-                           onSuccess: (details) => {
-                             const orderID = details.orderId || details.transactionId;
-                             setIsProcessingPayment(false);
-                             placeOrder({
-                               customerName: (details?.payer?.name || formData.name).trim() || "Google Pay Customer",
-                               email: (details?.payer?.email || formData.email).trim() || "customer@dbuystore.com",
-                               address: (details?.payer?.address || formData.address).trim() || "Global Address",
-                               city: (details?.payer?.city || formData.city).trim() || "Tbilisi",
-                               zip: (details?.payer?.zip || formData.zip).trim() || "0100",
-                               country: (details?.payer?.country || formData.country).trim() || "United States",
-                               paymentMethod: "googlepay",
-                               googlePayTransactionId: orderID,
-                             });
-                             setStep(3);
-                             addToast("Google Pay processed successfully!", "success");
-                           },
-                           onError: () => {
-                             setIsProcessingPayment(false);
-                             addToast("Google Pay payment failed", "error");
-                           },
-                           onCancel: () => {
-                             setIsProcessingPayment(false);
-                           }
-                         });
-                       } catch (err) {
-                         setIsProcessingPayment(false);
-                       }
-                     }}
-                     disabled={isProcessingPayment}
-                     className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                     onClick={handleGooglePay}
+                     className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer select-none"
                      aria-label="Buy with Google Pay"
                    >
-                     <span className="text-[16px] font-medium tracking-normal leading-none text-white" style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}>
+                     <span
+                       className="text-[16px] font-medium tracking-normal leading-none text-white"
+                       style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}
+                     >
                        Buy with
                      </span>
                      <svg className="h-[20px] w-auto" viewBox="0 0 41 17" fill="none" xmlns="http://www.w3.org/2000/svg">
