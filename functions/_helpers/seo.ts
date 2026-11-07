@@ -186,12 +186,12 @@ export function injectProductOpenGraphResponse(
 
   const rawPrice = product.price || 0;
   
-  currencyCode = 'USD';
-  priceAmount = rawPrice;
-  displayTitle = product.titleEn || product.title;
+  let currencyCode = 'USD';
+  let priceAmount = rawPrice;
+  let displayTitle = product.titleEn || product.title;
 
-  seoTitle = `🔥 ${displayTitle} — Only $${rawPrice} | Worldwide Shipping 🌍`;
-  seoDesc = `Premium quality at direct value. Order now at DBUY Store with Fast & Secure Worldwide Shipping!`;
+  let seoTitle = `🔥 ${displayTitle} — Only $${rawPrice} | Worldwide Shipping 🌍`;
+  let seoDesc = `Premium quality at direct value. Order now at DBUY Store with Fast & Secure Worldwide Shipping!`;
 
 
   // Facebook & Social Crawlers strictly require absolute URLs with https://

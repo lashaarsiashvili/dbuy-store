@@ -4685,7 +4685,7 @@ app.post('/api/gemini/generate-ad', async (req, res) => {
       contents: [{ role: 'user', parts: [prompt, ...imageParts] }],
     });
 
-    const caption = result.text();
+    const caption = result.text;
     res.json({ success: true, caption });
   } catch (error: any) {
     console.error('Gemini Ad Gen Error:', error);

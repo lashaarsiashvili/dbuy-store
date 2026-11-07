@@ -38,7 +38,7 @@ export async function publishFacebookPhotoPost(
       const json: any = await response.json();
       return json;
     }
-    const json = await response.json().catch(() => ({}));
+    const json: any = await response.json().catch(() => ({}));
     return { success: false, error: json.error || 'Request failed' };
   } catch (err: any) {
     return { success: false, error: err?.message || 'Network error' };

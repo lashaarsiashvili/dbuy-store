@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { StoreProvider, useStore } from './context/StoreContext';
+import { LanguageProvider } from './context/LanguageContext';
 import { Header } from './components/Header';
 import { Hero } from './components/Hero';
 import { CategoryBrowse } from './components/CategoryBrowse';
@@ -350,19 +351,21 @@ const MainLayout: React.FC = () => {
 
 export function App() {
   return (
-    <StoreProvider>
-      <PayPalScriptProvider
-        options={{
-          clientId: paypalClientId,
-          currency: 'USD',
-          intent: 'capture',
-          components: 'buttons',
-          enableFunding: 'card,paylater,venmo',
-        }}
-      >
-        <MainLayout />
-      </PayPalScriptProvider>
-    </StoreProvider>
+    <LanguageProvider>
+      <StoreProvider>
+        <PayPalScriptProvider
+          options={{
+            clientId: paypalClientId,
+            currency: 'USD',
+            intent: 'capture',
+            components: 'buttons',
+            enableFunding: 'card,paylater,venmo',
+          }}
+        >
+          <MainLayout />
+        </PayPalScriptProvider>
+      </StoreProvider>
+    </LanguageProvider>
   );
 }
 

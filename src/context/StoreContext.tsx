@@ -22,6 +22,7 @@ import { initialBillboards } from '../data/initialBillboards';
 import { categoryIdToSlug, slugToCategoryId } from '../data/categoryNavigationData';
 import { translations } from '../data/translations';
 import { getTranslation } from '../utils/i18n';
+import { useLanguage } from './LanguageContext';
 import { loadImageBackupsIDB, preloadProductImages } from '../utils/imageStorage';
 import { 
   loadVisitorLogs, 
@@ -374,33 +375,7 @@ const getFontFamilyValue = (themeName: string): string => {
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Reactive Multi-language State with robust fallback
-  const [language, setLanguageState] = useState<Language>(() => {
-    if (typeof localStorage !== 'undefined') {
-      const saved = localStorage.getItem('dbuy_lang');
-      if (saved && (['en', 'ka', 'es', 'fr', 'de'] as string[]).includes(saved)) {
-        return saved as Language;
-      }
-    }
-    return 'en';
-  });
-
-  const setLanguage = (lang: Language) => {
-    setLanguageState(lang);
-    try {
-      localStorage.setItem('dbuy_lang', lang);
-    } catch {}
-    
-    if (typeof document !== 'undefined') {
-      document.documentElement.lang = lang;
-    }
-  };
-
-  useEffect(() => {
-    if (typeof document !== 'undefined') {
-      document.documentElement.lang = language;
-    }
-  }, [language]);
+  const { language, setLanguage, t } = useLanguage();
 
   // Toast Notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -416,11 +391,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setTimeout(() => {
       removeToast(id);
     }, 4000);
-  };
-
-  // Robust translation helper supporting nested dot notation
-  const t = (key: string, params?: Record<string, string | number>): string => {
-    return getTranslation(language, key, params);
   };
 
   const safeFirestoreSetDoc = async (documentRef: any, data: any, options: any = { merge: true }) => {

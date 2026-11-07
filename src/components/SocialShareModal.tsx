@@ -80,7 +80,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     if (!pageId) {
         fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}`)
             .then(r => r.json())
-            .then(data => { if(data.id) { setPageId(data.id); localStorage.setItem('dbuy_fb_page_id', data.id); } });
+            .then((data: any) => { if(data.id) { setPageId(data.id); localStorage.setItem('dbuy_fb_page_id', data.id); } });
     }
 
     const urls = new Set<string>();
