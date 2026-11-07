@@ -117,6 +117,8 @@ interface StoreContextType {
   setQuickViewProduct: (product: Product | null) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
+  isFaceSetupOpen: boolean;
+  setIsFaceSetupOpen: (open: boolean) => void;
   activeAuthTab: 'login' | 'register' | 'face';
   setActiveAuthTab: (tab: 'login' | 'register' | 'face') => void;
   isCheckoutOpen: boolean;
@@ -983,6 +985,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
+  const [isFaceSetupOpen, setIsFaceSetupOpen] = useState(false);
   const [activeAuthTab, setActiveAuthTab] = useState<'login' | 'register' | 'face'>('login');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
 
@@ -1123,6 +1126,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cartTotalCount, cartSubtotalUSD, promoCode, promoDiscountPercent,
         applyPromoCode, clearPromoCode, isCartOpen, setIsCartOpen,
         quickViewProduct, setQuickViewProduct, isAuthModalOpen, setIsAuthModalOpen,
+        isFaceSetupOpen, setIsFaceSetupOpen,
         activeAuthTab, setActiveAuthTab,
         isCheckoutOpen, setIsCheckoutOpen,
         orders, placeOrder, updateOrderStatus, updateOrderTracking,

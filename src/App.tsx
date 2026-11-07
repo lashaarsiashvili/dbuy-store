@@ -12,6 +12,7 @@ import { CartDrawer } from './components/CartDrawer';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { AuthModal } from './components/AuthModal';
+import { FaceIdSetupModal } from './components/FaceIdSetupModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AboutPage } from './components/AboutPage';
 import { ContactPage } from './components/ContactPage';
@@ -344,6 +345,7 @@ const MainLayout: React.FC = () => {
       <WishlistDrawer />
       <CheckoutModal />
       <AuthModal />
+      <FaceIdSetupModal />
       <ToastContainer />
     </div>
   );
