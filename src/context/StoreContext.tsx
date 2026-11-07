@@ -167,6 +167,7 @@ interface StoreContextType {
   billboardIntervalSeconds: number;
   updateBillboard: (id: string, updated: Partial<BillboardSlide>) => void;
   addBillboard: (slide: Omit<BillboardSlide, 'id'>) => void;
+  addBillboardServer: (newBillboard: { imageUrl: string; title?: string; link?: string }) => Promise<void>;
   deleteBillboard: (id: string) => void;
   resetBillboards: () => void;
   setBillboardIntervalSeconds: (seconds: number) => void;
@@ -763,6 +764,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const next = [...billboards, newSlide];
     saveBillboards(next);
     addToast('New billboard slide added!', 'success');
+  };
+
+  const addBillboardServer = async (newBillboard: { imageUrl: string; title?: string; link?: string }) => {
+    try {
+      const response = await fetch('/api/slideshow', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Admin-Slug': adminSecretSlug
+        },
+        body: JSON.stringify(newBillboard),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save billboard to server');
+      }
+
+      const result = await response.json();
+      
+      // Integrate into existing billboards state as a new slide
+      const newSlide: BillboardSlide = {
+        id: result.id,
+        title: result.title || '',
+        titleKa: result.title || '',
+        subtitle: result.link || '',
+        subtitleKa: result.link || '',
+        image: result.imageUrl,
+        bgImage: result.imageUrl,
+        isActive: true,
+      };
+
+      const next = [...billboards, newSlide];
+      saveBillboards(next);
+      addToast('New billboard slide added to server!', 'success');
+    } catch (error) {
+      console.error("Error saving slideshow billboard:", error);
+      throw error;
+    }
   };
 
   const deleteBillboard = (id: string) => {
