@@ -31,7 +31,7 @@ export const CartDrawer: React.FC = () => {
     applyPromoCode,
     clearPromoCode,
     formatPrice,
-    setIsCheckoutOpen,
+    setCurrentPage,
     user,
     isAdmin,
   } = useStore();
@@ -66,7 +66,7 @@ export const CartDrawer: React.FC = () => {
     );
     analytics.trackCheckoutAttempt(isCurrentAdmin);
     setIsCartOpen(false);
-    setIsCheckoutOpen(true);
+    setCurrentPage('checkout');
   };
 
   return (

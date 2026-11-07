@@ -11,6 +11,7 @@ import { QuickViewModal } from './components/QuickViewModal';
 import { CartDrawer } from './components/CartDrawer';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
+import { CheckoutPage } from './components/CheckoutPage';
 import { AuthModal } from './components/AuthModal';
 import { FaceIdSetupModal } from './components/FaceIdSetupModal';
 import { AdminDashboard } from './components/AdminDashboard';
@@ -334,6 +335,7 @@ const MainLayout: React.FC = () => {
         {currentPage === 'deliveries' && <VerifiedDeliveriesPage />}
         {currentPage === 'campaigns' && <AdsGallery />}
         {currentPage === 'admin' && <AdminDashboard />}
+        {currentPage === 'checkout' && <CheckoutPage />}
       </main>
 
       {/* Universal Footer */}

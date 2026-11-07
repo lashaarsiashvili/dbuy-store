@@ -12,7 +12,7 @@ interface OfficialGooglePayButtonProps {
   disabled?: boolean;
   loading?: boolean;
   buttonColor?: 'default' | 'black' | 'white';
-  buttonType?: 'buy' | 'pay' | 'checkout' | 'order' | 'plain';
+  buttonType?: 'book' | 'buy' | 'checkout' | 'donate' | 'order' | 'pay' | 'plain' | 'subscribe';
   buttonSizeMode?: 'fill' | 'static';
   formatAmount?: string;
   className?: string;
@@ -155,8 +155,8 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
           containerRef.current.innerHTML = '';
 
           const button = paymentsClientRef.current.createButton({
-            buttonColor: 'white',
-            buttonType: 'pay',
+            buttonColor: buttonColor === 'white' ? 'white' : (buttonColor === 'default' ? 'default' : 'black'),
+            buttonType: buttonType || 'buy',
             buttonRadius: 24,
             buttonBorderType: 'default_border',
             buttonSizeMode: buttonSizeMode,
@@ -340,25 +340,29 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
               height: `${height}px`,
               borderRadius: '9999px',
             }}
-            className="gpay-capsule-badge gpay-button-wrapper w-full relative px-5 flex items-center justify-center transition-all duration-150 bg-white text-slate-900 hover:bg-slate-50 border border-[#DADCE0] select-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-xs"
+            className={`gpay-capsule-badge gpay-button-wrapper w-full relative px-5 flex items-center justify-center transition-all duration-150 ${
+              buttonColor === 'white'
+                ? 'bg-white text-slate-900 hover:bg-slate-50 border border-[#DADCE0]'
+                : 'bg-black text-white hover:bg-zinc-900 border border-black'
+            } select-none cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed shadow-xs`}
           >
             {loading || isTriggering ? (
               <div className="flex items-center space-x-2.5">
-                <Loader2 className="w-5 h-5 animate-spin text-slate-700 dark:text-slate-200" />
-                <span className="text-xs font-semibold tracking-wide text-slate-700 dark:text-slate-200">
+                <Loader2 className={`w-5 h-5 animate-spin ${buttonColor === 'white' ? 'text-slate-700' : 'text-white'}`} />
+                <span className={`text-xs font-semibold tracking-wide ${buttonColor === 'white' ? 'text-slate-700' : 'text-white'}`}>
                   Opening Google Pay Sheet...
                 </span>
               </div>
             ) : (
               <div className="flex items-center justify-center space-x-2 text-center pointer-events-none">
-                <span className="text-sm font-medium leading-none whitespace-nowrap text-slate-900 dark:text-white">
-                  {buttonType === 'pay' ? 'Pay with' : 'Buy with'}
+                <span className={`text-sm font-medium leading-none whitespace-nowrap ${buttonColor === 'white' ? 'text-slate-900' : 'text-white'}`}>
+                  {buttonType === 'book' ? 'Book with' : buttonType === 'buy' ? 'Buy with' : buttonType === 'checkout' ? 'Checkout with' : buttonType === 'donate' ? 'Donate with' : buttonType === 'order' ? 'Order with' : buttonType === 'pay' ? 'Pay with' : buttonType === 'subscribe' ? 'Subscribe with' : buttonType === 'plain' ? '' : 'Buy with'}
                 </span>
                 <div className="flex items-center shrink-0">
-                  <GooglePayVector className="h-6 w-auto" isDark={false} />
+                  <GooglePayVector className="h-6 w-auto" isDark={buttonColor !== 'white'} />
                 </div>
                 {formatAmount && (
-                  <span className="text-slate-500 font-mono text-xs pl-1 font-normal opacity-90">
+                  <span className={`${buttonColor === 'white' ? 'text-slate-500' : 'text-slate-300'} font-mono text-xs pl-1 font-normal opacity-90`}>
                     • {formatAmount}
                   </span>
                 )}

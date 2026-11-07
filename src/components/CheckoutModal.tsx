@@ -756,57 +756,91 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               </div>
 
-              {/* Payment Gateway Method Tabs - Only shown when multiple methods are active (e.g. Google Pay review/test mode) */}
-              {isGPayAvailable && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between px-1">
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
-                      {language === "ka"
-                        ? "აირჩიეთ გადახდის მეთოდი"
-                        : "Select Payment Method"}
-                    </span>
-                    <div className="flex items-center space-x-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
-                      <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
-                      <span>256-bit SSL</span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2.5">
-                    {/* Official Google Pay Acceptance Mark (Compliant) */}
-                    <button
-                      type="button"
-                      onClick={() => setActivePaymentMethod("googlepay")}
-                      className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
-                        activePaymentMethod === "googlepay"
-                          ? "border-blue-600 bg-white dark:bg-slate-800 shadow-sm ring-2 ring-blue-500/20"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs"
-                      }`}
-                    >
-                      <OfficialGooglePayMark height={36} />
-                      <span className="text-[10px] font-bold tracking-tight notranslate">Google Pay</span>
-
-                    </button>
-                    {/* PayPal Tab */}
-                    <button
-                      type="button"
-                      onClick={() => setActivePaymentMethod("paypal")}
-                      className={`p-2.5 sm:p-3 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
-                        activePaymentMethod === "paypal"
-                          ? "border-[#003087] bg-[#003087] text-white shadow-md ring-2 ring-[#003087]/25"
-                          : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs"
-                      }`}
-                    >
-                      <div className="h-5 flex items-center justify-center">
-                        <PayPalLogo
-                          className="h-4 w-auto"
-                          isWhite={activePaymentMethod === "paypal"}
-                        />
-                      </div>
-                      <span className="text-[10px] font-bold tracking-tight">PayPal</span>
-                    </button>
+               {/* eBay-Style Multi-Payment Selection Grid (PayPal, Debit/Credit Card, Google Pay, Apple Pay) */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {language === "ka"
+                      ? "აირჩიეთ გადახდის მეთოდი (eBay Style Checkout)"
+                      : "Select Payment Method"}
+                  </span>
+                  <div className="flex items-center space-x-1 text-[11px] text-slate-500 dark:text-slate-400 font-medium">
+                    <Lock className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    <span>256-bit SSL</span>
                   </div>
                 </div>
-              )}
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {/* 1. PayPal Tab */}
+                  <button
+                    type="button"
+                    onClick={() => setActivePaymentMethod("paypal")}
+                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
+                      activePaymentMethod === "paypal"
+                        ? "border-[#003087] bg-[#003087] text-white shadow-md ring-2 ring-[#003087]/25"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs text-slate-800 dark:text-slate-200"
+                    }`}
+                  >
+                    <div className="h-5 flex items-center justify-center mb-1">
+                      <PayPalLogo
+                        className="h-4 w-auto"
+                        isWhite={activePaymentMethod === "paypal"}
+                      />
+                    </div>
+                    <span className="text-[10px] font-bold tracking-tight">PayPal</span>
+                  </button>
+
+                  {/* 2. Debit or Credit Card Tab */}
+                  <button
+                    type="button"
+                    onClick={() => setActivePaymentMethod("card")}
+                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
+                      activePaymentMethod === "card"
+                        ? "border-slate-900 bg-slate-900 text-white dark:border-blue-600 dark:bg-blue-600 shadow-md ring-2 ring-slate-900/25"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs text-slate-800 dark:text-slate-200"
+                    }`}
+                  >
+                    <div className="h-5 flex items-center justify-center mb-1">
+                      <CreditCard className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-bold tracking-tight">
+                      {language === "ka" ? "ბარათი" : "Card"}
+                    </span>
+                  </button>
+
+                  {/* 3. Google Pay Tab */}
+                  <button
+                    type="button"
+                    onClick={() => setActivePaymentMethod("googlepay")}
+                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
+                      activePaymentMethod === "googlepay"
+                        ? "border-blue-600 bg-white dark:bg-slate-800 shadow-sm ring-2 ring-blue-500/20"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs"
+                    }`}
+                  >
+                    <div className="h-5 flex items-center justify-center mb-1">
+                      <OfficialGooglePayMark height={24} />
+                    </div>
+                    <span className="text-[10px] font-bold tracking-tight notranslate text-slate-800 dark:text-slate-200">Google Pay</span>
+                  </button>
+
+                  {/* 4. Apple Pay Tab (Shows when Apple Pay supported or as quick option in Safari) */}
+                  <button
+                    type="button"
+                    onClick={() => setActivePaymentMethod("applepay")}
+                    className={`p-2.5 rounded-2xl border transition-all duration-150 flex flex-col items-center justify-center cursor-pointer select-none ${
+                      activePaymentMethod === "applepay"
+                        ? "border-black bg-black text-white shadow-md ring-2 ring-black/25"
+                        : "border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 hover:bg-slate-50 dark:hover:bg-slate-700/60 shadow-xs text-slate-800 dark:text-slate-200"
+                    }`}
+                  >
+                    <div className="h-5 flex items-center justify-center mb-1">
+                      <AppleLogoIcon className={`w-4 h-4 ${activePaymentMethod === "applepay" ? "fill-white" : "fill-slate-900 dark:fill-white"}`} />
+                    </div>
+                    <span className="text-[10px] font-bold tracking-tight">Apple Pay</span>
+                  </button>
+                </div>
+              </div>
 
               {/* Processing State Indicator */}
               {isProcessingPayment && (
@@ -1018,8 +1052,8 @@ export const CheckoutModal: React.FC = () => {
                 </div>
               )}
 
-              {/* TAB 4: CREDIT / DEBIT CARD - Temporarily Disabled */}
-              {false && activePaymentMethod === "card" && (
+              {/* TAB 4: CREDIT / DEBIT CARD */}
+              {activePaymentMethod === "card" && (
                 <div className="space-y-4">
                   {/* Official PayPal v6 Hosted Card Fields (Number, Expiry, CVV + 3DS) */}
                   <div className="p-4 bg-slate-50/90 dark:bg-slate-900/90 rounded-2xl border border-slate-200 dark:border-slate-800">

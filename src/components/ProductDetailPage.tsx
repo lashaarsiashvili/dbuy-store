@@ -460,7 +460,7 @@ export const ProductDetailPage: React.FC = () => {
     analytics.trackCheckoutAttempt(isCurrentAdmin);
     const variantName = getSelectedVariantName();
     addToCart(product, quantity, variantName);
-    setIsCheckoutOpen(true);
+    setCurrentPage('checkout');
   };
 
   const handleCopyLink = () => {
