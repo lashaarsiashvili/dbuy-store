@@ -12,6 +12,7 @@ import { initialProducts, DB_VERSION } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 import { buildCustomerOrderEmail, buildAdminOrderAlertEmail } from './src/utils/orderEmailTemplates';
 import { generateSmartOfflineAdCopy } from './src/utils/adCopyGenerator';
+import { parseProductHtml } from './src/utils/productScraper';
 
 dotenv.config();
 
@@ -299,6 +300,7 @@ interface StoreDatabase {
   adminPasswordHash?: string;
   adminPasswordSalt?: string;
   uploadsMap?: Record<string, string>;
+  userCarts?: Record<string, { cart: any[]; wishlist: any[]; updatedAt: string }>;
   lastUpdated: string;
 }
 
@@ -441,6 +443,7 @@ function initStoreDatabase(): StoreDatabase {
     adminPasswordHash: loadedDb?.adminPasswordHash || '',
     adminPasswordSalt: loadedDb?.adminPasswordSalt || '',
     uploadsMap,
+    userCarts: loadedDb?.userCarts || {},
     lastUpdated: loadedDb?.lastUpdated || new Date().toISOString(),
   };
   (initialDb as any).dbVersion = DB_VERSION;
@@ -2058,6 +2061,137 @@ app.get('/api/store/products', (req, res) => {
   });
 });
 
+// POST: 1-Click Amazon & eBay Scraper & Parser Endpoint
+app.post('/api/import-product', async (req, res) => {
+  try {
+    const { url, html: directHtml } = req.body || {};
+    const targetUrl = (url || '').trim();
+    let htmlContent = (directHtml || '').trim();
+
+    if (!targetUrl && !htmlContent) {
+      return res.status(400).json({
+        success: false,
+        error: 'Please provide an Amazon or eBay product URL or paste page HTML',
+      });
+    }
+
+    if (targetUrl && !htmlContent) {
+      const isAmazon = /amazon\.|amzn\.to/i.test(targetUrl);
+      const isEbay = /ebay\./i.test(targetUrl);
+
+      if (!isAmazon && !isEbay) {
+        return res.status(400).json({
+          success: false,
+          error: 'Unsupported URL. Please enter a valid Amazon (amazon.com, amzn.to) or eBay (ebay.com/itm) product link.',
+        });
+      }
+
+      const desktopHeaders = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.9',
+        'Sec-Fetch-Dest': 'document',
+        'Sec-Fetch-Mode': 'navigate',
+        'Sec-Fetch-Site': 'none',
+        'Sec-Fetch-User': '?1',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'max-age=0',
+        'Cookie': 'i18n-prefs=USD; lc-main=en_US;',
+      };
+
+      // Strategy 1: Direct fetch with realistic desktop browser headers
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+        const webRes = await fetch(targetUrl, {
+          method: 'GET',
+          headers: desktopHeaders,
+          redirect: 'follow',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
+
+        if (webRes.ok) {
+          const text = await webRes.text();
+          const isRobotBlock = text.includes('To discuss automated access to Amazon data') ||
+                               text.includes('Enter the characters you see below') ||
+                               (text.includes('Something went wrong on our end') && text.includes('reference-id'));
+          if (!isRobotBlock && text.length > 3000) {
+            htmlContent = text;
+          }
+        }
+      } catch (err: any) {
+        console.warn('[SERVER-IMPORT-SCRAPER] Direct fetch attempt error:', err?.message || err);
+      }
+
+      // Strategy 2: Fallback proxies for public extraction
+      if (!htmlContent) {
+        const fallbackUrls = [
+          `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
+          `https://api.allorigins.win/raw?url=${encodeURIComponent(targetUrl)}`,
+          `https://r.jina.ai/${targetUrl}`,
+        ];
+
+        for (const proxyUrl of fallbackUrls) {
+          try {
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 5000);
+            const proxyRes = await fetch(proxyUrl, {
+              headers: {
+                'Accept': 'text/html,application/xhtml+xml,text/plain,*/*',
+                'User-Agent': desktopHeaders['User-Agent'],
+              },
+              signal: controller.signal,
+            });
+            clearTimeout(timeoutId);
+
+            if (proxyRes.ok) {
+              const text = await proxyRes.text();
+              if (
+                text.length > 2000 &&
+                !text.includes('Target URL returned error') &&
+                !text.includes('Enter the characters you see below')
+              ) {
+                htmlContent = text;
+                break;
+              }
+            }
+          } catch {}
+        }
+      }
+
+      if (!htmlContent) {
+        return res.json({
+          success: false,
+          isBotBlocked: true,
+          error: 'Marketplace bot protection challenge detected on server IP.',
+          suggestedAction: 'paste_html',
+        });
+      }
+    }
+
+    const scraped = parseProductHtml(htmlContent, targetUrl);
+
+    if (!scraped.title || scraped.title === 'Imported Product') {
+      return res.status(422).json({
+        success: false,
+        error: 'Could not extract product details. Please ensure the link is a valid Amazon or eBay product page.',
+      });
+    }
+
+    return res.json({
+      success: true,
+      data: scraped,
+    });
+  } catch (err: any) {
+    console.error('[IMPORT-PRODUCT-ERROR]', err);
+    return res.status(500).json({
+      success: false,
+      error: err?.message || 'Failed to process product extraction',
+    });
+  }
+});
+
 // POST: Save / update products (used by Admin Dashboard, Worker, and D1 API compatibility)
 app.post('/api/products', (req, res) => {
   try {
@@ -2409,7 +2543,7 @@ app.post('/api/store/pull-remote', async (req, res) => {
 // POST: Register / Update user on persistent server
 app.post('/api/store/register-user', (req, res) => {
   try {
-    const { name, email, country, city, zip, address, phone, passwordHash, passwordSalt, provider, picture } = req.body;
+    const { name, email, country, city, zip, address, phone, passwordHash, passwordSalt, provider, authProvider, picture } = req.body;
     
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       res.status(400).json({ success: false, error: 'Valid email is required' });
@@ -2418,6 +2552,7 @@ app.post('/api/store/register-user', (req, res) => {
 
     const cleanEmail = email.trim().toLowerCase();
     const existing = storeDb.registeredUsers[cleanEmail] || {};
+    const finalProvider = authProvider || provider || existing.authProvider || existing.provider || 'email';
 
     const updatedUser = {
       ...existing,
@@ -2428,7 +2563,8 @@ app.post('/api/store/register-user', (req, res) => {
       zip: zip?.trim() || existing.zip || '',
       address: address?.trim() || existing.address || '',
       phone: phone?.trim() || existing.phone || '',
-      provider: provider || existing.provider || 'email',
+      provider: finalProvider,
+      authProvider: finalProvider,
       picture: picture || existing.picture,
       createdAt: existing.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -2440,7 +2576,7 @@ app.post('/api/store/register-user', (req, res) => {
     storeDb.registeredUsers[cleanEmail] = updatedUser;
     saveStoreDatabase();
 
-    console.log(`[USER-PERSISTED] Registered user saved to server: ${cleanEmail}`);
+    console.log(`[USER-PERSISTED] Registered user (${finalProvider}) saved to server: ${cleanEmail}`);
 
     res.json({
       success: true,
@@ -2453,6 +2589,7 @@ app.post('/api/store/register-user', (req, res) => {
         address: updatedUser.address,
         phone: updatedUser.phone,
         provider: updatedUser.provider,
+        authProvider: updatedUser.authProvider,
         picture: updatedUser.picture,
         createdAt: updatedUser.createdAt,
         role: updatedUser.role,
@@ -2465,7 +2602,8 @@ app.post('/api/store/register-user', (req, res) => {
         zip: u.zip,
         address: u.address,
         phone: u.phone,
-        provider: u.provider || 'email',
+        provider: u.provider || u.authProvider || 'email',
+        authProvider: u.authProvider || u.provider || 'email',
         picture: u.picture,
         createdAt: u.createdAt,
         role: u.role,
@@ -2506,7 +2644,8 @@ app.post('/api/store/delete-user', (req, res) => {
         zip: u.zip,
         address: u.address,
         phone: u.phone,
-        provider: u.provider || 'email',
+        provider: u.provider || u.authProvider || 'email',
+        authProvider: u.authProvider || u.provider || 'email',
         picture: u.picture,
         createdAt: u.createdAt,
         role: u.role,
@@ -2515,6 +2654,52 @@ app.post('/api/store/delete-user', (req, res) => {
   } catch (err) {
     console.error('Error deleting user:', err);
     res.status(500).json({ success: false, error: 'Failed to delete user' });
+  }
+});
+
+// GET: Retrieve user-isolated cart & wishlist
+app.get('/api/store/user-cart', (req, res) => {
+  try {
+    const email = String(req.query.email || '').trim().toLowerCase();
+    if (!email) {
+      res.json({ success: true, cart: [], wishlist: [] });
+      return;
+    }
+    const userCart: any = (storeDb.userCarts && storeDb.userCarts[email]) || { cart: [], wishlist: [], updatedAt: null };
+    res.json({
+      success: true,
+      cart: Array.isArray(userCart.cart) ? userCart.cart : [],
+      wishlist: Array.isArray(userCart.wishlist) ? userCart.wishlist : [],
+      updatedAt: userCart.updatedAt || null
+    });
+  } catch (err) {
+    console.error('Error fetching user cart:', err);
+    res.status(500).json({ success: false, error: 'Failed to fetch user cart' });
+  }
+});
+
+// POST: Save user-isolated cart & wishlist
+app.post('/api/store/user-cart', (req, res) => {
+  try {
+    const { email, cart, wishlist } = req.body;
+    const cleanEmail = String(email || '').trim().toLowerCase();
+    if (!cleanEmail) {
+      res.status(400).json({ success: false, error: 'Valid user email is required' });
+      return;
+    }
+    if (!storeDb.userCarts) {
+      storeDb.userCarts = {};
+    }
+    storeDb.userCarts[cleanEmail] = {
+      cart: Array.isArray(cart) ? cart : [],
+      wishlist: Array.isArray(wishlist) ? wishlist : [],
+      updatedAt: new Date().toISOString()
+    };
+    saveStoreDatabase();
+    res.json({ success: true, message: 'User cart synced successfully' });
+  } catch (err) {
+    console.error('Error saving user cart:', err);
+    res.status(500).json({ success: false, error: 'Failed to save user cart' });
   }
 });
 

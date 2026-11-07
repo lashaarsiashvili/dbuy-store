@@ -510,6 +510,26 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       });
     }
 
+    if (path.endsWith('/user-cart')) {
+      try {
+        const url = new URL(request.url);
+        const email = (url.searchParams.get('email') || '').trim().toLowerCase();
+        if (!email) {
+          return jsonResponse({ success: true, cart: [], wishlist: [] });
+        }
+        const userCarts = JSON.parse(await dbGet(db, 'user_carts') || '{}');
+        const userCart = userCarts[email] || { cart: [], wishlist: [] };
+        return jsonResponse({
+          success: true,
+          cart: Array.isArray(userCart.cart) ? userCart.cart : [],
+          wishlist: Array.isArray(userCart.wishlist) ? userCart.wishlist : [],
+          updatedAt: userCart.updatedAt || null,
+        });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to fetch user cart' }, 500);
+      }
+    }
+
     if (path.endsWith('/products')) {
       try {
         let results: any[] = [];
@@ -639,7 +659,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     if (path.endsWith('/register-user')) {
       try {
         const reqBody: any = await request.json();
-        const { name, email, country, city, zip, address, phone, passwordHash, passwordSalt, provider, picture } = reqBody;
+        const { name, email, country, city, zip, address, phone, passwordHash, passwordSalt, provider, authProvider, picture } = reqBody;
 
         if (!email || typeof email !== 'string' || !email.includes('@')) {
           return jsonResponse({ success: false, error: 'Valid email is required' }, 400);
@@ -648,6 +668,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         const cleanEmail = email.trim().toLowerCase();
         const registeredUsers = JSON.parse(await dbGet(db, 'registered_users') || '{}');
         const existing = registeredUsers[cleanEmail] || {};
+        const finalProvider = authProvider || provider || existing.authProvider || existing.provider || 'email';
 
         let finalPasswordHash = passwordHash || '';
         if (!finalPasswordHash && reqBody.password) {
@@ -665,7 +686,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           zip: zip?.trim() || existing.zip || '',
           address: address?.trim() || existing.address || '',
           phone: phone?.trim() || existing.phone || '',
-          provider: provider || existing.provider || 'email',
+          provider: finalProvider,
+          authProvider: finalProvider,
           picture: picture || existing.picture,
           createdAt: existing.createdAt || new Date().toISOString(),
           updatedAt: new Date().toISOString(),
@@ -692,6 +714,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             address: updatedUser.address,
             phone: updatedUser.phone,
             provider: updatedUser.provider,
+            authProvider: updatedUser.authProvider,
             picture: updatedUser.picture,
             createdAt: updatedUser.createdAt,
             role: updatedUser.role,
@@ -726,6 +749,27 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         return jsonResponse({ success: true, registeredUsers: usersList });
       } catch (err: any) {
         return jsonResponse({ success: false, error: err?.message || 'Failed to delete user' }, 500);
+      }
+    }
+
+    if (path.endsWith('/user-cart')) {
+      try {
+        const reqBody: any = await request.json();
+        const { email, cart, wishlist } = reqBody;
+        const cleanEmail = String(email || '').trim().toLowerCase();
+        if (!cleanEmail) {
+          return jsonResponse({ success: false, error: 'Valid email is required' }, 400);
+        }
+        const userCarts = JSON.parse(await dbGet(db, 'user_carts') || '{}');
+        userCarts[cleanEmail] = {
+          cart: Array.isArray(cart) ? cart : [],
+          wishlist: Array.isArray(wishlist) ? wishlist : [],
+          updatedAt: new Date().toISOString()
+        };
+        await dbPut(db, 'user_carts', JSON.stringify(userCarts));
+        return jsonResponse({ success: true, message: 'User cart synced successfully' });
+      } catch (err: any) {
+        return jsonResponse({ success: false, error: err?.message || 'Failed to save user cart' }, 500);
       }
     }
 

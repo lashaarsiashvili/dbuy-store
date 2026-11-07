@@ -6,7 +6,7 @@ import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
 import { analytics } from './AdminAnalyticsDashboard';
-import { ProductReviewsSection } from './ProductReviewsSection';
+import { ProductReviewsSection, reviewService } from './ProductReviewsSection';
 import { ProductSEO, ProductSEOData } from '@hooks/useDynamicMetaTags';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { 
@@ -92,16 +92,38 @@ export const ProductDetailPage: React.FC = () => {
   const [justAdded, setJustAdded] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  // Dynamic estimated delivery date (+ 7 days from now)
+  // Dynamic estimated delivery date (Current Date + 5 to 7 business days)
   const estimatedDeliveryDate = React.useMemo(() => {
-    const targetDate = new Date();
-    targetDate.setDate(targetDate.getDate() + 7);
-    return targetDate.toLocaleDateString(language === 'ka' ? 'ka-GE' : 'en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-    });
+    const addBusinessDays = (startDate: Date, days: number) => {
+      const cur = new Date(startDate);
+      let count = 0;
+      while (count < days) {
+        cur.setDate(cur.getDate() + 1);
+        const day = cur.getDay();
+        if (day !== 0 && day !== 6) { // Skip weekends
+          count++;
+        }
+      }
+      return cur;
+    };
+
+    const now = new Date();
+    const minDate = addBusinessDays(now, 5);
+    const maxDate = addBusinessDays(now, 7);
+
+    const isKa = language === 'ka';
+    const loc = isKa ? 'ka-GE' : 'en-US';
+
+    const minWeekday = minDate.toLocaleDateString(loc, { weekday: 'short' });
+    const minMonthDay = minDate.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
+    const maxWeekday = maxDate.toLocaleDateString(loc, { weekday: 'short' });
+    const maxMonthDay = maxDate.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
+
+    return `${minWeekday}, ${minMonthDay} - ${maxWeekday}, ${maxMonthDay}`;
   }, [language]);
+
+  // Synchronized reviews state matching the Customer Reviews section below
+  const [reviewsState, setReviewsState] = useState<{ count: number; avgRating: number }>({ count: 1, avgRating: 5.0 });
 
   // Strictly manual zoom & Lightbox state (Default state is static 1x)
   const [isLightboxOpen, setIsLightboxOpen] = useState(false);
@@ -136,6 +158,19 @@ export const ProductDetailPage: React.FC = () => {
       updateOpenGraphMetaTags(ogPayload);
       
       incrementProductViews(product.id);
+
+      // Synchronize reviews state with reviewService
+      try {
+        const revs = reviewService.getProductReviews(product.id, product);
+        if (revs && revs.length > 0) {
+          const avg = revs.reduce((sum, r) => sum + r.rating, 0) / revs.length;
+          setReviewsState({ count: revs.length, avgRating: avg });
+        } else {
+          setReviewsState({ count: product.reviewsCount ?? 1, avgRating: product.rating ?? 5.0 });
+        }
+      } catch (e) {
+        setReviewsState({ count: product.reviewsCount ?? 1, avgRating: product.rating ?? 5.0 });
+      }
     }
     return () => {
       resetStoreMetaTags();
@@ -708,16 +743,16 @@ export const ProductDetailPage: React.FC = () => {
                     <Star
                       key={i}
                       className={`w-4 h-4 ${
-                        i < Math.floor(product.rating ?? 5.0)
+                        i < Math.floor(reviewsState.avgRating)
                           ? 'fill-amber-400 text-amber-400'
                           : 'fill-slate-200 dark:fill-slate-800 text-slate-200 dark:text-slate-800 dark:text-slate-100'
                       }`}
                     />
                   ))}
                 </div>
-                <span>{(product.rating ?? 5.0).toFixed(1)}</span>
+                <span>{reviewsState.avgRating.toFixed(1)}</span>
                 <span className="text-slate-400 font-normal">
-                  ({product.reviewsCount ?? 1} {language === 'ka' ? 'შეფასება' : 'reviews'})
+                  ({reviewsState.count} {language === 'ka' ? 'შეფასება' : 'reviews'})
                 </span>
               </div>
             </div>
@@ -953,8 +988,12 @@ export const ProductDetailPage: React.FC = () => {
                 <Truck className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <p className="font-bold text-slate-900 dark:text-slate-100">{t('trust.shipping')}</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('trust.shippingSub')}</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100">
+                  {language === 'ka' ? (t('trust.shipping') || 'სწრაფი გლობალური მიწოდება') : 'Worldwide Express Shipping'}
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {language === 'ka' ? (t('trust.shippingSub') || 'გლობალური მიკვლევადი მიწოდება') : 'Global tracked delivery'}
+                </p>
               </div>
             </div>
 
@@ -963,8 +1002,12 @@ export const ProductDetailPage: React.FC = () => {
                 <ShieldCheck className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <p className="font-bold text-slate-900 dark:text-slate-100">{t('trust.guarantee')}</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('trust.guaranteeSub')}</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100">
+                  {language === 'ka' ? (t('trust.guarantee') || '30-დღიანი თანხის დაბრუნება') : '30-Day Money-Back'}
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {language === 'ka' ? (t('trust.guaranteeSub') || 'მარტივი და გარანტირებული დაბრუნება') : 'Hassle-free returns'}
+                </p>
               </div>
             </div>
 
@@ -973,8 +1016,12 @@ export const ProductDetailPage: React.FC = () => {
                 <Lock className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <p className="font-bold text-slate-900 dark:text-slate-100">{t('trust.secure')}</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('trust.secureSub')}</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100">
+                  {language === 'ka' ? (t('trust.secure') || '256-ბიტიანი SSL უსაფრთხოება') : '256-Bit SSL Secure'}
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {language === 'ka' ? (t('trust.secureSub') || 'დაშიფრული და დაცული გადახდა') : 'Encrypted checkout'}
+                </p>
               </div>
             </div>
 
@@ -983,8 +1030,12 @@ export const ProductDetailPage: React.FC = () => {
                 <Award className="w-4 h-4" />
               </div>
               <div className="text-xs">
-                <p className="font-bold text-slate-900 dark:text-slate-100">{t('trust.warranty')}</p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">{t('trust.warrantySub')}</p>
+                <p className="font-bold text-slate-900 dark:text-slate-100">
+                  {language === 'ka' ? (t('trust.warranty') || '1-წლიანი გარანტია') : '1-Year Warranty'}
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {language === 'ka' ? (t('trust.warrantySub') || 'მწარმოებლის სრული საგარანტიო დაცვა') : 'Full manufacturer coverage'}
+                </p>
               </div>
             </div>
           </div>
@@ -995,6 +1046,7 @@ export const ProductDetailPage: React.FC = () => {
       <ProductReviewsSection 
         product={product} 
         currentUser={user} 
+        onReviewsUpdated={(count, avgRating) => setReviewsState({ count, avgRating })}
       />
 
       {/* Related Products with Deep Links */}

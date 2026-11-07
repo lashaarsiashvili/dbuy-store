@@ -12,6 +12,8 @@ import { BrandLogo } from './BrandLogo';
 import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
 import { ThemeCustomizer } from './ThemeCustomizer';
+import { ProductUrlImporter } from './ProductUrlImporter';
+import { ScrapedProductData } from '../utils/productScraper';
 
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
 import { compressImageForUpload, uploadImageToR2 } from '../utils/imageUpload';
@@ -166,6 +168,37 @@ export const AdminDashboard: React.FC = () => {
   const [userSearch, setUserSearch] = useState('');
   const [userToDelete, setUserToDelete] = useState<string | null>(null);
   const [copiedEmail, setCopiedEmail] = useState<string | null>(null);
+  const [inspectingUser, setInspectingUser] = useState<any | null>(null);
+  const [inspectingUserCart, setInspectingUserCart] = useState<any[]>([]);
+  const [inspectingUserWishlist, setInspectingUserWishlist] = useState<any[]>([]);
+  const [loadingUserCart, setLoadingUserCart] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (inspectingUser?.email) {
+      setLoadingUserCart(true);
+      const cleanEmail = inspectingUser.email.toLowerCase().trim();
+      try {
+        const localCartStr = localStorage.getItem(`db_cart_${cleanEmail}`);
+        if (localCartStr) setInspectingUserCart(JSON.parse(localCartStr));
+        const localWishStr = localStorage.getItem(`db_wishlist_${cleanEmail}`);
+        if (localWishStr) setInspectingUserWishlist(JSON.parse(localWishStr));
+      } catch (e) {}
+
+      fetch(`/api/store/user-cart?email=${encodeURIComponent(cleanEmail)}`)
+        .then(r => r.json())
+        .then((d: any) => {
+          if (d?.success) {
+            if (Array.isArray(d.cart)) setInspectingUserCart(d.cart);
+            if (Array.isArray(d.wishlist)) setInspectingUserWishlist(d.wishlist);
+          }
+        })
+        .catch(() => {})
+        .finally(() => setLoadingUserCart(false));
+    } else {
+      setInspectingUserCart([]);
+      setInspectingUserWishlist([]);
+    }
+  }, [inspectingUser?.email]);
 
   // Tabs
   const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security' | 'messages' | 'reviews'>('analytics');
@@ -1326,6 +1359,99 @@ export const AdminDashboard: React.FC = () => {
     setIsProductModalOpen(true);
   };
 
+  const handlePopulateFromScraper = (data: ScrapedProductData) => {
+    setEditingProduct(null);
+    setUploadedFileInfo(null);
+    setImageInputMode('url');
+    setNewImageUrl('');
+
+    const normImages = (data.images || []).filter(Boolean);
+    const coverImg = normImages[0] || '';
+    const featuresList = [...(data.features || [])];
+    while (featuresList.length < 4) {
+      featuresList.push('');
+    }
+
+    setFeaturesTab('en'); // Strict English only! Never translate to Georgian
+
+    setProdForm({
+      title: data.title,
+      titleKa: '', // Strict rule 3: English only!
+      customSlug: generateProductSlug(data.title),
+      category: data.category as Product['category'],
+      price: data.price || 49.99,
+      origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
+      stock: 25,
+      badge: data.marketplace === 'amazon' ? 'Amazon Top Pick' : (data.marketplace === 'ebay' ? 'Official eBay Find' : 'Featured'),
+      image: coverImg,
+      images: normImages,
+      videos: [],
+      variants: [],
+      description: data.description,
+      descriptionKa: '', // Strict rule 3: English only!
+      features: featuresList.slice(0, 4),
+      featuresEn: featuresList.slice(0, 4),
+      featuresKa: featuresList.slice(0, 4),
+    });
+
+    setIsProductModalOpen(true);
+  };
+
+  const handleDirectSaveFromScraper = async (data: ScrapedProductData): Promise<boolean> => {
+    const normImages = (data.images || []).filter(Boolean);
+    const coverImg = normImages[0] || '';
+    const featuresList = (data.features || []).filter(Boolean).slice(0, 4);
+
+    const generatedId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+    const finalSlug = generateProductSlug(data.title);
+
+    const productPayload: Product = {
+      id: generatedId,
+      title: data.title,
+      titleKa: '',
+      title_en: data.title,
+      title_ka: '',
+      customSlug: finalSlug,
+      category: data.category as Product['category'],
+      price: data.price || 49.99,
+      origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
+      stock: 25,
+      badge: data.marketplace === 'amazon' ? 'Amazon Top Pick' : (data.marketplace === 'ebay' ? 'Official eBay Find' : 'Featured'),
+      image: coverImg,
+      images: normImages,
+      videos: [],
+      variants: [],
+      description: data.description,
+      descriptionKa: '',
+      description_en: data.description,
+      description_ka: '',
+      features: featuresList,
+      features_en: featuresList,
+      features_ka: featuresList,
+      isPublishedGlobally: true, // Worldwide Delivery
+      publishedAt: new Date().toISOString(),
+      rating: 5.0,
+      reviewsCount: 1,
+      views: 0,
+    };
+
+    try {
+      const success = await addProduct(productPayload);
+      if (success) {
+        addToast(
+          isKa 
+            ? `პროდუქტი "${data.title.substring(0, 30)}..." წარმატებით დაემატა!` 
+            : `Product "${data.title.substring(0, 35)}..." saved & published directly!`, 
+          'success'
+        );
+        return true;
+      }
+    } catch (err: any) {
+      addToast(err?.message || 'Failed to save imported product', 'error');
+    }
+    return false;
+  };
+
   const handleOpenEditProduct = (prod: Product) => {
     setEditingProduct(prod);
     setUploadedFileInfo(prod.image?.startsWith('data:') ? { name: 'Uploaded Image', size: 'Local' } : null);
@@ -1416,11 +1542,11 @@ export const AdminDashboard: React.FC = () => {
 
     const defaultStockCover = 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?auto=format&fit=crop&w=800&q=80';
 
-    // Prepare valid images array (up to 5 images) ensuring persistent URLs
+    // Prepare valid images array ensuring persistent URLs
     const validImages = (prodForm.images || [])
       .map(img => ensurePersistentAbsoluteUrl(img, ''))
       .filter(img => img.length > 0)
-      .slice(0, 5);
+      .slice(0, 10);
 
     const finalImages = validImages.length > 0
       ? validImages
@@ -2107,6 +2233,15 @@ export const AdminDashboard: React.FC = () => {
         {/* TAB 1: PRODUCTS CATALOG */}
         {activeTab === 'products' && (
           <div className="space-y-4">
+            {/* 1-Click Amazon & eBay URL Importer Module */}
+            <ProductUrlImporter
+              onPopulateForm={handlePopulateFromScraper}
+              onDirectSave={handleDirectSaveFromScraper}
+              isKa={isKa}
+              formatPrice={formatPrice}
+              addToast={addToast}
+            />
+
             {/* Inventory Overview Ribbon (Shopify Style) */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="p-3.5 bg-white rounded-2xl border border-slate-200 shadow-xs flex items-center justify-between">
@@ -3624,6 +3759,7 @@ export const AdminDashboard: React.FC = () => {
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
                       <th className="py-3.5 px-4">{isKa ? 'მომხმარებელი' : 'Customer'}</th>
                       <th className="py-3.5 px-4">{isKa ? 'ელ-ფოსტა (Email)' : 'Email'}</th>
+                      <th className="py-3.5 px-4">{isKa ? 'ავტორიზაცია' : 'Auth Provider'}</th>
                       <th className="py-3.5 px-4">{isKa ? 'მისამართი / ქალაქი' : 'Location & Address'}</th>
                       <th className="py-3.5 px-4">{isKa ? 'რეგისტრაციის თარიღი' : 'Registered Date'}</th>
                       <th className="py-3.5 px-4">{isKa ? 'როლი' : 'Role'}</th>
@@ -3695,6 +3831,26 @@ export const AdminDashboard: React.FC = () => {
                               </div>
                             </td>
 
+                            {/* Auth Provider */}
+                            <td className="py-3.5 px-4">
+                              {(u.authProvider === 'google' || u.provider === 'google') ? (
+                                <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                  <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24">
+                                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                                  </svg>
+                                  <span>Google OAuth</span>
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                                  <Mail className="w-3 h-3 text-slate-500" />
+                                  <span>Standard Email</span>
+                                </span>
+                              )}
+                            </td>
+
                             {/* Location & Address */}
                             <td className="py-3.5 px-4 max-w-[200px]">
                               <p className="text-slate-900 dark:text-white font-medium truncate">
@@ -3750,20 +3906,27 @@ export const AdminDashboard: React.FC = () => {
 
                             {/* Actions */}
                             <td className="py-3.5 px-4 text-right">
-                              {isPrimaryAdmin ? (
-                                <span className="text-[11px] text-slate-400 font-semibold italic">
-                                  {isKa ? 'დაცული ანგარიში' : 'Protected Admin'}
-                                </span>
-                              ) : (
+                              <div className="flex items-center justify-end space-x-2">
                                 <button
                                   type="button"
-                                  onClick={() => setUserToDelete(u.email)}
-                                  className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                                  title={isKa ? 'მომხმარებლის წაშლა' : 'Delete user'}
+                                  onClick={() => setInspectingUser(u)}
+                                  className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center space-x-1 transition-colors cursor-pointer border border-blue-200 shadow-2xs"
+                                  title={isKa ? 'მომხმარებლის შეკვეთების და კალათის ნახვა' : 'Inspect user orders & live cart'}
                                 >
-                                  <Trash2 className="w-4 h-4" />
+                                  <Eye className="w-3.5 h-3.5" />
+                                  <span>{isKa ? 'შემოწმება' : 'Inspect'}</span>
                                 </button>
-                              )}
+                                {!isPrimaryAdmin && (
+                                  <button
+                                    type="button"
+                                    onClick={() => setUserToDelete(u.email)}
+                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                    title={isKa ? 'მომხმარებლის წაშლა' : 'Delete user'}
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                )}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -3771,7 +3934,7 @@ export const AdminDashboard: React.FC = () => {
 
                     {registeredUsers.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="py-12 text-center text-slate-400">
+                        <td colSpan={9} className="py-12 text-center text-slate-400">
                           <Users className="w-10 h-10 mx-auto text-slate-300 mb-2" />
                           <p className="font-bold text-slate-600 dark:text-slate-300">
                             {isKa ? 'დარეგისტრირებული მომხმარებლები არ მოიძებნა' : 'No registered users found'}
@@ -6145,6 +6308,238 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Customer Activity & Orders Inspection Modal */}
+      {inspectingUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-3xl max-w-4xl w-full p-6 sm:p-8 shadow-2xl border border-slate-200 dark:border-slate-800 my-8 max-h-[90vh] flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 dark:border-slate-800">
+              <div className="flex items-center space-x-3.5">
+                <div className="w-12 h-12 rounded-2xl bg-blue-100 dark:bg-blue-950 text-blue-700 dark:text-blue-300 font-black text-lg flex items-center justify-center shrink-0 border border-blue-200 dark:border-blue-800">
+                  {inspectingUser.name ? inspectingUser.name.slice(0, 2).toUpperCase() : 'U'}
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white">
+                      {inspectingUser.name || 'Customer'}
+                    </h3>
+                    {(inspectingUser.authProvider === 'google' || inspectingUser.provider === 'google') ? (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                        <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"/>
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"/>
+                        </svg>
+                        <span>Google OAuth</span>
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center space-x-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                        <Mail className="w-3 h-3 text-slate-500" />
+                        <span>Standard Email</span>
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-slate-500 font-mono mt-0.5">{inspectingUser.email}</p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setInspectingUser(null)}
+                className="p-2 rounded-xl text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Scrollable Content */}
+            <div className="overflow-y-auto space-y-6 pt-4 flex-1 pr-1">
+              {/* Profile Summary Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{isKa ? 'მდებარეობა' : 'Location'}</p>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1 truncate">
+                    {[inspectingUser.city, inspectingUser.country].filter(Boolean).join(', ') || 'Tbilisi, Georgia'}
+                  </p>
+                  {inspectingUser.address && (
+                    <p className="text-[11px] text-slate-500 truncate mt-0.5">{inspectingUser.address}</p>
+                  )}
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{isKa ? 'რეგისტრაციის თარიღი' : 'Registered Date'}</p>
+                  <p className="text-xs font-bold text-slate-800 dark:text-slate-200 mt-1">
+                    {inspectingUser.createdAt ? new Date(inspectingUser.createdAt).toLocaleDateString() : '—'}
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">{inspectingUser.phone || 'No phone recorded'}</p>
+                </div>
+
+                <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200/80 dark:border-slate-700/80">
+                  <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">{isKa ? 'შეკვეთების რაოდენობა' : 'Total Orders Placed'}</p>
+                  <p className="text-xs font-bold text-blue-600 dark:text-blue-400 mt-1">
+                    {orders.filter(o => o.email?.toLowerCase().trim() === inspectingUser.email.toLowerCase().trim() || o.userId?.toLowerCase().trim() === inspectingUser.email.toLowerCase().trim()).length} orders
+                  </p>
+                  <p className="text-[11px] text-slate-500 mt-0.5">
+                    {inspectingUserWishlist.length} items in wishlist
+                  </p>
+                </div>
+              </div>
+
+              {/* Live Scoped Cart Section */}
+              <div className="p-4 sm:p-5 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-200/80 dark:border-slate-700/80 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <ShoppingBag className="w-4 h-4 text-blue-600" />
+                    <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                      {isKa ? 'მომხმარებლის აქტიური კალათა (Live Scoped Cart)' : 'User’s Current Active Cart'}
+                    </h4>
+                  </div>
+                  <span className="text-xs font-bold text-slate-500">
+                    {inspectingUserCart.reduce((sum, item) => sum + (item.quantity || 1), 0)} items
+                  </span>
+                </div>
+
+                {loadingUserCart ? (
+                  <div className="py-4 text-center text-xs text-slate-400 flex items-center justify-center space-x-2">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Loading user cart...</span>
+                  </div>
+                ) : inspectingUserCart.length > 0 ? (
+                  <div className="divide-y divide-slate-200/70 dark:divide-slate-700/70">
+                    {inspectingUserCart.map((item, idx) => (
+                      <div key={idx} className="py-2.5 flex items-center justify-between text-xs">
+                        <div className="flex items-center space-x-3 min-w-0">
+                          {item.product?.image && (
+                            <img src={item.product.image} alt={item.product.title} className="w-10 h-10 object-cover rounded-lg border border-slate-200 shrink-0" />
+                          )}
+                          <div className="min-w-0">
+                            <p className="font-bold text-slate-800 dark:text-slate-200 truncate">{item.product?.title || 'Product'}</p>
+                            {item.selectedOption && (
+                              <p className="text-[11px] text-slate-400">Option: {item.selectedOption}</p>
+                            )}
+                          </div>
+                        </div>
+                        <div className="text-right shrink-0 font-mono">
+                          <p className="font-bold text-slate-900 dark:text-white">${((item.product?.price || 0) * (item.quantity || 1)).toFixed(2)}</p>
+                          <p className="text-[11px] text-slate-400">Qty: {item.quantity || 1} × ${item.product?.price || 0}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-xs text-slate-400 italic py-2">
+                    {isKa ? 'მომხმარებლის კალათა ამჟამად ცარიელია.' : 'This customer’s cart is currently empty.'}
+                  </p>
+                )}
+              </div>
+
+              {/* Customer Orders & Purchase History */}
+              <div className="space-y-3">
+                <div className="flex items-center space-x-2">
+                  <Package className="w-4 h-4 text-blue-600" />
+                  <h4 className="text-xs font-black text-slate-900 dark:text-white uppercase tracking-wider">
+                    {isKa ? 'შეკვეთების ისტორია (Purchase History)' : 'Complete Purchase History'}
+                  </h4>
+                </div>
+
+                {(() => {
+                  const userOrders = orders.filter(
+                    o => o.email?.toLowerCase().trim() === inspectingUser.email.toLowerCase().trim() ||
+                         o.userId?.toLowerCase().trim() === inspectingUser.email.toLowerCase().trim()
+                  );
+
+                  if (userOrders.length === 0) {
+                    return (
+                      <div className="p-8 text-center rounded-2xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/50">
+                        <ShoppingBag className="w-8 h-8 mx-auto text-slate-300 mb-2" />
+                        <p className="text-xs font-bold text-slate-600 dark:text-slate-400">
+                          {isKa ? 'ამ მომხმარებელს ჯერ არ აქვს შეკვეთა განთავსებული' : 'No purchase orders placed yet by this customer.'}
+                        </p>
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="space-y-3">
+                      {userOrders.map((ord) => (
+                        <div key={ord.id} className="p-4 rounded-2xl bg-white dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 shadow-2xs space-y-3">
+                          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-slate-100 dark:border-slate-700/80">
+                            <div className="flex items-center space-x-2">
+                              <span className="font-mono text-xs font-black text-slate-900 dark:text-white">{ord.id}</span>
+                              <span className="text-[11px] text-slate-400">• {ord.date}</span>
+                            </div>
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
+                                ord.status === 'Delivered'
+                                  ? 'bg-emerald-100 text-emerald-800'
+                                  : ord.status === 'Shipped'
+                                  ? 'bg-blue-100 text-blue-800'
+                                  : ord.status === 'Processing'
+                                  ? 'bg-amber-100 text-amber-800'
+                                  : 'bg-slate-100 text-slate-700'
+                              }`}>
+                                {ord.status || 'Processing'}
+                              </span>
+                              <span className="font-mono text-xs font-black text-slate-900 dark:text-white">
+                                ${(ord.total || 0).toFixed(2)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Ordered Products Breakdown */}
+                          <div className="space-y-2">
+                            {(ord.items || []).map((it: any, iIdx: number) => (
+                              <div key={iIdx} className="flex items-center justify-between text-xs">
+                                <div className="flex items-center space-x-2.5 min-w-0">
+                                  {it.image && (
+                                    <img src={it.image} alt={it.title} className="w-8 h-8 object-cover rounded-md border border-slate-200 shrink-0" />
+                                  )}
+                                  <div className="min-w-0">
+                                    <p className="font-bold text-slate-800 dark:text-slate-200 truncate">{it.title || 'Product'}</p>
+                                    <p className="text-[10px] text-slate-400">Qty: {it.quantity || 1} × ${(it.price || 0).toFixed(2)}</p>
+                                  </div>
+                                </div>
+                                <span className="font-mono font-bold text-slate-900 dark:text-white shrink-0">
+                                  ${((it.price || 0) * (it.quantity || 1)).toFixed(2)}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+
+                          {ord.trackingNumber && (
+                            <div className="p-2.5 rounded-xl bg-blue-50/70 border border-blue-200/80 text-[11px] text-blue-900 flex items-center justify-between">
+                              <span>Tracking: <strong className="font-mono">{ord.trackingNumber}</strong> ({ord.carrier || 'Courier'})</span>
+                              {ord.trackingUrl && (
+                                <a href={ord.trackingUrl} target="_blank" rel="noopener noreferrer" className="text-blue-600 font-bold hover:underline flex items-center space-x-1">
+                                  <span>Track</span>
+                                  <ExternalLink className="w-3 h-3" />
+                                </a>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-4 border-t border-slate-100 dark:border-slate-800 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setInspectingUser(null)}
+                className="px-5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200 font-bold text-xs transition-colors cursor-pointer"
+              >
+                {isKa ? 'დახურვა' : 'Close'}
+              </button>
+            </div>
           </div>
         </div>
       )}

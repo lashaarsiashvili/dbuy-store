@@ -100,7 +100,15 @@ export const translations: Record<string, Record<string, string>> = {
     "products.resetAll": "Clear All Filters",
     "products.viewResults": "View {count} Results",
     "footer.announcement": "Limited Time: Free Worldwide Express Shipping on Orders Over $50!",
-    "nav.signOut": "Sign Out"
+    "nav.signOut": "Sign Out",
+    "trust.shipping": "Worldwide Express Shipping",
+    "trust.shippingSub": "Global tracked delivery",
+    "trust.guarantee": "30-Day Money-Back",
+    "trust.guaranteeSub": "Hassle-free returns",
+    "trust.secure": "256-Bit SSL Secure",
+    "trust.secureSub": "Encrypted checkout",
+    "trust.warranty": "1-Year Warranty",
+    "trust.warrantySub": "Full manufacturer coverage"
   },
   "ka": {
     "products.sortBy": "დალაგება",
@@ -203,7 +211,15 @@ export const translations: Record<string, Record<string, string>> = {
     "nav.account": "პროფილი",
     "nav.myOrders": "შეკვეთები",
     "nav.adminDash": "ადმინ პანელი",
-    "nav.signOut": "გამოსვლა"
+    "nav.signOut": "გამოსვლა",
+    "trust.shipping": "სწრაფი გლობალური მიწოდება",
+    "trust.shippingSub": "გლობალური მიკვლევადი მიწოდება",
+    "trust.guarantee": "30-დღიანი თანხის დაბრუნება",
+    "trust.guaranteeSub": "მარტივი და გარანტირებული დაბრუნება",
+    "trust.secure": "256-ბიტიანი SSL უსაფრთხოება",
+    "trust.secureSub": "დაშიფრული და დაცული გადახდა",
+    "trust.warranty": "1-წლიანი გარანტია",
+    "trust.warrantySub": "მწარმოებლის სრული საგარანტიო დაცვა"
   },
   "es": {
     "nav.home": "Inicio",
