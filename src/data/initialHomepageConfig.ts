@@ -22,8 +22,9 @@ export type HomepageCategoryId =
   | 'gaming'
   | 'smart-home'
   | 'audio'
-  | 'office'
   | 'wearables'
+  | 'smart-bottles'
+  | 'office'
   | 'beauty-health'
   | 'pets'
   | 'deals';
@@ -353,6 +354,23 @@ export const INITIAL_HOMEPAGE_CATEGORIES: HomepageCategoryConfig[] = [
       { productId: 'prod-1788877210563', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
       { productId: 'prod-1788775639253', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
       { productId: 'prod-1788724519740', displayOrder: 5, isPinned: false, isFeatured: false, isHidden: false },
+    ],
+  },
+  {
+    id: 'smart-bottles',
+    name: 'Smart Bottles',
+    nameKa: 'ჭკვიანი თერმოსები',
+    slug: 'smart-bottles',
+    description: 'Smart hydration tracking bottles, UV self-cleaning flasks, and insulated drinkware.',
+    isEnabled: true,
+    displayOrder: 7,
+    updatedAt: '2026-11-08T00:00:00.000Z',
+    items: [
+      { productId: 'prod-1788877024412', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
+      { productId: 'prod-1788723441741', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
+      { productId: 'prod-1788723082932', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
+      { productId: 'prod-1789138699002-hmxeg6s', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
+      { productId: 'prod-1789138614222-4evc5wn', displayOrder: 5, isPinned: false, isFeatured: false, isHidden: false },
     ],
   },
   {

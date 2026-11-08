@@ -370,6 +370,7 @@ const parseRouteFromLocation = (
   if (lower === 'privacy') return { page: 'privacy', productId: null };
   if (lower === 'returns') return { page: 'returns', productId: null };
   if (lower === 'guarantee') return { page: 'guarantee', productId: null };
+  if (lower === 'deliveries') return { page: 'deliveries', productId: null };
   if (lower === 'my-orders' || lower === 'orders') return { page: 'my-orders', productId: null };
   return { page: 'home', productId: null };
 };
@@ -1685,12 +1686,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const sanitizeCategoriesConfig = (rawCats: HomepageCategoryConfig[]): HomepageCategoryConfig[] => {
     if (!Array.isArray(rawCats) || rawCats.length === 0) return INITIAL_HOMEPAGE_CATEGORIES;
-    return rawCats.map((cat) => ({
+    const cleaned = rawCats.map((cat) => ({
       ...cat,
       items: Array.isArray(cat.items)
         ? cat.items.filter((item) => item && item.productId && !String(item.productId).startsWith('prod-ref-'))
         : [],
     }));
+    const existingIds = new Set(cleaned.map((c) => c.id));
+    for (const initCat of INITIAL_HOMEPAGE_CATEGORIES) {
+      if (!existingIds.has(initCat.id)) {
+        cleaned.push(initCat);
+      }
+    }
+    return cleaned;
   };
 
   const [homepageSlides, setHomepageSlides] = useState<HomepageSlideConfig[]>(() => {

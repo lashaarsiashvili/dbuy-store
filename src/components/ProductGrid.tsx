@@ -64,6 +64,8 @@ export const ProductGrid: React.FC = () => {
         return c === 'tech' || c === 'drinkware' || c === 'audio';
       case 'wearables':
         return c === 'wearables' || c === 'fitness';
+      case 'smart-bottles':
+        return c === 'drinkware';
       case 'beauty-health':
         return c === 'fitness' || c === 'supplements';
       case 'pets':
