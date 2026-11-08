@@ -190,7 +190,7 @@ export const INITIAL_HOMEPAGE_SLIDES: HomepageSlideConfig[] = [
     mobileBannerImage: '/uploads/ref-hero-everyday.jpg',
     title: 'Level Up Your Everyday',
     subtitle: 'Premium tech, home essentials and lifestyle picks for a smarter, happier you.',
-    secondaryText: 'Rode PodMic USB · Studio Broadcast Microphone',
+    secondaryText: 'Sony WH-1000XM6 · Noise Cancelling Headphones',
     headlineTop: 'Level Up',
     headlineBottomPrefix: 'Your ',
     headlineAccent: 'Everyday',

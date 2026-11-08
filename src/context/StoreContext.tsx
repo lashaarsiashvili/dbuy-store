@@ -1651,15 +1651,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ============================================================================
   const sanitizeSlidesConfig = (rawSlides: HomepageSlideConfig[]): HomepageSlideConfig[] => {
     if (!Array.isArray(rawSlides) || rawSlides.length === 0) return INITIAL_HOMEPAGE_SLIDES;
-    const mapped = rawSlides.map((s, idx) => {
+    const mapped: HomepageSlideConfig[] = rawSlides.map((s, idx) => {
       const fallbackSlide =
         INITIAL_HOMEPAGE_SLIDES.find((init) => init.id === s.id) ||
         INITIAL_HOMEPAGE_SLIDES[idx] ||
         INITIAL_HOMEPAGE_SLIDES[0];
       const hasFakeProdId = !s.productId || String(s.productId).startsWith('prod-ref-');
+      const secondaryText =
+        s.id === 'slide-everyday-1' && (!s.secondaryText || s.secondaryText.includes('WH-CH720N'))
+          ? fallbackSlide.secondaryText
+          : s.secondaryText || fallbackSlide.secondaryText;
+      const rightCtaText =
+        s.id === 'slide-everyday-1' && (!s.rightCtaText || s.rightCtaText === 'Shop Now')
+          ? fallbackSlide.rightCtaText
+          : s.rightCtaText || fallbackSlide.rightCtaText;
       return {
         ...fallbackSlide,
         ...s,
+        secondaryText,
+        rightCtaText,
         productId: hasFakeProdId ? fallbackSlide.productId : s.productId,
         desktopBannerImage:
           sanitizeImageUrl(s.desktopBannerImage) ||
