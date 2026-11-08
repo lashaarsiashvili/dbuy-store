@@ -296,7 +296,7 @@ export const QuickViewModal: React.FC = () => {
             <div>
               {/* Main Featured Active Image with Manual Zoom Trigger */}
               <div 
-                className="relative w-full aspect-square sm:h-80 md:h-96 rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-center cursor-pointer select-none group"
+                className="relative w-full aspect-square rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-center cursor-pointer select-none group"
                 onClick={handleOpenZoom}
                 title={language === 'ka' ? 'დააწკაპუნეთ სურათის გასადიდებლად' : 'Click to zoom image'}
               >
@@ -304,7 +304,7 @@ export const QuickViewModal: React.FC = () => {
                   src={currentImage}
                   alt={`${displayTitle} - photo ${activeImageIndex + 1}`}
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-contain p-2 select-none pointer-events-none"
+                  className="w-full h-full object-contain p-4 sm:p-6 select-none pointer-events-none"
                 />
 
                 {/* Dedicated Manual Zoom / Magnifying Glass Button */}
@@ -397,7 +397,7 @@ export const QuickViewModal: React.FC = () => {
                         src={imgUrl}
                         alt={`Thumbnail ${idx + 1}`}
                         referrerPolicy="no-referrer"
-                        className="w-full h-full object-cover"
+                        className="w-full h-full object-contain p-1"
                       />
                       {activeImageIndex === idx && (
                         <div className="absolute inset-0 bg-blue-600/10 pointer-events-none" />
@@ -737,7 +737,7 @@ export const QuickViewModal: React.FC = () => {
                   <CachedImage
                     src={imgUrl}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain p-1"
                   />
                 </button>
               ))}

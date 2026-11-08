@@ -11,18 +11,27 @@ export const Hero: React.FC = () => {
     products, 
     navigateToProduct,
     billboards,
+    isLoadingBillboards,
     billboardIntervalSeconds,
     t
   } = useStore();
 
   const isKa = language === 'ka';
 
-  // Dynamic slides from StoreContext or initial promotional kits
+  // Dynamic slides from StoreContext
   const slides: BillboardSlide[] = (billboards && Array.isArray(billboards))
     ? billboards.filter(b => b.isActive !== false)
-    : initialBillboards;
+    : [];
 
-  if (!slides || slides.length === 0) {
+  if (isLoadingBillboards) {
+    return (
+      <div className="w-full aspect-[21/9] bg-slate-900 animate-pulse flex items-center justify-center">
+        <div className="w-12 h-12 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      </div>
+    );
+  }
+
+  if (slides.length === 0) {
     return null;
   }
 

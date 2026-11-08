@@ -164,6 +164,7 @@ interface StoreContextType {
 
   // Rotating Billboards & Banners
   billboards: BillboardSlide[];
+  isLoadingBillboards: boolean;
   billboardIntervalSeconds: number;
   updateBillboard: (id: string, updated: Partial<BillboardSlide>) => void;
   addBillboard: (slide: Omit<BillboardSlide, 'id'>) => void;
@@ -729,18 +730,36 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     bgImage: sanitizeImageUrl(b.bgImage)
   });
 
-  const [billboards, setBillboards] = useState<BillboardSlide[]>(() => {
-    const saved = localStorage.getItem('dbuy_billboards') || localStorage.getItem('dbuy_slides');
-    if (saved) {
+  const [billboards, setBillboards] = useState<BillboardSlide[]>([]);
+  const [isLoadingBillboards, setIsLoadingBillboards] = useState<boolean>(true);
+
+  // Fetch billboards from D1 on mount
+  useEffect(() => {
+    const fetchBillboards = async () => {
       try {
-        const parsed: BillboardSlide[] = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map(sanitizeBillboardUrls);
+        setIsLoadingBillboards(true);
+        const response = await fetch('/api/billboards');
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data) && data.length > 0) {
+            setBillboards(data);
+          } else {
+            // Fallback to initial if database is empty
+            setBillboards(initialBillboards.map(sanitizeBillboardUrls));
+          }
+        } else {
+          setBillboards(initialBillboards.map(sanitizeBillboardUrls));
         }
-      } catch (e) {}
-    }
-    return initialBillboards.map(sanitizeBillboardUrls);
-  });
+      } catch (err) {
+        console.warn('Failed to fetch billboards from server, using defaults:', err);
+        setBillboards(initialBillboards.map(sanitizeBillboardUrls));
+      } finally {
+        setIsLoadingBillboards(false);
+      }
+    };
+
+    fetchBillboards();
+  }, []);
 
   const [billboardIntervalSeconds, setBillboardIntervalSecondsState] = useState<number>(120);
 
@@ -749,54 +768,83 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('dbuy_billboards', JSON.stringify(slides));
   };
 
-  const updateBillboard = (id: string, updated: Partial<BillboardSlide>) => {
+  const updateBillboard = async (id: string, updated: Partial<BillboardSlide>) => {
     const next = billboards.map(b => (b.id === id ? { ...b, ...updated } : b));
-    saveBillboards(next);
-    addToast('Billboard slide updated successfully!', 'success');
+    setBillboards(next);
+    localStorage.setItem('dbuy_billboards', JSON.stringify(next));
+
+    try {
+      const formData = new FormData();
+      Object.entries(updated).forEach(([key, val]) => {
+        if (val !== undefined && val !== null) {
+          formData.append(key, String(val));
+        }
+      });
+
+      await fetch(`/api/billboards/${id}`, {
+        method: 'PUT',
+        headers: { 'X-Admin-Slug': adminSecretSlug },
+        body: formData,
+      });
+      addToast('Billboard slide updated successfully!', 'success');
+    } catch (err) {
+      console.warn('Failed to sync billboard update to server:', err);
+    }
   };
 
-  const addBillboard = (slideData: Omit<BillboardSlide, 'id'>) => {
+  const addBillboard = async (slideData: Omit<BillboardSlide, 'id'>) => {
+    const id = 'billboard-' + Date.now();
     const newSlide: BillboardSlide = {
       ...slideData,
-      id: 'billboard-' + Date.now(),
+      id,
       isActive: slideData.isActive !== undefined ? slideData.isActive : true,
     };
     const next = [...billboards, newSlide];
-    saveBillboards(next);
-    addToast('New billboard slide added!', 'success');
+    setBillboards(next);
+    localStorage.setItem('dbuy_billboards', JSON.stringify(next));
+
+    // For addBillboard (internal), we assume it might not have a File object, 
+    // so we'll try to use the server API if it's a URL, but the user specifically
+    // asked for POST /api/billboards with binary upload.
+    // If we have a URL, we'll just keep it in local state for now.
+    addToast('New billboard slide added locally!', 'success');
   };
 
-  const addBillboardServer = async (newBillboard: { imageUrl: string; title?: string; link?: string }) => {
+  const addBillboardServer = async (newBillboard: { file?: File; imageUrl?: string; title?: string; link?: string; [key: string]: any }) => {
     try {
-      const response = await fetch('/api/slideshow', {
+      const formData = new FormData();
+      if (newBillboard.file) formData.append('file', newBillboard.file);
+      if (newBillboard.title) formData.append('title', newBillboard.title);
+      if (newBillboard.link) formData.append('buttonLink', newBillboard.link);
+      
+      // Map other fields
+      Object.entries(newBillboard).forEach(([key, val]) => {
+        if (key !== 'file' && key !== 'imageUrl' && key !== 'title' && key !== 'link') {
+          formData.append(key, String(val));
+        }
+      });
+
+      const response = await fetch('/api/billboards', {
         method: 'POST',
         headers: { 
-          'Content-Type': 'application/json',
           'X-Admin-Slug': adminSecretSlug
         },
-        body: JSON.stringify(newBillboard),
+        body: formData,
       });
 
       if (!response.ok) {
         throw new Error('Failed to save billboard to server');
       }
 
-      const result = await response.json();
+      const result: any = await response.json();
       
-      // Integrate into existing billboards state as a new slide
-      const newSlide: BillboardSlide = {
-        id: result.id,
-        title: result.title || '',
-        titleKa: result.title || '',
-        subtitle: result.link || '',
-        subtitleKa: result.link || '',
-        image: result.imageUrl,
-        bgImage: result.imageUrl,
-        isActive: true,
-      };
-
-      const next = [...billboards, newSlide];
-      saveBillboards(next);
+      // Refetch all to get latest state including mapping
+      const refetch = await fetch('/api/billboards');
+      if (refetch.ok) {
+        const data = await refetch.json();
+        setBillboards(data);
+      }
+      
       addToast('New billboard slide added to server!', 'success');
     } catch (error) {
       console.error("Error saving slideshow billboard:", error);
@@ -804,10 +852,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   };
 
-  const deleteBillboard = (id: string) => {
+  const deleteBillboard = async (id: string) => {
     const next = billboards.filter(b => b.id !== id);
-    saveBillboards(next);
-    addToast(language === 'ka' ? 'ბილბორდის სლაიდი წაიშალა!' : 'Billboard slide removed', 'info');
+    setBillboards(next);
+    localStorage.setItem('dbuy_billboards', JSON.stringify(next));
+
+    try {
+      await fetch(`/api/billboards/${id}`, {
+        method: 'DELETE',
+        headers: { 'X-Admin-Slug': adminSecretSlug },
+      });
+      addToast(language === 'ka' ? 'ბილბორდის სლაიდი წაიშალა!' : 'Billboard slide removed', 'info');
+    } catch (err) {
+      console.warn('Failed to delete billboard from server:', err);
+    }
   };
 
   const resetBillboards = () => {
@@ -1557,7 +1615,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         orders, placeOrder, updateOrderStatus, updateOrderTracking,
         deleteOrder, clearOrderHistory, lastPlacedOrder, setLastPlacedOrder,
         theme, updateTheme, resetTheme, isDarkMode, toggleDarkMode, setIsDarkMode,
-        billboards, billboardIntervalSeconds, updateBillboard, addBillboard,
+        billboards, isLoadingBillboards, billboardIntervalSeconds, updateBillboard, addBillboard, addBillboardServer,
         deleteBillboard, resetBillboards, setBillboardIntervalSeconds,
         user, adminPassword, adminSecretSlug, updateAdminSecretSlug,
         generateRandomAdminSlug, getAdminUrl, copyAdminUrl,

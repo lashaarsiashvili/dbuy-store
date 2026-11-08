@@ -678,6 +678,7 @@ export const AdminDashboard: React.FC = () => {
   const [showLogoModal, setShowLogoModal] = useState(false);
   const [editingBillboard, setEditingBillboard] = useState<BillboardSlide | null>(null);
   const [billboardImageMode, setBillboardImageMode] = useState<'upload' | 'url'>('url');
+  const [billboardFile, setBillboardFile] = useState<File | null>(null);
   const billboardFileInputRef = useRef<HTMLInputElement>(null);
 
   // Drag-to-Pan Logic for Hero Banner Image Focal Point (object-position Y)
@@ -710,6 +711,7 @@ export const AdminDashboard: React.FC = () => {
   const [quickSlideTitle, setQuickSlideTitle] = useState('');
   const [quickSlideDesc, setQuickSlideDesc] = useState('');
   const [quickSlideImage, setQuickSlideImage] = useState('');
+  const [quickSlideFile, setQuickSlideFile] = useState<File | null>(null);
   const [quickSlideProductId, setQuickSlideProductId] = useState('');
   const [isUploadingQuickSlide, setIsUploadingQuickSlide] = useState(false);
   const quickSlideFileInputRef = useRef<HTMLInputElement>(null);
@@ -717,17 +719,15 @@ export const AdminDashboard: React.FC = () => {
   const handleQuickSlideImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    setIsUploadingQuickSlide(true);
-    try {
-      const r2Url = await uploadImageToR2(file, quickSlideTitle || 'slide');
-      setQuickSlideImage(r2Url);
-      addToast(isKa ? 'სურათი აიტვირთა Cloudflare R2-ში!' : 'Banner image uploaded to Cloudflare R2!', 'success');
-    } catch (err: any) {
-      console.error('Error uploading slide image:', err);
-      addToast(isKa ? 'სურათის ატვირთვის შეცდომა' : 'Error uploading banner image to R2', 'error');
-    } finally {
-      setIsUploadingQuickSlide(false);
-    }
+    setQuickSlideFile(file);
+    
+    // Preview locally
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setQuickSlideImage(ev.target?.result as string);
+    };
+    reader.readAsDataURL(file);
+    addToast(isKa ? 'სურათი მზადაა ასატვირთად!' : 'Image ready for upload!', 'info');
   };
 
   const handleQuickSlideSubmit = async (e: React.FormEvent) => {
@@ -748,13 +748,12 @@ export const AdminDashboard: React.FC = () => {
     setIsUploadingQuickSlide(true);
     try {
       const matchedProd = quickSlideProductId ? products.find(p => p.id === quickSlideProductId) : null;
-      const newSlide: Omit<BillboardSlide, 'id'> = {
+      
+      const payload: any = {
         title: quickSlideTitle.trim(),
         titleKa: quickSlideTitle.trim(),
         subtitle: quickSlideDesc.trim(),
         subtitleKa: quickSlideDesc.trim(),
-        image: quickSlideImage,
-        bgImage: quickSlideImage,
         bgGradient: 'from-slate-950 via-indigo-950 to-slate-900',
         priceTag: matchedProd ? formatPrice(matchedProd.price) : '$189.00',
         origPriceTag: matchedProd?.origPrice ? formatPrice(matchedProd.origPrice) : '',
@@ -768,27 +767,17 @@ export const AdminDashboard: React.FC = () => {
         isActive: true,
       };
 
-      await addBillboard(newSlide);
-
-      // Also sync to dbuy_slides in localStorage
-      try {
-        const saved = localStorage.getItem('dbuy_slides');
-        const existing = saved ? JSON.parse(saved) : [];
-        existing.push({
-          title: quickSlideTitle.trim(),
-          desc: quickSlideDesc.trim(),
-          image: quickSlideImage
-        });
-        localStorage.setItem('dbuy_slides', JSON.stringify(existing));
-      } catch (err) {
-        console.error(err);
+      if (quickSlideFile) {
+        payload.file = quickSlideFile;
       }
 
+      await (useStore() as any).addBillboardServer(payload);
+
       addToast(isKa ? 'სლაიდი წარმატებით დაემატა!' : 'Slide added successfully!', 'success');
-      alert(isKa ? 'სლაიდი წარმატებით დაემატა!' : 'Slide added successfully!');
       setQuickSlideTitle('');
       setQuickSlideDesc('');
       setQuickSlideImage('');
+      setQuickSlideFile(null);
       if (quickSlideFileInputRef.current) {
         quickSlideFileInputRef.current.value = '';
       }
@@ -852,6 +841,7 @@ export const AdminDashboard: React.FC = () => {
       category: 'tech',
       isActive: true,
     });
+    setBillboardFile(null);
     setIsBillboardModalOpen(true);
   };
 
@@ -877,6 +867,7 @@ export const AdminDashboard: React.FC = () => {
       category: slide.category || 'tech',
       isActive: slide.isActive ?? true,
     });
+    setBillboardFile(null);
     setIsBillboardModalOpen(true);
   };
 
@@ -915,9 +906,9 @@ export const AdminDashboard: React.FC = () => {
     }
 
     if (editingBillboard) {
-      updateBillboard(editingBillboard.id, billboardForm);
+      updateBillboard(editingBillboard.id, { ...billboardForm, file: billboardFile } as any);
     } else {
-      addBillboard(billboardForm);
+      (useStore() as any).addBillboardServer({ ...billboardForm, file: billboardFile });
     }
     setIsBillboardModalOpen(false);
   };
@@ -927,14 +918,13 @@ export const AdminDashboard: React.FC = () => {
       addToast(isKa ? 'გთხოვთ ატვირთოთ ვალიდური სურათის ფაილი' : 'Please upload a valid image file', 'error');
       return;
     }
-    try {
-      const base64Data = await readImageAsBase64(file, 1920, 1080);
-      setBillboardForm(prev => ({ ...prev, image: base64Data }));
-      addToast(isKa ? 'ბილბორდის სურათი დაემატა!' : 'Billboard image added!', 'success');
-    } catch (err) {
-      console.error('Error reading billboard image:', err);
-      addToast(isKa ? 'შეცდომა სურათის წაკითხვისას' : 'Error reading image file', 'error');
-    }
+    setBillboardFile(file);
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      setBillboardForm(prev => ({ ...prev, image: ev.target?.result as string }));
+    };
+    reader.readAsDataURL(file);
+    addToast(isKa ? 'ბილბორდის სურათი მზადაა ასატვირთად!' : 'Billboard image ready for upload!', 'success');
   };
 
   // Calculate Metrics

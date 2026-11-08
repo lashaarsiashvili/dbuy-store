@@ -146,7 +146,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
 
       {/* Product Image Container */}
       <div 
-        className="product-card-image-wrapper relative w-full pt-[85%] bg-slate-100 dark:bg-slate-900/60 overflow-hidden group cursor-pointer"
+        className="product-card-image-wrapper relative w-full aspect-square bg-white dark:bg-slate-900/60 overflow-hidden group cursor-pointer flex items-center justify-center"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
@@ -154,13 +154,13 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
           <CachedImage
             src={getCardImageSrc(product)}
             alt={displayTitle}
-            className="product-card-img absolute inset-0 w-full h-full object-cover"
+            className="product-card-img w-full h-full object-contain p-4 sm:p-6 transition-transform duration-300 group-hover:scale-105"
             loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
           />
         ) : (
-          <div className="absolute inset-0 w-full h-full bg-slate-100 dark:bg-slate-800/50 flex items-center justify-center text-slate-400 dark:text-slate-500 text-xs font-medium">
+          <div className="w-full h-full bg-white dark:bg-slate-800/50 flex items-center justify-center text-slate-400 dark:text-slate-500 text-xs font-medium">
             Ready for upload
           </div>
         )}

@@ -570,7 +570,7 @@ export const ProductDetailPage: React.FC = () => {
         <div className="lg:col-span-6 xl:col-span-6 space-y-4">
           <div 
             key={`main-display-var-${selectedVariantIndex}`} 
-            className="relative w-full pt-[85%] sm:pt-[80%] rounded-3xl bg-slate-50 dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-sm group select-none"
+            className="relative w-full aspect-square rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-sm group select-none flex items-center justify-center"
           >
             {/* Main Media Display (Image or Video) */}
             {currentMediaItem ? (
@@ -610,7 +610,7 @@ export const ProductDetailPage: React.FC = () => {
                     referrerPolicy="no-referrer"
                     loading="eager"
                     fetchPriority="high"
-                    className="absolute inset-0 w-full h-full object-contain p-4 sm:p-6 select-none pointer-events-none"
+                    className="w-full h-full object-contain p-4 sm:p-6 select-none pointer-events-none"
                   />
                 </div>
               )
@@ -691,7 +691,7 @@ export const ProductDetailPage: React.FC = () => {
                 <button
                   key={item.id || idx}
                   onClick={() => setActiveImageIndex(idx)}
-                  className={`relative w-20 h-20 rounded-2xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer bg-slate-50 dark:bg-slate-900 ${
+                  className={`relative w-20 h-20 rounded-2xl overflow-hidden border-2 transition-all shrink-0 cursor-pointer bg-white dark:bg-slate-900 ${
                     activeImageIndex === idx
                       ? 'border-blue-600 ring-2 ring-blue-500/20 shadow-md scale-105'
                       : 'border-slate-200 dark:border-slate-800 hover:border-slate-400 opacity-75 hover:opacity-100'
@@ -718,7 +718,7 @@ export const ProductDetailPage: React.FC = () => {
                       src={item.url}
                       alt={`${displayTitle} - photo ${idx + 1}`}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-cover p-1"
+                      className="w-full h-full object-contain p-1"
                     />
                   )}
                 </button>
@@ -1076,12 +1076,12 @@ export const ProductDetailPage: React.FC = () => {
                   onClick={() => navigateToProduct(rel.id)}
                   className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-3 flex flex-col justify-between hover:shadow-xl transition-all cursor-pointer"
                 >
-                  <div className="relative pt-[85%] rounded-xl bg-slate-50 dark:bg-slate-950 overflow-hidden mb-3">
+                  <div className="relative aspect-square rounded-xl bg-white dark:bg-slate-950 overflow-hidden mb-3 flex items-center justify-center">
                     <CachedImage
                       src={getProductImage(rel)}
                       alt={relTitle}
                       referrerPolicy="no-referrer"
-                      className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                      className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
                     />
                   </div>
                   <div>
@@ -1300,7 +1300,7 @@ export const ProductDetailPage: React.FC = () => {
                   <CachedImage
                     src={item.type === 'video' ? (item.thumbUrl || cleanMainImg) : item.url}
                     alt=""
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-contain p-1"
                   />
                   {item.type === 'video' && (
                     <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
