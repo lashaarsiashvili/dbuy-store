@@ -1,11 +1,5 @@
 import { Product } from '../types';
 
-/**
- * ============================================================================
- * PRESENTATION-LAYER HOMEPAGE CONFIGURATION TABLES
- * ============================================================================
- */
-
 export type HomepageCategoryId =
   | 'electronics'
   | 'gaming'
@@ -146,8 +140,34 @@ export function matchesProductSearch(product: Product, query: string, index: num
   );
 }
 
-// ამოშლილია ყალბი პროდუქტები, სლაიდერები ცარიელია სანამ თქვენს რეალურ ID-ს არ მიუთითებთ
-export const INITIAL_HOMEPAGE_SLIDES: HomepageSlideConfig[] = [];
+export const INITIAL_HOMEPAGE_SLIDES: HomepageSlideConfig[] = [
+  {
+    id: 'slide-everyday-1',
+    slideOrder: 1,
+    isEnabled: true,
+    desktopBannerImage: '/uploads/ref-hero-everyday.jpg',
+    mobileBannerImage: '/uploads/ref-hero-everyday.jpg',
+    title: 'Level Up Your Everyday',
+    subtitle: 'Premium tech, home essentials and lifestyle picks for a smarter, happier you.',
+    secondaryText: 'Explore our latest collection',
+    headlineTop: 'Level Up',
+    headlineBottomPrefix: 'Your ',
+    headlineAccent: 'Everyday',
+    accentGradient: 'linear-gradient(90deg, #56B4FF 0%, #3B82F6 52%, #1D4ED8 100%)',
+    overlayLine1: 'Sound',
+    overlayLine2: 'Without Limits',
+    overlayStyle: 'split-weight',
+    primaryCtaText: 'Shop Now',
+    rightCtaText: 'Shop Product',
+    primaryCategory: 'electronics',
+    themeVariant: 'everyday',
+    signatureLines: ['Good', 'Tech', 'Brighter', 'Days'],
+    startDate: '',
+    endDate: '',
+    productId: '', 
+    updatedAt: '2026-11-08T00:00:00.000Z',
+  }
+];
 
 export const INITIAL_HOMEPAGE_CATEGORIES: HomepageCategoryConfig[] = [
   {
