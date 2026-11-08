@@ -19,10 +19,12 @@
   /* 1. Root HTML: viewport context, safe native overscroll, and canvas color propagation */
   html {
     width: 100%;
+    max-width: 100vw;
     min-height: 100%;
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
+    overflow-x: hidden !important;
+    box-sizing: border-box;
     background-color: #F7F8FA;
     color: #0f172a;
     -webkit-text-size-adjust: 100%;
@@ -36,12 +38,14 @@
     color: #f8fafc;
   }
 
-  /* 2. Root Body: prevent horizontal page scrolling */
+  /* 2. Root Body: strictly prevent any horizontal scrolling on the entire page */
   body {
     width: 100%;
+    max-width: 100vw;
     margin: 0;
     padding: 0;
-    overflow-x: hidden;
+    overflow-x: hidden !important;
+    box-sizing: border-box;
     min-height: 100dvh;
     min-height: 100vh; /* fallback */
     min-height: 100dvh;
@@ -52,18 +56,20 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* 3. Application container: handles horizontal clipping */
+  /* 3. Application container: strictly handles horizontal clipping and box-sizing */
   #root {
     width: 100%;
+    max-width: 100%;
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    overflow-x: hidden;
+    overflow-x: hidden !important;
+    box-sizing: border-box;
     background-color: inherit;
   }
 
   *, *::before, *::after {
-    box-sizing: border-box;
+    box-sizing: border-box !important;
   }
 
   img, video, canvas, svg {
@@ -243,32 +249,435 @@ apple-pay-button {
   display: none !important;
 }
 
+/* Category Browse Section - Completely Static (No vertical jumps or translation) */
+#category-browse-section .category-circle-item,
+#category-browse-section .category-circle-icon-box,
+.category-circle-item,
+.category-circle-icon-box {
+  transform: none !important;
+}
+
+#category-browse-section .category-circle-item:hover,
+#category-browse-section .category-circle-icon-box:hover,
+.category-circle-item:hover,
+.category-circle-icon-box:hover {
+  transform: none !important;
+}
+
 /* ==========================================================================
-   MOBILE E-COMMERCE PRODUCT CATALOG & HERO / SLIDER RESPONSIVE RULES
-   Strictly isolated to mobile screens under @media (max-width: 768px).
-   Desktop & tablet layouts (>= 769px) remain completely untouched.
+   HERO CAMPAIGN SHOWCASE - RESPONSIVE ARCHITECTURE
+   Fully responsive across Desktop (> 1024px), Tablet/iPad (<= 1024px), and Mobile (<= 768px).
    ========================================================================== */
-@media (max-width: 768px) {
-  /* Hero Buttons: column layout, 100% width, small gap on mobile */
+
+.hero-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+@media (min-width: 1025px) {
+  .hero-section {
+    min-height: 380px;
+    height: 420px;
+  }
+
+  .hero-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 3rem;
+    width: 100%;
+    max-width: 1340px;
+    height: 100%;
+    margin: 0 auto;
+    padding: 2.5rem 2rem;
+    position: relative;
+    z-index: 10;
+    box-sizing: border-box;
+  }
+
+  .hero-text-block {
+    width: 48%;
+    max-width: 600px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 1.25rem;
+    z-index: 20;
+    position: relative;
+    box-sizing: border-box;
+  }
+
+  .hero-headline {
+    font-size: 42px;
+    line-height: 1.08;
+    font-weight: 800;
+    letter-spacing: -0.025em;
+    color: #ffffff;
+    margin: 0;
+  }
+
+  .hero-subtitle {
+    font-size: 15px;
+    line-height: 1.45;
+    color: rgba(226, 232, 240, 0.9);
+    margin: 0;
+    max-width: 520px;
+  }
+
   .hero-actions-container {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 0.875rem;
+    width: auto;
+    padding-top: 0.25rem;
+  }
+
+  .hero-trust-badges-desktop {
+    display: block;
+    width: 100%;
+    padding-top: 0.75rem;
+  }
+
+  .hero-trust-badges-mobile-wrapper {
+    display: none !important;
+  }
+
+  .hero-trust-badges {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 1.25rem;
+    width: 100%;
+  }
+
+  .hero-trust-badge-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
+
+  .hero-trust-badge-icon {
+    width: 30px;
+    height: 30px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .hero-trust-badge-text {
+    display: flex;
+    flex-direction: column;
+    line-height: 1.15;
+  }
+
+  .hero-trust-badge-title {
+    font-size: 11px;
+    font-weight: 700;
+    color: #ffffff;
+    white-space: nowrap;
+  }
+
+  .hero-trust-badge-subtitle {
+    font-size: 9.5px;
+    color: #94a3b8;
+    white-space: nowrap;
+  }
+
+  .hero-trust-divider {
+    height: 20px;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
+  }
+
+  .hero-image-block {
+    width: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    height: 100%;
+    min-height: 320px;
+    box-sizing: border-box;
+  }
+
+  .hero-image-container {
+    width: 100%;
+    height: 100%;
+    max-height: 380px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 1rem;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  .hero-product-image {
+    width: 100%;
+    height: 100%;
+    max-height: 380px;
+    object-fit: contain;
+    object-position: center;
+    transition: transform 0.35s ease;
+  }
+
+  .hero-product-image:hover {
+    transform: scale(1.03);
+  }
+
+  .hero-carousel-controls {
+    position: absolute;
+    top: 0;
+    right: 0;
+    z-index: 30;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 0.5rem;
+  }
+
+  .hero-carousel-counter {
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.05em;
+    color: #94a3b8;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .hero-carousel-arrows {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .hero-arrow-btn {
+    width: 32px;
+    height: 32px;
+    border-radius: 9999px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #ffffff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+
+  .hero-arrow-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
+  }
+}
+
+.hero-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  height: 42px;
+  padding: 0 1.5rem;
+  border-radius: 9999px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  flex-shrink: 0;
+  box-sizing: border-box;
+}
+
+.hero-action-btn:active {
+  transform: scale(0.97);
+}
+
+.hero-action-btn-primary {
+  background: linear-gradient(180deg, #1E88E5 0%, #0062FF 100%);
+  color: #ffffff;
+  box-shadow: 0 6px 20px -2px rgba(0, 102, 255, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.25);
+}
+
+.hero-action-btn-primary:hover {
+  filter: brightness(1.1);
+}
+
+.hero-action-btn-secondary {
+  background: rgba(6, 14, 30, 0.6);
+  color: rgba(255, 255, 255, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  backdrop-filter: blur(8px);
+}
+
+.hero-action-btn-secondary:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+/* ==========================================================================
+   TABLET / IPAD FIX (@media (max-width: 1024px))
+   - No duplicate text blocks or buttons. No ghost elements.
+   - flex-direction: column layout.
+   - Text block sits completely above product image, width: 100%.
+   - Product image sits below text, width: 100%, object-fit: contain.
+   - No position: absolute for text.
+   ========================================================================== */
+@media (max-width: 1024px) {
+  .hero-section {
+    min-height: auto !important;
+    height: auto !important;
+    padding: 2.5rem 1.5rem !important;
+  }
+
+  .hero-container {
     display: flex !important;
     flex-direction: column !important;
     width: 100% !important;
-    gap: 0.625rem !important;
+    gap: 1.75rem !important;
+    align-items: stretch !important;
+    padding: 0 !important;
   }
 
-  .hero-actions-container .hero-action-btn {
+  .hero-text-block {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    position: relative !important;
+    top: auto !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    gap: 1rem !important;
+    z-index: 10 !important;
+  }
+
+  .hero-headline {
+    font-size: 32px !important;
+    line-height: 1.15 !important;
+    font-weight: 800 !important;
     width: 100% !important;
   }
 
-  /* Features / Trust Badges: horizontal swipe with mandatory scroll snap & hidden scrollbar */
-  .hero-trust-badges {
+  .hero-subtitle {
+    font-size: 14.5px !important;
+    line-height: 1.4 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .hero-actions-container {
     display: flex !important;
-    overflow-x: auto !important;
-    scroll-snap-type: x mandatory !important;
+    flex-direction: row !important;
+    align-items: center !important;
     gap: 1rem !important;
     width: 100% !important;
-    -webkit-overflow-scrolling: touch !important;
+    padding-top: 0.25rem !important;
+  }
+
+  .hero-trust-badges-desktop {
+    display: none !important;
+  }
+
+  .hero-trust-badges-mobile-wrapper {
+    display: block !important;
+    width: 100% !important;
+    margin-top: 1rem !important;
+  }
+
+  .hero-image-block {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    position: relative !important;
+    margin-top: 0.5rem !important;
+    align-items: center !important;
+  }
+
+  .hero-image-container {
+    width: 100% !important;
+    height: 320px !important;
+    max-height: 360px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    overflow: hidden !important;
+    border-radius: 1rem !important;
+    background: rgba(255, 255, 255, 0.03) !important;
+    cursor: pointer !important;
+  }
+
+  .hero-product-image {
+    width: 100% !important;
+    height: 100% !important;
+    max-height: 360px !important;
+    object-fit: contain !important;
+    object-position: center !important;
+  }
+
+  .hero-carousel-controls {
+    position: absolute !important;
+    top: 12px !important;
+    right: 12px !important;
+    z-index: 25 !important;
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    backdrop-filter: blur(8px) !important;
+    padding: 5px 12px !important;
+    border-radius: 9999px !important;
+    border: 1px solid rgba(255, 255, 255, 0.2) !important;
+  }
+
+  .hero-carousel-counter {
+    font-size: 11.5px !important;
+    color: #cbd5e1 !important;
+  }
+
+  .hero-carousel-arrows {
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.375rem !important;
+  }
+
+  .hero-arrow-btn {
+    width: 28px !important;
+    height: 28px !important;
+    border-radius: 9999px !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    border: 1px solid rgba(255, 255, 255, 0.25) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    color: #ffffff !important;
+    cursor: pointer !important;
+  }
+
+  .hero-trust-badges {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 1rem !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    padding-bottom: 6px !important;
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
   }
@@ -278,45 +687,197 @@ apple-pay-button {
   }
 
   .hero-trust-badge-item {
-    scroll-snap-align: start !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    flex-shrink: 0 !important;
+    background: rgba(255, 255, 255, 0.06) !important;
+    padding: 0.5rem 0.875rem !important;
+    border-radius: 0.75rem !important;
+    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  }
+
+  .hero-trust-divider {
+    display: none !important;
+  }
+}
+
+/* ==========================================================================
+   MOBILE FIX (@media (max-width: 768px))
+   - Text block and buttons perfectly stacked (flex-direction: column, gap: 1rem) above product image.
+   - Bottom trust badges in swipeable flex container with:
+     overflow-x: auto; white-space: nowrap; flex-wrap: nowrap; gap: 1rem; padding-bottom: 10px;
+     hide scrollbar (::-webkit-scrollbar { display: none; })
+   ========================================================================== */
+@media (max-width: 768px) {
+  .hero-section {
+    padding: 1.75rem 0.875rem !important;
+  }
+
+  .hero-container {
+    gap: 1.25rem !important;
+  }
+
+  .hero-text-block {
+    gap: 0.875rem !important;
+  }
+
+  .hero-headline {
+    font-size: 24px !important;
+    line-height: 1.15 !important;
+  }
+
+  .hero-subtitle {
+    font-size: 13px !important;
+    line-height: 1.4 !important;
+  }
+
+  /* Buttons perfectly stacked with flex-direction: column, gap: 1rem */
+  .hero-actions-container {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 1rem !important;
+    width: 100% !important;
+    padding-top: 0.25rem !important;
+  }
+
+  .hero-action-btn {
+    width: 100% !important;
+    height: 42px !important;
+    font-size: 13px !important;
+    justify-content: center !important;
     flex-shrink: 0 !important;
   }
 
-  /* Main Product Slider (Sound Without Limits): column layout with 100% width image above text block */
-  .hero-product-slider {
+  .hero-image-block {
+    margin-top: 0.5rem !important;
+  }
+
+  .hero-image-container {
+    height: 230px !important;
+    max-height: 250px !important;
+    border-radius: 0.875rem !important;
+  }
+
+  .hero-product-image {
+    max-height: 250px !important;
+  }
+
+  .hero-carousel-controls {
+    top: 10px !important;
+    right: 10px !important;
+    gap: 0.5rem !important;
+    padding: 3px 10px !important;
+  }
+
+  .hero-trust-badges-mobile-wrapper {
+    margin-top: 0.75rem !important;
+  }
+
+  /* Bottom trust badges swipeable flex container */
+  .hero-trust-badges {
     display: flex !important;
-    flex-direction: column !important;
-    width: 100% !important;
-    height: auto !important;
-  }
-
-  .hero-slider-image-container {
-    width: 100% !important;
-  }
-
-  .hero-slider-text-container {
-    width: 100% !important;
-    flex: 1 1 auto !important;
-  }
-
-  /* Bottom Category Circles: smooth horizontal swiping on mobile */
-  .category-circles-container {
-    display: flex !important;
-    overflow-x: auto !important;
-    gap: 1rem !important;
+    flex-direction: row !important;
     flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    gap: 1rem !important;
+    padding-bottom: 10px !important;
     -webkit-overflow-scrolling: touch !important;
+    width: 100% !important;
     scrollbar-width: none !important;
     -ms-overflow-style: none !important;
+    justify-content: flex-start !important;
   }
 
+  .hero-trust-badges::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .hero-trust-badge-item {
+    flex-shrink: 0 !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.5rem !important;
+    background: rgba(255, 255, 255, 0.08) !important;
+    border: 1px solid rgba(255, 255, 255, 0.15) !important;
+    border-radius: 0.75rem !important;
+    padding: 0.5rem 0.875rem !important;
+  }
+
+  .hero-trust-badge-icon {
+    width: 26px !important;
+    height: 26px !important;
+  }
+
+  .hero-trust-badge-title {
+    font-size: 10.5px !important;
+  }
+
+  .hero-trust-badge-subtitle {
+    font-size: 9px !important;
+  }
+}
+
+  /* Category Icons Section (below main hero slider): compact vertical spacing & horizontal scroll on mobile */
+@media (max-width: 768px) {
+  #category-browse-section {
+    padding-top: 0.875rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  #category-browse-section .category-circles-container,
+  .category-circles-container {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    -webkit-overflow-scrolling: touch !important;
+    touch-action: pan-x !important;
+    gap: 0.75rem !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    -ms-overflow-style: none !important;
+    scrollbar-width: none !important;
+  }
+
+  #category-browse-section .category-circles-container::-webkit-scrollbar,
   .category-circles-container::-webkit-scrollbar {
     display: none !important;
   }
 
+  #category-browse-section .category-circle-item,
   .category-circle-item {
     flex: 0 0 auto !important;
+    min-width: 68px !important;
     width: auto !important;
+    transform: none !important;
+  }
+
+  #category-browse-section .category-circle-item:hover,
+  .category-circle-item:hover,
+  #category-browse-section .category-circle-icon-box:hover,
+  .category-circle-icon-box:hover {
+    transform: none !important;
+  }
+
+  /* Reduce circular category icon container size on mobile to 56px */
+  #category-browse-section .category-circle-icon-box,
+  .category-circle-icon-box {
+    width: 56px !important;
+    height: 56px !important;
+    min-width: 56px !important;
+    min-height: 56px !important;
+    transform: none !important;
+  }
+
+  /* Reduce category label font size on mobile to 11px */
+  #category-browse-section .category-circle-label,
+  .category-circle-label {
+    font-size: 11px !important;
+    line-height: 1.2 !important;
+    margin-top: 6px !important;
   }
 
   /* 1. Mobile Section Spacing & Edge Padding */
@@ -419,16 +980,18 @@ apple-pay-button {
     height: 11px !important;
   }
 
-  /* 5. Compact Mobile Product Images (Square ratio 1:1, max-height 130px-150px, object-fit: contain, subtle neutral background #f8f8f8, non-collapsing dimensions) */
+  /* 5. Product Card Image Showcase (Maximized size, zero excessive padding, solid white showcase in dark mode, mix-blend-mode: multiply) */
   .product-card-image-wrapper {
     position: relative !important;
     width: 100% !important;
     aspect-ratio: 1 / 1 !important;
-    padding-top: 0 !important;
-    height: 140px !important;
-    min-height: 130px !important;
-    max-height: 145px !important;
-    background-color: #f8f8f8 !important;
+    padding: 0 !important;
+    height: 155px !important;
+    min-height: 140px !important;
+    max-height: 165px !important;
+    background-color: #ffffff !important;
+    border-top-left-radius: 12px !important;
+    border-top-right-radius: 12px !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
@@ -436,7 +999,9 @@ apple-pay-button {
   }
 
   .dark .product-card-image-wrapper {
-    background-color: #0b0f19 !important;
+    background-color: #ffffff !important;
+    border-top-left-radius: 12px !important;
+    border-top-right-radius: 12px !important;
   }
 
   .product-card-img {
@@ -445,17 +1010,20 @@ apple-pay-button {
     width: 100% !important;
     height: 100% !important;
     min-height: 130px !important;
-    max-height: 140px !important;
     object-fit: contain !important;
-    background-color: #f8f8f8 !important;
-    padding: 6px !important;
+    object-position: center !important;
+    background-color: transparent !important;
+    padding: 0 !important;
     display: block !important;
-    transform: none !important;
-    transition: none !important;
+    mix-blend-mode: multiply !important;
+    transform: scale(1.05) !important;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 
   .dark .product-card-img {
-    background-color: #0b0f19 !important;
+    background-color: transparent !important;
+    mix-blend-mode: multiply !important;
+    transform: scale(1.05) !important;
   }
 
   /* Disable desktop-only quickview hover overlay on touch mobile */
@@ -674,8 +1242,11 @@ apple-pay-button {
   }
 
   .product-card-root .product-card-img {
-    transition: none !important;
-    transform: none !important;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  }
+
+  .product-card-root:hover .product-card-img {
+    transform: scale(1.1) !important;
   }
 }
 

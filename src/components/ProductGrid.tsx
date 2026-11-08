@@ -20,6 +20,7 @@ export const ProductGrid: React.FC = () => {
   const {
     selectedCategory,
     setSelectedCategory,
+    navigateToCategory,
     searchQuery,
     setSearchQuery,
     products,
@@ -334,7 +335,7 @@ export const ProductGrid: React.FC = () => {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5">
             {/* BANNER 1: Smart Living Starts Here */}
             <div
-              onClick={() => promoSmartHomeProduct && navigateToProduct(promoSmartHomeProduct.id)}
+              onClick={() => navigateToCategory('smart-home')}
               className="group relative h-[124px] lg:h-[140px] rounded-[18px] lg:rounded-[20px] overflow-hidden px-4 py-3 lg:px-6 lg:py-4 flex items-center justify-between cursor-pointer transition-all duration-300 hover:-translate-y-0.5"
               style={{
                 background: 'linear-gradient(90deg, #D3E3FA 0%, #E2EEFC 45%, #F2F7FD 100%)',
@@ -367,17 +368,25 @@ export const ProductGrid: React.FC = () => {
                 </div>
 
                 <div>
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-[#0F172A] font-bold text-[10.5px] lg:text-[11px] shadow-sm transition-all whitespace-nowrap shrink-0">
+                  <a
+                    href="/category/smart-home"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      navigateToCategory('smart-home');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-[#0F172A] font-bold text-[10.5px] lg:text-[11px] shadow-sm transition-all whitespace-nowrap shrink-0 cursor-pointer"
+                  >
                     <span>Shop Smart Home</span>
                     <ArrowRight className="w-3 h-3 stroke-[2.5]" />
-                  </span>
+                  </a>
                 </div>
               </div>
             </div>
 
             {/* BANNER 2: Game Without Limits */}
             <div
-              onClick={() => promoGamingProduct && navigateToProduct(promoGamingProduct.id)}
+              onClick={() => navigateToCategory('gaming')}
               className="group relative h-[124px] lg:h-[140px] rounded-[18px] lg:rounded-[20px] overflow-hidden px-4 py-3 lg:px-6 lg:py-4 flex items-center justify-between cursor-pointer transition-all duration-300 hover:-translate-y-0.5"
               style={{
                 background: 'linear-gradient(90deg, #050811 0%, #090F22 48%, #12132E 100%)',
@@ -412,22 +421,28 @@ export const ProductGrid: React.FC = () => {
                 </div>
 
                 <div>
-                  <span
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[#0B1120] font-bold text-[10.5px] lg:text-[11px] shadow-md transition-all whitespace-nowrap shrink-0"
+                  <a
+                    href="/category/pro-gaming"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      navigateToCategory('gaming');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[#0B1120] font-bold text-[10.5px] lg:text-[11px] shadow-md transition-all whitespace-nowrap shrink-0 cursor-pointer"
                     style={{
                       background: 'linear-gradient(90deg, #BDB8FF 0%, #8CA8FF 52%, #4FB0FF 100%)',
                     }}
                   >
                     <span>Shop Gaming</span>
                     <ArrowRight className="w-3 h-3 stroke-[2.5]" />
-                  </span>
+                  </a>
                 </div>
               </div>
             </div>
 
             {/* BANNER 3: Brew Perfection Every Day */}
             <div
-              onClick={() => promoDrinkwareProduct && navigateToProduct(promoDrinkwareProduct.id)}
+              onClick={() => navigateToCategory('smart-bottles')}
               className="group relative h-[124px] lg:h-[140px] rounded-[18px] lg:rounded-[20px] overflow-hidden px-4 py-3 lg:px-6 lg:py-4 flex items-center justify-between cursor-pointer transition-all duration-300 hover:-translate-y-0.5"
               style={{
                 background: 'linear-gradient(90deg, #F6DFDC 0%, #F8E5E2 46%, #ECD0C9 100%)',
@@ -458,10 +473,18 @@ export const ProductGrid: React.FC = () => {
                 </div>
 
                 <div>
-                  <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-[#0F172A] font-bold text-[10.5px] lg:text-[11px] shadow-sm transition-all whitespace-nowrap shrink-0">
+                  <a
+                    href="/category/smart-hydration"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      navigateToCategory('smart-bottles');
+                    }}
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-[#0F172A] font-bold text-[10.5px] lg:text-[11px] shadow-sm transition-all whitespace-nowrap shrink-0 cursor-pointer"
+                  >
                     <span>Shop Drinkware</span>
                     <ArrowRight className="w-3 h-3 stroke-[2.5]" />
-                  </span>
+                  </a>
                 </div>
               </div>
             </div>

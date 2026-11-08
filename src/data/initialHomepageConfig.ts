@@ -27,7 +27,8 @@ export type HomepageCategoryId =
   | 'office'
   | 'beauty-health'
   | 'pets'
-  | 'deals';
+  | 'deals'
+  | 'all';
 
 export interface HomepageSlideConfig {
   id: string;

@@ -15,7 +15,6 @@ import {
   KeyRound,
   ScanFace,
   Globe,
-  LayoutGrid,
   Truck,
   CornerUpLeft,
   Flame,
@@ -53,13 +52,11 @@ export const Header: React.FC = () => {
   } = useStore();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
-  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const catDropdownRef = useRef<HTMLDivElement>(null);
   const langDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -67,9 +64,6 @@ export const Header: React.FC = () => {
       const target = event.target as Node;
       if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         setUserDropdownOpen(false);
-      }
-      if (catDropdownRef.current && !catDropdownRef.current.contains(target)) {
-        setCatDropdownOpen(false);
       }
       if (langDropdownRef.current && !langDropdownRef.current.contains(target)) {
         setLangDropdownOpen(false);
@@ -101,7 +95,6 @@ export const Header: React.FC = () => {
     if (homepageIdMap[catLower]) {
       setActiveHomepageCategory(homepageIdMap[catLower]);
     }
-    setCatDropdownOpen(false);
     if (currentPage !== 'home') {
       setCurrentPage('home');
     }
@@ -581,38 +574,6 @@ export const Header: React.FC = () => {
         <div className="max-w-[1320px] h-[46px] mx-auto px-4 lg:px-6 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
           {/* Left Navigation Links */}
           <div className="flex items-center gap-5 lg:gap-7 shrink-0">
-            {/* All Categories Pill Dropdown */}
-            <div className="relative" ref={catDropdownRef}>
-              <button
-                type="button"
-                onClick={() => setCatDropdownOpen(!catDropdownOpen)}
-                className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#F8FAFC] dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-[13px] font-semibold text-[#0F172A] dark:text-white transition-colors cursor-pointer whitespace-nowrap"
-              >
-                <LayoutGrid className="w-4 h-4 text-[#334155] dark:text-slate-300" />
-                <span>All Categories</span>
-                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-              </button>
-
-              {catDropdownOpen && (
-                <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-50">
-                  {categoryMenuItems.map((item) => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleCategorySelect(item.id)}
-                      className={`w-full text-left px-4 py-2 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-between ${
-                        selectedCategory === item.id
-                          ? 'text-blue-600 font-bold bg-blue-50/50 dark:bg-blue-950/30'
-                          : 'text-slate-700 dark:text-slate-300'
-                      }`}
-                    >
-                      <span>{item.label}</span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
             {/* Deals */}
             <button
               type="button"
