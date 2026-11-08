@@ -15,55 +15,55 @@ const CATEGORIES_LIST: CategoryItem[] = [
   {
     key: 'electronics',
     label: 'Electronics',
-    storeCategory: 'all',
+    storeCategory: 'Electronics',
     iconSrc: '/uploads/category-icons/electronics.png',
   },
   {
     key: 'gaming',
     label: 'Gaming',
-    storeCategory: 'gaming',
+    storeCategory: 'Gaming',
     iconSrc: '/uploads/category-icons/gaming.png',
   },
   {
     key: 'smart-home',
     label: 'Smart Home',
-    storeCategory: 'security',
+    storeCategory: 'Smart Home',
     iconSrc: '/uploads/category-icons/smart-home.png',
   },
   {
     key: 'audio',
     label: 'Audio',
-    storeCategory: 'audio',
+    storeCategory: 'Audio',
     iconSrc: '/uploads/category-icons/audio.png',
   },
   {
     key: 'wearables',
     label: 'Wearables',
-    storeCategory: 'wearables',
+    storeCategory: 'Wearables',
     iconSrc: '/uploads/category-icons/wearables.png',
   },
   {
     key: 'smart-bottles',
     label: 'Smart Bottles',
-    storeCategory: 'drinkware',
+    storeCategory: 'Smart Bottles',
     iconSrc: '/uploads/category-icons/smart-bottles.png',
   },
   {
     key: 'office',
     label: 'Office',
-    storeCategory: 'drinkware',
+    storeCategory: 'Office',
     iconSrc: '/uploads/category-icons/office.png',
   },
   {
     key: 'beauty-health',
     label: 'Beauty & Health',
-    storeCategory: 'fitness',
+    storeCategory: 'Beauty & Health',
     iconSrc: '/uploads/category-icons/beauty-health.png',
   },
   {
     key: 'pets',
     label: 'Pets',
-    storeCategory: 'accessories',
+    storeCategory: 'Pets',
     iconSrc: '/uploads/category-icons/pets.png',
   },
   {
@@ -108,7 +108,7 @@ export const CategoryBrowse: React.FC = () => {
       aria-label="Shop by Category"
     >
       <div className="w-full max-w-[1320px] mx-auto px-4 lg:px-6">
-        <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-11 gap-y-5 gap-x-2 sm:gap-x-3 items-start justify-items-center">
+        <div className="category-circles-container flex flex-nowrap overflow-x-auto gap-4 lg:grid lg:grid-cols-11 lg:gap-y-5 lg:gap-x-3 lg:overflow-visible items-start lg:justify-items-center no-scrollbar scroll-smooth py-1">
           {visibleItems.map((item) => {
             const isActive = activeHomepageCategory === item.key;
 
@@ -117,7 +117,7 @@ export const CategoryBrowse: React.FC = () => {
                 key={item.key}
                 type="button"
                 onClick={() => handleSelect(item)}
-                className="group flex flex-col items-center justify-start cursor-pointer focus:outline-none w-full"
+                className="category-circle-item group flex flex-col items-center justify-start cursor-pointer focus:outline-none shrink-0 w-auto lg:w-full"
               >
                 {/* Circular 3D Reference Icon Button */}
                 <div className="relative flex items-center justify-center">

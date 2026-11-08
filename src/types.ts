@@ -1,4 +1,32 @@
-export type Category = 'all' | 'tech' | 'fitness' | 'everyday' | 'accessories' | 'deals' | 'drinkware' | 'gaming' | 'wearables' | 'supplements' | 'security' | 'audio' | string;
+export type Category =
+  | 'all'
+  | 'Electronics'
+  | 'Gaming'
+  | 'Smart Home'
+  | 'Audio'
+  | 'Wearables'
+  | 'Smart Bottles'
+  | 'Office'
+  | 'Beauty & Health'
+  | 'Pets'
+  | 'electronics'
+  | 'gaming'
+  | 'smart-home'
+  | 'audio'
+  | 'wearables'
+  | 'smart-bottles'
+  | 'office'
+  | 'beauty-health'
+  | 'pets'
+  | 'tech'
+  | 'fitness'
+  | 'everyday'
+  | 'accessories'
+  | 'deals'
+  | 'drinkware'
+  | 'supplements'
+  | 'security'
+  | string;
 
 export type Currency = 'USD' | 'EUR' | 'GEL';
 

@@ -297,9 +297,9 @@ export const Hero: React.FC = () => {
         </div>
 
         {/* LEFT COLUMN (Headline, Subheadline, Buttons, Trust Badges) */}
-        <div className="w-full md:w-[44%] flex flex-col justify-between h-full py-1 md:py-4 lg:py-5 z-20">
+        <div className="hero-left-column w-full md:w-[44%] flex flex-col justify-between h-full py-1 md:py-4 lg:py-5 z-20">
           {/* Top/Middle Group: Headline + Subheadline + CTAs */}
-          <div className="space-y-2 lg:space-y-3 my-auto">
+          <div className="space-y-2.5 lg:space-y-3 my-auto w-full">
             <h1
               className="font-extrabold tracking-[-0.025em] text-white text-[28px] sm:text-[34px] md:text-[34px] lg:text-[42px] xl:text-[46px]"
               style={{ lineHeight: 1.04 }}
@@ -307,7 +307,7 @@ export const Hero: React.FC = () => {
               {usePresetHeadlineSplit ? (
                 <>
                   {slide.headlineTop && <span className="block">{slide.headlineTop}</span>}
-                  <span className={`block whitespace-nowrap ${slide.headlineTop ? 'mt-0.5' : ''}`}>
+                  <span className={`block sm:whitespace-nowrap ${slide.headlineTop ? 'mt-0.5' : ''}`}>
                     {slide.headlineBottomPrefix}
                     <span
                       className="bg-clip-text text-transparent"
@@ -330,13 +330,13 @@ export const Hero: React.FC = () => {
               {subtitleParts[1] && <span className="block">{subtitleParts[1]}</span>}
             </p>
 
-            {/* Action Buttons */}
-            <div className="flex flex-wrap items-center gap-3 pt-1">
+            {/* Action Buttons: Column & 100% width on mobile (<=768px), Row on desktop */}
+            <div className="hero-actions-container flex flex-col md:flex-row items-stretch md:items-center w-full md:w-auto gap-2.5 md:gap-3 pt-1">
               {/* Primary Blue Pill Button -> Opens Linked Product */}
               <button
                 type="button"
                 onClick={handlePrimaryShop}
-                className="h-[36px] lg:h-[40px] px-5 lg:px-6 rounded-[999px] text-white font-bold text-[12px] lg:text-[13px] inline-flex items-center justify-center gap-2 transition-all duration-200 hover:brightness-110 active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
+                className="hero-action-btn w-full md:w-auto h-[40px] md:h-[36px] lg:h-[40px] px-5 lg:px-6 rounded-[999px] text-white font-bold text-[12.5px] md:text-[12px] lg:text-[13px] inline-flex items-center justify-center gap-2 transition-all duration-200 hover:brightness-110 active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
                 style={{
                   background: 'linear-gradient(180deg, #1E88E5 0%, #0062FF 100%)',
                   boxShadow: '0 6px 20px -2px rgba(0, 102, 255, 0.55), inset 0 1px 1px rgba(255, 255, 255, 0.25)',
@@ -350,16 +350,16 @@ export const Hero: React.FC = () => {
               <button
                 type="button"
                 onClick={handleExploreCollection}
-                className="h-[36px] lg:h-[40px] px-5 lg:px-6 rounded-[999px] text-white/95 hover:text-white font-semibold text-[12px] lg:text-[13px] inline-flex items-center justify-center transition-all duration-200 hover:bg-white/10 active:scale-95 cursor-pointer backdrop-blur-md border border-white/25 bg-[#060E1E]/60 whitespace-nowrap shrink-0"
+                className="hero-action-btn w-full md:w-auto h-[40px] md:h-[36px] lg:h-[40px] px-5 lg:px-6 rounded-[999px] text-white/95 hover:text-white font-semibold text-[12.5px] md:text-[12px] lg:text-[13px] inline-flex items-center justify-center transition-all duration-200 hover:bg-white/10 active:scale-95 cursor-pointer backdrop-blur-md border border-white/25 bg-[#060E1E]/60 whitespace-nowrap shrink-0"
               >
                 <span>Explore Collection</span>
               </button>
             </div>
           </div>
 
-          {/* Bottom Group: 3 Trust Badges with Vertical Dividers */}
-          <div className="pt-2 md:pt-1.5 flex items-center gap-3 lg:gap-4">
-            <div className="flex items-center gap-2">
+          {/* Bottom Group: 3 Trust Badges with Horizontal Swipe & Mandatory Scroll Snap on Mobile */}
+          <div className="hero-trust-badges pt-3 md:pt-1.5 w-full flex items-center gap-4 lg:gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar">
+            <div className="hero-trust-badge-item flex items-center gap-2 snap-start shrink-0">
               <div className="w-7 h-7 lg:w-7.5 lg:h-7.5 rounded-full bg-white/6 border border-white/15 flex items-center justify-center shrink-0">
                 <Truck className="w-3.5 h-3.5 text-slate-200" />
               </div>
@@ -369,9 +369,9 @@ export const Hero: React.FC = () => {
               </div>
             </div>
 
-            <div className="hidden sm:block h-5 w-px bg-white/12 shrink-0" />
+            <div className="hidden md:block h-5 w-px bg-white/12 shrink-0" />
 
-            <div className="flex items-center gap-2">
+            <div className="hero-trust-badge-item flex items-center gap-2 snap-start shrink-0">
               <div className="w-7 h-7 lg:w-7.5 lg:h-7.5 rounded-full bg-white/6 border border-white/15 flex items-center justify-center shrink-0">
                 <ShieldCheck className="w-3.5 h-3.5 text-slate-200" />
               </div>
@@ -381,9 +381,9 @@ export const Hero: React.FC = () => {
               </div>
             </div>
 
-            <div className="hidden sm:block h-5 w-px bg-white/12 shrink-0" />
+            <div className="hidden md:block h-5 w-px bg-white/12 shrink-0" />
 
-            <div className="flex items-center gap-2">
+            <div className="hero-trust-badge-item flex items-center gap-2 snap-start shrink-0">
               <div className="w-7 h-7 lg:w-7.5 lg:h-7.5 rounded-full bg-white/6 border border-white/15 flex items-center justify-center shrink-0">
                 <RefreshCw className="w-3.5 h-3.5 text-slate-200" />
               </div>
@@ -395,13 +395,13 @@ export const Hero: React.FC = () => {
           </div>
         </div>
 
-        {/* RIGHT COLUMN (56% width) */}
-        <div className="relative w-full md:w-[56%] h-[220px] sm:h-[260px] md:h-full flex items-center">
-          {/* Interactive Clickable Product Area over Center-Right Subject */}
+        {/* RIGHT COLUMN / MAIN PRODUCT SLIDER: Column on Mobile (image directly above text block), Row on Desktop */}
+        <div className="hero-product-slider relative w-full md:w-[56%] h-auto md:h-full mt-4 md:mt-0 flex flex-col md:flex-row items-stretch md:items-center gap-3.5 md:gap-0">
+          {/* Interactive Clickable Product Image Container (100% width on mobile, sits directly above text block) */}
           <div
             onClick={handleShopHeroProduct}
-            className={`relative h-full cursor-pointer ${
-              variant === 'everyday' ? 'w-[45%]' : 'w-[58%]'
+            className={`hero-slider-image-container relative w-full h-[210px] sm:h-[250px] md:h-full cursor-pointer ${
+              variant === 'everyday' ? 'md:w-[45%]' : 'md:w-[58%]'
             }`}
             title={linkedProduct ? `View ${linkedProduct.title}` : slide.secondaryText}
           >
@@ -410,67 +410,97 @@ export const Hero: React.FC = () => {
               src={mobileImg}
               alt={linkedProduct?.title || slide.secondaryText || slide.title}
               referrerPolicy="no-referrer"
-              className="md:hidden w-full h-full object-cover object-right rounded-xl"
+              className="md:hidden w-full h-full object-cover object-center rounded-xl"
             />
           </div>
 
-          {/* Right Product Text Overlay & Secondary Text */}
+          {/* Right Product Text Overlay & Secondary Text (Expands properly to 100% width on mobile) */}
           <div
-            className={`relative z-20 flex flex-col justify-center items-start space-y-2 ${
-              variant === 'everyday' ? 'pl-1 lg:pl-2 -mt-3' : 'pl-2 lg:pl-4'
+            className={`hero-slider-text-container relative z-20 w-full md:w-auto flex flex-col justify-center items-start space-y-2.5 md:space-y-2 ${
+              variant === 'everyday' ? 'pl-0 md:pl-1 lg:pl-2 mt-0 md:-mt-3' : 'pl-0 md:pl-2 lg:pl-4'
             }`}
           >
-            <div className="leading-[1.12]">
-              {(slide.overlayStyle === 'split-weight' || !slide.overlayStyle) && (
-                <>
-                  <span className="block text-[16px] md:text-[18px] lg:text-[21px] font-normal text-[#9BA8B8] tracking-tight whitespace-nowrap">
-                    {slide.overlayLine1 || 'Sound'}
-                  </span>
-                  <span className="block text-[17px] md:text-[19px] lg:text-[22px] font-extrabold text-white tracking-tight whitespace-nowrap">
-                    {slide.overlayLine2 || 'Without Limits'}
-                  </span>
-                </>
-              )}
+            {/* Top row on mobile: Headline + Accessible 01/03 Navigation & Arrows */}
+            <div className="w-full flex items-start justify-between gap-3">
+              <div className="leading-[1.12]">
+                {(slide.overlayStyle === 'split-weight' || !slide.overlayStyle) && (
+                  <>
+                    <span className="block text-[17px] md:text-[18px] lg:text-[21px] font-normal text-[#9BA8B8] tracking-tight whitespace-nowrap">
+                      {slide.overlayLine1 || 'Sound'}
+                    </span>
+                    <span className="block text-[19px] md:text-[19px] lg:text-[22px] font-extrabold text-white tracking-tight whitespace-nowrap">
+                      {slide.overlayLine2 || 'Without Limits'}
+                    </span>
+                  </>
+                )}
 
-              {slide.overlayStyle === 'bold-white' && (
-                <>
-                  <span className="block text-[15.5px] md:text-[17px] lg:text-[20px] font-bold text-white tracking-tight whitespace-nowrap">
-                    {slide.overlayLine1 || 'Small Devices'}
-                  </span>
-                  <span className="block text-[15.5px] md:text-[17px] lg:text-[20px] font-bold text-white tracking-tight whitespace-nowrap">
-                    {slide.overlayLine2 || 'Big Possibilities'}
-                  </span>
-                </>
-              )}
+                {slide.overlayStyle === 'bold-white' && (
+                  <>
+                    <span className="block text-[16.5px] md:text-[17px] lg:text-[20px] font-bold text-white tracking-tight whitespace-nowrap">
+                      {slide.overlayLine1 || 'Small Devices'}
+                    </span>
+                    <span className="block text-[16.5px] md:text-[17px] lg:text-[20px] font-bold text-white tracking-tight whitespace-nowrap">
+                      {slide.overlayLine2 || 'Big Possibilities'}
+                    </span>
+                  </>
+                )}
 
-              {slide.overlayStyle === 'uppercase-lavender' && (
-                <>
-                  <span className="block text-[17px] md:text-[19px] lg:text-[23px] font-extrabold uppercase tracking-wide text-[#94A3B8] whitespace-nowrap">
-                    {slide.overlayLine1 || 'PLAY'}
-                  </span>
-                  <span className="block text-[17px] md:text-[19px] lg:text-[23px] font-extrabold uppercase tracking-wide text-[#94A3B8] whitespace-nowrap">
-                    {slide.overlayLine2 || 'BEYOND'}
-                  </span>
-                </>
-              )}
+                {slide.overlayStyle === 'uppercase-lavender' && (
+                  <>
+                    <span className="block text-[18px] md:text-[19px] lg:text-[23px] font-extrabold uppercase tracking-wide text-[#94A3B8] whitespace-nowrap">
+                      {slide.overlayLine1 || 'PLAY'}
+                    </span>
+                    <span className="block text-[18px] md:text-[19px] lg:text-[23px] font-extrabold uppercase tracking-wide text-[#94A3B8] whitespace-nowrap">
+                      {slide.overlayLine2 || 'BEYOND'}
+                    </span>
+                  </>
+                )}
+              </div>
+
+              {/* Mobile-accessible Carousel Counter (01 / 03) & Arrow Controls at Top of Text Block */}
+              <div className="hero-slider-nav-mobile flex md:hidden items-center gap-2.5 shrink-0">
+                <div className="text-[12px] font-medium tracking-wider text-[#94A3B8] tabular-nums">
+                  <span className="font-bold text-white">{String(safeIndex + 1).padStart(2, '0')}</span>
+                  <span className="mx-1 text-[#64748B]">/</span>
+                  <span>{String(activeSlides.length).padStart(2, '0')}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={handlePrev}
+                    aria-label="Previous Hero Slide"
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md flex items-center justify-center text-white transition-all cursor-pointer active:scale-90"
+                  >
+                    <ChevronLeft className="w-4 h-4 stroke-[2.2]" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleNext}
+                    aria-label="Next Hero Slide"
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 backdrop-blur-md flex items-center justify-center text-white transition-all cursor-pointer active:scale-90"
+                  >
+                    <ChevronRight className="w-4 h-4 stroke-[2.2]" />
+                  </button>
+                </div>
+              </div>
             </div>
 
-            <div className="space-y-0.5">
-              <p className="text-[10.5px] lg:text-[11.5px] font-normal text-[#B0BDCC] leading-tight whitespace-nowrap">
+            <div className="space-y-0.5 w-full">
+              <p className="text-[11.5px] md:text-[10.5px] lg:text-[11.5px] font-normal text-[#B0BDCC] leading-tight">
                 {secondaryParts[0]}
               </p>
               {secondaryParts[1] && (
-                <p className="text-[10.5px] lg:text-[11.5px] font-normal text-[#94A3B8] leading-tight whitespace-nowrap">
+                <p className="text-[11.5px] md:text-[10.5px] lg:text-[11.5px] font-normal text-[#94A3B8] leading-tight">
                   {secondaryParts[1]}
                 </p>
               )}
             </div>
 
-            <div className="pt-1">
+            <div className="pt-1 w-full md:w-auto">
               <button
                 type="button"
                 onClick={handleShopHeroProduct}
-                className="h-[32px] lg:h-[34px] px-4 lg:px-4.5 rounded-[999px] bg-white hover:bg-slate-100 text-[#0F172A] font-bold text-[10.5px] lg:text-[11px] inline-flex items-center gap-1.5 shadow-lg transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
+                className="h-[34px] md:h-[32px] lg:h-[34px] px-4.5 md:px-4 lg:px-4.5 rounded-[999px] bg-white hover:bg-slate-100 text-[#0F172A] font-bold text-[11px] md:text-[10.5px] lg:text-[11px] inline-flex items-center justify-center gap-1.5 shadow-lg transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
               >
                 <span>{slide.rightCtaText || 'Shop Product'}</span>
                 <ArrowRight className="w-3 h-3 stroke-[2.5]" />
@@ -478,8 +508,8 @@ export const Hero: React.FC = () => {
             </div>
           </div>
 
-          {/* Top-Right Carousel Counter (01 / 03) & Round Glass Arrow Controls */}
-          <div className="absolute top-3 md:top-6 lg:top-7 right-0 z-30 flex flex-col items-center gap-2">
+          {/* Desktop Top-Right Carousel Counter (01 / 03) & Round Glass Arrow Controls */}
+          <div className="hero-slider-nav-desktop hidden md:flex absolute top-3 md:top-6 lg:top-7 right-0 z-30 flex-col items-center gap-2">
             <div className="text-[11.5px] lg:text-[12.5px] font-medium tracking-wider text-[#94A3B8] tabular-nums">
               <span className="font-bold text-white">{String(safeIndex + 1).padStart(2, '0')}</span>
               <span className="mx-1 text-[#64748B]">/</span>
@@ -506,7 +536,7 @@ export const Hero: React.FC = () => {
           </div>
 
           {/* Bottom-Right Handwritten Signature Callout */}
-          <div className="hidden sm:flex flex-col items-center absolute bottom-3 md:bottom-4 lg:bottom-5 right-0 z-20 pointer-events-none select-none">
+          <div className="hidden md:flex flex-col items-center absolute bottom-3 md:bottom-4 lg:bottom-5 right-0 z-20 pointer-events-none select-none">
             <div
               className="text-center text-white/90 leading-[1.06] -rotate-8"
               style={{

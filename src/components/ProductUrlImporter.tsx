@@ -477,15 +477,15 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
                 onChange={(e) => setEditCategory(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white focus:outline-hidden focus:ring-1 focus:ring-indigo-400"
               >
-                <option value="tech">Smart Tech</option>
-                <option value="audio">Studio & Audio</option>
-                <option value="gaming">Gaming</option>
-                <option value="wearables">Wearables</option>
-                <option value="fitness">Health & Fitness</option>
-                <option value="drinkware">Smart Hydration</option>
-                <option value="everyday">Everyday Carry</option>
-                <option value="accessories">Accessories</option>
-                <option value="security">Security</option>
+                <option value="Electronics">Electronics</option>
+                <option value="Gaming">Gaming</option>
+                <option value="Smart Home">Smart Home</option>
+                <option value="Audio">Audio</option>
+                <option value="Wearables">Wearables</option>
+                <option value="Smart Bottles">Smart Bottles</option>
+                <option value="Office">Office</option>
+                <option value="Beauty & Health">Beauty & Health</option>
+                <option value="Pets">Pets</option>
               </select>
             </div>
           </div>

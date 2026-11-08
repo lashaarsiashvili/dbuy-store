@@ -3,6 +3,7 @@ import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
 import { initialProducts, isFakeStudioProduct } from '../data/initialProducts';
 import { matchesProductSearch } from '../data/initialHomepageConfig';
+import { ADMIN_PRODUCT_CATEGORIES, matchesCategory } from '../data/categoryNavigationData';
 import { Product } from '../types';
 import {
   ArrowRight,
@@ -50,26 +51,27 @@ export const ProductGrid: React.FC = () => {
 
   // Helper to match a product's store category to the selected homepage category pill
   const matchesHomepageCategoryPill = (prod: Product, catId: string): boolean => {
-    const c = (prod.category || '').toLowerCase();
+    if (matchesCategory(prod, catId)) return true;
+    const c = (prod.category || '').trim().toLowerCase();
     switch (catId) {
       case 'electronics':
-        return c === 'tech' || c === 'audio' || c === 'security' || c === 'everyday';
+        return c === 'electronics' || c === 'tech' || c === 'audio' || c === 'security' || c === 'everyday';
       case 'gaming':
         return c === 'gaming';
       case 'smart-home':
-        return c === 'tech' || c === 'security' || c === 'drinkware';
+        return c === 'smart home' || c === 'smart-home' || c === 'tech' || c === 'security' || c === 'drinkware';
       case 'audio':
         return c === 'audio';
       case 'office':
-        return c === 'tech' || c === 'drinkware' || c === 'audio';
+        return c === 'office' || c === 'tech' || c === 'drinkware' || c === 'audio';
       case 'wearables':
         return c === 'wearables' || c === 'fitness';
       case 'smart-bottles':
-        return c === 'drinkware';
+        return c === 'smart bottles' || c === 'smart-bottles' || c === 'drinkware';
       case 'beauty-health':
-        return c === 'fitness' || c === 'supplements';
+        return c === 'beauty & health' || c === 'beauty-health' || c === 'fitness' || c === 'supplements';
       case 'pets':
-        return c === 'accessories' || c === 'drinkware' || c === 'everyday';
+        return c === 'pets' || c === 'accessories' || c === 'drinkware' || c === 'everyday';
       case 'deals':
         return Boolean(prod.isDeal || (prod.origPrice && prod.origPrice > prod.price));
       default:
@@ -108,8 +110,13 @@ export const ProductGrid: React.FC = () => {
       for (const item of visibleConfigItems) {
         const found = catalogProducts.find((p) => p.id === item.productId);
         if (found && !seenIds.has(found.id)) {
-          resolvedProducts.push(found);
-          seenIds.add(found.id);
+          // If the product was explicitly assigned one of the 9 exact Admin categories,
+          // ensure it matches the selected category pill.
+          const isExplicitAdminCat = ADMIN_PRODUCT_CATEGORIES.includes(found.category as any);
+          if (!isExplicitAdminCat || matchesHomepageCategoryPill(found, activeHomepageCategory)) {
+            resolvedProducts.push(found);
+            seenIds.add(found.id);
+          }
         }
       }
 

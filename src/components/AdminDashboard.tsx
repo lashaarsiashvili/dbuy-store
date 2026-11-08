@@ -15,6 +15,7 @@ import { ThemeCustomizer } from './ThemeCustomizer';
 import { ProductUrlImporter } from './ProductUrlImporter';
 import { AdminHomepageManager } from './AdminHomepageManager';
 import { ScrapedProductData } from '../utils/productScraper';
+import { ADMIN_PRODUCT_CATEGORIES, normalizeProductCategory, matchesCategory } from '../data/categoryNavigationData';
 
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
 import { compressImageForUpload, uploadImageToR2 } from '../utils/imageUpload';
@@ -481,7 +482,7 @@ export const AdminDashboard: React.FC = () => {
     title: '',
     titleKa: '',
     customSlug: '',
-    category: 'tech' as Product['category'],
+    category: 'Electronics' as Product['category'],
     price: '' as unknown as number,
     origPrice: '' as unknown as number | undefined,
     stock: '' as unknown as number,
@@ -1335,7 +1336,7 @@ export const AdminDashboard: React.FC = () => {
       title: '',
       titleKa: '',
       customSlug: '',
-      category: 'tech',
+      category: 'Electronics',
       price: '' as unknown as number,
       origPrice: '' as unknown as number | undefined,
       stock: '' as unknown as number,
@@ -1373,7 +1374,7 @@ export const AdminDashboard: React.FC = () => {
       title: data.title,
       titleKa: '', // Strict rule 3: English only!
       customSlug: generateProductSlug(data.title),
-      category: data.category as Product['category'],
+      category: normalizeProductCategory(data.category, data.title) as Product['category'],
       price: data.price || 49.99,
       origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
       stock: 25,
@@ -1407,7 +1408,7 @@ export const AdminDashboard: React.FC = () => {
       title_en: data.title,
       title_ka: '',
       customSlug: finalSlug,
-      category: data.category as Product['category'],
+      category: normalizeProductCategory(data.category, data.title) as Product['category'],
       price: data.price || 49.99,
       origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
       stock: 50, // Increased default stock for imported items
@@ -1508,7 +1509,7 @@ export const AdminDashboard: React.FC = () => {
       title: prod.title_en || prod.title,
       titleKa: prod.title_ka || prod.titleKa || '',
       customSlug: prod.customSlug || generateProductSlug(prod.title),
-      category: prod.category,
+      category: normalizeProductCategory(prod.category, prod.title),
       price: prod.price,
       origPrice: prod.origPrice || 0,
       stock: prod.stock,
@@ -1681,13 +1682,15 @@ export const AdminDashboard: React.FC = () => {
         title: '',
         titleKa: '',
         customSlug: '',
-        category: 'tech',
+        category: 'Electronics',
         price: '' as unknown as number,
         origPrice: '' as unknown as number | undefined,
         stock: '' as unknown as number,
         badge: '',
         image: '',
         images: [],
+        videos: [],
+        variants: [],
         description: '',
         descriptionKa: '',
         features: ['', '', '', ''],
@@ -1774,7 +1777,14 @@ export const AdminDashboard: React.FC = () => {
 
   // Filtered & sorted products in admin table
   const filteredProducts = products.filter(p => {
-    if (categoryFilter !== 'all' && p.category !== categoryFilter) return false;
+    if (
+      categoryFilter !== 'all' &&
+      normalizeProductCategory(p.category, p.title) !== categoryFilter &&
+      p.category !== categoryFilter &&
+      !matchesCategory(p, categoryFilter)
+    ) {
+      return false;
+    }
     if (productSearch.trim()) {
       const q = productSearch.toLowerCase();
       const matchTitle = p.title.toLowerCase().includes(q);
@@ -2342,14 +2352,11 @@ export const AdminDashboard: React.FC = () => {
                     className="px-3 py-2 text-xs font-semibold bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden cursor-pointer"
                   >
                     <option value="all" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'ყველა კატეგორია' : 'All Categories'}</option>
-                    <option value="drinkware" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Smart Hydration (ჭკვიანი ჭურჭელი)' : 'Smart Hydration'}</option>
-                    <option value="gaming" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Gaming (გეიმინგი)' : 'Gaming'}</option>
-                    <option value="wearables" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Fitness Trackers (ფიტნეს ტრეკერები)' : 'Fitness Trackers'}</option>
-                    <option value="audio" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Studio & Audio (სტუდია)' : 'Studio & Audio'}</option>
-                    <option value="tech" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Smart Tech (ტექნიკა)' : 'Smart Tech'}</option>
-                    <option value="fitness" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Health & Fitness (ფიტნესი)' : 'Health & Fitness'}</option>
-                    <option value="everyday" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Everyday Carry' : 'Everyday Carry'}</option>
-                    <option value="accessories" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Accessories (აქსესუარები)' : 'Accessories'}</option>
+                    {ADMIN_PRODUCT_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                        {cat}
+                      </option>
+                    ))}
                   </select>
 
                   {/* Stock Status Filter */}
@@ -2492,9 +2499,9 @@ export const AdminDashboard: React.FC = () => {
                               </button>
                             </div>
                           </td>
-                          <td className="p-4 uppercase font-semibold text-[10px] text-blue-600">
+                          <td className="p-4 font-semibold text-[10px] text-blue-600">
                             <span className="px-2 py-1 rounded-md bg-blue-50 border border-blue-100">
-                              {prod.category}
+                              {normalizeProductCategory(prod.category, prod.title)}
                             </span>
                           </td>
                           <td className="p-4 font-black text-slate-900 dark:text-white">
@@ -5157,15 +5164,15 @@ export const AdminDashboard: React.FC = () => {
                     📂 {isKa ? 'კატეგორია' : 'Category'}
                   </label>
                   <select
-                    value={billboardForm.category || 'tech'}
+                    value={normalizeProductCategory(billboardForm.category)}
                     onChange={e => setBillboardForm({ ...billboardForm, category: e.target.value as any })}
                     className="w-full px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-blue-500 font-semibold"
                   >
-                    <option value="tech">Tech & Gadgets</option>
-                    <option value="fitness">Fitness & Hydration</option>
-                    <option value="everyday">Everyday Carry</option>
-                    <option value="accessories">Accessories</option>
-                    <option value="deals">Special Deals</option>
+                    {ADMIN_PRODUCT_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
+                      </option>
+                    ))}
                   </select>
                 </div>
               </div>
@@ -5314,18 +5321,15 @@ export const AdminDashboard: React.FC = () => {
                     {isKa ? 'კატეგორია *' : 'Category *'}
                   </label>
                   <select
-                    value={prodForm.category ?? 'tech'}
+                    value={normalizeProductCategory(prodForm.category, prodForm.title)}
                     onChange={e => setProdForm({ ...prodForm, category: e.target.value as Product['category'] })}
                     className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden font-medium cursor-pointer"
                   >
-                    <option value="drinkware" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Smart Hydration (ჭკვიანი ჭურჭელი)' : 'Smart Hydration (Drinkware)'}</option>
-                    <option value="gaming" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Gaming (გეიმინგი)' : 'Gaming'}</option>
-                    <option value="wearables" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Fitness Trackers (ფიტნეს ტრეკერები)' : 'Fitness Trackers (Wearables)'}</option>
-                    <option value="audio" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Studio & Audio (სტუდია & აუდიო)' : 'Studio & Audio'}</option>
-                    <option value="tech" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Smart Tech (ჭკვიანი ტექნიკა)' : 'Smart Tech'}</option>
-                    <option value="fitness" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Health & Fitness (ჯანმრთელობა & ფიტნესი)' : 'Health & Fitness'}</option>
-                    <option value="everyday" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Everyday Carry (ყოველდღიური ნივთები)' : 'Everyday Carry'}</option>
-                    <option value="accessories" className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">{isKa ? 'Accessories (აქსესუარები)' : 'Accessories'}</option>
+                    {ADMIN_PRODUCT_CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat} className="bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100">
+                        {cat}
+                      </option>
+                    ))}
                   </select>
                 </div>
 

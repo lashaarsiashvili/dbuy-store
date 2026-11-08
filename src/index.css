@@ -22,6 +22,7 @@
     min-height: 100%;
     margin: 0;
     padding: 0;
+    overflow-x: hidden;
     background-color: #F7F8FA;
     color: #0f172a;
     -webkit-text-size-adjust: 100%;
@@ -35,11 +36,12 @@
     color: #f8fafc;
   }
 
-  /* 2. Root Body: must NOT have overflow-x: hidden (which triggers overflow-y: auto and breaks root window scrolling) */
+  /* 2. Root Body: prevent horizontal page scrolling */
   body {
     width: 100%;
     margin: 0;
     padding: 0;
+    overflow-x: hidden;
     min-height: 100dvh;
     min-height: 100vh; /* fallback */
     min-height: 100dvh;
@@ -50,13 +52,13 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* 3. Application container: handles horizontal clipping without forming a secondary scroll viewport */
+  /* 3. Application container: handles horizontal clipping */
   #root {
     width: 100%;
     min-height: 100dvh;
     display: flex;
     flex-direction: column;
-    overflow-x: clip;
+    overflow-x: hidden;
     background-color: inherit;
   }
 
@@ -229,12 +231,94 @@ apple-pay-button {
   }
 }
 
+/* Universal Scrollbar Hiding Utility */
+.no-scrollbar,
+.scrollbar-none {
+  -ms-overflow-style: none !important;
+  scrollbar-width: none !important;
+}
+
+.no-scrollbar::-webkit-scrollbar,
+.scrollbar-none::-webkit-scrollbar {
+  display: none !important;
+}
+
 /* ==========================================================================
-   MOBILE E-COMMERCE PRODUCT CATALOG (AMAZON / EBAY MOBILE 2-COLUMN DISPLAY)
+   MOBILE E-COMMERCE PRODUCT CATALOG & HERO / SLIDER RESPONSIVE RULES
    Strictly isolated to mobile screens under @media (max-width: 768px).
    Desktop & tablet layouts (>= 769px) remain completely untouched.
    ========================================================================== */
 @media (max-width: 768px) {
+  /* Hero Buttons: column layout, 100% width, small gap on mobile */
+  .hero-actions-container {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    gap: 0.625rem !important;
+  }
+
+  .hero-actions-container .hero-action-btn {
+    width: 100% !important;
+  }
+
+  /* Features / Trust Badges: horizontal swipe with mandatory scroll snap & hidden scrollbar */
+  .hero-trust-badges {
+    display: flex !important;
+    overflow-x: auto !important;
+    scroll-snap-type: x mandatory !important;
+    gap: 1rem !important;
+    width: 100% !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+
+  .hero-trust-badges::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .hero-trust-badge-item {
+    scroll-snap-align: start !important;
+    flex-shrink: 0 !important;
+  }
+
+  /* Main Product Slider (Sound Without Limits): column layout with 100% width image above text block */
+  .hero-product-slider {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    height: auto !important;
+  }
+
+  .hero-slider-image-container {
+    width: 100% !important;
+  }
+
+  .hero-slider-text-container {
+    width: 100% !important;
+    flex: 1 1 auto !important;
+  }
+
+  /* Bottom Category Circles: smooth horizontal swiping on mobile */
+  .category-circles-container {
+    display: flex !important;
+    overflow-x: auto !important;
+    gap: 1rem !important;
+    flex-wrap: nowrap !important;
+    -webkit-overflow-scrolling: touch !important;
+    scrollbar-width: none !important;
+    -ms-overflow-style: none !important;
+  }
+
+  .category-circles-container::-webkit-scrollbar {
+    display: none !important;
+  }
+
+  .category-circle-item {
+    flex: 0 0 auto !important;
+    width: auto !important;
+  }
+
   /* 1. Mobile Section Spacing & Edge Padding */
   #products {
     padding-top: 1rem !important;

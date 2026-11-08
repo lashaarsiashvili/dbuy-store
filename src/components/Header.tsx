@@ -35,6 +35,7 @@ export const Header: React.FC = () => {
     setCurrency,
     selectedCategory,
     setSelectedCategory,
+    setActiveHomepageCategory,
     searchQuery,
     setSearchQuery,
     setSortOption,
@@ -80,6 +81,26 @@ export const Header: React.FC = () => {
 
   const handleCategorySelect = (cat: Category) => {
     setSelectedCategory(cat);
+    const catLower = String(cat).toLowerCase();
+    const homepageIdMap: Record<string, any> = {
+      all: 'all',
+      electronics: 'electronics',
+      gaming: 'gaming',
+      'smart home': 'smart-home',
+      'smart-home': 'smart-home',
+      audio: 'audio',
+      wearables: 'wearables',
+      'smart bottles': 'smart-bottles',
+      'smart-bottles': 'smart-bottles',
+      office: 'office',
+      'beauty & health': 'beauty-health',
+      'beauty-health': 'beauty-health',
+      pets: 'pets',
+      deals: 'deals',
+    };
+    if (homepageIdMap[catLower]) {
+      setActiveHomepageCategory(homepageIdMap[catLower]);
+    }
     setCatDropdownOpen(false);
     if (currentPage !== 'home') {
       setCurrentPage('home');
@@ -96,14 +117,18 @@ export const Header: React.FC = () => {
     }
     if (filterType === 'deals') {
       setSelectedCategory('deals');
+      setActiveHomepageCategory('deals');
     } else if (filterType === 'new') {
       setSelectedCategory('all');
+      setActiveHomepageCategory('all');
       setSortOption('newest');
     } else if (filterType === 'bestsellers') {
       setSelectedCategory('all');
+      setActiveHomepageCategory('all');
       setSortOption('featured');
     } else {
       setSelectedCategory('all');
+      setActiveHomepageCategory('all');
     }
     const el = document.getElementById('featured-products-section') || document.getElementById('products');
     if (el) {
@@ -115,6 +140,7 @@ export const Header: React.FC = () => {
     e.preventDefault();
     setCurrentPage('home');
     setSelectedCategory('all');
+    setActiveHomepageCategory('all');
     setSearchQuery('');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -132,15 +158,16 @@ export const Header: React.FC = () => {
 
   const categoryMenuItems: { id: Category; label: string }[] = [
     { id: 'all', label: 'All Categories' },
-    { id: 'tech', label: 'Electronics & Smart Tech' },
-    { id: 'gaming', label: 'Gaming Gear' },
-    { id: 'everyday', label: 'Home & Living' },
-    { id: 'audio', label: 'Audio & Headphones' },
-    { id: 'wearables', label: 'Smart Devices & Wearables' },
-    { id: 'drinkware', label: 'Drinkware (Bottles & Mugs)' },
-    { id: 'fitness', label: 'Beauty, Health & Fitness' },
-    { id: 'accessories', label: 'Lifestyle & Accessories' },
-    { id: 'deals', label: 'Special Deals' },
+    { id: 'Electronics', label: 'Electronics' },
+    { id: 'Gaming', label: 'Gaming' },
+    { id: 'Smart Home', label: 'Smart Home' },
+    { id: 'Audio', label: 'Audio' },
+    { id: 'Wearables', label: 'Wearables' },
+    { id: 'Smart Bottles', label: 'Smart Bottles' },
+    { id: 'Office', label: 'Office' },
+    { id: 'Beauty & Health', label: 'Beauty & Health' },
+    { id: 'Pets', label: 'Pets' },
+    { id: 'deals', label: 'Deals' },
   ];
 
   return (
