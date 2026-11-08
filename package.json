@@ -9,7 +9,7 @@
   },
   "scripts": {
     "dev": "tsx server.ts",
-    "build": "mkdir -p public/uploads && (cp -r data/uploads/* public/uploads/ 2>/dev/null || true) && (tsx scripts/generate-favicons.ts || true) && (tsx scripts/generate-sitemap.ts || true) && vite build && mkdir -p dist/uploads && (cp -r public/uploads/* dist/uploads/ 2>/dev/null || true) && (cp -r data/uploads/* dist/uploads/ 2>/dev/null || true) && (esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs || true)",
+    "build": "npm install --legacy-peer-deps && mkdir -p public/uploads && (cp -r data/uploads/* public/uploads/ 2>/dev/null || true) && (tsx scripts/generate-favicons.ts || true) && (tsx scripts/generate-sitemap.ts || true) && vite build && mkdir -p dist/uploads && (cp -r public/uploads/* dist/uploads/ 2>/dev/null || true) && (cp -r data/uploads/* dist/uploads/ 2>/dev/null || true) && (esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs || true)",
     "start": "node dist/server.cjs",
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
