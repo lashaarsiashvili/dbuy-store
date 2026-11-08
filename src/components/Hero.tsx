@@ -41,11 +41,21 @@ export const Hero: React.FC = () => {
   const safeIndex = activeSlideIndex >= activeSlides.length ? 0 : activeSlideIndex;
   const slide = activeSlides[safeIndex] || INITIAL_HOMEPAGE_SLIDES[0];
 
-  // Resolve linked product from read-only catalog using slide.productId
+  // Resolve linked product from read-only catalog using slide.productId (falling back to real catalog item by category if needed)
   const linkedProduct = useMemo(() => {
-    if (!slide.productId) return null;
-    return products.find((p) => p.id === slide.productId) || null;
-  }, [products, slide.productId]);
+    const validCatalog = Array.isArray(products) ? products.filter((p) => p && p.id && !String(p.id).startsWith('prod-ref-')) : [];
+    if (slide.productId && !String(slide.productId).startsWith('prod-ref-')) {
+      const exact = validCatalog.find((p) => p.id === slide.productId);
+      if (exact) return exact;
+    }
+    if (slide.themeVariant === 'gaming' || slide.primaryCategory === 'gaming') {
+      return validCatalog.find((p) => p.category === 'gaming') || validCatalog[0] || null;
+    }
+    if (slide.themeVariant === 'smarthome' || slide.primaryCategory === 'smart-home') {
+      return validCatalog.find((p) => p.category === 'tech' || p.category === 'security') || validCatalog[0] || null;
+    }
+    return validCatalog.find((p) => p.category === 'audio' || p.category === 'tech') || validCatalog[0] || null;
+  }, [products, slide.productId, slide.themeVariant, slide.primaryCategory]);
 
   useEffect(() => {
     if (!homepageSettings?.autoPlaySlider || activeSlides.length <= 1) return;
@@ -63,15 +73,23 @@ export const Hero: React.FC = () => {
     setActiveSlideIndex((prev) => (prev + 1) % activeSlides.length);
   };
 
-  // Clicking the slide CTA or product showcase opens the linked product via Product ID
+  // Clicking the slide CTA or product showcase opens the linked real product via Product ID
   const handleShopHeroProduct = () => {
-    if (slide.productId) {
+    if (linkedProduct?.id) {
+      navigateToProduct(linkedProduct.id);
+      return;
+    }
+    if (slide.productId && !String(slide.productId).startsWith('prod-ref-')) {
       navigateToProduct(slide.productId);
     }
   };
 
   const handlePrimaryShop = () => {
-    if (slide.productId) {
+    if (linkedProduct?.id) {
+      navigateToProduct(linkedProduct.id);
+      return;
+    }
+    if (slide.productId && !String(slide.productId).startsWith('prod-ref-')) {
       navigateToProduct(slide.productId);
       return;
     }
@@ -86,8 +104,8 @@ export const Hero: React.FC = () => {
 
   const handleExploreCollection = () => {
     setSelectedCategory('all');
-    setActiveHomepageCategory('electronics');
-    const el = document.getElementById('category-browse-section') || document.getElementById('featured-products-section');
+    setActiveHomepageCategory('all');
+    const el = document.getElementById('featured-products-section') || document.getElementById('category-browse-section');
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' });
     }

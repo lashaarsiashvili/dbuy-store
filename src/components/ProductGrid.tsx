@@ -1,13 +1,10 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
-import { initialProducts } from '../data/initialProducts';
-import { flagshipReferenceProducts } from '../data/flagshipProducts';
+import { initialProducts, isFakeStudioProduct } from '../data/initialProducts';
 import { matchesProductSearch } from '../data/initialHomepageConfig';
 import { Product } from '../types';
 import {
-  ChevronLeft,
-  ChevronRight,
   ArrowRight,
   Star,
   CreditCard,
@@ -32,20 +29,14 @@ export const ProductGrid: React.FC = () => {
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<FeaturedTab>('featured');
-  const [pageIndex, setPageIndex] = useState<number>(0);
 
-  // Reset pagination when active category or search changes
-  useEffect(() => {
-    setPageIndex(0);
-  }, [activeHomepageCategory, selectedCategory, searchQuery]);
-
-  // Combine flagship products first, followed by the rest of the catalog (read-only)
+  // Dynamically pull ALL real products from the live admin product catalog,
+  // strictly excluding any fake/studio products (such as prod-ref-*).
   const catalogProducts = useMemo(() => {
     const source = Array.isArray(products) && products.length > 0 ? products : initialProducts;
     const map = new Map<string, Product>();
-    flagshipReferenceProducts.forEach((fp) => map.set(fp.id, fp));
     source.forEach((p) => {
-      if (!map.has(p.id)) {
+      if (p && p.id && !isFakeStudioProduct(p) && !map.has(p.id)) {
         map.set(p.id, p);
       }
     });
@@ -57,7 +48,34 @@ export const ProductGrid: React.FC = () => {
     return homepageCategories.find((c) => c.id === activeHomepageCategory) || null;
   }, [homepageCategories, activeHomepageCategory]);
 
-  // Dynamically resolve products from homepage_categories configuration table
+  // Helper to match a product's store category to the selected homepage category pill
+  const matchesHomepageCategoryPill = (prod: Product, catId: string): boolean => {
+    const c = (prod.category || '').toLowerCase();
+    switch (catId) {
+      case 'electronics':
+        return c === 'tech' || c === 'audio' || c === 'security' || c === 'everyday';
+      case 'gaming':
+        return c === 'gaming';
+      case 'smart-home':
+        return c === 'tech' || c === 'security' || c === 'drinkware';
+      case 'audio':
+        return c === 'audio';
+      case 'office':
+        return c === 'tech' || c === 'drinkware' || c === 'audio';
+      case 'wearables':
+        return c === 'wearables' || c === 'fitness';
+      case 'beauty-health':
+        return c === 'fitness' || c === 'supplements';
+      case 'pets':
+        return c === 'accessories' || c === 'drinkware' || c === 'everyday';
+      case 'deals':
+        return Boolean(prod.isDeal || (prod.origPrice && prod.origPrice > prod.price));
+      default:
+        return true;
+    }
+  };
+
+  // Dynamically resolve products from the real admin catalog
   const filteredList = useMemo(() => {
     // 1. Search query overrides category filter and searches by Name, SKU, or Product ID
     if (searchQuery && searchQuery.trim().length > 0) {
@@ -66,15 +84,14 @@ export const ProductGrid: React.FC = () => {
 
     let baseList: Product[] = [];
 
-    // 2. If a homepage category is selected and configured in homepage_categories
-    if (activeCategoryConfig) {
+    // 2. If a specific homepage category is selected, prioritize configured items + matching category products, followed by the rest of the catalog
+    if (activeCategoryConfig && activeHomepageCategory !== 'all') {
       const hiddenIds = new Set(
         activeCategoryConfig.items.filter((i) => i.isHidden).map((i) => i.productId)
       );
 
-      // Sort configured items: Pinned first -> Featured second -> displayOrder ascending
       const visibleConfigItems = [...activeCategoryConfig.items]
-        .filter((i) => !i.isHidden)
+        .filter((i) => !i.isHidden && !String(i.productId).startsWith('prod-ref-'))
         .sort((a, b) => {
           if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
           if (activeTab === 'featured' && a.isFeatured !== b.isFeatured) {
@@ -94,8 +111,16 @@ export const ProductGrid: React.FC = () => {
         }
       }
 
-      // If fewer than 6 items are configured and not hidden, pad with remaining non-hidden catalog items
-      if (resolvedProducts.length < 6) {
+      // Include any remaining real catalog products matching this category
+      for (const p of catalogProducts) {
+        if (!seenIds.has(p.id) && !hiddenIds.has(p.id) && matchesHomepageCategoryPill(p, activeHomepageCategory)) {
+          resolvedProducts.push(p);
+          seenIds.add(p.id);
+        }
+      }
+
+      // If still empty, fall back to all non-hidden real catalog products
+      if (resolvedProducts.length === 0) {
         for (const p of catalogProducts) {
           if (!seenIds.has(p.id) && !hiddenIds.has(p.id)) {
             resolvedProducts.push(p);
@@ -106,8 +131,8 @@ export const ProductGrid: React.FC = () => {
 
       baseList = resolvedProducts;
     } else {
-      // 'All Categories' view: aggregate pinned/featured items across enabled homepage categories first
-      const globallyHidden = new Set<string>();
+      // 'All Categories' view (Default): dynamically display ALL real products from the admin catalog,
+      // ordering any pinned/featured items first.
       const seen = new Set<string>();
       const aggregated: Product[] = [];
 
@@ -115,7 +140,7 @@ export const ProductGrid: React.FC = () => {
         .filter((c) => c.isEnabled !== false)
         .forEach((cat) => {
           cat.items
-            .filter((i) => !i.isHidden && (i.isPinned || i.isFeatured))
+            .filter((i) => !i.isHidden && (i.isPinned || i.isFeatured) && !String(i.productId).startsWith('prod-ref-'))
             .sort((a, b) => (a.isPinned === b.isPinned ? a.displayOrder - b.displayOrder : a.isPinned ? -1 : 1))
             .forEach((item) => {
               const prod = catalogProducts.find((p) => p.id === item.productId);
@@ -127,7 +152,7 @@ export const ProductGrid: React.FC = () => {
         });
 
       catalogProducts.forEach((p) => {
-        if (!seen.has(p.id) && !globallyHidden.has(p.id)) {
+        if (!seen.has(p.id)) {
           aggregated.push(p);
           seen.add(p.id);
         }
@@ -138,7 +163,7 @@ export const ProductGrid: React.FC = () => {
 
     // 3. Apply secondary tab sorting when user clicks Bestsellers / New Arrivals / Top Rated
     if (activeTab === 'bestsellers') {
-      const best = baseList.filter((p) => p.badge === 'Best Seller' || (p.reviewsCount ?? 0) >= 900);
+      const best = baseList.filter((p) => p.badge === 'Best Seller' || (p.reviewsCount ?? 0) >= 100 || p.isDeal);
       const rest = baseList.filter((p) => !best.includes(p));
       return [...best, ...rest];
     }
@@ -150,45 +175,45 @@ export const ProductGrid: React.FC = () => {
     }
 
     if (activeTab === 'top-rated') {
-      return [...baseList].sort((a, b) => (b.rating ?? 4.8) - (a.rating ?? 4.8));
+      return [...baseList].sort((a, b) => (b.rating ?? 5) - (a.rating ?? 5));
     }
 
     return baseList;
-  }, [catalogProducts, searchQuery, activeCategoryConfig, homepageCategories, activeTab]);
+  }, [catalogProducts, searchQuery, activeCategoryConfig, activeHomepageCategory, homepageCategories, activeTab]);
 
-  const pageSize = 6;
-  const totalPages = Math.max(1, Math.ceil(filteredList.length / pageSize));
-  const safePageIndex = pageIndex >= totalPages ? 0 : pageIndex;
+  // Resolve real products for the 3 promotional banners dynamically
+  const promoSmartHomeProduct = useMemo(
+    () =>
+      catalogProducts.find((p) => p.id === 'prod-1788722697137') ||
+      catalogProducts.find((p) => p.category === 'tech' || p.category === 'security') ||
+      catalogProducts[0],
+    [catalogProducts]
+  );
 
-  const visibleSixProducts = useMemo(() => {
-    if (searchQuery && searchQuery.trim().length > 0) {
-      return filteredList;
-    }
-    const start = safePageIndex * pageSize;
-    const slice = filteredList.slice(start, start + pageSize);
-    if (slice.length < 6 && filteredList.length >= 6) {
-      return filteredList.slice(0, 6);
-    }
-    return slice;
-  }, [filteredList, safePageIndex, searchQuery]);
+  const promoGamingProduct = useMemo(
+    () =>
+      catalogProducts.find((p) => p.id === 'prod-1788787675363') ||
+      catalogProducts.find((p) => p.category === 'gaming') ||
+      catalogProducts[0],
+    [catalogProducts]
+  );
 
-  const handlePrevPage = () => {
-    setPageIndex((prev) => (prev - 1 + totalPages) % totalPages);
-  };
-
-  const handleNextPage = () => {
-    setPageIndex((prev) => (prev + 1) % totalPages);
-  };
+  const promoDrinkwareProduct = useMemo(
+    () =>
+      catalogProducts.find((p) => p.id === 'prod-1789155706235-izasbyx') ||
+      catalogProducts.find((p) => p.category === 'drinkware' || p.category === 'tech') ||
+      catalogProducts[0],
+    [catalogProducts]
+  );
 
   const handleTabChange = (tab: FeaturedTab) => {
     setActiveTab(tab);
-    setPageIndex(0);
   };
 
   return (
     <div className="w-full bg-[#F7F8FA] dark:bg-slate-950 text-[#0F172A] dark:text-slate-100">
       {/* =========================================================
-          1. FEATURED PRODUCTS SECTION (6 CARDS PER ROW)
+          1. FEATURED PRODUCTS SECTION (DYNAMICALLY DISPLAYS ALL REAL CATALOG PRODUCTS)
          ========================================================= */}
       <section
         id="featured-products-section"
@@ -196,21 +221,23 @@ export const ProductGrid: React.FC = () => {
         aria-label="Featured Products"
       >
         <div className="w-full max-w-[1320px] mx-auto px-4 lg:px-6">
-          {/* Header Row: Title/Subtitle (Left) + Tabs & Arrows (Right) */}
+          {/* Header Row: Title/Subtitle (Left) + Tabs (Right) */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
             <div>
               <div className="flex items-center gap-3">
                 <h2 className="text-[24px] sm:text-[26px] font-extrabold tracking-tight text-[#0F172A] dark:text-white leading-tight">
                   Featured Products
                 </h2>
-                {(searchQuery || (activeHomepageCategory !== 'electronics' && activeHomepageCategory !== 'all')) && (
+                <span className="px-2.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold tabular-nums">
+                  {filteredList.length}
+                </span>
+                {(searchQuery || activeHomepageCategory !== 'all') && (
                   <button
                     type="button"
                     onClick={() => {
                       setSearchQuery('');
                       setSelectedCategory('all');
-                      setActiveHomepageCategory('electronics');
-                      setPageIndex(0);
+                      setActiveHomepageCategory('all');
                     }}
                     className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-blue-50 dark:bg-blue-950 text-blue-600 dark:text-blue-400 text-xs font-semibold hover:bg-blue-100 cursor-pointer"
                   >
@@ -228,9 +255,8 @@ export const ProductGrid: React.FC = () => {
               </p>
             </div>
 
-            {/* Right Controls: Segmented Tabs + Circular Arrow Navigation */}
+            {/* Right Controls: Segmented Tabs */}
             <div className="flex items-center justify-between md:justify-end gap-3 flex-wrap">
-              {/* Segmented Tab Pill Container */}
               <div className="inline-flex items-center p-1 rounded-full bg-[#EBEFF5] dark:bg-slate-800/90 border border-slate-200/60 dark:border-slate-700">
                 {(
                   [
@@ -257,36 +283,16 @@ export const ProductGrid: React.FC = () => {
                   );
                 })}
               </div>
-
-              {/* Arrow Navigation Controls */}
-              <div className="flex items-center gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={handlePrevPage}
-                  aria-label="Previous products"
-                  className="w-9 h-9 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-2xs transition-all cursor-pointer active:scale-95"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <button
-                  type="button"
-                  onClick={handleNextPage}
-                  aria-label="Next products"
-                  className="w-9 h-9 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700 flex items-center justify-center text-slate-600 dark:text-slate-300 shadow-2xs transition-all cursor-pointer active:scale-95"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
             </div>
           </div>
 
-          {/* 6-Column Product Cards Grid */}
-          {visibleSixProducts.length > 0 ? (
+          {/* 6-Column Product Cards Grid showing ALL matching real catalog products */}
+          {filteredList.length > 0 ? (
             <div
               id="product-grid-container"
               className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 lg:gap-4 w-full"
             >
-              {visibleSixProducts.map((product, idx) => (
+              {filteredList.map((product, idx) => (
                 <ProductCard key={product.id} product={product} index={idx} />
               ))}
             </div>
@@ -300,7 +306,7 @@ export const ProductGrid: React.FC = () => {
                 onClick={() => {
                   setSearchQuery('');
                   setSelectedCategory('all');
-                  setActiveHomepageCategory('electronics');
+                  setActiveHomepageCategory('all');
                 }}
                 className="px-5 py-2.5 rounded-full bg-[#2563EB] text-white text-xs font-bold hover:bg-blue-700 cursor-pointer"
               >
@@ -312,14 +318,14 @@ export const ProductGrid: React.FC = () => {
       </section>
 
       {/* =========================================================
-          2. PROMOTION BLOCKS (3 EQUAL-WIDTH BANNERS MATCHING REFERENCE)
+          2. PROMOTION BLOCKS (3 EQUAL-WIDTH BANNERS LINKED TO REAL PRODUCTS)
          ========================================================= */}
       <section className="w-full py-5" aria-label="Promotional Highlights">
         <div className="w-full max-w-[1320px] mx-auto px-4 lg:px-6">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-5">
             {/* BANNER 1: Smart Living Starts Here */}
             <div
-              onClick={() => navigateToProduct('prod-ref-blink')}
+              onClick={() => promoSmartHomeProduct && navigateToProduct(promoSmartHomeProduct.id)}
               className="group relative h-[124px] lg:h-[140px] rounded-[18px] lg:rounded-[20px] overflow-hidden px-4 py-3 lg:px-6 lg:py-4 flex items-center justify-between cursor-pointer transition-all duration-300 hover:-translate-y-0.5"
               style={{
                 background: 'linear-gradient(90deg, #D3E3FA 0%, #E2EEFC 45%, #F2F7FD 100%)',
@@ -362,7 +368,7 @@ export const ProductGrid: React.FC = () => {
 
             {/* BANNER 2: Game Without Limits */}
             <div
-              onClick={() => navigateToProduct('prod-ref-razer')}
+              onClick={() => promoGamingProduct && navigateToProduct(promoGamingProduct.id)}
               className="group relative h-[124px] lg:h-[140px] rounded-[18px] lg:rounded-[20px] overflow-hidden px-4 py-3 lg:px-6 lg:py-4 flex items-center justify-between cursor-pointer transition-all duration-300 hover:-translate-y-0.5"
               style={{
                 background: 'linear-gradient(90deg, #050811 0%, #090F22 48%, #12132E 100%)',
@@ -412,7 +418,7 @@ export const ProductGrid: React.FC = () => {
 
             {/* BANNER 3: Brew Perfection Every Day */}
             <div
-              onClick={() => navigateToProduct('prod-ref-nextmug')}
+              onClick={() => promoDrinkwareProduct && navigateToProduct(promoDrinkwareProduct.id)}
               className="group relative h-[124px] lg:h-[140px] rounded-[18px] lg:rounded-[20px] overflow-hidden px-4 py-3 lg:px-6 lg:py-4 flex items-center justify-between cursor-pointer transition-all duration-300 hover:-translate-y-0.5"
               style={{
                 background: 'linear-gradient(90deg, #F6DFDC 0%, #F8E5E2 46%, #ECD0C9 100%)',

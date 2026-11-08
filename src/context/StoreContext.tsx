@@ -16,8 +16,7 @@ import {
   DailyStat,
   BillboardSlide
 } from '../types';
-import { initialProducts, DB_VERSION } from '../data/initialProducts';
-import { flagshipReferenceProducts } from '../data/flagshipProducts';
+import { initialProducts, DB_VERSION, isFakeStudioProduct } from '../data/initialProducts';
 import productsData from '../data/products.json';
 import {
   HomepageCategoryId,
@@ -756,11 +755,44 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return trimmed;
   };
 
+  const getDeletedProductIds = (): Set<string> => {
+    try {
+      if (typeof window === 'undefined') return new Set();
+      const raw = localStorage.getItem('dbuy_deleted_product_ids');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) return new Set(parsed.map(String));
+      }
+    } catch (e) {}
+    return new Set();
+  };
+
+  const recordDeletedProductId = (id: string) => {
+    try {
+      if (typeof window === 'undefined') return;
+      const set = getDeletedProductIds();
+      set.add(String(id));
+      localStorage.setItem('dbuy_deleted_product_ids', JSON.stringify(Array.from(set)));
+    } catch (e) {}
+  };
+
   const sanitizeProducts = (rawProducts: Product[]): Product[] => {
-    if (!rawProducts || !Array.isArray(rawProducts) || rawProducts.length === 0) return initialProducts;
-    const existingIds = new Set(rawProducts.map(p => p.id));
-    const missingFlagship = flagshipReferenceProducts.filter(fp => !existingIds.has(fp.id));
-    return [...missingFlagship, ...rawProducts];
+    const deletedIds = getDeletedProductIds();
+    const filterGenuine = (list: Product[]) =>
+      list.filter(
+        (p) =>
+          p &&
+          typeof p.id === 'string' &&
+          p.id.trim().length > 0 &&
+          !isFakeStudioProduct(p) &&
+          !deletedIds.has(p.id)
+      );
+
+    if (!rawProducts || !Array.isArray(rawProducts)) {
+      return filterGenuine(initialProducts);
+    }
+    const cleaned = filterGenuine(rawProducts);
+    return cleaned.length > 0 ? cleaned : filterGenuine(initialProducts);
   };
 
   const sanitizeProductUrls = (p: Product): Product => p;
@@ -1044,6 +1076,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const deleteProduct = async (id: string) => {
+    recordDeletedProductId(id);
     const newProducts = products.filter(p => p.id !== id);
     await saveProducts(newProducts);
     addToast(language === 'ka' ? `პროდუქტი წაიშალა` : `Product deleted`, 'info');
@@ -1615,17 +1648,58 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // ============================================================================
   // DEDICATED HOMEPAGE CONFIGURATION TABLES (PRESENTATION LAYER ONLY)
   // ============================================================================
+  const sanitizeSlidesConfig = (rawSlides: HomepageSlideConfig[]): HomepageSlideConfig[] => {
+    if (!Array.isArray(rawSlides) || rawSlides.length === 0) return INITIAL_HOMEPAGE_SLIDES;
+    const mapped = rawSlides.map((s, idx) => {
+      const fallbackSlide =
+        INITIAL_HOMEPAGE_SLIDES.find((init) => init.id === s.id) ||
+        INITIAL_HOMEPAGE_SLIDES[idx] ||
+        INITIAL_HOMEPAGE_SLIDES[0];
+      const hasFakeProdId = !s.productId || String(s.productId).startsWith('prod-ref-');
+      return {
+        ...fallbackSlide,
+        ...s,
+        productId: hasFakeProdId ? fallbackSlide.productId : s.productId,
+        desktopBannerImage:
+          sanitizeImageUrl(s.desktopBannerImage) ||
+          s.desktopBannerImage ||
+          fallbackSlide.desktopBannerImage,
+        mobileBannerImage:
+          sanitizeImageUrl(s.mobileBannerImage) ||
+          s.mobileBannerImage ||
+          sanitizeImageUrl(s.desktopBannerImage) ||
+          fallbackSlide.mobileBannerImage,
+      };
+    });
+    // Ensure all 3 core hero slides are present if fewer than 3 were cached
+    if (mapped.length < 3) {
+      const existingIds = new Set(mapped.map((m) => m.id));
+      for (const initSlide of INITIAL_HOMEPAGE_SLIDES) {
+        if (!existingIds.has(initSlide.id)) {
+          mapped.push(initSlide);
+        }
+      }
+    }
+    return mapped.sort((a, b) => (a.slideOrder || 1) - (b.slideOrder || 1));
+  };
+
+  const sanitizeCategoriesConfig = (rawCats: HomepageCategoryConfig[]): HomepageCategoryConfig[] => {
+    if (!Array.isArray(rawCats) || rawCats.length === 0) return INITIAL_HOMEPAGE_CATEGORIES;
+    return rawCats.map((cat) => ({
+      ...cat,
+      items: Array.isArray(cat.items)
+        ? cat.items.filter((item) => item && item.productId && !String(item.productId).startsWith('prod-ref-'))
+        : [],
+    }));
+  };
+
   const [homepageSlides, setHomepageSlides] = useState<HomepageSlideConfig[]>(() => {
     try {
       const saved = localStorage.getItem('dbuy_homepage_slides');
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed.map((s: HomepageSlideConfig) => ({
-            ...s,
-            desktopBannerImage: sanitizeImageUrl(s.desktopBannerImage) || s.desktopBannerImage,
-            mobileBannerImage: sanitizeImageUrl(s.mobileBannerImage) || s.mobileBannerImage || sanitizeImageUrl(s.desktopBannerImage) || s.desktopBannerImage,
-          }));
+          return sanitizeSlidesConfig(parsed);
         }
       }
     } catch (e) {}
@@ -1638,7 +1712,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed) && parsed.length > 0) {
-          return parsed;
+          return sanitizeCategoriesConfig(parsed);
         }
       }
     } catch (e) {}
@@ -1650,7 +1724,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const saved = localStorage.getItem('dbuy_homepage_featured_products');
       if (saved) {
         const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.filter((fp: HomepageFeaturedProductConfig) => fp && fp.productId && !String(fp.productId).startsWith('prod-ref-'));
+        }
       }
     } catch (e) {}
     return INITIAL_HOMEPAGE_FEATURED_PRODUCTS;
@@ -1678,7 +1754,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return INITIAL_HOMEPAGE_SETTINGS;
   });
 
-  const [activeHomepageCategory, setActiveHomepageCategory] = useState<HomepageCategoryId | 'all'>('electronics');
+  const [activeHomepageCategory, setActiveHomepageCategory] = useState<HomepageCategoryId | 'all'>('all');
 
   const syncHomepageConfigToServer = (payload: {
     homepage_slides?: HomepageSlideConfig[];
@@ -1704,16 +1780,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (data && data.success && data.tables) {
           const { homepage_slides, homepage_categories, homepage_featured_products, homepage_sections, homepage_settings } = data.tables;
           if (Array.isArray(homepage_slides) && homepage_slides.length > 0) {
-            setHomepageSlides(homepage_slides);
-            localStorage.setItem('dbuy_homepage_slides', JSON.stringify(homepage_slides));
+            const sanitizedSlides = sanitizeSlidesConfig(homepage_slides);
+            setHomepageSlides(sanitizedSlides);
+            localStorage.setItem('dbuy_homepage_slides', JSON.stringify(sanitizedSlides));
           }
           if (Array.isArray(homepage_categories) && homepage_categories.length > 0) {
-            setHomepageCategories(homepage_categories);
-            localStorage.setItem('dbuy_homepage_categories', JSON.stringify(homepage_categories));
+            const sanitizedCats = sanitizeCategoriesConfig(homepage_categories);
+            setHomepageCategories(sanitizedCats);
+            localStorage.setItem('dbuy_homepage_categories', JSON.stringify(sanitizedCats));
           }
           if (Array.isArray(homepage_featured_products) && homepage_featured_products.length > 0) {
-            setHomepageFeaturedProducts(homepage_featured_products);
-            localStorage.setItem('dbuy_homepage_featured_products', JSON.stringify(homepage_featured_products));
+            const cleanFp = homepage_featured_products.filter(
+              (fp: HomepageFeaturedProductConfig) => fp && fp.productId && !String(fp.productId).startsWith('prod-ref-')
+            );
+            setHomepageFeaturedProducts(cleanFp);
+            localStorage.setItem('dbuy_homepage_featured_products', JSON.stringify(cleanFp));
           }
           if (Array.isArray(homepage_sections) && homepage_sections.length > 0) {
             setHomepageSections(homepage_sections);

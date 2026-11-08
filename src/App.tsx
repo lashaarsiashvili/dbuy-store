@@ -17,7 +17,7 @@ import { FaceIdSetupModal } from './components/FaceIdSetupModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AboutPage } from './components/AboutPage';
 import { ContactPage } from './components/ContactPage';
-import { GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPages';
+import { PolicyPages, GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPages';
 import { MyOrdersPage } from './components/MyOrdersPage';
 import { ProductDetailPage } from './components/ProductDetailPage';
 import { CategoryPage } from './components/CategoryPage';
@@ -328,11 +328,11 @@ const MainLayout: React.FC = () => {
         {currentPage === 'product' && <ProductDetailPage />}
         {currentPage === 'about' && <AboutPage />}
         {currentPage === 'contact' && <ContactPage />}
-        {currentPage === 'guarantee' && <GuaranteePage />}
-        {currentPage === 'returns' && <ReturnsPage />}
-        {currentPage === 'privacy' && <PrivacyPage />}
+        {currentPage === 'guarantee' && <PolicyPages policyType="guarantee" />}
+        {currentPage === 'returns' && <PolicyPages policyType="returns" />}
+        {currentPage === 'privacy' && <PolicyPages policyType="privacy" />}
         {currentPage === 'my-orders' && <MyOrdersPage />}
-        {currentPage === 'deliveries' && <VerifiedDeliveriesPage />}
+        {currentPage === 'deliveries' && <PolicyPages policyType="deliveries" />}
         {currentPage === 'campaigns' && <AdsGallery />}
         {currentPage === 'admin' && <AdminDashboard />}
         {currentPage === 'checkout' && <CheckoutPage />}

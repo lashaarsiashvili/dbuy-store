@@ -108,7 +108,7 @@ export const AdminHomepageManager: React.FC = () => {
     signatureLines: ['Good', 'Tech', 'Brighter', 'Days'],
     startDate: '',
     endDate: '',
-    productId: products[0]?.id || 'prod-ref-sony-blue',
+    productId: products[0]?.id || 'prod-1788722508271',
   });
 
   // Search products by Name, SKU, or Product ID (#258, #781, #1042, or full ID)
