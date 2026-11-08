@@ -1,8 +1,6 @@
-import { EventContext } from '../products';
-
 interface Env {
-  DB: D1Database;
-  R2: R2Bucket;
+  DB: any;
+  R2: any;
 }
 
 const CORS_HEADERS = {
@@ -46,7 +44,7 @@ async function uploadToR2(env: Env, file: File, title: string): Promise<{ url: s
   return { url: imageUrl, key: r2Key };
 }
 
-export const onRequest: PagesFunction<Env> = async (context) => {
+export const onRequest = async (context: { request: Request; env: Env; params: Record<string, any> }) => {
   const { request, env, params } = context;
   const id = params.id as string;
 
@@ -117,7 +115,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         'title', 'title_ka', 'subtitle', 'subtitle_ka', 
         'button_text', 'button_text_ka', 'button_link', 
         'sort_order', 'bg_gradient', 'is_active',
-        'badge', 'badge_ka', 'product_id', 'category',
+        'badge', 'badge_ka', 'product_id', 'product_slug', 'category',
         'price_tag', 'orig_price_tag', 'discount_tag'
       ];
 

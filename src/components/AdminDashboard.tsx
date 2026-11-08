@@ -13,6 +13,7 @@ import { LogoPreviewModal } from './LogoPreviewModal';
 import { PayhipImportModal } from './PayhipImportModal';
 import { ThemeCustomizer } from './ThemeCustomizer';
 import { ProductUrlImporter } from './ProductUrlImporter';
+import { AdminHomepageManager } from './AdminHomepageManager';
 import { ScrapedProductData } from '../utils/productScraper';
 
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
@@ -201,7 +202,7 @@ export const AdminDashboard: React.FC = () => {
   }, [inspectingUser?.email]);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security' | 'messages' | 'reviews'>('analytics');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security' | 'messages' | 'reviews'>('homepage');
 
   // Contact Messages & SMTP State
   const [contactMessages, setContactMessages] = useState<Array<{
@@ -763,6 +764,7 @@ export const AdminDashboard: React.FC = () => {
         badge: matchedProd ? `${matchedProd.category.toUpperCase()} • ADVERTISED` : 'FEATURED EDIT',
         badgeKa: 'რეკლამირებული პროდუქტი',
         productId: quickSlideProductId || undefined,
+        productSlug: matchedProd?.customSlug || (matchedProd ? generateProductSlug(matchedProd.title) : undefined),
         category: matchedProd?.category || 'tech',
         isActive: true,
       };
@@ -806,6 +808,7 @@ export const AdminDashboard: React.FC = () => {
     buttonText: 'Shop Now',
     buttonTextKa: 'შეძენა',
     productId: '',
+    productSlug: '',
     category: 'tech',
     isActive: true,
   });
@@ -864,6 +867,7 @@ export const AdminDashboard: React.FC = () => {
       buttonText: slide.buttonText || 'Shop Now',
       buttonTextKa: slide.buttonTextKa || 'შეძენა',
       productId: slide.productId || '',
+      productSlug: slide.productSlug || '',
       category: slide.category || 'tech',
       isActive: slide.isActive ?? true,
     });
@@ -877,6 +881,7 @@ export const AdminDashboard: React.FC = () => {
     setBillboardForm(prev => ({
       ...prev,
       productId: prod.id,
+      productSlug: prod.customSlug || generateProductSlug(prod.title),
       title: prod.title,
       titleKa: prod.titleKa || prod.title,
       subtitle: prod.description,
@@ -2074,6 +2079,18 @@ export const AdminDashboard: React.FC = () => {
         {/* Tab Navigation - Modern Segmented Control with Wrapping */}
         <div className="bg-slate-200/75 dark:bg-slate-900 p-1.5 rounded-2xl flex flex-wrap items-center gap-1.5 border border-slate-300/60 dark:border-slate-800 shadow-xs">
           <button
+            onClick={() => setActiveTab('homepage')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
+              activeTab === 'homepage'
+                ? 'bg-white dark:bg-slate-800 text-blue-700 dark:text-blue-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+            }`}
+          >
+            <Sliders className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            <span>{isKa ? 'მთავარი გვერდი (Hero & კატეგორიები)' : 'Homepage (Hero Slider & Categories)'}</span>
+          </button>
+
+          <button
             onClick={() => setActiveTab('analytics')}
             className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
               activeTab === 'analytics'
@@ -2216,6 +2233,9 @@ export const AdminDashboard: React.FC = () => {
             </span>
           </button>
         </div>
+
+        {/* TAB: HOMEPAGE (HERO SLIDER & FEATURED CATEGORIES) */}
+        {activeTab === 'homepage' && <AdminHomepageManager />}
 
         {/* TAB 0: TRAFFIC & COUNTRY ANALYTICS */}
         {activeTab === 'analytics' && <AdminAnalytics />}

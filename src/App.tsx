@@ -310,7 +310,7 @@ const MainLayout: React.FC = () => {
   }, [currentPage, selectedCategory, products, activeProductId, language]);
 
   return (
-    <div className="min-h-dvh w-full max-w-full overflow-x-clip flex flex-col bg-white dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-600 selection:text-white antialiased">
+    <div className="min-h-dvh w-full max-w-full overflow-x-clip flex flex-col bg-[#F7F8FA] dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans selection:bg-blue-600 selection:text-white antialiased">
       {/* Universal Header */}
       <Header />
 
@@ -318,8 +318,8 @@ const MainLayout: React.FC = () => {
       <main className="flex-1">
         {currentPage === 'home' && (
           <>
-            <CategoryBrowse />
             <Hero />
+            <CategoryBrowse />
             <ProductGrid />
           </>
         )}

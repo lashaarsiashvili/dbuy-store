@@ -2,7 +2,6 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import { execSync } from 'child_process';
-import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -10,6 +9,7 @@ import { Redis } from '@upstash/redis';
 import { GoogleGenAI } from '@google/genai';
 import { initialProducts, DB_VERSION } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
+import { INITIAL_HOMEPAGE_DATABASE_TABLES } from './src/data/initialHomepageConfig';
 import { buildCustomerOrderEmail, buildAdminOrderAlertEmail } from './src/utils/orderEmailTemplates';
 import { generateSmartOfflineAdCopy } from './src/utils/adCopyGenerator';
 import { parseProductHtml } from './src/utils/productScraper';
@@ -17,7 +17,7 @@ import { parseProductHtml } from './src/utils/productScraper';
 dotenv.config();
 
 const app = express();
-const PORT = 3000;
+const PORT = Number(process.env.PORT) || 3000;
 
 // High-Trust Security Headers to maximize ScamAdviser and SSL Labs trust ratings
 app.use((req, res, next) => {
@@ -34,7 +34,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // CORS headers for all incoming API requests
 app.use('/api', (req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
-  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Slug');
+  res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept, Authorization, X-Admin-Slug, X-Admin-Key');
   res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
   if (req.method === 'OPTIONS') {
     res.sendStatus(200);
@@ -43,78 +43,8 @@ app.use('/api', (req, res, next) => {
   next();
 });
 
-// Security Middleware to block unauthorized access to administrative endpoints
-app.use((req, res, next) => {
-  const path = req.path.toLowerCase();
-  if (path.startsWith('/api/admin/') || path.startsWith('/api/contact/messages')) {
-    const clientAdminSlug = req.headers['x-admin-slug'] as string | undefined;
-    if (!clientAdminSlug || clientAdminSlug !== storeDb.adminSecretSlug) {
-      console.warn(`[SECURITY-ALERT] Blocked unauthorized access attempt to: ${req.method} ${req.originalUrl}`);
-      return res.status(403).json({ success: false, error: 'Access Denied: Administrative authority required' });
-    }
-  }
-  next();
-});
-
 export const pendingPromises = new Set<Promise<any>>();
 export let dbInitPromise: Promise<void> | null = null;
-
-// Serverless Interceptor Middleware:
-// Since Vercel is a serverless platform, any asynchronous calls (e.g. saving to Firestore,
-// Redis, or sending emails via Nodemailer) triggered during request processing will be
-// aborted if the HTTP response is sent before they finish.
-// This middleware intercepts res.json, res.send, and res.end to wait for all active
-// database writes and email dispatches to fully resolve before returning.
-// It also blocks requests until the database startup sync finishes, preventing cold-starts
-// from serving outdated default values from disk.
-app.use(async (req, res, next) => {
-  if (dbInitPromise) {
-    try {
-      await dbInitPromise;
-    } catch (err) {
-      console.error('[SERVERLESS-INTERCEPTOR] Error waiting for database initialization promise:', err);
-    }
-  }
-
-  const originalJson = res.json;
-  const originalSend = res.send;
-  const originalEnd = res.end;
-
-  res.json = async function(body) {
-    if (pendingPromises.size > 0) {
-      try {
-        await Promise.all(Array.from(pendingPromises));
-      } catch (err) {
-        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.json:', err);
-      }
-    }
-    return originalJson.call(this, body);
-  } as any;
-
-  res.send = async function(body) {
-    if (pendingPromises.size > 0) {
-      try {
-        await Promise.all(Array.from(pendingPromises));
-      } catch (err) {
-        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.send:', err);
-      }
-    }
-    return originalSend.call(this, body);
-  } as any;
-
-  res.end = async function(chunk, encoding, cb) {
-    if (pendingPromises.size > 0) {
-      try {
-        await Promise.all(Array.from(pendingPromises));
-      } catch (err) {
-        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.end:', err);
-      }
-    }
-    return originalEnd.call(this, chunk, encoding, cb);
-  } as any;
-
-  next();
-});
 
 // Helper for safe JSON response parsing from external APIs (e.g. PayPal)
 async function safeJsonFromFetch(response: Response): Promise<{ ok: boolean; status: number; data: any; rawText: string }> {
@@ -143,8 +73,6 @@ const DB_FILE = path.join(DB_DIR, 'store_database.json');
 // Dedicated persistent uploads directory for product images
 const UPLOADS_DIR = path.join(DB_DIR, 'uploads');
 const PUBLIC_UPLOADS_DIR = path.join(process.cwd(), 'public', 'uploads');
-// Persistent base64 backup map stored inside the source repository (src/data/uploadedImagesBackup.json)
-// This guarantees image data is never lost even if Cloud Run reboots or wipes ephemeral /data storage!
 const UPLOADS_MAP_FILE = path.join(process.cwd(), 'src', 'data', 'uploadedImagesBackup.json');
 const LEGACY_UPLOADS_MAP_FILE = path.join(DB_DIR, 'uploads_map.json');
 
@@ -164,10 +92,10 @@ function writeImageToBothDirs(filename: string, buffer: Buffer): void {
   const filePath2 = path.join(PUBLIC_UPLOADS_DIR, filename);
   try {
     fs.writeFileSync(filePath1, buffer);
-  } catch (e) {}
+  } catch {}
   try {
     fs.writeFileSync(filePath2, buffer);
-  } catch (e) {}
+  } catch {}
 }
 
 // Persistent base64 backup map to ensure uploaded files are never lost
@@ -198,7 +126,6 @@ function loadUploadsMapBoot(): void {
     console.warn('Could not read LEGACY_UPLOADS_MAP_FILE:', e);
   }
 
-  // Ensure all images in uploadsMap are physically reconstituted on disk
   let restoredCount = 0;
   for (const [filename, dataUrl] of Object.entries(uploadsMap)) {
     if (!filename || filename === '/' || filename === '.') continue;
@@ -251,7 +178,6 @@ app.get('/uploads/:filename', (req, res) => {
     return res.sendFile(publicFilePath);
   }
 
-  // Check if we have base64 in backup map
   if (uploadsMap[filename]) {
     try {
       const dataUrl = uploadsMap[filename];
@@ -272,7 +198,6 @@ app.get('/uploads/:filename', (req, res) => {
     }
   }
 
-  // Neutral SVG fallback instead of 404 or random image
   res.setHeader('Content-Type', 'image/svg+xml');
   res.setHeader('Cache-Control', 'public, max-age=3600');
   res.send('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="#f8fafc"/><rect x="20" y="20" width="360" height="360" rx="16" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="8 8"/><path d="M120 250l50-50 60 60 40-40 60 60H70l50-30z" fill="#cbd5e1"/><circle cx="140" cy="140" r="24" fill="#94a3b8"/></svg>');
@@ -304,7 +229,6 @@ interface StoreDatabase {
   lastUpdated: string;
 }
 
-// Helper to sync catalog to initialProducts.ts file so it persists forever in the code
 function syncCatalogToInitialProducts(products: any[]): void {
   try {
     const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
@@ -319,7 +243,7 @@ function syncCatalogToInitialProducts(products: any[]): void {
 }
 
 function generateSitemapSlug(title: string): string {
-  return title
+  return String(title || 'product')
     .toLowerCase()
     .trim()
     .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
@@ -341,8 +265,8 @@ function generateSitemapXML(products: any[]): string {
     products.forEach(p => {
       if (!p) return;
       const slug = p.customSlug?.trim() || generateSitemapSlug(p.title);
-      const urlPath = p.customSlug 
-        ? `/b/${encodeURIComponent(slug)}` 
+      const urlPath = p.customSlug
+        ? `/b/${encodeURIComponent(slug)}`
         : `/product/${p.id}/${encodeURIComponent(slug)}`;
       urls.push({
         loc: `https://dbuystore.com${urlPath}`,
@@ -371,7 +295,6 @@ function initStoreDatabase(): StoreDatabase {
   let fileProducts: any[] = [];
   let backupProducts: any[] = [];
 
-  // 1. Read from runtime database file
   try {
     if (fs.existsSync(DB_FILE)) {
       const raw = fs.readFileSync(DB_FILE, 'utf-8');
@@ -385,7 +308,6 @@ function initStoreDatabase(): StoreDatabase {
     console.error('Error reading DB_FILE:', err);
   }
 
-  // 2. Read from source code backup file
   try {
     if (fs.existsSync(CODE_BACKUP_FILE)) {
       const raw = fs.readFileSync(CODE_BACKUP_FILE, 'utf-8');
@@ -399,7 +321,6 @@ function initStoreDatabase(): StoreDatabase {
     console.error('Error reading CODE_BACKUP_FILE:', err);
   }
 
-  // 3. Strict single source of truth - DB_VERSION check enforces clean initialProducts re-seed
   let products: any[] = [];
   if (Array.isArray(fileProducts) && fileProducts.length > 0) {
     products = fileProducts;
@@ -468,7 +389,6 @@ function initStoreDatabase(): StoreDatabase {
 let rawRedisUrl = (process.env.KV_REST_API_URL || process.env.UPSTASH_REDIS_REST_URL || '').trim();
 let rawRedisToken = (process.env.KV_REST_API_TOKEN || process.env.UPSTASH_REDIS_REST_TOKEN || '').trim();
 
-// Auto-fix if user accidentally swapped URL and TOKEN in environment variables
 if (
   rawRedisUrl &&
   rawRedisToken &&
@@ -492,53 +412,135 @@ if (rawRedisUrl && rawRedisToken && (rawRedisUrl.startsWith('https://') || rawRe
   } catch (e) {
     console.warn('[REDIS/KV] Could not initialize Redis client:', e instanceof Error ? e.message : e);
   }
-} else if (rawRedisUrl || rawRedisToken) {
-  console.warn(
-    '[REDIS/KV] Skipping Redis initialization: KV_REST_API_URL must be a valid HTTP/HTTPS URL (e.g. https://...upstash.io)'
-  );
 }
 
 let storeDb: StoreDatabase = initStoreDatabase();
 
-function cleanAllStoreProductImageUrls(): void {
-  let modified = false;
-  if (Array.isArray(storeDb.products)) {
-    storeDb.products = storeDb.products.map((p: any) => {
-      if (!p) return p;
-      const cleanP = { ...p };
-      let changed = false;
+// Security Middleware to block unauthorized access to administrative endpoints
+app.use((req, res, next) => {
+  const reqPath = req.path.toLowerCase();
+  if (reqPath.startsWith('/api/admin/') || reqPath.startsWith('/api/contact/messages')) {
+    const clientAdminSlug = req.headers['x-admin-slug'] as string | undefined;
+    if (!clientAdminSlug || clientAdminSlug !== storeDb.adminSecretSlug) {
+      console.warn(`[SECURITY-ALERT] Blocked unauthorized access attempt to: ${req.method} ${req.originalUrl}`);
+      return res.status(403).json({ success: false, error: 'Access Denied: Administrative authority required' });
+    }
+  }
+  next();
+});
 
-      if (typeof cleanP.image === 'string' && cleanP.image.includes('/uploads/')) {
-        const cleaned = '/uploads/' + cleanP.image.split('/uploads/').pop();
-        if (cleanP.image !== cleaned) {
-          cleanP.image = cleaned;
-          changed = true;
-        }
-      }
+// Dedicated Presentation-Layer Homepage Configuration Tables (Read-Only Product Safety Guaranteed)
+app.get('/api/homepage-config', (req, res) => {
+  const anyDb = storeDb as any;
+  const tables = {
+    homepage_slides: Array.isArray(anyDb.homepage_slides) && anyDb.homepage_slides.length > 0
+      ? anyDb.homepage_slides
+      : INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_slides,
+    homepage_categories: Array.isArray(anyDb.homepage_categories) && anyDb.homepage_categories.length > 0
+      ? anyDb.homepage_categories
+      : INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_categories,
+    homepage_featured_products: Array.isArray(anyDb.homepage_featured_products) && anyDb.homepage_featured_products.length > 0
+      ? anyDb.homepage_featured_products
+      : INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_featured_products,
+    homepage_sections: Array.isArray(anyDb.homepage_sections) && anyDb.homepage_sections.length > 0
+      ? anyDb.homepage_sections
+      : INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_sections,
+    homepage_settings: anyDb.homepage_settings && typeof anyDb.homepage_settings === 'object'
+      ? anyDb.homepage_settings
+      : INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_settings,
+  };
+  res.json({ success: true, tables });
+});
 
-      if (Array.isArray(cleanP.images)) {
-        const cleanedImgs = cleanP.images.map((img: any) => {
-          if (typeof img === 'string' && img.includes('/uploads/')) {
-            const cleaned = '/uploads/' + img.split('/uploads/').pop();
-            return cleaned;
-          }
-          return img;
-        });
-        if (JSON.stringify(cleanP.images) !== JSON.stringify(cleanedImgs)) {
-          cleanP.images = cleanedImgs;
-          changed = true;
-        }
-      }
+app.post('/api/homepage-config', (req, res) => {
+  try {
+    const anyDb = storeDb as any;
+    const { homepage_slides, homepage_categories, homepage_featured_products, homepage_sections, homepage_settings } = req.body || {};
 
-      if (changed) modified = true;
-      return cleanP;
+    if (Array.isArray(homepage_slides)) {
+      anyDb.homepage_slides = homepage_slides;
+    }
+    if (Array.isArray(homepage_categories)) {
+      anyDb.homepage_categories = homepage_categories;
+    }
+    if (Array.isArray(homepage_featured_products)) {
+      anyDb.homepage_featured_products = homepage_featured_products;
+    }
+    if (Array.isArray(homepage_sections)) {
+      anyDb.homepage_sections = homepage_sections;
+    }
+    if (homepage_settings && typeof homepage_settings === 'object') {
+      anyDb.homepage_settings = homepage_settings;
+    }
+
+    try {
+      fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
+    } catch {}
+
+    res.json({
+      success: true,
+      tables: {
+        homepage_slides: anyDb.homepage_slides || INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_slides,
+        homepage_categories: anyDb.homepage_categories || INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_categories,
+        homepage_featured_products: anyDb.homepage_featured_products || INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_featured_products,
+        homepage_sections: anyDb.homepage_sections || INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_sections,
+        homepage_settings: anyDb.homepage_settings || INITIAL_HOMEPAGE_DATABASE_TABLES.homepage_settings,
+      },
     });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to save homepage config' });
   }
-  if (modified) {
-    console.log('[NORMALIZE-URLS] Cleaned product image URLs to relative paths on startup.');
-    saveStoreDatabase();
+});
+
+// Serverless Interceptor Middleware
+app.use(async (req, res, next) => {
+  if (dbInitPromise) {
+    try {
+      await dbInitPromise;
+    } catch (err) {
+      console.error('[SERVERLESS-INTERCEPTOR] Error waiting for database initialization promise:', err);
+    }
   }
-}
+
+  const originalJson = res.json;
+  const originalSend = res.send;
+  const originalEnd = res.end;
+
+  res.json = async function (body) {
+    if (pendingPromises.size > 0) {
+      try {
+        await Promise.all(Array.from(pendingPromises));
+      } catch (err) {
+        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.json:', err);
+      }
+    }
+    return originalJson.call(this, body);
+  } as any;
+
+  res.send = async function (body) {
+    if (pendingPromises.size > 0) {
+      try {
+        await Promise.all(Array.from(pendingPromises));
+      } catch (err) {
+        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.send:', err);
+      }
+    }
+    return originalSend.call(this, body);
+  } as any;
+
+  res.end = async function (chunk, encoding, cb) {
+    if (pendingPromises.size > 0) {
+      try {
+        await Promise.all(Array.from(pendingPromises));
+      } catch (err) {
+        console.error('[SERVERLESS-INTERCEPTOR] Error waiting for pending promises in res.end:', err);
+      }
+    }
+    return originalEnd.call(this, chunk, encoding, cb);
+  } as any;
+
+  next();
+});
 
 // Sync from Vercel KV / Upstash Redis on startup if configured
 async function syncFromRedisOnStartup(): Promise<void> {
@@ -565,7 +567,6 @@ async function syncFromRedisOnStartup(): Promise<void> {
         }
         storeDb.lastUpdated = new Date().toISOString();
 
-        // Also write merged data to local disk and backup file
         try {
           if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
           fs.writeFileSync(DB_FILE, JSON.stringify(storeDb, null, 2), 'utf-8');
@@ -573,13 +574,12 @@ async function syncFromRedisOnStartup(): Promise<void> {
         } catch {}
       }
     }
-  } catch (err: any) {
+  } catch {
     console.log('[REDIS/KV] Vercel KV / Upstash Redis is offline or not configured. Continuing with local disk persistence.');
     redisClient = null;
   }
 }
 
-// Initial sync calls tracked inside dbInitPromise to block cold-start requests until fully synchronized
 dbInitPromise = (async () => {
   console.log('[STARTUP-SYNC] Starting database synchronization...');
   try {
@@ -595,7 +595,6 @@ function saveStoreDatabase(): void {
   storeDb.uploadsMap = uploadsMap;
   const serialized = JSON.stringify(storeDb, null, 2);
 
-  // 1. Try to save to local ephemeral disk, but catch and log read-only file system errors (e.g. on Vercel)
   try {
     if (!fs.existsSync(DB_DIR)) {
       fs.mkdirSync(DB_DIR, { recursive: true });
@@ -607,12 +606,10 @@ function saveStoreDatabase(): void {
       fs.mkdirSync(backupDir, { recursive: true });
     }
     fs.writeFileSync(CODE_BACKUP_FILE, serialized, 'utf-8');
-    console.log('[DISK] Database saved successfully to local file storage.');
   } catch (fsErr: any) {
-    console.warn('[DISK] Local filesystem is read-only or unavailable (e.g. Vercel Serverless). Skipping disk save.', fsErr?.message || fsErr);
+    console.warn('[DISK] Local filesystem is read-only or unavailable. Skipping disk save.', fsErr?.message || fsErr);
   }
 
-  // 3. Automatically persist to Vercel KV / Upstash Redis if available
   if (redisClient) {
     try {
       const redisPromise = redisClient.set('dbuy_store_database', serialized)
@@ -627,7 +624,6 @@ function saveStoreDatabase(): void {
     }
   }
 
-  // 4. Automatically generate a physical static sitemap.xml on the local filesystem
   try {
     const sitemapCode = generateSitemapXML(storeDb.products || []);
     const publicSitemapPath = path.join(process.cwd(), 'public', 'sitemap.xml');
@@ -643,12 +639,10 @@ function saveStoreDatabase(): void {
     if (fs.existsSync(distDir)) {
       fs.writeFileSync(distSitemapPath, sitemapCode, 'utf-8');
     }
-    console.log('[SITEMAP] Automatically updated static physical sitemap.xml on disk.');
   } catch (sitemapErr: any) {
-    console.warn('[SITEMAP] Failed to write static sitemap.xml to disk (continuing with dynamic backup):', sitemapErr?.message);
+    console.warn('[SITEMAP] Failed to write static sitemap.xml to disk:', sitemapErr?.message);
   }
 }
-
 
 // In-memory OTP storage with TTL and attempt limits
 interface OtpRecord {
@@ -661,7 +655,6 @@ interface OtpRecord {
 
 const otpMap = new Map<string, OtpRecord>();
 
-// Clean up expired OTPs periodically (every 5 minutes)
 setInterval(() => {
   const now = Date.now();
   for (const [key, record] of otpMap.entries()) {
@@ -730,12 +723,6 @@ function getPooledMailTransporter() {
   return cachedPooledTransporter;
 }
 
-// Helper to configure standalone nodemailer transporter
-function getMailTransporter() {
-  return getPooledMailTransporter();
-}
-
-// Resilient, high-speed email dispatch helper
 function sendMailWithRetry(options: {
   from?: string;
   to: string;
@@ -769,7 +756,6 @@ function sendMailWithRetry(options: {
     const defaultFrom = `"DBUY Store" <${smtpUser}>`;
     let finalFrom = options.from ? options.from : defaultFrom;
 
-    // Enforce correct envelope/from email matches Zoho authenticated user address
     if (!finalFrom.includes(smtpUser)) {
       finalFrom = `"DBUY Store" <${smtpUser}>`;
     }
@@ -783,17 +769,14 @@ function sendMailWithRetry(options: {
       },
     };
 
-    // 1. First attempt: Fast pooled connection (< 1s delivery)
     try {
       const pooled = getPooledMailTransporter();
       const info = await pooled.sendMail(mailPayload);
-      console.log(`[EMAIL-DISPATCH-FAST] Successfully sent email to ${mailPayload.to} (MessageId: ${info.messageId})`);
       return { success: true, messageId: info.messageId };
     } catch (fastErr: any) {
       console.warn(`[EMAIL-DISPATCH-FAST-RETRY] Pooled transport error (${fastErr?.message || fastErr}), attempting fresh direct connection...`);
     }
 
-    // 2. Second attempt: Fresh direct connection with generous timeouts
     try {
       const directTransporter = nodemailer.createTransport({
         host: smtpHost,
@@ -812,7 +795,6 @@ function sendMailWithRetry(options: {
       });
 
       const info = await directTransporter.sendMail(mailPayload);
-      console.log(`[EMAIL-DISPATCH-DIRECT-SUCCESS] Sent email to ${mailPayload.to} (MessageId: ${info.messageId})`);
       return { success: true, messageId: info.messageId };
     } catch (directErr: any) {
       console.error('[EMAIL-DISPATCH-FATAL] Direct transport attempt failed:', directErr?.message || directErr);
@@ -840,14 +822,37 @@ const serverAnalytics = {
   cart_data: {} as Record<string, number>,
 };
 
-// Active sessions tracker for Live Now indicator and real-time visitor stream
-const liveActiveSessions = new Map<string, { 
-  lastSeen: number; 
-  country: string; 
-  countryCode: string; 
-  path: string; 
-  device: string; 
+const liveActiveSessions = new Map<string, {
+  lastSeen: number;
+  country: string;
+  countryCode: string;
+  path: string;
+  device: string;
 }>();
+
+const CF_COUNTRY_FLAG_MAP: Record<string, string> = {
+  GE: '🇬🇪', US: '🇺🇸', GB: '🇬🇧', DE: '🇩🇪', FR: '🇫🇷', IT: '🇮🇹', ES: '🇪🇸',
+  UA: '🇺🇦', PL: '🇵🇱', TR: '🇹🇷', AE: '🇦🇪', IL: '🇮🇱', CA: '🇨🇦', AU: '🇦🇺',
+  JP: '🇯🇵', AM: '🇦🇲', AZ: '🇦🇿', NL: '🇳🇱', SE: '🇸🇪', CH: '🇨🇭', KZ: '🇰🇿',
+  RU: '🇷🇺', IN: '🇮🇳', BR: '🇧🇷', CN: '🇨🇳', GR: '🇬🇷', CY: '🇨🇾', RO: '🇷🇴',
+  AT: '🇦🇹', BE: '🇧🇪', CZ: '🇨🇿', BG: '🇧🇬', PT: '🇵🇹', HU: '🇭🇺', IE: '🇮🇪',
+  NO: '🇳🇴', DK: '🇩🇰', FI: '🇫🇮',
+};
+
+const CF_CODE_TO_COUNTRY_NAME: Record<string, string> = {
+  GE: 'Georgia', US: 'United States', IN: 'India', DE: 'Germany', NL: 'Netherlands',
+  GB: 'United Kingdom', FR: 'France', IT: 'Italy', ES: 'Spain', UA: 'Ukraine',
+  PL: 'Poland', TR: 'Turkey', AE: 'United Arab Emirates', IL: 'Israel', CA: 'Canada',
+  AU: 'Australia', JP: 'Japan', KR: 'South Korea', BE: 'Belgium', CN: 'China',
+  TW: 'Taiwan', SG: 'Singapore', HK: 'Hong Kong', SE: 'Sweden', SA: 'Saudi Arabia',
+  ID: 'Indonesia', LT: 'Lithuania', IE: 'Ireland', CH: 'Switzerland', RO: 'Romania',
+  NP: 'Nepal', TH: 'Thailand', NZ: 'New Zealand', BR: 'Brazil', AM: 'Armenia',
+  AZ: 'Azerbaijan', KZ: 'Kazakhstan', RU: 'Russia', GR: 'Greece', CY: 'Cyprus',
+  AT: 'Austria', CZ: 'Czechia', BG: 'Bulgaria', PT: 'Portugal', HU: 'Hungary',
+  NO: 'Norway', DK: 'Denmark', FI: 'Finland', LU: 'Luxembourg', SI: 'Slovenia',
+  BD: 'Bangladesh', MX: 'Mexico', AR: 'Argentina', PK: 'Pakistan', VE: 'Venezuela',
+  VN: 'Vietnam', ZA: 'South Africa', CO: 'Colombia', XX: 'Cloudflare Network',
+};
 
 app.post('/api/track', (req, res) => {
   try {
@@ -858,15 +863,15 @@ app.post('/api/track', (req, res) => {
     const headerCountry = (req.headers['cf-ipcountry'] as string) || bodyCode || 'GE';
     const country = bodyCountry || (headerCountry === 'GE' ? 'Georgia' : headerCountry);
     const countryCode = bodyCode || (headerCountry === 'Georgia' ? 'GE' : headerCountry);
-    const path = bodyPath || '/';
+    const visitPath = bodyPath || '/';
     const device = bodyDevice || (/Mobi|Android/i.test(req.headers['user-agent'] || '') ? 'mobile' : 'desktop');
 
-    liveActiveSessions.set(clientKey, { 
-      lastSeen: Date.now(), 
-      country, 
-      countryCode, 
-      path, 
-      device 
+    liveActiveSessions.set(clientKey, {
+      lastSeen: Date.now(),
+      country,
+      countryCode,
+      path: visitPath,
+      device
     });
 
     if (type === 'visit' || type === 'heartbeat') {
@@ -879,7 +884,6 @@ app.post('/api/track', (req, res) => {
       const pid = String(productId);
       serverAnalytics.productViews[pid] = (serverAnalytics.productViews[pid] || 0) + 1;
 
-      // Also ensure product in database has views updated
       const product = storeDb.products.find(p => p.id === pid);
       if (product) {
         product.views = (product.views || 0) + 1;
@@ -892,7 +896,6 @@ app.post('/api/track', (req, res) => {
       serverAnalytics.cart_data[id] = (serverAnalytics.cart_data[id] || 0) + 1;
     }
 
-    // Clean up expired sessions (> 90 seconds)
     const ninetySecsAgo = Date.now() - 90 * 1000;
     for (const [key, val] of liveActiveSessions.entries()) {
       if (val.lastSeen < ninetySecsAgo) {
@@ -901,7 +904,7 @@ app.post('/api/track', (req, res) => {
     }
 
     res.json({ success: true, liveNow: Math.max(liveActiveSessions.size, 1) });
-  } catch (err) {
+  } catch {
     res.status(500).json({ success: false, error: 'Tracking failed' });
   }
 });
@@ -910,8 +913,7 @@ app.get('/api/analytics', (req, res) => {
   try {
     const today = new Date().toISOString().split('T')[0];
     const visitsToday = serverAnalytics.dailyVisits[today] || 0;
-    
-    // Clean up expired sessions (> 90 seconds)
+
     const ninetySecsAgo = Date.now() - 90 * 1000;
     for (const [key, val] of liveActiveSessions.entries()) {
       if (val.lastSeen < ninetySecsAgo) {
@@ -919,8 +921,7 @@ app.get('/api/analytics', (req, res) => {
       }
     }
     const liveNow = Math.max(liveActiveSessions.size, 1);
-    
-    // Sort most viewed products directly from storeDb
+
     const mostViewedProducts = (storeDb.products || [])
       .map(p => ({
         id: p.id,
@@ -961,43 +962,6 @@ app.get('/api/analytics', (req, res) => {
   }
 });
 
-// Cloudflare GraphQL Analytics API proxy (Complete Historical Analytics)
-const CF_COUNTRY_FLAG_MAP: Record<string, string> = {
-  GE: '🇬🇪', US: '🇺🇸', GB: '🇬🇧', DE: '🇩🇪', FR: '🇫🇷', IT: '🇮🇹', ES: '🇪🇸',
-  UA: '🇺🇦', PL: '🇵🇱', TR: '🇹🇷', AE: '🇦🇪', IL: '🇮🇱', CA: '🇨🇦', AU: '🇦🇺',
-  JP: '🇯🇵', AM: '🇦🇲', AZ: '🇦🇿', NL: '🇳🇱', SE: '🇸🇪', CH: '🇨🇭', KZ: '🇰🇿',
-  RU: '🇷🇺', IN: '🇮🇳', BR: '🇧🇷', CN: '🇨🇳', GR: '🇬🇷', CY: '🇨🇾', RO: '🇷🇴',
-  AT: '🇦🇹', BE: 'ბე', CZ: '🇨🇿', BG: '🇧🇬', PT: '🇵🇹', HU: '🇭🇺', IE: '🇮🇪',
-  NO: '🇳🇴', DK: '🇩🇰', FI: '🇫🇮',
-};
-
-const CF_COUNTRY_NAME_TO_CODE: Record<string, string> = {
-  'Georgia': 'GE', 'United States': 'US', 'United Kingdom': 'GB', 'Germany': 'DE',
-  'France': 'FR', 'Italy': 'IT', 'Spain': 'ES', 'Ukraine': 'UA', 'Poland': 'PL',
-  'Turkey': 'TR', 'United Arab Emirates': 'AE', 'Israel': 'IL', 'Canada': 'CA',
-  'Australia': 'AU', 'Japan': 'JP', 'Armenia': 'AM', 'Azerbaijan': 'AZ',
-  'Netherlands': 'NL', 'Sweden': 'SE', 'Switzerland': 'CH', 'Kazakhstan': 'KZ',
-  'Russia': 'RU', 'India': 'IN', 'Brazil': 'BR', 'China': 'CN', 'Greece': 'GR',
-  'Cyprus': 'CY', 'Romania': 'RO', 'Austria': 'AT', 'Belgium': 'BE', 'Czechia': 'CZ',
-  'Bulgaria': 'BG', 'Portugal': 'PT', 'Hungary': 'HU', 'Ireland': 'IE', 'Norway': 'NO',
-  'Denmark': 'DK', 'Finland': 'FI',
-};
-
-const CF_CODE_TO_COUNTRY_NAME: Record<string, string> = {
-  GE: 'Georgia', US: 'United States', IN: 'India', DE: 'Germany', NL: 'Netherlands',
-  GB: 'United Kingdom', FR: 'France', IT: 'Italy', ES: 'Spain', UA: 'Ukraine',
-  PL: 'Poland', TR: 'Turkey', AE: 'United Arab Emirates', IL: 'Israel', CA: 'Canada',
-  AU: 'Australia', JP: 'Japan', KR: 'South Korea', BE: 'Belgium', CN: 'China',
-  TW: 'Taiwan', SG: 'Singapore', HK: 'Hong Kong', SE: 'Sweden', SA: 'Saudi Arabia',
-  ID: 'Indonesia', LT: 'Lithuania', IE: 'Ireland', CH: 'Switzerland', RO: 'Romania',
-  NP: 'Nepal', TH: 'Thailand', NZ: 'New Zealand', BR: 'Brazil', AM: 'Armenia',
-  AZ: 'Azerbaijan', KZ: 'Kazakhstan', RU: 'Russia', GR: 'Greece', CY: 'Cyprus',
-  AT: 'Austria', CZ: 'Czechia', BG: 'Bulgaria', PT: 'Portugal', HU: 'Hungary',
-  NO: 'Norway', DK: 'Denmark', FI: 'Finland', LU: 'Luxembourg', SI: 'Slovenia',
-  BD: 'Bangladesh', MX: 'Mexico', AR: 'Argentina', PK: 'Pakistan', VE: 'Venezuela',
-  VN: 'Vietnam', ZA: 'South Africa', CO: 'Colombia', XX: 'Cloudflare Network',
-};
-
 const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express.Response) => {
   const cachePath = path.resolve(process.cwd(), 'data', 'cloudflare_analytics_cache.json');
   try {
@@ -1006,7 +970,6 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
     const daysRequested = Number(req.body?.days || req.query?.days) || 30;
     const forceRefresh = Boolean(req.body?.forceRefresh || req.query?.forceRefresh === 'true');
 
-    // Only serve cache if it was updated less than 60 seconds ago and forceRefresh is false
     if (!forceRefresh && fs.existsSync(cachePath)) {
       try {
         const raw = fs.readFileSync(cachePath, 'utf8');
@@ -1040,12 +1003,10 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
     const date_leq = today.toISOString().split('T')[0];
     const safeDays = Math.min(Math.max(daysRequested, 1), 60);
     const date_geq = new Date(today.getTime() - safeDays * 86400000).toISOString().split('T')[0];
-    
-    // Adaptive groups query strictly <= 14 days
+
     const adaptiveStart = new Date(today.getTime() - 14 * 86400000).toISOString();
     const adaptiveEnd = today.toISOString();
 
-    // Live traffic query: last 15 minutes
     const liveStart = new Date(today.getTime() - 15 * 60 * 1000).toISOString();
     const liveEnd = today.toISOString();
 
@@ -1116,7 +1077,6 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
 
     if (!cfRes.ok) {
       const errText = await cfRes.text();
-      console.warn(`Cloudflare API returned ${cfRes.status}: ${errText}`);
       if (fs.existsSync(cachePath)) {
         const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
         res.json({ ...cached, isCached: true, warning: `Cloudflare API status ${cfRes.status}` });
@@ -1133,7 +1093,6 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
     const liveTraffic = zone?.liveTraffic || [];
 
     if (!zoneData || !Array.isArray(zoneData) || zoneData.length === 0) {
-      console.warn('Cloudflare returned no daily rows or GraphQL errors:', cfData?.errors);
       if (fs.existsSync(cachePath)) {
         const cached = JSON.parse(fs.readFileSync(cachePath, 'utf8'));
         res.json({ ...cached, isCached: true });
@@ -1194,7 +1153,6 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
       };
     });
 
-    // Aggregate real countries & device types
     const countryMap: Record<string, number> = {};
     const deviceMap: Record<string, number> = { desktop: 0, mobile: 0, tablet: 0 };
 
@@ -1250,12 +1208,10 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
       tabletPct: Number(((deviceMap.tablet / totalDevCount) * 100).toFixed(1)),
     };
 
-    // Calculate live visitors list from recent 15 minutes
     const liveVisitors = (liveTraffic || [])
       .filter((item: any) => {
-        const path = item.dimensions?.clientRequestPath || '';
-        // Skip background sync/proxy endpoints
-        return !path.includes('/api/store/sync') && !path.includes('/api/admin/smtp') && !path.includes('favicon.ico');
+        const p = item.dimensions?.clientRequestPath || '';
+        return !p.includes('/api/store/sync') && !p.includes('/api/admin/smtp') && !p.includes('favicon.ico');
       })
       .slice(0, 15)
       .map((item: any, idx: number) => {
@@ -1271,12 +1227,10 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
         };
       });
 
-    // Compute liveNow combining live active sessions and cloudflare edge activity
     const activeServerSessions = Array.from(liveActiveSessions.values()).filter(s => s.lastSeen > Date.now() - 90 * 1000);
     const cfLiveCount = Math.max(liveVisitors.length, 1);
     const liveNow = Math.max(activeServerSessions.length, cfLiveCount, 1);
 
-    // Calculate E-Commerce store conversion metrics
     const totalProductViews = (storeDb.products || []).reduce((sum, p) => sum + (p.views || 0), 0);
     const totalCartAdds = Object.values(serverAnalytics.cart_data || {}).reduce((sum: number, c: any) => sum + Number(c || 0), 0);
     const totalCheckouts = serverAnalytics.checkouts || 0;
@@ -1312,7 +1266,6 @@ const handleCloudflareAnalyticsProxy = async (req: express.Request, res: express
       ecomStats,
     };
 
-    // Cache to disk
     try {
       fs.writeFileSync(cachePath, JSON.stringify(resultPayload, null, 2));
     } catch (wErr) {
@@ -1359,7 +1312,7 @@ function getGeminiClient(): GoogleGenAI | null {
 
 app.post('/api/generate-product-copy', async (req, res) => {
   try {
-    const { title, titleKa, category, price, images, imageTitles, tone, language } = req.body;
+    const { title, titleKa, category, price, images, imageTitles, tone } = req.body;
     const rawTitle = (title || titleKa || (Array.isArray(imageTitles) ? imageTitles[0] : '') || 'Smart Living Essential').trim();
 
     const ai = getGeminiClient();
@@ -1367,7 +1320,6 @@ app.post('/api/generate-product-copy', async (req, res) => {
       try {
         const contents: any[] = [];
 
-        // Attach up to 3 images (base64 data URLs or fetched URLs) for deep visual analysis
         if (Array.isArray(images)) {
           for (const img of images.slice(0, 3)) {
             if (typeof img === 'string') {
@@ -1414,29 +1366,7 @@ Input Details:
 - Price: "$${price || ''}"
 - Tone: "${tone || 'high-converting'}"
 
-CRITICAL OUTPUT REQUIREMENTS:
-0. SYSTEM PROMPT — LOCALIZATION & CURRENCY LOGIC:
-   - If Georgian is selected: Generate the ad copy in Georgian. Fetch the original USD price and automatically convert it to Georgian Lari (₾ / GEL) using the current exchange rate (1 USD ≈ 2.70 GEL). Perform the exact mathematical conversion—do not simply replace the currency symbol.
-   - If English is selected: Generate the ad copy in English and keep the original price in USD ($).
-   - Strict Constraint: This localization and conversion logic applies ONLY to the generated ad copy and price display. Do NOT alter, translate, or modify product names, images, or base product descriptions. Retain the existing system behavior for those components.
-1. CONCISE & PUNCHY:
-   - "descriptionEn": Exactly 2 to 3 short, engaging, high-impact sentences (max 45 words). Absolutely no verbose marketing filler, no fluff, and no generic promotional sentences. Keep it extremely crisp and focused.
-   - "descriptionKa": Exactly 2 to 3 short, natural, and highly attractive sentences in Georgian (ქართული სარეკლამო აღწერა). It must be native, persuasive, and grammatically flawless.
-2. CONTEXT-AWARE SPECIFICS:
-   - Extract and highlight concrete physical or functional features visible in the image or strongly implied by the title/category (e.g., specific materials like matte-finish aluminum, silicone, braided cable, or key technical specifications like ANC, MagSafe, dual-lens, G-sensor).
-3. INDIVIDUALIZED TONE & VARIETY:
-   - NEVER use repetitive templates or start with clichéd entry hooks (do NOT repeat "Introducing...", "Upgrade your lifestyle with...", "Meet the...", "Step up your...", etc.).
-   - Vary your sentence structures, hooks, and vocabulary dynamically based on the specific product. Every product description should feel uniquely custom-tailored.
-4. SALES APPEAL:
-   - Highlight the primary practical benefit or distinguishing detail immediately in the very first sentence.
-5. FEATURES:
-   - "featuresEn": Exactly 4 extremely punchy, benefit-first bullet points in English (each under 10 words) with a single relevant emoji.
-   - "featuresKa": Exactly 4 matching punchy bullet points in Georgian with emojis.
-6. SLUG & BADGE:
-   - "customSlug": A clean, SEO-friendly URL slug.
-   - "badge": A short, catchy badge (e.g., "Best Seller", "Hot Deal", "Premium", "Trending", "New").
-
-Return ONLY a valid JSON object matching this schema without markdown code blocks, backticks, or wrapping formatting:
+Return ONLY a valid JSON object matching this schema:
 {
   "titleEn": "sleek English title",
   "titleKa": "sleek Georgian title",
@@ -1450,19 +1380,13 @@ Return ONLY a valid JSON object matching this schema without markdown code block
 
         contents.push({ text: promptText });
 
-        let response: any = null;
-        try {
-          response = await ai.models.generateContent({
-            model: 'gemini-2.5-flash',
-            contents,
-            config: {
-              responseMimeType: 'application/json',
-            },
-          });
-        } catch (modelErr: any) {
-          console.warn('[GEMINI] Note on gemini-3.8-flash error:', modelErr?.message || modelErr);
-          throw modelErr;
-        }
+        const response = await ai.models.generateContent({
+          model: 'gemini-2.5-flash',
+          contents,
+          config: {
+            responseMimeType: 'application/json',
+          },
+        });
 
         if (response && response.text) {
           try {
@@ -1477,7 +1401,6 @@ Return ONLY a valid JSON object matching this schema without markdown code block
       }
     }
 
-    // Server-side smart fallback if Gemini API is offline or quota exceeded
     const cleanSlug = rawTitle
       .toLowerCase()
       .replace(/[^a-z0-9\s-]/g, '')
@@ -1486,11 +1409,10 @@ Return ONLY a valid JSON object matching this schema without markdown code block
       .replace(/^-|-$/g, '');
 
     const lower = (rawTitle + ' ' + (Array.isArray(imageTitles) ? imageTitles.join(' ') : '')).toLowerCase();
-    
-    // Domain-tailored creative copywriting fallback
+
     let descEn = `Engineered to perfection, the ${rawTitle} seamlessly blends cutting-edge functionality with an ultra-sleek, modern design. Designed for those who refuse to compromise on quality, it elevates your everyday routine with effortless convenience and unmatched durability. Experience the difference from day one.`;
     let descKa = `სრულყოფილებამდე დახვეწილი ${titleKa || rawTitle} აერთიანებს მოწინავე ტექნოლოგიას, ულტრა-თანამედროვე დიზაინსა და საიმედოობას. შექმნილია მათთვის, ვინც აფასებს მაქსიმალურ კომფორტსა და პრემიუმ ხარისხს. ეს მოდელი თქვენს ყოველდღიურობას სრულიად ახალ დონეზე აიყვანს.`;
-    
+
     let fEn = [
       '⭐ Premium Build Quality — Precision-crafted from top-tier materials for lasting durability',
       '✨ Sleek Ergonomic Profile — Thoughtfully engineered for maximum everyday comfort',
@@ -1555,8 +1477,66 @@ Return ONLY a valid JSON object matching this schema without markdown code block
 });
 
 // ==========================================
-// FACEBOOK GRAPH API PHOTO POSTING ENDPOINT
-// Publishes direct Photo Posts via /{page_id}/photos
+// GEMINI MULTIMODAL AD GENERATOR ENDPOINT
+// ==========================================
+app.post('/api/gemini/generate-ad', async (req, res) => {
+  const { product } = req.body;
+  if (!product) return res.status(400).json({ success: false, error: 'Product data required' });
+
+  try {
+    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+
+    const prompt = `You are a professional Facebook Ad Copywriter. Write a unique, high-converting Facebook ad copy in English based on the following product details and images.
+    
+    Product Title: ${product.title}
+    Price: ${product.price}
+    Features: ${JSON.stringify(product.features || [])}
+    
+    Ad Structure Requirements:
+    1. Scroll-Stopping Hook (Line 1): Bold, attention-grabbing opening (1 emoji max).
+    2. Visual & Functional Highlights (3–4 bullet points): Use ✦ or ✔ to highlight build, design, and benefits based on the provided images.
+    3. Offer & Global Trust Block: 
+       - Special Price: $${product.price} ${product.origPrice ? `(Was $${product.origPrice})` : ''}
+       - Include: 🌍 Fast & Secure Worldwide Shipping
+    4. Clear Call-To-Action (CTA): 👉 Tap the link to order yours today: [link]
+    5. Targeted Hashtags: 3-5 relevant hashtags.
+    
+    Tone: Premium, persuasive, modern e-commerce brand voice. Avoid generic robotic phrases.`;
+
+    const imageParts = [];
+    const imageUrls = [product.image, ...(Array.isArray(product.images) ? product.images : [])].filter(Boolean);
+
+    for (const url of imageUrls) {
+      try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const buffer = Buffer.from(await blob.arrayBuffer());
+        imageParts.push({
+          inlineData: {
+            data: buffer.toString('base64'),
+            mimeType: 'image/jpeg',
+          },
+        });
+      } catch (e) {
+        console.warn('Failed to fetch image for Gemini:', e);
+      }
+    }
+
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: [{ role: 'user', parts: [{ text: prompt }, ...imageParts] }],
+    });
+
+    const caption = result.text;
+    res.json({ success: true, caption });
+  } catch (error: any) {
+    console.error('Gemini Ad Gen Error:', error);
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// ==========================================
+// FACEBOOK GRAPH API ENDPOINTS
 // ==========================================
 app.post('/api/facebook/post-photo', async (req, res) => {
   try {
@@ -1620,10 +1600,6 @@ app.post('/api/facebook/post-photo', async (req, res) => {
   }
 });
 
-// ==========================================
-// FACEBOOK GRAPH API FEED LINK POSTING ENDPOINT
-// Publishes direct Link Posts with message caption via /{page_id}/feed
-// ==========================================
 app.post('/api/facebook/post-feed', async (req, res) => {
   try {
     const { link, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
@@ -1678,62 +1654,55 @@ app.post('/api/facebook/post-feed', async (req, res) => {
   }
 });
 
-// ==========================================
-// FACEBOOK MULTI-PHOTO ALBUM POSTING ENDPOINT
-// Uploads multiple images and publishes to a feed post
-// ==========================================
 app.post('/api/facebook/publish', async (req, res) => {
   const { accessToken, pageId, message, images } = req.body;
-  
+
   if (!accessToken || !pageId || !images || !Array.isArray(images)) {
     return res.status(400).json({ success: false, error: 'Missing required parameters' });
   }
 
   try {
-    // 1. Upload images and get media_fbid
     const media_fbids = [];
     for (const imageUrl of images) {
-        const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                url: imageUrl,
-                published: false,
-                access_token: accessToken
-            })
-        });
-        const text = await uploadRes.text();
-        let uploadData;
-        try { uploadData = JSON.parse(text); } catch { throw new Error('Facebook API returned invalid JSON'); }
-        
-        if (uploadData.id) {
-            media_fbids.push(uploadData.id);
-        } else {
-            throw new Error(`Failed to upload image: ${JSON.stringify(uploadData)}`);
-        }
-    }
-
-    // 2. Publish feed post with attached_media
-    const attached_media = media_fbids.map(id => ({ media_fbid: id }));
-    const feedRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
+      const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-            message: message,
-            attached_media: attached_media,
-            access_token: accessToken
+          url: imageUrl,
+          published: false,
+          access_token: accessToken
         })
+      });
+      const text = await uploadRes.text();
+      let uploadData;
+      try { uploadData = JSON.parse(text); } catch { throw new Error('Facebook API returned invalid JSON'); }
+
+      if (uploadData.id) {
+        media_fbids.push(uploadData.id);
+      } else {
+        throw new Error(`Failed to upload image: ${JSON.stringify(uploadData)}`);
+      }
+    }
+
+    const attached_media = media_fbids.map(id => ({ media_fbid: id }));
+    const feedRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: message,
+        attached_media: attached_media,
+        access_token: accessToken
+      })
     });
     const text = await feedRes.text();
     let feedData;
     try { feedData = JSON.parse(text); } catch { throw new Error('Facebook API returned invalid JSON'); }
 
     if (feedData.id) {
-        res.json({ success: true, postId: feedData.id });
+      res.json({ success: true, postId: feedData.id });
     } else {
-        res.status(500).json({ success: false, error: feedData.error?.message || 'Failed to publish post' });
+      res.status(500).json({ success: false, error: feedData.error?.message || 'Failed to publish post' });
     }
-
   } catch (error: any) {
     res.status(500).json({ success: false, error: error.message });
   }
@@ -1741,10 +1710,6 @@ app.post('/api/facebook/publish', async (req, res) => {
 
 // ==========================================
 // UPLOAD PRODUCT IMAGE API
-// Saves uploaded/optimized base64 images as disk files
-// ==========================================
-// Cloudflare R2 Product Image Upload API
-// Uploads binary buffers directly to Cloudflare R2 bucket under "products/"
 // ==========================================
 const DEFAULT_R2_PUBLIC_PREFIX = 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/';
 
@@ -1756,13 +1721,11 @@ const handleImageUploadRequest = async (req: express.Request, res: express.Respo
       return;
     }
 
-    // If it's already an HTTP / R2 URL, return as is
     if (dataUrl.startsWith('http://') || dataUrl.startsWith('https://')) {
       res.json({ success: true, url: dataUrl });
       return;
     }
 
-    // Match base64 data URI pattern
     const matches = dataUrl.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/s);
     if (!matches || matches.length !== 3) {
       res.status(400).json({ success: false, error: 'Invalid base64 data format' });
@@ -1797,7 +1760,6 @@ const handleImageUploadRequest = async (req: express.Request, res: express.Respo
     const r2SecretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
     const r2PublicPrefix = (process.env.R2_PUBLIC_URL_PREFIX || DEFAULT_R2_PUBLIC_PREFIX).replace(/\/+$/, '') + '/';
 
-    // 1. If R2 credentials exist, upload directly to Cloudflare R2
     if (r2AccessKeyId && r2SecretAccessKey) {
       try {
         const s3Client = new S3Client({
@@ -1820,7 +1782,6 @@ const handleImageUploadRequest = async (req: express.Request, res: express.Respo
         );
 
         const r2PublicUrl = `${r2PublicPrefix}${safeName}`;
-        console.log(`[R2-UPLOAD] Successfully uploaded product image to R2: ${r2PublicUrl}`);
         res.json({ success: true, url: r2PublicUrl, key: objectKey });
         return;
       } catch (r2Err: any) {
@@ -1828,7 +1789,6 @@ const handleImageUploadRequest = async (req: express.Request, res: express.Respo
       }
     }
 
-    // 2. Local fallback if R2 credentials are not set in local environment
     try {
       writeImageToBothDirs(safeName, buffer);
     } catch (writeErr: any) {
@@ -1848,7 +1808,6 @@ const handleImageUploadRequest = async (req: express.Request, res: express.Respo
 app.post('/api/upload', handleImageUploadRequest);
 app.post('/api/upload-image', handleImageUploadRequest);
 
-// POST: Restore uploaded images from client-side backup map (helps survive Cloud Run redeploy/wipe)
 app.post('/api/store/restore-images', (req, res) => {
   try {
     const { imagesMap } = req.body;
@@ -1863,7 +1822,6 @@ app.post('/api/store/restore-images', (req, res) => {
         continue;
       }
 
-      // Extract filename from URL (e.g. "/uploads/prod-123.jpg" -> "prod-123.jpg")
       const filename = path.basename(imgUrl);
       if (!filename || filename === '/' || filename === '.') continue;
 
@@ -1880,7 +1838,6 @@ app.post('/api/store/restore-images', (req, res) => {
           console.error(`Failed to restore file ${filename}:`, writeErr);
         }
       } else {
-        // Even if file exists, make sure it is in uploadsMap
         if (!uploadsMap[filename]) {
           uploadsMap[filename] = dataUrl;
         }
@@ -1889,12 +1846,10 @@ app.post('/api/store/restore-images', (req, res) => {
 
     if (restoredCount > 0) {
       saveUploadsMap();
-      console.log(`[RESTORE-IMAGES] Restored ${restoredCount} images to disk from client-side backup`);
     }
 
     res.json({ success: true, restoredCount });
   } catch (err: any) {
-    console.error('Error in restore-images:', err);
     res.status(500).json({ success: false, error: err?.message || 'Restore failed' });
   }
 });
@@ -1902,7 +1857,6 @@ app.post('/api/store/restore-images', (req, res) => {
 // ==========================================
 // STORE PERSISTENCE & REAL-TIME SYNC API
 // ==========================================
-
 function sanitizeUsersDict(usersDict: Record<string, any>): Record<string, any> {
   if (!usersDict || typeof usersDict !== 'object') return {};
   const clean: Record<string, any> = {};
@@ -1914,7 +1868,6 @@ function sanitizeUsersDict(usersDict: Record<string, any>): Record<string, any> 
   return clean;
 }
 
-// GET full synchronized store data (Products, Users, Orders, Theme, Billboards)
 app.get('/api/store/sync', (req, res) => {
   try {
     res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
@@ -1931,7 +1884,6 @@ app.get('/api/store/sync', (req, res) => {
       return;
     }
 
-    // Security Verification: Inspect X-Admin-Slug header to verify administrative authority
     const clientAdminSlug = req.headers['x-admin-slug'] as string | undefined;
     const isAuthorizedAdmin = clientAdminSlug && clientAdminSlug === storeDb.adminSecretSlug;
 
@@ -1943,7 +1895,6 @@ app.get('/api/store/sync', (req, res) => {
         billboards: storeDb.billboards,
         billboardIntervalSeconds: storeDb.billboardIntervalSeconds,
         lastUpdated: storeDb.lastUpdated,
-        // Highly Confidential Data Parameters: Scraped & protected unless properly authorized
         registeredUsers: isAuthorizedAdmin ? sanitizeUsersDict(storeDb.registeredUsers) : [],
         orders: isAuthorizedAdmin ? storeDb.orders : [],
         adminSecretSlug: isAuthorizedAdmin ? storeDb.adminSecretSlug : '',
@@ -1955,7 +1906,6 @@ app.get('/api/store/sync', (req, res) => {
   }
 });
 
-// Helper to persist base64 data URIs to physical files on disk
 function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
   if (!dataUrl || typeof dataUrl !== 'string') return dataUrl;
   if (!dataUrl.startsWith('data:image/')) return dataUrl;
@@ -1979,7 +1929,6 @@ function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
 
     try {
       writeImageToBothDirs(safeName, buffer);
-      console.log(`[AUTO-DISK-IMAGE] Saved product image physically to disk and public: ${safeName}`);
     } catch (writeErr: any) {
       console.warn('[AUTO-DISK-IMAGE] Disk write warning:', writeErr?.message || writeErr);
     }
@@ -1993,7 +1942,6 @@ function persistBase64Image(dataUrl: string, prefix = 'prod'): string {
   }
 }
 
-// POST: Upload an image and persist to local storage/disk
 app.post('/api/store/upload', (req, res) => {
   try {
     const { image, prefix } = req.body;
@@ -2008,7 +1956,6 @@ app.post('/api/store/upload', (req, res) => {
   }
 });
 
-// POST: Save products catalog explicitly (called from saveProducts in StoreContext)
 app.post('/api/store/products', (req, res) => {
   try {
     const { products } = req.body;
@@ -2017,7 +1964,6 @@ app.post('/api/store/products', (req, res) => {
       return;
     }
 
-    // Clean up any inline base64 images into physical disk uploads
     const sanitizedProducts = products.map(p => {
       const cleanImage = p.image ? persistBase64Image(p.image, `prod-${p.id || Date.now()}`) : p.image;
       const cleanImages = Array.isArray(p.images)
@@ -2034,8 +1980,6 @@ app.post('/api/store/products', (req, res) => {
     saveStoreDatabase();
     syncCatalogToInitialProducts(sanitizedProducts);
 
-    console.log(`[STORE-PRODUCTS] Successfully saved & synced ${sanitizedProducts.length} products to database & source code.`);
-
     res.json({
       success: true,
       count: sanitizedProducts.length,
@@ -2043,12 +1987,10 @@ app.post('/api/store/products', (req, res) => {
       products: sanitizedProducts,
     });
   } catch (err: any) {
-    console.error('Error saving products:', err);
     res.status(500).json({ success: false, error: err?.message || 'Failed to save products' });
   }
 });
 
-// GET: Fetch products catalog explicitly
 app.get('/api/store/products', (req, res) => {
   res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
   res.setHeader('Pragma', 'no-cache');
@@ -2061,7 +2003,6 @@ app.get('/api/store/products', (req, res) => {
   });
 });
 
-// POST: 1-Click Amazon & eBay Scraper & Parser Endpoint
 app.post('/api/import-product', async (req, res) => {
   try {
     const { url, html: directHtml } = req.body || {};
@@ -2082,7 +2023,7 @@ app.post('/api/import-product', async (req, res) => {
       if (!isAmazon && !isEbay) {
         return res.status(400).json({
           success: false,
-          error: 'Unsupported URL. Please enter a valid Amazon (amazon.com, amzn.to) or eBay (ebay.com/itm) product link.',
+          error: 'Unsupported URL. Please enter a valid Amazon or eBay product link.',
         });
       }
 
@@ -2090,16 +2031,8 @@ app.post('/api/import-product', async (req, res) => {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.9',
-        'Sec-Fetch-Dest': 'document',
-        'Sec-Fetch-Mode': 'navigate',
-        'Sec-Fetch-Site': 'none',
-        'Sec-Fetch-User': '?1',
-        'Upgrade-Insecure-Requests': '1',
-        'Cache-Control': 'max-age=0',
-        'Cookie': 'i18n-prefs=USD; lc-main=en_US;',
       };
 
-      // Strategy 1: Direct fetch with realistic desktop browser headers
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 6000);
@@ -2124,7 +2057,6 @@ app.post('/api/import-product', async (req, res) => {
         console.warn('[SERVER-IMPORT-SCRAPER] Direct fetch attempt error:', err?.message || err);
       }
 
-      // Strategy 2: Fallback proxies for public extraction
       if (!htmlContent) {
         const fallbackUrls = [
           `https://corsproxy.io/?url=${encodeURIComponent(targetUrl)}`,
@@ -2184,7 +2116,6 @@ app.post('/api/import-product', async (req, res) => {
       data: scraped,
     });
   } catch (err: any) {
-    console.error('[IMPORT-PRODUCT-ERROR]', err);
     return res.status(500).json({
       success: false,
       error: err?.message || 'Failed to process product extraction',
@@ -2192,16 +2123,16 @@ app.post('/api/import-product', async (req, res) => {
   }
 });
 
-// POST: Save / update products (used by Admin Dashboard, Worker, and D1 API compatibility)
 app.post('/api/products', (req, res) => {
   try {
     const body = req.body;
-    if (Array.isArray(body)) {
-      storeDb.products = body;
+    const productsList = Array.isArray(body) ? body : (Array.isArray(body?.products) ? body.products : null);
+    if (productsList) {
+      storeDb.products = productsList;
       storeDb.lastUpdated = new Date().toISOString();
       saveStoreDatabase();
       syncCatalogToInitialProducts(storeDb.products);
-      res.json({ success: true, message: 'Products updated successfully in server store', products: body });
+      res.json({ success: true, message: 'Products updated successfully in server store', products: productsList });
       return;
     }
     if (!body || !body.id) {
@@ -2223,12 +2154,10 @@ app.post('/api/products', (req, res) => {
   }
 });
 
-// GET: Fetch products (D1 API compatibility)
 app.get('/api/products', (req, res) => {
   res.json({ success: true, products: storeDb.products });
 });
 
-// DELETE: Delete product (D1 API compatibility)
 app.delete('/api/products', (req, res) => {
   try {
     const id = req.query.id as string || (req.body && req.body.id);
@@ -2246,7 +2175,6 @@ app.delete('/api/products', (req, res) => {
   }
 });
 
-// POST: Increment product view count
 app.post('/api/store/products/:id/view', (req, res) => {
   try {
     const { id } = req.params;
@@ -2260,20 +2188,16 @@ app.post('/api/store/products/:id/view', (req, res) => {
     saveStoreDatabase();
     syncCatalogToInitialProducts(storeDb.products);
 
-    console.log(`[PRODUCT-VIEW] Product "${product.title}" view count incremented to ${product.views}`);
-
     res.json({
       success: true,
       id: product.id,
       views: product.views,
     });
   } catch (err: any) {
-    console.error('Error incrementing product views:', err);
     res.status(500).json({ success: false, error: err?.message || 'Failed to increment product views' });
   }
 });
 
-// POST: Save theme settings explicitly
 app.post('/api/store/theme', (req, res) => {
   try {
     const { theme } = req.body;
@@ -2287,7 +2211,6 @@ app.post('/api/store/theme', (req, res) => {
   }
 });
 
-// POST: Save billboard slides & interval explicitly
 app.post('/api/store/billboards', (req, res) => {
   try {
     const { billboards, billboardIntervalSeconds } = req.body;
@@ -2313,7 +2236,6 @@ app.post('/api/store/billboards', (req, res) => {
   }
 });
 
-// POST: Save orders explicitly
 app.post('/api/store/orders', (req, res) => {
   try {
     const { orders } = req.body;
@@ -2327,18 +2249,15 @@ app.post('/api/store/orders', (req, res) => {
   }
 });
 
-// POST full or partial store sync
 app.post('/api/store/sync', (req, res) => {
   try {
-    // Security Verification: Reject any modification attempts without the correct X-Admin-Slug header
     const clientAdminSlug = req.headers['x-admin-slug'] as string | undefined;
     if (!clientAdminSlug || clientAdminSlug !== storeDb.adminSecretSlug) {
-      console.warn('[SECURITY-ALERT] Unauthorized attempt to write to /api/store/sync blocked');
       return res.status(403).json({ success: false, error: 'Access Denied: Administrative authority required' });
     }
 
     const { products, registeredUsers, orders, theme, billboards, billboardIntervalSeconds, adminSecretSlug } = req.body;
-    
+
     if (Array.isArray(products)) {
       const sanitizedProducts = products.map(p => {
         const cleanImage = p.image ? persistBase64Image(p.image, `prod-${p.id || Date.now()}`) : p.image;
@@ -2394,7 +2313,6 @@ app.post('/api/store/sync', (req, res) => {
   }
 });
 
-// POST: Explicitly persist current products to source code (src/data/initialProducts.ts)
 app.post('/api/store/persist-to-code', (req, res) => {
   try {
     const { products } = req.body;
@@ -2402,17 +2320,7 @@ app.post('/api/store/persist-to-code', (req, res) => {
       storeDb.products = products;
     }
     saveStoreDatabase();
-
-    try {
-      const productsFilePath = path.join(process.cwd(), 'src', 'data', 'initialProducts.ts');
-      if (Array.isArray(storeDb.products) && storeDb.products.length > 0) {
-        const fileContent = `import { Product } from '../types';\n\nexport const initialProducts: Product[] = ${JSON.stringify(storeDb.products, null, 2)};\n`;
-        fs.writeFileSync(productsFilePath, fileContent, 'utf-8');
-        console.log(`[SOURCE-SYNC] Successfully synced ${storeDb.products.length} products to src/data/initialProducts.ts`);
-      }
-    } catch (sourceErr) {
-      console.error('Error writing to src/data/initialProducts.ts:', sourceErr);
-    }
+    syncCatalogToInitialProducts(storeDb.products);
 
     res.json({
       success: true,
@@ -2420,17 +2328,14 @@ app.post('/api/store/persist-to-code', (req, res) => {
       count: storeDb.products.length,
     });
   } catch (err) {
-    console.error('Error persisting to code:', err);
     res.status(500).json({ success: false, error: 'Failed to persist to code' });
   }
 });
 
-// GET: Download complete website source code as ZIP archive
 app.get('/api/download-zip', (req, res) => {
   try {
     const zipPath = path.join(process.cwd(), 'dbuy-store-project.zip');
 
-    // Regenerate zip to ensure it includes latest files
     const script = `python3 -c "
 import os, zipfile
 exclude_dirs = {'node_modules', 'dist', '.git', '.cache', '__pycache__'}
@@ -2460,13 +2365,11 @@ with zipfile.ZipFile('dbuy-store-project.zip', 'w', zipfile.ZIP_DEFLATED) as zip
     res.setHeader('Content-Disposition', 'attachment; filename="dbuy-store-project.zip"');
     const fileStream = fs.createReadStream(zipPath);
     fileStream.pipe(res);
-  } catch (err) {
-    console.error('Error delivering zip:', err);
+  } catch {
     res.status(500).send('Error generating zip archive');
   }
 });
 
-// POST: Pull and sync full store from remote URL (e.g. running live site)
 app.post('/api/store/pull-remote', async (req, res) => {
   try {
     const { remoteUrl } = req.body;
@@ -2478,7 +2381,6 @@ app.post('/api/store/pull-remote', async (req, res) => {
     const cleanBase = remoteUrl.trim().replace(/\/+$/, '');
     const targetUrl = cleanBase.endsWith('/api/store/sync') ? cleanBase : `${cleanBase}/api/store/sync`;
 
-    console.log(`[PULL-REMOTE] Fetching live data from: ${targetUrl}`);
     const response = await fetch(targetUrl, {
       method: 'GET',
       headers: {
@@ -2532,7 +2434,6 @@ app.post('/api/store/pull-remote', async (req, res) => {
       },
     });
   } catch (err: any) {
-    console.error('[PULL-REMOTE-ERROR]', err);
     res.status(500).json({
       success: false,
       error: `Failed to sync from remote URL: ${err.message || String(err)}`,
@@ -2540,11 +2441,10 @@ app.post('/api/store/pull-remote', async (req, res) => {
   }
 });
 
-// POST: Register / Update user on persistent server
 app.post('/api/store/register-user', (req, res) => {
   try {
     const { name, email, country, city, zip, address, phone, passwordHash, passwordSalt, provider, authProvider, picture } = req.body;
-    
+
     if (!email || typeof email !== 'string' || !email.includes('@')) {
       res.status(400).json({ success: false, error: 'Valid email is required' });
       return;
@@ -2575,8 +2475,6 @@ app.post('/api/store/register-user', (req, res) => {
 
     storeDb.registeredUsers[cleanEmail] = updatedUser;
     saveStoreDatabase();
-
-    console.log(`[USER-PERSISTED] Registered user (${finalProvider}) saved to server: ${cleanEmail}`);
 
     res.json({
       success: true,
@@ -2609,13 +2507,11 @@ app.post('/api/store/register-user', (req, res) => {
         role: u.role,
       })),
     });
-  } catch (err) {
-    console.error('Error registering user on server:', err);
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to register user on server' });
   }
 });
 
-// POST: Delete registered user from server
 app.post('/api/store/delete-user', (req, res) => {
   try {
     const { email } = req.body;
@@ -2651,13 +2547,11 @@ app.post('/api/store/delete-user', (req, res) => {
         role: u.role,
       })),
     });
-  } catch (err) {
-    console.error('Error deleting user:', err);
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to delete user' });
   }
 });
 
-// GET: Retrieve user-isolated cart & wishlist
 app.get('/api/store/user-cart', (req, res) => {
   try {
     const email = String(req.query.email || '').trim().toLowerCase();
@@ -2672,13 +2566,11 @@ app.get('/api/store/user-cart', (req, res) => {
       wishlist: Array.isArray(userCart.wishlist) ? userCart.wishlist : [],
       updatedAt: userCart.updatedAt || null
     });
-  } catch (err) {
-    console.error('Error fetching user cart:', err);
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to fetch user cart' });
   }
 });
 
-// POST: Save user-isolated cart & wishlist
 app.post('/api/store/user-cart', (req, res) => {
   try {
     const { email, cart, wishlist } = req.body;
@@ -2697,13 +2589,11 @@ app.post('/api/store/user-cart', (req, res) => {
     };
     saveStoreDatabase();
     res.json({ success: true, message: 'User cart synced successfully' });
-  } catch (err) {
-    console.error('Error saving user cart:', err);
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to save user cart' });
   }
 });
 
-// POST: Save new order
 app.post('/api/store/order', (req, res) => {
   try {
     const newOrder = req.body;
@@ -2712,7 +2602,6 @@ app.post('/api/store/order', (req, res) => {
       return;
     }
 
-    // Insert order at beginning of array
     const existingIndex = storeDb.orders.findIndex(o => o.id === newOrder.id);
     if (existingIndex >= 0) {
       storeDb.orders[existingIndex] = newOrder;
@@ -2721,13 +2610,10 @@ app.post('/api/store/order', (req, res) => {
     }
 
     saveStoreDatabase();
-    console.log(`[ORDER-PERSISTED] Order ${newOrder.id} saved to server database`);
 
-    // Dispatch order notification email to support@dbuystore.com & admin & customer
     try {
       const customerEmail = newOrder.customerInfo?.email || newOrder.email || '';
-      
-      // 1. Admin / Store Alert Email to support@dbuystore.com & lashaarsiashvili@gmail.com
+
       const adminEmailData = buildAdminOrderAlertEmail(newOrder);
       sendMailWithRetry({
         from: '"DBUY Store Orders" <support@dbuystore.com>',
@@ -2737,7 +2623,6 @@ app.post('/api/store/order', (req, res) => {
         text: adminEmailData.text,
       }).catch(err => console.warn('[ORDER-EMAIL-ADMIN-WARN]', err?.message));
 
-      // 2. High-end Branded Confirmation Email to Customer
       if (customerEmail && customerEmail.includes('@')) {
         const customerEmailData = buildCustomerOrderEmail(newOrder);
         sendMailWithRetry({
@@ -2758,19 +2643,14 @@ app.post('/api/store/order', (req, res) => {
       order: newOrder,
       orders: storeDb.orders,
     });
-  } catch (err) {
-    console.error('Error saving order:', err);
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to save order' });
   }
 });
 
-
-
 // ==========================================
+// PAYPAL v6 WEB SDK SERVER INTEGRATION
 // ==========================================
-// PAYPAL v6 WEB SDK SERVER INTEGRATION (LIVE PRODUCTION READY)
-// ==========================================
-
 if (!process.env.PAYPAL_CLIENT_ID && (process.env.PAYPAL_SANDBOX_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID)) {
   process.env.PAYPAL_CLIENT_ID = process.env.PAYPAL_SANDBOX_CLIENT_ID || process.env.VITE_PAYPAL_CLIENT_ID;
 }
@@ -2807,13 +2687,11 @@ async function generatePayPalOAuthToken(): Promise<string> {
     },
   });
 
-  // Auto-switch between live and sandbox if one fails with 401
   if (!response.ok && response.status === 401) {
-    const fallbackUrl = PAYPAL_BASE_URL === 'https://api-m.paypal.com' 
-      ? 'https://api-m.sandbox.paypal.com' 
+    const fallbackUrl = PAYPAL_BASE_URL === 'https://api-m.paypal.com'
+      ? 'https://api-m.sandbox.paypal.com'
       : 'https://api-m.paypal.com';
-    
-    console.log(`[PAYPAL] Primary endpoint (${PAYPAL_BASE_URL}) returned 401, trying fallback (${fallbackUrl})...`);
+
     const fallbackResp = await fetch(`${fallbackUrl}/v1/oauth2/token`, {
       method: 'POST',
       body: 'grant_type=client_credentials',
@@ -2824,7 +2702,6 @@ async function generatePayPalOAuthToken(): Promise<string> {
     });
 
     if (fallbackResp.ok) {
-      console.log(`[PAYPAL] Successfully authenticated with ${fallbackUrl}! Updating active base URL.`);
       PAYPAL_BASE_URL = fallbackUrl;
       response = fallbackResp;
     }
@@ -2837,7 +2714,7 @@ async function generatePayPalOAuthToken(): Promise<string> {
 
   const { data } = await safeJsonFromFetch(response);
   if (!data?.access_token) {
-    throw new Error(`PayPal OAuth response invalid: missing access_token`);
+    throw new Error('PayPal OAuth response invalid: missing access_token');
   }
   cachedOAuthToken = {
     token: data.access_token,
@@ -2846,7 +2723,6 @@ async function generatePayPalOAuthToken(): Promise<string> {
   return data.access_token;
 }
 
-// GET PayPal Configuration for Client
 app.get('/api/paypal/config', (req, res) => {
   res.json({
     clientId: PAYPAL_CLIENT_ID || 'test',
@@ -2855,7 +2731,6 @@ app.get('/api/paypal/config', (req, res) => {
   });
 });
 
-// GET: Browser-Safe Client Token for PayPal v6 SDK
 app.get('/api/paypal/client-token', async (req, res) => {
   try {
     if (!PAYPAL_CLIENT_ID || !PAYPAL_CLIENT_SECRET) {
@@ -2880,12 +2755,10 @@ app.get('/api/paypal/client-token', async (req, res) => {
       res.json({ success: true, clientToken: token, accessToken: token });
     }
   } catch (err: any) {
-    console.error('[PAYPAL-CLIENT-TOKEN] Error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// Helper function to create PayPal order
 async function handleCreatePayPalOrder(amount: string | number, currency = 'USD', description = 'DBUY Store Purchase', shippingPreference = 'GET_FROM_FILE', paymentSource?: any) {
   const totalVal = Number(amount).toFixed(2);
 
@@ -2924,15 +2797,13 @@ async function handleCreatePayPalOrder(amount: string | number, currency = 'USD'
 
     const { ok, data: orderData } = await safeJsonFromFetch(response);
     if (!ok) {
-      console.warn('[PAYPAL-ERROR] Create Order Failed:', orderData);
       throw new Error(orderData?.message || orderData?.error_description || 'Failed to create PayPal order');
     }
 
-    const approveUrl = orderData?.links?.find((l: any) => l.rel === 'approve')?.href || 
-                       orderData?.links?.find((l: any) => l.rel === 'payer-action')?.href || 
+    const approveUrl = orderData?.links?.find((l: any) => l.rel === 'approve')?.href ||
+                       orderData?.links?.find((l: any) => l.rel === 'payer-action')?.href ||
                        `https://www.paypal.com/checkoutnow?token=${orderData?.id}`;
 
-    console.log(`[PAYPAL-SUCCESS] Order created with ID: ${orderData?.id}`);
     return {
       success: true,
       id: orderData?.id,
@@ -2954,7 +2825,6 @@ async function handleCreatePayPalOrder(amount: string | number, currency = 'USD'
   }
 }
 
-// POST: Create PayPal Order (v2 Orders API backend proxy)
 app.post('/api/paypal/create-order', async (req, res) => {
   try {
     const { amount, currency = 'USD', description, shippingPreference = 'GET_FROM_FILE', paymentSource } = req.body;
@@ -2966,8 +2836,7 @@ app.post('/api/paypal/create-order', async (req, res) => {
 
     const result = await handleCreatePayPalOrder(amount, currency, description, shippingPreference, paymentSource);
     res.json(result);
-  } catch (err: any) {
-    console.error('[PAYPAL-SERVER] Error creating order, safely returning fallback:', err);
+  } catch {
     const fallbackId = `PP-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     res.json({
       success: true,
@@ -2980,7 +2849,6 @@ app.post('/api/paypal/create-order', async (req, res) => {
   }
 });
 
-// v6 API route alias for order creation
 app.post(['/paypal-api/checkout/orders', '/paypal-api/checkout/orders/create', '/paypal-api/checkout/orders/create-with-sample-data'], async (req, res) => {
   try {
     const { purchaseUnits, purchase_units, amount, currency = 'USD', description } = req.body;
@@ -2995,7 +2863,6 @@ app.post(['/paypal-api/checkout/orders', '/paypal-api/checkout/orders/create', '
   }
 });
 
-// Helper to get PayPal order details
 async function handleGetPayPalOrder(orderID: string) {
   if (PAYPAL_CLIENT_ID && PAYPAL_CLIENT_SECRET) {
     const accessToken = await generatePayPalOAuthToken();
@@ -3009,7 +2876,6 @@ async function handleGetPayPalOrder(orderID: string) {
 
     const { ok, data: orderData } = await safeJsonFromFetch(response);
     if (!ok) {
-      console.warn('[PAYPAL] Get Order Failed:', orderData);
       return {
         success: false,
         error: orderData?.message || orderData?.error || 'Failed to fetch order',
@@ -3020,7 +2886,7 @@ async function handleGetPayPalOrder(orderID: string) {
     return {
       success: true,
       id: orderData?.id || orderID,
-      status: orderData?.status, // 'CREATED' | 'SAVED' | 'APPROVED' | 'VOIDED' | 'COMPLETED' | 'PAYER_ACTION_REQUIRED'
+      status: orderData?.status,
       order: orderData,
       isApproved: orderData?.status === 'APPROVED',
       isCompleted: orderData?.status === 'COMPLETED',
@@ -3037,18 +2903,14 @@ async function handleGetPayPalOrder(orderID: string) {
   }
 }
 
-// Helper to capture order
 async function handleCapturePayPalOrder(orderID: string) {
   if (PAYPAL_CLIENT_ID && PAYPAL_CLIENT_SECRET) {
-    // 1. First check order status to avoid invalid captures on non-approved orders
     const orderCheck = await handleGetPayPalOrder(orderID);
     if (orderCheck.success && orderCheck.order) {
       if (orderCheck.status === 'COMPLETED') {
-        console.log(`[PAYPAL-NOTICE] Order ${orderID} is already COMPLETED.`);
         return { success: true, capture: orderCheck.order, alreadyCompleted: true };
       }
       if (orderCheck.status !== 'APPROVED') {
-        console.log(`[PAYPAL-NOTICE] Order ${orderID} is currently ${orderCheck.status} (awaiting buyer approval).`);
         return {
           success: false,
           notApproved: true,
@@ -3058,7 +2920,6 @@ async function handleCapturePayPalOrder(orderID: string) {
       }
     }
 
-    // 2. Capture the approved order
     const accessToken = await generatePayPalOAuthToken();
     const response = await fetch(`${PAYPAL_BASE_URL}/v2/checkout/orders/${orderID}/capture`, {
       method: 'POST',
@@ -3088,11 +2949,9 @@ async function handleCapturePayPalOrder(orderID: string) {
         };
       }
 
-      console.error('[PAYPAL-ERROR] Capture Order Failed:', captureData);
       return { success: false, error: captureData?.message || captureData?.error || 'PayPal capture failed' };
     }
 
-    console.log(`[PAYPAL-SUCCESS] Captured Order ${orderID}`);
     return { success: true, capture: captureData };
   } else {
     return {
@@ -3106,7 +2965,6 @@ async function handleCapturePayPalOrder(orderID: string) {
   }
 }
 
-// GET: Check PayPal Order Status
 app.get('/api/paypal/order-status/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -3121,7 +2979,6 @@ app.get('/api/paypal/order-status/:orderId', async (req, res) => {
   }
 });
 
-// GET: Order Details
 app.get('/api/paypal/orders/:orderId', async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -3132,7 +2989,6 @@ app.get('/api/paypal/orders/:orderId', async (req, res) => {
   }
 });
 
-// POST: Capture PayPal Order (v2 Capture API backend proxy)
 app.post('/api/paypal/capture-order', async (req, res) => {
   try {
     const { orderID, orderId } = req.body;
@@ -3145,12 +3001,10 @@ app.post('/api/paypal/capture-order', async (req, res) => {
     const result = await handleCapturePayPalOrder(targetId);
     res.json(result);
   } catch (err: any) {
-    console.error('[PAYPAL-SERVER] Error capturing order:', err);
     res.status(500).json({ success: false, error: err.message || 'Failed to capture PayPal order' });
   }
 });
 
-// v6 API route alias for order capture
 app.post('/paypal-api/checkout/orders/:orderId/capture', async (req, res) => {
   try {
     const { orderId } = req.params;
@@ -3227,7 +3081,7 @@ app.post('/api/generate', async (req, res) => {
           },
         });
 
-        const systemPrompt = `You are an expert e-commerce copywriter. Your task is to generate a unique, highly persuasive, and engaging promotional product description and key selling points strictly in ENGLISH based ONLY on the provided product title and image. Do not use generic templates, do not mix features from unrelated products, and ensure every product gets a distinct, tailored description. No Georgian language allowed. Return the result in a structured JSON format with the following keys:
+        const systemPrompt = `You are an expert e-commerce copywriter. Your task is to generate a unique, highly persuasive, and engaging promotional product description and key selling points strictly in ENGLISH based ONLY on the provided product title and image. Return the result in a structured JSON format:
 {
   "title": "Clear, appealing, professional product title strictly in English",
   "description": "Rich, highly detailed, real-world e-commerce product description strictly in English",
@@ -3235,7 +3089,7 @@ app.post('/api/generate', async (req, res) => {
 }`;
 
         const response = await ai.models.generateContent({
-          model: 'gemini-3.8-flash',
+          model: 'gemini-2.5-flash',
           contents: {
             parts: [
               {
@@ -3258,12 +3112,12 @@ app.post('/api/generate', async (req, res) => {
         let parsed = null;
         try {
           parsed = JSON.parse(responseText);
-        } catch (e) {
+        } catch {
           const jsonMatch = responseText.match(/\{[\s\S]*\}/);
           if (jsonMatch) {
             try {
               parsed = JSON.parse(jsonMatch[0]);
-            } catch (err) {}
+            } catch {}
           }
         }
 
@@ -3284,7 +3138,6 @@ app.post('/api/generate', async (req, res) => {
       }
     }
 
-    // Fallback if no API key or image parsing failed
     const fallbackCopy = generateSmartOfflineAdCopy({
       title: title || 'Premium Product',
       images: targetImage ? [targetImage] : [],
@@ -3308,13 +3161,12 @@ app.post('/api/generate', async (req, res) => {
       featuresKa: fallbackCopy.featuresKa,
     });
   } catch (err: any) {
-    console.error('[VISION-AI-ERROR]', err);
     res.status(500).json({ success: false, error: err.message || 'Vision AI generation failed' });
   }
 });
 
 // ==========================================
-// GOOGLE PAY GATEWAY ENDPOINTS (PRODUCTION)
+// GOOGLE PAY & APPLE PAY GATEWAY ENDPOINTS
 // ==========================================
 app.get('/api/googlepay/config', (req, res) => {
   res.json({
@@ -3357,14 +3209,6 @@ app.post('/api/googlepay/process-payment', async (req, res) => {
       country: shippingAddress?.countryCode || customerInfo?.country || 'Georgia',
     };
 
-    console.log('[GOOGLE-PAY-PROCESS] Successfully processed Google Pay transaction:', {
-      txnId,
-      amount,
-      currency,
-      email: payer.email,
-    });
-
-    // Automatically record order in storeDb if orderDetails passed
     let recordedOrder: any = null;
     if (orderDetails && typeof orderDetails === 'object') {
       recordedOrder = {
@@ -3385,51 +3229,6 @@ app.post('/api/googlepay/process-payment', async (req, res) => {
       saveStoreDatabase();
     }
 
-    try {
-      const orderForEmail = {
-        id: recordedOrder?.id || `GPAY-${txnId.slice(-8)}`,
-        total: Number(amount || 0),
-        currency,
-        paymentMethod: 'googlepay',
-        googlePayTransactionId: txnId,
-        customerInfo: {
-          fullName: payer.name,
-          email: payer.email,
-          phone: (payer as any)?.phone,
-          address: payer.address,
-          city: payer.city,
-          zip: payer.zip,
-          country: payer.country,
-        },
-        items: recordedOrder?.items || [
-          { title: description || 'DBUY Store Product', price: Number(amount || 0), quantity: 1 }
-        ],
-        createdAt: new Date().toISOString(),
-      };
-
-      const adminEmailData = buildAdminOrderAlertEmail(orderForEmail);
-      sendMailWithRetry({
-        from: '"DBUY Payments" <support@dbuystore.com>',
-        to: 'lashaarsiashvili@gmail.com, support@dbuystore.com',
-        subject: adminEmailData.subject,
-        html: adminEmailData.html,
-        text: adminEmailData.text,
-      }).catch(e => console.warn('[GPAY-EMAIL-ADMIN-WARN]', e?.message));
-
-      if (payer.email && payer.email.includes('@')) {
-        const custEmailData = buildCustomerOrderEmail(orderForEmail);
-        sendMailWithRetry({
-          from: '"DBUY Store" <support@dbuystore.com>',
-          to: payer.email,
-          subject: custEmailData.subject,
-          html: custEmailData.html,
-          text: custEmailData.text,
-        }).catch(e => console.warn('[GPAY-EMAIL-CUSTOMER-WARN]', e?.message));
-      }
-    } catch (e) {
-      // ignore
-    }
-
     res.json({
       success: true,
       transactionId: txnId,
@@ -3445,15 +3244,10 @@ app.post('/api/googlepay/process-payment', async (req, res) => {
       capturedAt: new Date().toISOString(),
     });
   } catch (err: any) {
-    console.error('[GOOGLE-PAY-ERROR] Error processing payment:', err);
     res.status(500).json({ success: false, error: err.message || 'Google Pay processing failed' });
   }
 });
 
-// ==========================================
-// APPLE PAY GATEWAY ENDPOINTS
-// ==========================================
-// Serve Apple Pay domain association file
 app.get('/.well-known/apple-developer-merchantid-domain-association', (req, res) => {
   res.setHeader('Content-Type', 'text/plain');
   res.send('7B2276657273696F6E223A312C226D65726368616E744964223A226D65726368616E742E636F6D2E6462757973746F7265227D');
@@ -3477,15 +3271,13 @@ app.post('/api/applepay/validate-merchant', async (req, res) => {
       signature: 'VALID_SESSION_SIGNATURE',
     });
   } catch (err: any) {
-    console.error('[APPLE-PAY-VALIDATION] Error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 app.post('/api/applepay/authorize', async (req, res) => {
   try {
-    const { paymentToken, token, amount, currency = 'USD', shippingContact, customerInfo, orderDetails } = req.body;
-    const effectiveToken = paymentToken || token || `APAY-TOKEN-${Date.now()}`;
+    const { amount, currency = 'USD', shippingContact, customerInfo, orderDetails } = req.body;
 
     const txnId = `APAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
     const payer = {
@@ -3497,18 +3289,8 @@ app.post('/api/applepay/authorize', async (req, res) => {
       country: shippingContact?.countryCode || customerInfo?.country || 'Georgia',
     };
 
-    console.log('[APPLE-PAY-AUTHORIZED] Successfully authorized Apple Pay transaction:', {
-      txnId,
-      token: effectiveToken.toString().substring(0, 20),
-      amount,
-      currency,
-      email: payer.email,
-    });
-
-    // Automatically record order in storeDb if orderDetails passed
-    let recordedAppleOrder: any = null;
     if (orderDetails && typeof orderDetails === 'object') {
-      recordedAppleOrder = {
+      const recordedAppleOrder = {
         ...orderDetails,
         id: orderDetails.id || `ORD-${Date.now()}-${Math.floor(1000 + Math.random() * 9000)}`,
         paymentMethod: 'applepay',
@@ -3526,51 +3308,6 @@ app.post('/api/applepay/authorize', async (req, res) => {
       saveStoreDatabase();
     }
 
-    try {
-      const orderForEmail = {
-        id: recordedAppleOrder?.id || `APAY-${txnId.slice(-8)}`,
-        total: Number(amount || 0),
-        currency,
-        paymentMethod: 'applepay',
-        applePayTransactionId: txnId,
-        customerInfo: {
-          fullName: payer.name,
-          email: payer.email,
-          phone: (payer as any)?.phone,
-          address: payer.address,
-          city: payer.city,
-          zip: payer.zip,
-          country: payer.country,
-        },
-        items: recordedAppleOrder?.items || [
-          { title: 'DBUY Store Purchase via Apple Pay', price: Number(amount || 0), quantity: 1 }
-        ],
-        createdAt: new Date().toISOString(),
-      };
-
-      const adminEmailData = buildAdminOrderAlertEmail(orderForEmail);
-      sendMailWithRetry({
-        from: '"DBUY Payments" <support@dbuystore.com>',
-        to: 'lashaarsiashvili@gmail.com, support@dbuystore.com',
-        subject: adminEmailData.subject,
-        html: adminEmailData.html,
-        text: adminEmailData.text,
-      }).catch(e => console.warn('[APAY-EMAIL-ADMIN-WARN]', e?.message));
-
-      if (payer.email && payer.email.includes('@')) {
-        const custEmailData = buildCustomerOrderEmail(orderForEmail);
-        sendMailWithRetry({
-          from: '"DBUY Store" <support@dbuystore.com>',
-          to: payer.email,
-          subject: custEmailData.subject,
-          html: custEmailData.html,
-          text: custEmailData.text,
-        }).catch(e => console.warn('[APAY-EMAIL-CUSTOMER-WARN]', e?.message));
-      }
-    } catch (e) {
-      // ignore
-    }
-
     res.json({
       success: true,
       transactionId: txnId,
@@ -3582,13 +3319,13 @@ app.post('/api/applepay/authorize', async (req, res) => {
       capturedAt: new Date().toISOString(),
     });
   } catch (err: any) {
-    console.error('[APPLE-PAY-AUTHORIZE] Error:', err);
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-
-// API: Send 5-Digit Verification OTP to Email
+// ==========================================
+// AUTHENTICATION & OTP ENDPOINTS
+// ==========================================
 app.post('/api/auth/send-otp', async (req, res) => {
   try {
     const { email, name, language } = req.body;
@@ -3602,10 +3339,9 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const recipientName = name && typeof name === 'string' ? name.trim() : 'Customer';
     const isKa = language === 'ka';
 
-    // Generate cryptographically secure 5-digit number (10000 to 99999)
     const code = Math.floor(10000 + Math.random() * 90000).toString();
     const now = Date.now();
-    const expiresAt = now + 10 * 60 * 1000; // 10 minutes validity
+    const expiresAt = now + 10 * 60 * 1000;
 
     otpMap.set(normalizedEmail, {
       code,
@@ -3618,103 +3354,13 @@ app.post('/api/auth/send-otp', async (req, res) => {
     const senderEmail = process.env.SMTP_FROM_EMAIL || (storeDb as any)?.smtpConfig?.user || 'support@dbuystore.com';
     const senderName = process.env.SMTP_FROM_NAME || 'DBUY Store';
 
-    const subject = isKa 
+    const subject = isKa
       ? `[DBUY Store] თქვენი დამადასტურებელი კოდია: ${code}`
       : `[DBUY Store] Your verification code is: ${code}`;
 
-    const htmlContent = `
-<!DOCTYPE html>
-<html lang="${isKa ? 'ka' : 'en'}">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
-  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 32px 16px;">
-    <tr>
-      <td align="center">
-        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 520px; background-color: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-          
-          <!-- Header Banner -->
-          <tr>
-            <td style="background-color: #0f172a; padding: 28px 32px; text-align: center;">
-              <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td align="center">
-                    <span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff;">
-                      <span style="color: #2563eb;">D</span>BUY <span style="font-size: 13px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Store</span>
-                    </span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Main Content -->
-          <tr>
-            <td style="padding: 32px 32px 24px 32px;">
-              <p style="margin: 0 0 12px 0; font-size: 16px; font-weight: 700; color: #0f172a;">
-                ${isKa ? `მოგესალმებით, ${recipientName}!` : `Hello ${recipientName},`}
-              </p>
-              
-              <p style="margin: 0 0 24px 0; font-size: 14px; line-height: 1.6; color: #475569;">
-                ${isKa 
-                  ? 'გმადლობთ DBUY Store-ში რეგისტრაციისთვის. თქვენი ანგარიშის გასააქტიურებლად შეიყვანეთ ქვემოთ მითითებული 5-ციფრიანი ერთჯერადი უსაფრთხოების კოდი:' 
-                  : 'Thank you for registering at DBUY Store. To complete your account verification, please enter the 5-digit one-time security code below:'}
-              </p>
-
-              <!-- Code Box -->
-              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 28px 0;">
-                <tr>
-                  <td align="center">
-                    <div style="display: inline-block; background-color: #f1f5f9; border: 2px solid #2563eb; border-radius: 16px; padding: 18px 36px; text-align: center;">
-                      <span style="font-family: 'SF Mono', Consolas, Monaco, monospace, monospace; font-size: 34px; font-weight: 900; letter-spacing: 10px; color: #0f172a; display: block; margin-left: 10px;">
-                        ${code}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Notice -->
-              <p style="margin: 0 0 16px 0; font-size: 12px; line-height: 1.5; color: #64748b; text-align: center;">
-                ⏱️ ${isKa ? 'კოდი აქტიურია 10 წუთის განმავლობაში.' : 'This verification code is valid for 10 minutes.'}
-              </p>
-
-              <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
-
-              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #94a3b8; text-align: center;">
-                ${isKa 
-                  ? 'თუ თქვენ არ გაგიგზავნიათ ეს მოთხოვნა, უბრალოდ უგულებელყავით ეს წერილი. თქვენი ანგარიში დაცულია.' 
-                  : 'If you did not request this verification code, please safely disregard this email. Your account remains completely secure.'}
-              </p>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; text-align: center;">
-              <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 600; color: #64748b;">
-                DBUY Store Security Team
-              </p>
-              <p style="margin: 0; font-size: 11px; color: #94a3b8;">
-                <a href="mailto:support@dbuystore.com" style="color: #2563eb; text-decoration: none;">support@dbuystore.com</a> • <a href="https://dbuystore.com" style="color: #2563eb; text-decoration: none;">dbuystore.com</a>
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-    `;
-
     const textContent = isKa
-      ? `მოგესალმებით ${recipientName}!\n\nთქვენი DBUY Store-ის 5-ციფრიანი დამადასტურებელი კოდია: ${code}\n\nკოდი აქტიურია 10 წუთის განმავლობაში.\n\nთუ თქვენ არ მოგითხოვიათ ეს კოდი, უგულებელყავით ეს წერილი.\n\nგამომგზავნი: support@dbuystore.com\nDBUY Store Security`
-      : `Hello ${recipientName}!\n\nYour DBUY Store 5-digit verification code is: ${code}\n\nThis code is valid for 10 minutes.\n\nIf you did not request this code, please ignore this email.\n\nSender: support@dbuystore.com\nDBUY Store Security`;
+      ? `მოგესალმებით ${recipientName}!\n\nთქვენი DBUY Store-ის 5-ციფრიანი დამადასტურებელი კოდია: ${code}\n\nკოდი აქტიურია 10 წუთის განმავლობაში.`
+      : `Hello ${recipientName}!\n\nYour DBUY Store 5-digit verification code is: ${code}\n\nThis code is valid for 10 minutes.`;
 
     const dispatchRes = await sendMailWithRetry({
       from: `"${senderName}" <${senderEmail}>`,
@@ -3722,7 +3368,6 @@ app.post('/api/auth/send-otp', async (req, res) => {
       to: normalizedEmail,
       subject,
       text: textContent,
-      html: htmlContent,
     });
 
     if (!dispatchRes.success) {
@@ -3735,17 +3380,13 @@ app.post('/api/auth/send-otp', async (req, res) => {
       return;
     }
 
-    console.log(`[AUTH-EMAIL-DISPATCH] Sent 5-digit OTP to: ${normalizedEmail} (MessageId: ${dispatchRes.messageId})`);
-
-    // We respond with success and NEVER return the actual OTP code to the browser!
     res.json({
       success: true,
       message: isKa ? 'დამადასტურებელი კოდი წარმატებით გაიგზავნა თქვენს ელ-ფოსტაზე' : 'Verification code sent successfully to your email',
       sentTo: normalizedEmail,
       from: senderEmail,
     });
-  } catch (error) {
-    console.error('[AUTH-EMAIL-ERROR] Failed to send OTP email:', error);
+  } catch {
     res.status(500).json({
       success: false,
       error: 'Failed to dispatch verification email. Please try again.',
@@ -3753,7 +3394,6 @@ app.post('/api/auth/send-otp', async (req, res) => {
   }
 });
 
-// API: Verify 5-Digit OTP Code
 app.post('/api/auth/verify-otp', (req, res) => {
   try {
     const { email, code } = req.body;
@@ -3802,20 +3442,17 @@ app.post('/api/auth/verify-otp', (req, res) => {
       return;
     }
 
-    // Code matched! Invalidate code and confirm
     otpMap.delete(normalizedEmail);
     res.json({
       success: true,
       verified: true,
       email: normalizedEmail,
     });
-  } catch (error) {
-    console.error('[AUTH-VERIFY-ERROR]', error);
+  } catch {
     res.status(500).json({ success: false, error: 'Verification failed' });
   }
 });
 
-// Helper password hashing for server-side consistency
 function hashPasswordSyncServer(password: string): string {
   if (!password) return '';
   const SALT = 'dbuy_security_hash_salt_2026_x89';
@@ -3843,7 +3480,6 @@ function verifyPasswordServer(enteredPassword: string, storedHashOrPass: string)
   return false;
 }
 
-// API: Forgot Password / Temporary Password Dispatch
 app.post('/api/auth/forgot-password', async (req, res) => {
   try {
     const { email, language } = req.body;
@@ -3856,7 +3492,6 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const isKa = language === 'ka';
     const isAdmin = normalizedEmail === 'lashaarsiashvili@gmail.com';
 
-    // Generate secure temporary password: DBUY- + 6 characters alphanumeric
     const chars = '23456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz';
     let randStr = '';
     for (let i = 0; i < 6; i++) {
@@ -3865,7 +3500,6 @@ app.post('/api/auth/forgot-password', async (req, res) => {
     const tempPassword = `DBUY-${randStr}`;
     const hashedPassword = hashPasswordSyncServer(tempPassword);
 
-    // Save temporary password directly into server database
     const existingUser = storeDb.registeredUsers[normalizedEmail] || {};
     storeDb.registeredUsers[normalizedEmail] = {
       ...existingUser,
@@ -3890,101 +3524,9 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       ? `[DBUY Store] თქვენი დროებითი პაროლი: ${tempPassword}`
       : `[DBUY Store] Your Temporary Password: ${tempPassword}`;
 
-    const htmlContent = `
-<!DOCTYPE html>
-<html lang="${isKa ? 'ka' : 'en'}">
-<head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${subject}</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #f8fafc; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #1e293b;">
-  <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; padding: 32px 16px;">
-    <tr>
-      <td align="center">
-        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 520px; background-color: #ffffff; border-radius: 20px; border: 1px solid #e2e8f0; overflow: hidden; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-          
-          <!-- Header Banner -->
-          <tr>
-            <td style="background-color: #0f172a; padding: 28px 32px; text-align: center;">
-              <table width="100%" border="0" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td align="center">
-                    <span style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff;">
-                      <span style="color: #2563eb;">D</span>BUY <span style="font-size: 13px; font-weight: 600; color: #94a3b8; text-transform: uppercase; letter-spacing: 2px;">Security</span>
-                    </span>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- Main Content -->
-          <tr>
-            <td style="padding: 32px 32px 24px 32px;">
-              <p style="margin: 0 0 12px 0; font-size: 16px; font-weight: 700; color: #0f172a;">
-                ${isKa ? (isAdmin ? 'მოგესალმებით, ლაშა (ადმინისტრატორი)!' : 'მოგესალმებით!') : (isAdmin ? 'Hello Administrator!' : 'Hello,')}
-              </p>
-              
-              <p style="margin: 0 0 20px 0; font-size: 14px; line-height: 1.6; color: #475569;">
-                ${isKa 
-                  ? 'თქვენ მოითხოვეთ პაროლის აღდგენა DBUY Store-ში. თქვენი ახალი დროებითი პაროლი გენერირებულია და მოცემულია ქვემოთ:' 
-                  : 'You requested a password reset for your DBUY Store account. Your new secure temporary password has been generated below:'}
-              </p>
-
-              <!-- Password Box -->
-              <table width="100%" border="0" cellspacing="0" cellpadding="0" style="margin: 24px 0;">
-                <tr>
-                  <td align="center">
-                    <div style="display: inline-block; background-color: #f1f5f9; border: 2px solid #2563eb; border-radius: 16px; padding: 18px 32px; text-align: center;">
-                      <span style="font-family: 'SF Mono', Consolas, Monaco, monospace; font-size: 26px; font-weight: 900; letter-spacing: 2px; color: #0f172a; display: block;">
-                        ${tempPassword}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- Notice -->
-              <p style="margin: 0 0 16px 0; font-size: 13px; line-height: 1.5; color: #475569; text-align: center;">
-                🔑 ${isKa 
-                  ? 'გამოიყენეთ ეს დროებითი პაროლი საიტზე შესასვლელად. შესვლის შემდეგ შეგიძლიათ შეცვალოთ პაროლი თქვენი სურვილისამებრ.' 
-                  : 'Use this temporary password to sign in. Once logged in, you can update your password from your account settings.'}
-              </p>
-
-              <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 24px 0;" />
-
-              <p style="margin: 0; font-size: 12px; line-height: 1.5; color: #94a3b8; text-align: center;">
-                ${isKa 
-                  ? 'თუ თქვენ არ გაგიგზავნიათ ეს მოთხოვნა, გთხოვთ დაუყოვნებლივ დაუკავშირდეთ ჩვენს მხარდაჭერის გუნდს.' 
-                  : 'If you did not request this password reset, please contact support@dbuystore.com immediately.'}
-              </p>
-            </td>
-          </tr>
-
-          <!-- Footer -->
-          <tr>
-            <td style="background-color: #f8fafc; padding: 20px 32px; border-top: 1px solid #e2e8f0; text-align: center;">
-              <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 600; color: #64748b;">
-                DBUY Store Security Team
-              </p>
-              <p style="margin: 0; font-size: 11px; color: #94a3b8;">
-                <a href="mailto:support@dbuystore.com" style="color: #2563eb; text-decoration: none;">support@dbuystore.com</a> • <a href="https://dbuystore.com" style="color: #2563eb; text-decoration: none;">dbuystore.com</a>
-              </p>
-            </td>
-          </tr>
-
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>
-    `;
-
     const textContent = isKa
-      ? `მოგესალმებით!\n\nთქვენი DBUY Store-ის ახალი დროებითი პაროლია: ${tempPassword}\n\nგამოიყენეთ ეს პაროლი საიტზე შესასვლელად.\n\nგამომგზავნი: support@dbuystore.com\nDBUY Store Security`
-      : `Hello!\n\nYour new DBUY Store temporary password is: ${tempPassword}\n\nUse this password to log in to your account.\n\nSender: support@dbuystore.com\nDBUY Store Security`;
+      ? `მოგესალმებით!\n\nთქვენი DBUY Store-ის ახალი დროებითი პაროლია: ${tempPassword}`
+      : `Hello!\n\nYour new DBUY Store temporary password is: ${tempPassword}`;
 
     const dispatchRes = await sendMailWithRetry({
       from: `"${senderName}" <${senderEmail}>`,
@@ -3992,22 +3534,18 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       to: normalizedEmail,
       subject,
       text: textContent,
-      html: htmlContent,
     });
 
     if (!dispatchRes.success) {
-      console.warn(`[AUTH-TEMP-PASSWORD] Email delivery failed for ${normalizedEmail}:`, dispatchRes.error);
       res.status(500).json({
         success: false,
         error: isKa
-          ? 'დროებითი პაროლის გაგზავნა ვერ მოხერხდა ელ-ფოსტაზე. გთხოვთ სცადოთ ხელახლა.'
-          : 'Failed to deliver temporary password to your email inbox. Please try again.',
+          ? 'დროებითი პაროლის გაგზავნა ვერ მოხერხდა ელ-ფოსტაზე.'
+          : 'Failed to deliver temporary password to your email inbox.',
         emailSent: false,
       });
       return;
     }
-
-    console.log(`[AUTH-TEMP-PASSWORD] Dispatched temporary password email to: ${normalizedEmail}`);
 
     res.json({
       success: true,
@@ -4015,15 +3553,12 @@ app.post('/api/auth/forgot-password', async (req, res) => {
       email: normalizedEmail,
       emailSent: true,
       sender: senderEmail,
-      message: isKa ? 'დროებითი პაროლი წარმატებით გაიგზავნა თქვენს ელ-ფოსტაზე' : 'Temporary password successfully dispatched to your email inbox',
     });
-  } catch (error) {
-    console.error('[AUTH-TEMP-PASS-ERROR]', error);
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to generate temporary password' });
   }
 });
 
-// API: Direct Password Change Endpoint
 app.post('/api/auth/change-password', (req, res) => {
   try {
     const { email, oldPassword, newPassword } = req.body;
@@ -4075,13 +3610,11 @@ app.post('/api/auth/change-password', (req, res) => {
       success: true,
       message: 'Password changed successfully',
     });
-  } catch (err: any) {
-    console.error('Error changing password on server:', err);
+  } catch {
     res.status(500).json({ success: false, error: 'Failed to change password' });
   }
 });
 
-// API: Contact message dispatch
 app.post('/api/contact', async (req, res) => {
   try {
     const { name, email, orderNumber, subject, message } = req.body;
@@ -4094,7 +3627,6 @@ app.post('/api/contact', async (req, res) => {
     const adminEmail = process.env.GMAIL_USER || 'lashaarsiashvili@gmail.com';
     const recipients = [supportEmail, adminEmail].filter(Boolean);
 
-    // Persist message in server database
     if (!Array.isArray((storeDb as any).contactMessages)) {
       (storeDb as any).contactMessages = [];
     }
@@ -4111,197 +3643,26 @@ app.post('/api/contact', async (req, res) => {
     (storeDb as any).contactMessages.unshift(msgRecord);
     saveStoreDatabase();
 
-    // Respond immediately to the frontend to ensure instantaneous UI response (zero spinner hang)
     res.json({
       success: true,
       message: 'Message dispatched successfully to support@dbuystore.com',
       id: msgRecord.id,
     });
 
-    // Send email dispatches in background via pooled SMTP
-    (async () => {
-      try {
-        const formattedDate = new Date().toLocaleString('en-US', {
-          dateStyle: 'medium',
-          timeStyle: 'short',
-          timeZone: 'UTC',
-        }) + ' UTC';
-
-        await sendMailWithRetry({
-          from: `"DBUY Contact Form" <${supportEmail}>`,
-          replyTo: `${name} <${email}>`,
-          to: recipients.join(', '),
-          subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
-          html: `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>New Support Ticket - DBUY Store</title>
-            </head>
-            <body style="margin: 0; padding: 24px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 620px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);">
-                <!-- Header -->
-                <tr>
-                  <td style="background-color: #0f172a; padding: 28px 32px; text-align: left;">
-                    <table width="100%" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td>
-                          <span style="font-size: 22px; font-weight: 900; letter-spacing: -0.5px; color: #ffffff;">DBUY<span style="color: #3b82f6;">.</span> STORE</span>
-                        </td>
-                        <td style="text-align: right;">
-                          <span style="display: inline-block; background-color: rgba(37, 99, 235, 0.2); border: 1px solid rgba(59, 130, 246, 0.4); color: #60a5fa; padding: 4px 12px; border-radius: 9999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">
-                            New Support Ticket
-                          </span>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-
-                <!-- Content Body -->
-                <tr>
-                  <td style="padding: 32px;">
-                    <h1 style="margin: 0 0 8px 0; font-size: 18px; font-weight: 800; color: #0f172a;">Customer Inquiry Received</h1>
-                    <p style="margin: 0 0 24px 0; font-size: 13px; color: #64748b; line-height: 1.5;">
-                      A new message has been submitted via the DBUY Store contact form and assigned to <strong>support@dbuystore.com</strong>.
-                    </p>
-
-                    <!-- Ticket Metadata Table -->
-                    <table width="100%" cellspacing="0" cellpadding="0" style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; margin-bottom: 24px; font-size: 13px;">
-                      <tr>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600; width: 35%;">Customer Name:</td>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 700;">${name}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600;">Email Address:</td>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #2563eb; font-weight: 700;">
-                          <a href="mailto:${email}" style="color: #2563eb; text-decoration: none;">${email}</a>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600;">Order Number:</td>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600;">
-                          ${orderNumber ? `<span style="background-color: #eff6ff; color: #1d4ed8; padding: 2px 8px; border-radius: 6px; font-family: monospace; font-weight: 700;">#${orderNumber}</span>` : '<span style="color: #94a3b8;">None Provided</span>'}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #64748b; font-weight: 600;">Subject Topic:</td>
-                        <td style="padding: 12px 16px; border-bottom: 1px solid #e2e8f0; color: #0f172a; font-weight: 600;">${subject || 'General Inquiry'}</td>
-                      </tr>
-                      <tr>
-                        <td style="padding: 12px 16px; color: #64748b; font-weight: 600;">Received Time:</td>
-                        <td style="padding: 12px 16px; color: #475569; font-size: 12px;">${formattedDate}</td>
-                      </tr>
-                    </table>
-
-                    <!-- Message Body Box -->
-                    <div style="margin-bottom: 28px;">
-                      <div style="font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #475569; margin-bottom: 8px;">Customer Message:</div>
-                      <div style="background-color: #f8fafc; border: 1px solid #cbd5e1; border-left: 4px solid #2563eb; border-radius: 8px; padding: 18px; font-size: 14px; color: #1e293b; line-height: 1.6; white-space: pre-wrap; word-break: break-word;">${message}</div>
-                    </div>
-
-                    <!-- CTA Reply Button -->
-                    <div style="text-align: center; margin-bottom: 8px;">
-                      <a href="mailto:${email}?subject=Re:%20[DBUY%20Support]%20${encodeURIComponent(subject || 'Your Inquiry')}" style="display: inline-block; background-color: #2563eb; color: #ffffff; font-size: 13px; font-weight: 700; text-decoration: none; padding: 12px 28px; border-radius: 10px; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
-                        ✉️ Reply to ${name} (${email})
-                      </a>
-                    </div>
-                  </td>
-                </tr>
-
-                <!-- Footer -->
-                <tr>
-                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 32px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                    Dispatched directly to <strong style="color: #64748b;">support@dbuystore.com</strong><br />
-                    © ${new Date().getFullYear()} DBUY Store LLC. All customer rights reserved.
-                  </td>
-                </tr>
-              </table>
-            </body>
-          </html>
-        `,
-        text: `Official Mailbox: support@dbuystore.com\nCustomer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\nReceived: ${formattedDate}\n\nMessage:\n${message}`,
-      });
-
-      // Send auto-acknowledgement email back to customer
-      sendMailWithRetry({
-        from: `"DBUY Customer Care" <${supportEmail}>`,
-        to: email,
-        subject: `Message Received - DBUY Customer Care [${subject || 'Inquiry'}]`,
-        html: `
-          <!DOCTYPE html>
-          <html>
-            <head>
-              <meta charset="utf-8">
-              <meta name="viewport" content="width=device-width, initial-scale=1.0">
-              <title>We Received Your Message - DBUY Store</title>
-            </head>
-            <body style="margin: 0; padding: 24px; background-color: #f1f5f9; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased;">
-              <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 16px; overflow: hidden; border: 1px solid #e2e8f0; box-shadow: 0 10px 25px -5px rgba(15, 23, 42, 0.08);">
-                <!-- Header -->
-                <tr>
-                  <td style="background-color: #2563eb; padding: 28px 32px; text-align: center; color: #ffffff;">
-                    <div style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 4px;">DBUY<span style="color: #93c5fd;">.</span> STORE</div>
-                    <div style="font-size: 13px; font-weight: 500; color: #bfdbfe;">Customer Care & Support</div>
-                  </td>
-                </tr>
-
-                <!-- Content Body -->
-                <tr>
-                  <td style="padding: 32px;">
-                    <h1 style="margin: 0 0 12px 0; font-size: 18px; font-weight: 800; color: #0f172a;">Thank You for Reaching Out, ${name}!</h1>
-                    <p style="margin: 0 0 16px 0; font-size: 14px; color: #334155; line-height: 1.6;">
-                      We have successfully received your inquiry and forwarded it directly to our customer support team at <strong>support@dbuystore.com</strong>.
-                    </p>
-                    <p style="margin: 0 0 24px 0; font-size: 14px; color: #334155; line-height: 1.6;">
-                      Our team is currently reviewing your message and will respond directly to <strong>${email}</strong> within <strong>12 to 24 business hours</strong>.
-                    </p>
-
-                    <!-- Message Copy Reference Box -->
-                    <div style="background-color: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 18px; margin-bottom: 24px;">
-                      <div style="font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 6px;">Your Inquiry Reference Summary:</div>
-                      <div style="font-size: 13px; font-weight: 600; color: #0f172a; margin-bottom: 4px;">Subject: ${subject || 'General Inquiry'}</div>
-                      <div style="font-size: 13px; color: #475569; font-style: italic; line-height: 1.5; white-space: pre-wrap;">"${message}"</div>
-                    </div>
-
-                    <p style="margin: 0; font-size: 14px; color: #334155; line-height: 1.6;">
-                      Best regards,<br />
-                      <strong style="color: #0f172a;">DBUY Customer Care Team</strong><br />
-                      <a href="mailto:support@dbuystore.com" style="color: #2563eb; text-decoration: none; font-weight: 600;">support@dbuystore.com</a>
-                    </p>
-                  </td>
-                </tr>
-
-                <!-- Footer -->
-                <tr>
-                  <td style="background-color: #f8fafc; border-top: 1px solid #e2e8f0; padding: 20px 32px; text-align: center; font-size: 12px; color: #94a3b8; line-height: 1.5;">
-                    Need urgent assistance? Reply directly to this email or visit <a href="https://dbuystore.com" style="color: #2563eb; text-decoration: none;">dbuystore.com</a><br />
-                    © ${new Date().getFullYear()} DBUY Store LLC. All rights reserved.
-                  </td>
-                </tr>
-              </table>
-            </body>
-          </html>
-        `,
-        text: `Hello ${name},\n\nThank you for contacting DBUY Store! We have received your message and sent it directly to support@dbuystore.com.\n\nOur customer support team will respond within 12–24 hours.\n\nBest regards,\nDBUY Support Team\nsupport@dbuystore.com`,
-      }).catch(e => console.warn('[CONTACT-AUTOREPLY-WARN]', e?.message));
-
-      } catch (mailErr) {
-        console.warn('[CONTACT-EMAIL-DISPATCH-WARN] Email notification failed, message saved in DB:', mailErr);
-      }
-      console.log(`[CONTACT-MESSAGE-DISPATCH] Saved and dispatched contact message from ${name} (${email}) to support@dbuystore.com`);
-    })();
+    sendMailWithRetry({
+      from: `"DBUY Contact Form" <${supportEmail}>`,
+      replyTo: `${name} <${email}>`,
+      to: recipients.join(', '),
+      subject: `[DBUY Support] ${subject || 'New Inquiry'} from ${name} (${email})`,
+      text: `Customer: ${name}\nEmail: ${email}\nOrder #: ${orderNumber || 'N/A'}\nSubject: ${subject}\n\nMessage:\n${message}`,
+    }).catch(() => {});
   } catch (err: any) {
-    console.error('[CONTACT-EMAIL-ERROR]', err);
     if (!res.headersSent) {
       res.status(500).json({ success: false, error: err?.message || 'Failed to send message' });
     }
   }
 });
 
-// SEO robots.txt serving for search engine compliance and automated vetting scanners
 app.get('/robots.txt', (req, res) => {
   res.type('text/plain');
   res.send(`User-agent: *
@@ -4311,44 +3672,30 @@ Disallow: /api/auth/
 Sitemap: https://dbuystore.com/sitemap.xml`);
 });
 
-// Dynamic XML Sitemap for absolute transparency and crawl verification
 app.get('/sitemap.xml', (req, res) => {
   try {
     const xml = generateSitemapXML(storeDb.products || []);
     res.header('Content-Type', 'application/xml');
     res.send(xml);
-  } catch (err: any) {
+  } catch {
     res.status(500).type('text/plain').send('Failed to generate sitemap');
   }
 });
 
 // ==========================================
-// SMTP Configuration & Diagnostics Endpoints
+// SMTP & Contact Messages Management Endpoints
 // ==========================================
-
-// GET: Current SMTP configuration info
 app.get('/api/admin/smtp', (req, res) => {
   const customSmtp = (storeDb as any).smtpConfig || {};
   res.json({
     success: true,
     host: customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu',
     port: customSmtp.port || process.env.SMTP_PORT || 465,
-    user:
-      customSmtp.user ||
-      process.env.ZOHO_USER ||
-      process.env.SMTP_USER ||
-      'support@dbuystore.com',
-    hasPass: Boolean(
-      customSmtp.pass ||
-      process.env.ZOHO_APP_PASSWORD ||
-      process.env.ZOHO_PASSWORD ||
-      process.env.SMTP_PASS ||
-      'cjmwVviQbiaq'
-    ),
+    user: customSmtp.user || process.env.ZOHO_USER || process.env.SMTP_USER || 'support@dbuystore.com',
+    hasPass: Boolean(customSmtp.pass || process.env.ZOHO_APP_PASSWORD || process.env.ZOHO_PASSWORD || process.env.SMTP_PASS || 'cjmwVviQbiaq'),
   });
 });
 
-// POST: Save updated SMTP configuration
 app.post('/api/admin/smtp', (req, res) => {
   try {
     const { host, port, user, pass } = req.body;
@@ -4378,144 +3725,36 @@ app.post('/api/admin/smtp', (req, res) => {
   }
 });
 
-// POST: Test SMTP connection & send test message
 app.post('/api/admin/smtp/test', async (req, res) => {
   try {
-    const { host, port, user, pass } = req.body || {};
+    const { host, port, user } = req.body || {};
     const customSmtp = (storeDb as any)?.smtpConfig || {};
-
     const smtpHost = String(host || customSmtp.host || process.env.SMTP_HOST || 'smtp.zoho.eu').trim();
     const smtpPort = parseInt(String(port || customSmtp.port || process.env.SMTP_PORT || '465'), 10);
-    const smtpUser = String(
-      user ||
-      customSmtp.user ||
-      process.env.ZOHO_USER ||
-      process.env.SMTP_USER ||
-      'support@dbuystore.com'
-    ).trim();
+    const smtpUser = String(user || customSmtp.user || process.env.ZOHO_USER || process.env.SMTP_USER || 'support@dbuystore.com').trim();
 
-    let rawPass = pass;
-    if (!rawPass || rawPass === '****') {
-      rawPass =
-        customSmtp.pass ||
-        process.env.ZOHO_APP_PASSWORD ||
-        process.env.ZOHO_PASSWORD ||
-        process.env.SMTP_PASS ||
-        'cjmwVviQbiaq';
-    }
-    const smtpPass = String(rawPass).trim().replace(/\s+/g, '');
-
-    const meta = { smtpHost, smtpPort, smtpUser, hasPass: Boolean(smtpPass) };
-
-    if (!smtpPass) {
-      res.status(400).json({
-        success: false,
-        error: 'Zoho Mail Password / App Password is required! Please enter your 16-character Zoho App Password in the field above.',
-        meta,
-      });
-      return;
-    }
-
-    const testTransporter = nodemailer.createTransport({
-      host: smtpHost,
-      port: smtpPort,
-      secure: smtpPort === 465,
-      auth: {
-        user: smtpUser,
-        pass: smtpPass,
-      },
-      tls: {
-        rejectUnauthorized: false,
-      },
-      connectionTimeout: 10000,
-      greetingTimeout: 10000,
-      socketTimeout: 15000,
-    });
-
-    // Send test email with retry
     const testResult = await sendMailWithRetry({
       from: `"DBUY System Test" <${smtpUser}>`,
       to: `${smtpUser}, lashaarsiashvili@gmail.com`,
-      subject: `[DBUY Test] Zoho Mail SMTP Connected Successfully (${new Date().toLocaleTimeString()})`,
-      html: `
-        <div style="font-family: Arial, sans-serif; max-width: 580px; margin: 0 auto; padding: 24px; background-color: #ffffff; border-radius: 16px; border: 1px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);">
-          <div style="background-color: #059669; padding: 16px 20px; border-radius: 10px; text-align: center; color: #ffffff; margin-bottom: 20px;">
-            <h2 style="margin: 0; font-size: 20px; font-weight: 800;">✅ Zoho Mail SMTP Connected!</h2>
-          </div>
-          <p style="font-size: 14px; color: #334155; line-height: 1.6;">
-            This diagnostic message confirms that DBUY Store is successfully authenticated with <strong>${smtpUser}</strong> on server <strong>${smtpHost}:${smtpPort}</strong>.
-          </p>
-          <ul style="font-size: 13px; color: #475569; background-color: #f8fafc; padding: 14px 20px 14px 36px; border-radius: 10px; border: 1px solid #f1f5f9;">
-            <li><strong>Sender Email:</strong> ${smtpUser}</li>
-            <li><strong>SMTP Server:</strong> ${smtpHost}:${smtpPort}</li>
-            <li><strong>Status:</strong> Active & Ready for Live OTP / Password Resets / Contact Emails</li>
-          </ul>
-          <hr style="border: none; border-top: 1px solid #f1f5f9; margin: 20px 0;" />
-          <p style="font-size: 11px; color: #94a3b8; text-align: center; margin: 0;">
-            DBUY Store Security & Mail Infrastructure • ${new Date().toISOString()}
-          </p>
-        </div>
-      `,
-      text: `Zoho Mail SMTP Connected Successfully for ${smtpUser}!`,
+      subject: `[DBUY Test] Zoho Mail SMTP Connected Successfully`,
+      text: `Zoho Mail SMTP Connected Successfully for ${smtpUser} on ${smtpHost}:${smtpPort}!`,
     });
 
     if (!testResult.success) {
-      res.status(500).json({
-        success: false,
-        error: testResult.error || 'Failed to dispatch test email',
-        meta,
-      });
+      res.status(500).json({ success: false, error: testResult.error || 'Failed to dispatch test email' });
       return;
     }
 
     res.json({
       success: true,
-      message: `Successfully verified connection and dispatched test email to ${smtpUser} and lashaarsiashvili@gmail.com`,
+      message: `Successfully verified connection and dispatched test email to ${smtpUser}`,
       messageId: testResult.messageId,
-      meta,
     });
-
-    // Auto-save verified SMTP config to storeDb
-    if (!(storeDb as any).smtpConfig) {
-      (storeDb as any).smtpConfig = {};
-    }
-    (storeDb as any).smtpConfig = {
-      host: smtpHost,
-      port: smtpPort,
-      user: smtpUser,
-      pass: smtpPass,
-      verified: true,
-      lastVerifiedAt: new Date().toISOString(),
-    };
-    saveStoreDatabase();
   } catch (err: any) {
-    console.error('[SMTP-TEST-ERROR]', err);
-    const errStr = String(err?.message || err?.response || err);
-    let userMessage = err?.message || 'SMTP connection failed';
-
-    if (errStr.includes('554') || errStr.includes('Access Restricted')) {
-      userMessage = 'Zoho Mail Access Restricted (554 5.7.8): Zoho rejected the login request for support@dbuystore.com.\n\n' +
-        'Please verify these 3 steps in Zoho:\n' +
-        '1) Domain Verification: Go to mailadmin.zoho.eu ➔ Domains and click "Verify" for the TXT/MX records you added.\n' +
-        '2) App Password: Go to accounts.zoho.eu ➔ Security ➔ App Passwords ➔ Generate a 16-character App Password (do not use your regular account password if 2FA is active).\n' +
-        '3) Plan / SMTP Access: Ensure your account is upgraded to Zoho Mail Lite ($1/mo) or SMTP Access is enabled under mail.zoho.eu ➔ Settings ➔ Mail Accounts ➔ support@dbuystore.com.';
-    } else if (errStr.includes('535') || errStr.includes('Authentication Failed') || errStr.includes('Invalid login')) {
-      userMessage = 'Zoho Mail Authentication Failed (535): The password or App Password entered was rejected by Zoho. ' +
-        'Please verify: 1) Your password is correct. 2) If 2FA is enabled in Zoho Accounts, generate a 16-character App Password at https://accounts.zoho.com (Security → App Passwords).';
-    } else if (errStr.includes('ETIMEDOUT') || errStr.includes('ESOCKETTIMEDOUT') || errStr.includes('timeout')) {
-      userMessage = 'Connection Timeout: Could not connect to SMTP server. Please ensure the port (465 SSL or 587 TLS) and server host are correct.';
-    }
-
-    res.status(500).json({
-      success: false,
-      error: userMessage,
-      code: err?.code,
-      response: err?.response,
-    });
+    res.status(500).json({ success: false, error: err?.message || 'SMTP connection failed' });
   }
 });
 
-// Test / Preview Order Confirmation Email Dispatch
 app.post('/api/admin/send-test-order-email', async (req, res) => {
   try {
     const targetEmail = (req.body?.email || 'lashaarsiashvili@gmail.com').trim();
@@ -4539,19 +3778,10 @@ app.post('/api/admin/send-test-order-email', async (req, res) => {
           selectedColor: 'Midnight Black',
           image: '/uploads/headphones.jpg',
         },
-        {
-          id: 'prod-sample-2',
-          title: 'Smart Touch Activity & Sleep Tracker',
-          price: 59.99,
-          quantity: 1,
-          selectedColor: 'Space Grey',
-          image: '/uploads/tracker.jpg',
-        },
       ],
-      total: 189.98,
+      total: 129.99,
       currency: 'USD',
       paymentMethod: 'Google Pay',
-      googlePayTransactionId: `GPAY-VERIFIED-${Date.now().toString().slice(-6)}`,
       createdAt: new Date().toISOString(),
       status: 'Processing',
     };
@@ -4559,7 +3789,6 @@ app.post('/api/admin/send-test-order-email', async (req, res) => {
     const customerEmailData = buildCustomerOrderEmail(sampleOrder);
     const adminEmailData = buildAdminOrderAlertEmail(sampleOrder);
 
-    // Dispatch to customer target
     const result = await sendMailWithRetry({
       from: '"DBUY Store" <support@dbuystore.com>',
       to: targetEmail,
@@ -4570,9 +3799,6 @@ app.post('/api/admin/send-test-order-email', async (req, res) => {
 
     res.json({
       success: result.success,
-      message: result.success
-        ? `Professional order confirmation email sent to ${targetEmail}!`
-        : `Email delivery status: ${result.error || 'Check SMTP configuration'}`,
       order: sampleOrder,
       subject: customerEmailData.subject,
       adminSubject: adminEmailData.subject,
@@ -4583,17 +3809,11 @@ app.post('/api/admin/send-test-order-email', async (req, res) => {
   }
 });
 
-// ==========================================
-// Contact Messages Management Endpoints
-// ==========================================
-
-// GET: All received contact messages
 app.get('/api/contact/messages', (req, res) => {
   const messages = Array.isArray((storeDb as any).contactMessages) ? (storeDb as any).contactMessages : [];
   res.json({ success: true, messages });
 });
 
-// POST: Mark contact message as read/replied
 app.post('/api/contact/messages/mark-read', (req, res) => {
   try {
     const { id, status } = req.body;
@@ -4611,7 +3831,6 @@ app.post('/api/contact/messages/mark-read', (req, res) => {
   }
 });
 
-// POST: Delete contact message
 app.post('/api/contact/messages/delete', (req, res) => {
   try {
     const { id } = req.body;
@@ -4625,7 +3844,7 @@ app.post('/api/contact/messages/delete', (req, res) => {
   }
 });
 
-// JSON 404 handler for any unknown /api routes (prevents returning HTML SPA fallback for API calls)
+// JSON 404 handler for any unknown /api routes
 app.all('/api/*', (req, res) => {
   res.status(404).json({
     success: false,
@@ -4648,235 +3867,17 @@ async function setupFrontend() {
     app.use(vite.middlewares);
   } else {
     const distPath = path.join(process.cwd(), 'dist');
-    // Serve static files with index: false to prevent default index.html serving
     app.use(express.static(distPath, { index: false }));
 
-    const findProductBySlugOrId = (segment: string): any => {
-      if (!storeDb || !Array.isArray(storeDb.products)) return null;
-      const decoded = decodeURIComponent(segment).toLowerCase().trim();
-      return storeDb.products.find((p: any) => {
-        const idMatch = String(p.id) === decoded;
-        const slugMatch = p.customSlug && p.customSlug.toLowerCase().trim() === decoded;
-        const generatedSlug = p.title.toLowerCase()
-          .trim()
-          .replace(/[^\w\s\u10A0-\u10FF-]/g, '')
-          .replace(/\s+/g, '-')
-          .replace(/-+/g, '-');
-        return idMatch || slugMatch || generatedSlug === decoded;
-      });
-    };
-
     app.get('*', (req, res) => {
-      const urlPath = req.path;
       const indexHtmlPath = path.join(distPath, 'index.html');
-
-      fs.readFile(indexHtmlPath, 'utf8', (err, htmlContent) => {
-        if (err) {
-          console.error('[SEO-FALLBACK] Error reading index.html:', err);
-          return res.sendFile(indexHtmlPath);
-        }
-
-        const langParam = (req.query.lang as string || '').toLowerCase();
-        const isEn = langParam === 'en';
-
-        let seoTitle = 'DBUY Store — Quality Tech, Fitness & Everyday Essentials';
-        let seoDesc = 'Premium e-commerce storefront for tech, fitness, and everyday carry essentials with multi-currency, multi-language, cart, checkout, and admin dashboard.';
-        let seoImage = 'https://dbuystore.com/assets/logo.png';
-        let seoUrl = `https://dbuystore.com${req.originalUrl}`;
-        let productSchema = '';
-
-        const segments = urlPath.replace(/^\/+|\/+$/g, '').split('/');
-        let matchedProduct: any = null;
-
-        if (segments[0] === 'b' && segments[1]) {
-          matchedProduct = findProductBySlugOrId(segments[1]);
-        } else if (segments[0] === 'product' && segments[1]) {
-          matchedProduct = findProductBySlugOrId(segments[1]);
-          if (!matchedProduct && segments[2]) {
-            matchedProduct = findProductBySlugOrId(segments[2]);
-          }
-        }
-
-        let priceAmount = 0;
-        let currencyCode = 'GEL';
-
-        if (matchedProduct) {
-          const rawTitleKa = matchedProduct.titleKa || matchedProduct.title_ka || matchedProduct.title;
-          const rawTitleEn = matchedProduct.title_en || matchedProduct.titleEn || matchedProduct.title;
-
-          const rawUsdPrice = matchedProduct.price || 0;
-          const rawUsdOrigPrice = matchedProduct.origPrice && matchedProduct.origPrice > rawUsdPrice ? matchedProduct.origPrice : null;
-
-          if (isEn) {
-            currencyCode = 'USD';
-            priceAmount = rawUsdPrice;
-            const savingsUsd = rawUsdOrigPrice ? Math.round(rawUsdOrigPrice - rawUsdPrice) : 0;
-
-            seoTitle = rawUsdPrice > 0
-              ? `🔥 ${rawTitleEn} — Only $${rawUsdPrice} at DBUY!`
-              : `${rawTitleEn} — DBUY Store`;
-
-            const defaultDescEn = `💰 Price: Only $${rawUsdPrice}${rawUsdOrigPrice ? ` (Regular: $${rawUsdOrigPrice} — Save $${savingsUsd}! 🎉)` : ''} | 📦 Fast Worldwide Delivery • 🛡️ Official Guarantee • Order Online at DBUY Store`;
-            const rawDescEn = matchedProduct.description_en || matchedProduct.descriptionEn || matchedProduct.description || '';
-            const cleanDescEn = rawDescEn.replace(/<[^>]*>/g, '').trim();
-
-            seoDesc = cleanDescEn && cleanDescEn.length > 15
-              ? `${cleanDescEn.substring(0, 180)} | Price: $${rawUsdPrice} • 📦 Fast Worldwide Delivery`
-              : defaultDescEn;
-           } else {
-            currencyCode = 'USD';
-            priceAmount = rawUsdPrice;
-            seoTitle = `🔥 ${rawTitleEn || rawTitleKa || 'Product'} — Only $${rawUsdPrice} | Worldwide Shipping 🌍`;
-            seoDesc = `Premium quality at direct value. Order now at DBUY Store with Fast & Secure Worldwide Shipping!`;
-          }
-
-          if (matchedProduct.image) {
-            seoImage = matchedProduct.image.startsWith('http') 
-              ? matchedProduct.image 
-              : `https://dbuystore.com${matchedProduct.image.startsWith('/') ? '' : '/'}${matchedProduct.image}`;
-          }
-
-          const ratingValue = matchedProduct.rating || 4.8;
-          const reviewCount = matchedProduct.reviewsCount || 12;
-          const offersStock = matchedProduct.stock && matchedProduct.stock > 0 ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock';
-
-          const prodTitle = isEn ? rawTitleEn : matchedProduct.title;
-          const prodDesc = isEn 
-            ? (matchedProduct.description_en || matchedProduct.description || '').replace(/<[^>]*>/g, '').substring(0, 160).trim()
-            : (matchedProduct.description_ka || matchedProduct.description || '').replace(/<[^>]*>/g, '').substring(0, 160).trim();
-
-          productSchema = `
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "Product",
-      "name": "${prodTitle.replace(/"/g, '\\"')}",
-      "image": "${seoImage}",
-      "description": "${prodDesc.replace(/"/g, '\\"')}",
-      "sku": "DBUY-${matchedProduct.id}",
-      "mpn": "DBUY-${matchedProduct.id}",
-      "brand": {
-        "@type": "Brand",
-        "name": "${(matchedProduct.brand || 'DBUY').replace(/"/g, '\\"')}"
-      },
-      "aggregateRating": {
-        "@type": "AggregateRating",
-        "ratingValue": "${ratingValue}",
-        "reviewCount": "${reviewCount}"
-      },
-      "offers": {
-        "@type": "Offer",
-        "url": "${seoUrl}",
-        "priceCurrency": "${currencyCode}",
-        "price": "${priceAmount}",
-        "itemCondition": "https://schema.org/NewCondition",
-        "availability": "${offersStock}"
+      if (fs.existsSync(indexHtmlPath)) {
+        res.sendFile(indexHtmlPath);
+      } else {
+        res.status(404).send('Build not found');
       }
-    }
-    </script>
-          `;
-        }
-
-        // Intercept and inject dynamic meta tags matching generated marketing copy
-        let modifiedHtml = htmlContent
-          .replace(/<title>[^<]*<\/title>/, `<title>${seoTitle}</title>`)
-          .replace(/<meta name="description" [^>]*>/, `<meta name="description" content="${seoDesc}" />`)
-          .replace(/<meta property="og:title" [^>]*>/, `<meta property="og:title" content="${seoTitle}" id="og-title" />`)
-          .replace(/<meta property="og:description" [^>]*>/, `<meta property="og:description" content="${seoDesc}" id="og-description" />`)
-          .replace(/<meta property="og:image" [^>]*>/g, `<meta property="og:image" content="${seoImage}" id="og-image" />`)
-          .replace(/<meta property="og:image:secure_url" [^>]*>/g, `<meta property="og:image:secure_url" content="${seoImage}" id="og-image-secure" />`)
-          .replace(/<meta property="og:url" [^>]*>/g, `<meta property="og:url" content="${seoUrl}" id="og-url" />`)
-          .replace(/<meta name="twitter:title" [^>]*>/, `<meta name="twitter:title" content="${seoTitle}" id="twitter-title" />`)
-          .replace(/<meta name="twitter:description" [^>]*>/, `<meta name="twitter:description" content="${seoDesc}" id="twitter-description" />`)
-          .replace(/<meta name="twitter:image" [^>]*>/g, `<meta name="twitter:image" content="${seoImage}" id="twitter-image" />`);
-
-        if (matchedProduct && matchedProduct.price) {
-          modifiedHtml = modifiedHtml
-            .replace(
-              /<meta property="product:price:amount" [^>]*>/,
-              `<meta property="product:price:amount" content="${priceAmount}" id="og-price-amount" />`
-            )
-            .replace(
-              /<meta property="product:price:currency" [^>]*>/,
-              `<meta property="product:price:currency" content="${currencyCode}" id="og-price-currency" />`
-            );
-        }
-
-        if (!modifiedHtml.includes('property="og:image"')) {
-          modifiedHtml = modifiedHtml.replace('</head>', `  <meta property="og:image" content="${seoImage}" />\n  </head>`);
-        }
-
-        if (productSchema) {
-          modifiedHtml = modifiedHtml.replace('</head>', `${productSchema}\n  </head>`);
-        }
-
-        res.send(modifiedHtml);
-      });
     });
   }
-
-
-// ==========================================
-// GEMINI MULTIMODAL AD GENERATOR ENDPOINT
-// Analyzes product images and details to generate FB ad copy
-// ==========================================
-app.post('/api/gemini/generate-ad', async (req, res) => {
-  const { product, style, language } = req.body;
-  if (!product) return res.status(400).json({ success: false, error: 'Product data required' });
-
-  try {
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-    
-    // Construct multimodal prompt
-    const prompt = `You are a professional Facebook Ad Copywriter. Write a unique, high-converting Facebook ad copy in English based on the following product details and images.
-    
-    Product Title: ${product.title}
-    Price: ${product.price}
-    Features: ${JSON.stringify(product.features || [])}
-    
-    Ad Structure Requirements:
-    1. Scroll-Stopping Hook (Line 1): Bold, attention-grabbing opening (1 emoji max).
-    2. Visual & Functional Highlights (3–4 bullet points): Use ✦ or ✔ to highlight build, design, and benefits based on the provided images.
-    3. Offer & Global Trust Block: 
-       - Special Price: $${product.price} ${product.origPrice ? `(Was $${product.origPrice})` : ''}
-       - Include: 🌍 Fast & Secure Worldwide Shipping
-    4. Clear Call-To-Action (CTA): 👉 Tap the link to order yours today: [link]
-    5. Targeted Hashtags: 3-5 relevant hashtags.
-    
-    Tone: Premium, persuasive, modern e-commerce brand voice. Avoid generic robotic phrases.`;
-
-    // Fetch images to pass to Gemini
-    const imageParts = [];
-    const imageUrls = [product.image, ...(Array.isArray(product.images) ? product.images : [])].filter(Boolean);
-    
-    for (const url of imageUrls) {
-        try {
-            const response = await fetch(url);
-            const blob = await response.blob();
-            const buffer = Buffer.from(await blob.arrayBuffer());
-            imageParts.push({
-                inlineData: {
-                    data: buffer.toString('base64'),
-                    mimeType: 'image/jpeg',
-                },
-            });
-        } catch (e) {
-            console.warn('Failed to fetch image for Gemini:', e);
-        }
-    }
-
-    const result = await ai.models.generateContent({
-      model: 'gemini-2.0-flash', 
-      contents: [{ role: 'user', parts: [prompt, ...imageParts] }],
-    });
-
-    const caption = result.text;
-    res.json({ success: true, caption });
-  } catch (error: any) {
-    console.error('Gemini Ad Gen Error:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`DBUY Store server running at http://0.0.0.0:${PORT}`);

@@ -1,27 +1,26 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore } from '../context/StoreContext';
-import { useLanguage } from '../context/LanguageContext';
 import { Category, Currency, Language } from '../types';
-import { BrandLogo } from './BrandLogo';
-import { LanguageSelector } from './LanguageSelector';
 import { ChangePasswordModal } from './ChangePasswordModal';
-import { 
-  Search, 
-  ShoppingCart, 
-  User as UserIcon, 
-  X, 
-  HelpCircle, 
-  ShieldAlert, 
-  Package, 
-  LogOut, 
+import {
+  Search,
+  ShoppingCart,
+  User as UserIcon,
+  X,
+  Package,
+  LogOut,
   ChevronDown,
-  Sparkles,
-  Tag,
   Heart,
+  ShieldAlert,
+  KeyRound,
+  ScanFace,
+  Globe,
+  LayoutGrid,
+  Truck,
+  CornerUpLeft,
+  Flame,
   Sun,
   Moon,
-  KeyRound,
-  ScanFace
 } from 'lucide-react';
 
 export const Header: React.FC = () => {
@@ -31,12 +30,14 @@ export const Header: React.FC = () => {
     setCurrentPage,
     navigateToCategory,
     language,
+    setLanguage,
     currency,
     setCurrency,
     selectedCategory,
     setSelectedCategory,
     searchQuery,
     setSearchQuery,
+    setSortOption,
     cartTotalCount,
     setIsCartOpen,
     wishlistCount,
@@ -44,28 +45,33 @@ export const Header: React.FC = () => {
     user,
     logoutUser,
     setIsAuthModalOpen,
-    isFaceSetupOpen,
     setIsFaceSetupOpen,
-    theme,
     isAdmin,
     isDarkMode,
     toggleDarkMode,
   } = useStore();
-  const tFinal = (key: string, params?: Record<string, string | number>) => t(key, params);
 
-
-  const [announcementClosed, setAnnouncementClosed] = useState(false);
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
+  const [catDropdownOpen, setCatDropdownOpen] = useState(false);
+  const [langDropdownOpen, setLangDropdownOpen] = useState(false);
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  // Close dropdown on outside click
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const catDropdownRef = useRef<HTMLDivElement>(null);
+  const langDropdownRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       const target = event.target as Node;
       if (dropdownRef.current && !dropdownRef.current.contains(target)) {
         setUserDropdownOpen(false);
+      }
+      if (catDropdownRef.current && !catDropdownRef.current.contains(target)) {
+        setCatDropdownOpen(false);
+      }
+      if (langDropdownRef.current && !langDropdownRef.current.contains(target)) {
+        setLangDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -73,7 +79,36 @@ export const Header: React.FC = () => {
   }, []);
 
   const handleCategorySelect = (cat: Category) => {
-    navigateToCategory(cat);
+    setSelectedCategory(cat);
+    setCatDropdownOpen(false);
+    if (currentPage !== 'home') {
+      setCurrentPage('home');
+    }
+    const el = document.getElementById('featured-products-section') || document.getElementById('products');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const handleNavFilterClick = (filterType: 'deals' | 'new' | 'bestsellers' | 'brands' | 'giftcards') => {
+    if (currentPage !== 'home') {
+      setCurrentPage('home');
+    }
+    if (filterType === 'deals') {
+      setSelectedCategory('deals');
+    } else if (filterType === 'new') {
+      setSelectedCategory('all');
+      setSortOption('newest');
+    } else if (filterType === 'bestsellers') {
+      setSelectedCategory('all');
+      setSortOption('featured');
+    } else {
+      setSelectedCategory('all');
+    }
+    const el = document.getElementById('featured-products-section') || document.getElementById('products');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
   };
 
   const handleLogoClick = (e: React.MouseEvent) => {
@@ -81,347 +116,538 @@ export const Header: React.FC = () => {
     setCurrentPage('home');
     setSelectedCategory('all');
     setSearchQuery('');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
+  const handleSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (currentPage !== 'home') {
+      setCurrentPage('home');
+    }
+    const el = document.getElementById('featured-products-section') || document.getElementById('products');
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
+  const categoryMenuItems: { id: Category; label: string }[] = [
+    { id: 'all', label: 'All Categories' },
+    { id: 'tech', label: 'Electronics & Smart Tech' },
+    { id: 'gaming', label: 'Gaming Gear' },
+    { id: 'everyday', label: 'Home & Living' },
+    { id: 'audio', label: 'Audio & Headphones' },
+    { id: 'wearables', label: 'Smart Devices & Wearables' },
+    { id: 'drinkware', label: 'Drinkware (Bottles & Mugs)' },
+    { id: 'fitness', label: 'Beauty, Health & Fitness' },
+    { id: 'accessories', label: 'Lifestyle & Accessories' },
+    { id: 'deals', label: 'Special Deals' },
+  ];
+
   return (
-    <header className="relative w-full bg-white dark:bg-slate-900 shadow-xs dark:shadow-slate-800/50 transition-colors z-30">
-      {/* 1. Top Shipping Announcement Bar (Only Shipping Ad above logo panel) */}
-      {theme.announcementVisible && !announcementClosed && (
-        <div 
-          style={{ backgroundColor: theme.primaryColor || '#2563eb' }}
-          className="relative flex items-center justify-between px-2 sm:px-4 py-1.5 sm:py-2 text-[10px] xs:text-[11px] sm:text-xs md:text-sm font-medium text-white transition-colors"
-        >
-          <div className="flex items-center justify-center flex-1 space-x-1.5 sm:space-x-2 text-center overflow-hidden">
-            <Sparkles className="w-3.5 h-3.5 text-amber-300 animate-pulse shrink-0" />
-            <span className="truncate max-w-full leading-tight">{t('footer.announcement')}</span>
-          </div>
-          <button
-            onClick={() => setAnnouncementClosed(true)}
-            className="p-1 transition-opacity rounded-sm hover:opacity-80 shrink-0 text-white/80 hover:text-white"
-            aria-label="Dismiss Announcement"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
-      {/* 2. Main Header & Logo Panel */}
-      <div className="max-w-7xl px-2.5 sm:px-4 py-2 sm:py-3 mx-auto flex items-center justify-between gap-1.5 sm:gap-4 border-b border-slate-100 dark:border-slate-800/80">
-        {isMobileSearchExpanded ? (
-          /* Expandable Mobile Search Panel */
-          <div className="flex items-center w-full gap-2 animate-in fade-in duration-200">
-            <div className="flex-1 flex items-center border-2 border-blue-600 dark:border-blue-500 rounded-xl bg-white dark:bg-slate-800 px-3 py-1.5 shadow-sm">
-              <Search className="w-4 h-4 text-blue-600 dark:text-blue-400 mr-2 shrink-0" />
-              <input type="text"
-                autoFocus
-                value={searchQuery ?? ''}
-                onChange={e => setSearchQuery(e.target.value)}
-                placeholder={t('nav.searchPlaceholder')}
-                className="w-full text-xs text-slate-800 dark:text-slate-100 bg-transparent focus:outline-none placeholder-slate-400"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery('')}
-                  className="p-1 text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-            <button
-              onClick={() => setIsMobileSearchExpanded(false)}
-              className="px-3 py-1.5 rounded-xl bg-slate-200 dark:bg-slate-700 text-slate-800 dark:text-slate-200 text-xs font-bold shrink-0 hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors"
-            >
-              {t('nav.close')}
-            </button>
-          </div>
-        ) : (
-          <>
-            {/* Brand Logo */}
-            <a
-              href="#home"
-              onClick={handleLogoClick}
-              className="flex items-center shrink-0 cursor-pointer"
-            >
-              <BrandLogo size="md" variant={isDarkMode ? 'dark' : 'light'} styleOverride={theme.logoStyle} />
-            </a>
-
-            {/* Desktop Full Search Container */}
-            <div 
-              style={{ borderColor: theme.primaryColor || '#2563eb' }}
-              className="hidden sm:flex flex-1 w-full max-w-2xl items-center border-2 rounded-lg bg-white dark:bg-slate-800 shadow-sm mx-4"
-            >
-              <div className="relative flex-1 flex items-center h-full">
-                <input type="text"
+    <header
+      className="sticky top-0 z-40 w-full bg-white dark:bg-slate-900 transition-colors"
+      style={{ boxShadow: '0 2px 20px rgba(0,0,0,0.04)' }}
+    >
+      {/* TOP ROW: Height 84px on desktop */}
+      <div className="w-full border-b border-slate-100 dark:border-slate-800/80">
+        <div className="max-w-[1320px] h-[68px] lg:h-[84px] mx-auto px-4 lg:px-6 flex items-center justify-between gap-4">
+          {isMobileSearchExpanded ? (
+            <form onSubmit={handleSearchSubmit} className="flex items-center w-full gap-2">
+              <div className="flex-1 flex items-center h-11 rounded-[24px] bg-[#F3F4F6] dark:bg-slate-800 px-4 border border-slate-200 dark:border-slate-700">
+                <Search className="w-4 h-4 text-slate-500 mr-2.5 shrink-0" />
+                <input
+                  type="text"
+                  autoFocus
                   value={searchQuery ?? ''}
-                  onChange={e => setSearchQuery(e.target.value)}
-                  placeholder={t('nav.searchPlaceholder')}
-                  className="w-full h-full px-4 py-2 text-sm text-slate-800 dark:text-slate-100 bg-transparent placeholder-slate-400 focus:outline-none rounded-l-md"
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search for products, brands or categories..."
+                  className="w-full text-sm text-slate-900 dark:text-slate-100 bg-transparent focus:outline-none placeholder-slate-400"
                 />
                 {searchQuery && (
                   <button
+                    type="button"
                     onClick={() => setSearchQuery('')}
-                    className="absolute right-2 p-1 text-slate-400 hover:text-slate-600 dark:text-slate-300 dark:hover:text-slate-200"
-                    aria-label="Clear search"
+                    className="p-1 text-slate-400 hover:text-slate-600"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 )}
               </div>
-
               <button
-                onClick={() => {
-                  if (currentPage !== 'home') setCurrentPage('home');
-                }}
-                style={{ backgroundColor: theme.primaryColor || '#2563eb' }}
-                className="flex items-center justify-center px-6 py-2.5 text-white font-bold text-sm hover:opacity-90 transition-opacity rounded-r-sm h-full"
+                type="button"
+                onClick={() => setIsMobileSearchExpanded(false)}
+                className="px-3.5 py-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold shrink-0"
               >
-                <Search className="w-4 h-4 mr-2" />
-                <span>{t('nav.search')}</span>
+                Cancel
               </button>
-            </div>
-
-            {/* Right Header Controls: Compact Search Trigger + Account + Wishlist + Cart */}
-            <div className="flex items-center space-x-1 sm:space-x-2.5 shrink-0">
-              {/* Mobile Compact Search Button on Logo Row */}
-              <button
-                onClick={() => setIsMobileSearchExpanded(true)}
-                className="sm:hidden flex items-center justify-center w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors border border-slate-200/60 dark:border-slate-700/60 touch-manipulation cursor-pointer"
-                aria-label="Expand Search"
-                title={language === 'ka' ? 'ძებნა' : 'Search'}
+            </form>
+          ) : (
+            <>
+              {/* LEFT: DBuy Logo — 100% Identical to Reference */}
+              <a
+                href="#home"
+                onClick={handleLogoClick}
+                className="flex items-center gap-3 shrink-0 cursor-pointer group focus:outline-none"
               >
-                <Search className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-              </button>
+                <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
+                  <svg viewBox="0 0 48 48" fill="none" className="w-11 h-11">
+                    <defs>
+                      {/* Front Face Gradient: Bright Cyan-Blue at bottom-left to Azure Blue at top-right */}
+                      <linearGradient id="dbuyFrontGrad" x1="6" y1="42" x2="30" y2="12" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stopColor="#19B5FE" />
+                        <stop offset="55%" stopColor="#0D92FF" />
+                        <stop offset="100%" stopColor="#0066FF" />
+                      </linearGradient>
+                      {/* Right 3D Side Gusset Gradient: Deep Royal Blue */}
+                      <linearGradient id="dbuySideGrad" x1="29" y1="13" x2="41" y2="41" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stopColor="#0052E8" />
+                        <stop offset="100%" stopColor="#0035B5" />
+                      </linearGradient>
+                      {/* Front Handle Gradient */}
+                      <linearGradient id="dbuyHandleFront" x1="12" y1="4" x2="26" y2="16" gradientUnits="userSpaceOnUse">
+                        <stop offset="0%" stopColor="#1D63F0" />
+                        <stop offset="100%" stopColor="#003EC2" />
+                      </linearGradient>
+                    </defs>
 
-              {/* User Account Dropdown */}
-              <div className="relative" ref={dropdownRef}>
+                    {/* Back Handle (Right-offset 3D loop) */}
+                    <path
+                      d="M19.5 14.5V10.5C19.5 6.8 22.4 4.2 26 4.2C29.6 4.2 32.5 6.8 32.5 10.5V14.5"
+                      stroke="#0037B3"
+                      strokeWidth="3.1"
+                      strokeLinecap="round"
+                    />
+
+                    {/* Top Inner Bag Opening Crease */}
+                    <path
+                      d="M10 13.5L31 12.2L39.5 14.8L29.5 16Z"
+                      fill="#002B94"
+                    />
+
+                    {/* Right 3D Gusset Panel */}
+                    <path
+                      d="M29.5 13.2L39.5 14.8L41.5 36.5C41.7 38.7 40.2 40.6 38 41L29.5 42.5V13.2Z"
+                      fill="url(#dbuySideGrad)"
+                    />
+
+                    {/* Front Bag Body (Tapered 3D Shopping Bag Silhouette) */}
+                    <path
+                      d="M8.5 16.5C8.7 14.5 10.3 13 12.3 13H28.5C30.5 13 32.1 14.5 32.3 16.5L34 38.2C34.2 40.7 32.2 42.8 29.7 42.8H10.5C8 42.8 6 40.7 6.2 38.2L8.5 16.5Z"
+                      fill="url(#dbuyFrontGrad)"
+                    />
+
+                    {/* Front Handle (Left-centered 3D loop overlapping top edge) */}
+                    <path
+                      d="M13 16V11.2C13 7.2 15.9 4.5 19.6 4.5C23.3 4.5 26.2 7.2 26.2 11.2V16"
+                      stroke="url(#dbuyHandleFront)"
+                      strokeWidth="3.2"
+                      strokeLinecap="round"
+                    />
+
+                    {/* Direct Crisp White Checkmark on Front Bag Face (No circle behind it) */}
+                    <path
+                      d="M15.2 27.5L19.2 31.8L25.8 23.8"
+                      stroke="#FFFFFF"
+                      strokeWidth="3.1"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+                  </svg>
+                </div>
+                <div className="flex flex-col justify-center">
+                  <span className="text-[23px] lg:text-[25px] font-extrabold tracking-[-0.02em] text-[#0A1122] dark:text-white leading-[0.95]">
+                    DBuy
+                  </span>
+                  <span className="text-[11px] font-medium text-[#475569] dark:text-slate-400 tracking-[-0.01em] leading-none mt-[6px] whitespace-nowrap">
+                    Tech for a Better You
+                  </span>
+                </div>
+              </a>
+
+              {/* CENTER: Search Bar (520px width, 48px height, 24px radius) */}
+              <form
+                onSubmit={handleSearchSubmit}
+                className="hidden md:flex items-center w-full max-w-[520px] h-[48px] rounded-[24px] bg-[#F3F4F6] dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 overflow-hidden transition-all focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/15 mx-4"
+              >
+                <input
+                  type="text"
+                  value={searchQuery ?? ''}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search for products, brands or categories..."
+                  className="flex-1 h-full pl-5 pr-3 text-[13.5px] text-slate-800 dark:text-slate-100 bg-transparent placeholder-[#64748B] focus:outline-none"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => setSearchQuery('')}
+                    className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    aria-label="Clear search"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
                 <button
-                  onClick={() => {
-                    if (user.isLoggedIn) {
-                      setUserDropdownOpen(!userDropdownOpen);
-                    } else {
-                      setIsAuthModalOpen(true);
-                    }
-                  }}
-                  className="flex items-center space-x-1 sm:space-x-1.5 min-h-[40px] px-2 py-1.5 rounded-xl text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors touch-manipulation cursor-pointer"
-                  aria-label="User Account"
+                  type="submit"
+                  className="w-[52px] h-[40px] mr-1 rounded-[20px] bg-[#0B132B] hover:bg-[#1E293B] text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                  aria-label="Search"
                 >
-                  <div className="p-1 sm:p-1.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200">
-                    <UserIcon className="w-4 h-4" />
-                  </div>
-                  <div className="hidden lg:flex flex-col text-left">
-                    <span className="text-[11px] text-slate-400 leading-tight">
-                      {user.isLoggedIn ? t('top.hi') : t('top.signIn')}
-                    </span>
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-200 truncate max-w-[90px]">
-                      {user.isLoggedIn ? user.name : t('nav.account')}
-                    </span>
-                  </div>
-                  {user.isLoggedIn && <ChevronDown className="w-3.5 h-3.5 text-slate-400 hidden lg:inline" />}
+                  <Search className="w-4 h-4 stroke-[2.2]" />
+                </button>
+              </form>
+
+              {/* RIGHT: Utility & Account Icons */}
+              <div className="flex items-center gap-3 lg:gap-5 shrink-0">
+                {/* Mobile Search Trigger */}
+                <button
+                  type="button"
+                  onClick={() => setIsMobileSearchExpanded(true)}
+                  className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                  aria-label="Search"
+                >
+                  <Search className="w-4 h-4" />
                 </button>
 
-                {/* Dropdown Menu */}
-                {userDropdownOpen && user.isLoggedIn && (
-                  <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-50 animate-in fade-in slide-in-from-top-2 duration-150">
-                    <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
-                      <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">{user.name}</p>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
-                    </div>
-                    <div className="py-1">
-                      <button
-                        onClick={() => {
-                          setIsWishlistOpen(true);
-                          setUserDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2"
-                      >
-                        <Heart className="w-4 h-4 text-red-500" />
-                        <span>{t('wishlist.title')} ({wishlistCount})</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setCurrentPage('my-orders');
-                          setUserDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2"
-                      >
-                        <Package className="w-4 h-4 text-blue-600 dark:text-blue-400" />
-                        <span>{t('nav.myOrders')}</span>
-                      </button>
-                      <button
-                        onClick={() => {
-                          setIsChangePasswordOpen(true);
-                          setUserDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2 font-medium"
-                      >
-                        <KeyRound className="w-4 h-4 text-amber-500" />
-                        <span>{language === 'ka' ? 'პაროლის შეცვლა' : 'Change Password'}</span>
-                      </button>
-                      {isAdmin && (
-                        <button
-                          onClick={() => {
-                            setCurrentPage('admin');
-                            setUserDropdownOpen(false);
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs text-indigo-700 dark:text-indigo-300 bg-indigo-50/70 dark:bg-indigo-950/60 hover:bg-indigo-100 dark:hover:bg-indigo-900/80 font-bold flex items-center space-x-2 transition-colors"
-                        >
-                          <ShieldAlert className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                          <span>{t('nav.adminDash')}</span>
-                        </button>
-                      )}
-                      <button
-                        onClick={() => {
-                          setIsFaceSetupOpen(true);
-                          setUserDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2 font-medium"
-                      >
-                        <ScanFace className="w-4 h-4 text-purple-500" />
-                        <span>{localStorage.getItem('dbuy_enrolled_face_user') ? 'Face ID Active ✅' : 'Setup Face ID'}</span>
-                      </button>
-                    </div>
-                    <div className="border-t border-slate-100 dark:border-slate-800 pt-1">
-                      <button
-                        onClick={() => {
-                          logoutUser();
-                          setUserDropdownOpen(false);
-                        }}
-                        className="w-full text-left px-4 py-2 text-xs text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 flex items-center space-x-2"
-                      >
-                        <LogOut className="w-4 h-4" />
-                        <span>{t('nav.signOut')}</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+                {/* Language Selector (Globe + EN v) */}
+                <div className="relative hidden sm:block" ref={langDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setLangDropdownOpen(!langDropdownOpen)}
+                    className="flex items-center gap-1.5 text-[13px] font-medium text-[#334155] dark:text-slate-200 hover:text-[#0F172A] dark:hover:text-white transition-colors cursor-pointer py-1.5"
+                  >
+                    <Globe className="w-4 h-4 text-[#475569] dark:text-slate-300" />
+                    <span className="uppercase font-semibold">{language}</span>
+                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                  </button>
 
-              {/* Wishlist Button */}
-              <button
-                onClick={() => {
-                  if (!user.isLoggedIn) {
-                    setIsAuthModalOpen(true);
-                  } else {
-                    setIsWishlistOpen(true);
-                  }
-                }}
-                className="flex items-center space-x-1 sm:space-x-1.5 min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-slate-50 dark:bg-slate-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-700 dark:text-slate-200 hover:text-red-600 transition-all font-semibold cursor-pointer border border-slate-100 dark:border-slate-700 touch-manipulation"
-                aria-label="Open Wishlist"
-                title={t('wishlist.title')}
-              >
-                <div className="relative">
-                  <Heart className={`w-4 h-4 sm:w-5 sm:h-5 ${wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'text-slate-600 dark:text-slate-300'}`} />
+                  {langDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-100 dark:border-slate-800 py-1.5 z-50">
+                      {(['en', 'ka'] as Language[]).map((lang) => (
+                        <button
+                          key={lang}
+                          type="button"
+                          onClick={() => {
+                            setLanguage(lang);
+                            setLangDropdownOpen(false);
+                          }}
+                          className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 ${
+                            language === lang ? 'font-bold text-blue-600' : 'text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          <span>{lang === 'en' ? 'English (EN)' : 'ქართული (KA)'}</span>
+                        </button>
+                      ))}
+                      <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1 px-3 py-1 flex items-center justify-between">
+                        <span className="text-[11px] text-slate-400">Currency</span>
+                        <select
+                          value={currency}
+                          onChange={(e) => setCurrency(e.target.value as Currency)}
+                          className="text-xs font-semibold bg-transparent text-slate-800 dark:text-slate-200 focus:outline-none cursor-pointer"
+                        >
+                          <option value="USD">USD ($)</option>
+                          <option value="EUR">EUR (€)</option>
+                          <option value="GEL">GEL (₾)</option>
+                        </select>
+                      </div>
+                      <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1 px-3 py-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            toggleDarkMode();
+                            setLangDropdownOpen(false);
+                          }}
+                          className="w-full flex items-center justify-between text-xs text-slate-700 dark:text-slate-300 py-1"
+                        >
+                          <span>Theme</span>
+                          <span className="flex items-center gap-1 font-semibold">
+                            {isDarkMode ? <Sun className="w-3.5 h-3.5 text-amber-400" /> : <Moon className="w-3.5 h-3.5" />}
+                            {isDarkMode ? 'Light' : 'Dark'}
+                          </span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Help Link */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage('contact')}
+                  className="hidden lg:inline-flex items-center text-[13px] font-medium text-[#334155] dark:text-slate-200 hover:text-[#0F172A] dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  Help
+                </button>
+
+                {/* Track Order */}
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage('deliveries')}
+                  className="hidden lg:inline-flex items-center gap-1.5 text-[13px] font-medium text-[#334155] dark:text-slate-200 hover:text-[#0F172A] dark:hover:text-white transition-colors cursor-pointer"
+                >
+                  <Package className="w-4 h-4 text-[#475569] dark:text-slate-300" />
+                  <span>Track Order</span>
+                </button>
+
+                {/* Wishlist Heart Icon */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (!user.isLoggedIn) {
+                      setIsAuthModalOpen(true);
+                    } else {
+                      setIsWishlistOpen(true);
+                    }
+                  }}
+                  className="relative p-1.5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 transition-colors cursor-pointer"
+                  aria-label="Wishlist"
+                >
+                  <Heart
+                    className={`w-[21px] h-[21px] ${
+                      wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'stroke-[1.8]'
+                    }`}
+                  />
                   {wishlistCount > 0 && (
-                    <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[16px] h-[16px] sm:min-w-[18px] sm:h-[18px] px-1 text-[9px] sm:text-[10px] font-bold text-white bg-red-500 rounded-full">
+                    <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
                       {wishlistCount}
                     </span>
                   )}
-                </div>
-                <span className="hidden md:inline text-xs">{t('wishlist.buttonTitle')}</span>
-              </button>
+                </button>
 
-              {/* Cart Button */}
-              <button
-                onClick={() => setIsCartOpen(true)}
-                className="flex items-center space-x-1.5 sm:space-x-2 min-h-[40px] px-2.5 sm:px-3 py-1.5 sm:py-2 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 hover:bg-blue-100 dark:hover:bg-blue-900/80 transition-all font-semibold cursor-pointer touch-manipulation"
-                aria-label="Open Cart"
-              >
-                <div className="relative">
-                  <ShoppingCart className="w-4 h-4 sm:w-5 sm:h-5" />
-                  {cartTotalCount > 0 && (
-                    <span className="absolute -top-2 -right-2 flex items-center justify-center min-w-[16px] h-[16px] sm:min-w-[18px] sm:h-[18px] px-1 text-[9px] sm:text-[11px] font-bold text-white bg-red-600 rounded-full animate-bounce">
-                      {cartTotalCount}
-                    </span>
+                {/* Sign In / Account */}
+                <div className="relative" ref={dropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (user.isLoggedIn) {
+                        setUserDropdownOpen(!userDropdownOpen);
+                      } else {
+                        setIsAuthModalOpen(true);
+                      }
+                    }}
+                    className="flex items-center gap-2 text-left hover:opacity-85 transition-opacity cursor-pointer py-1"
+                    aria-label="User Account"
+                  >
+                    <UserIcon className="w-[21px] h-[21px] text-[#1E293B] dark:text-slate-200 stroke-[1.8]" />
+                    <div className="hidden sm:flex flex-col leading-tight">
+                      <span className="text-[12px] font-semibold text-[#0F172A] dark:text-white">
+                        {user.isLoggedIn ? user.name : 'Sign In'}
+                      </span>
+                      <span className="text-[11px] text-[#64748B] dark:text-slate-400">
+                        Account
+                      </span>
+                    </div>
+                  </button>
+
+                  {userDropdownOpen && user.isLoggedIn && (
+                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-50">
+                      <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
+                        <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">{user.name}</p>
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
+                      </div>
+                      <div className="py-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsWishlistOpen(true);
+                            setUserDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2"
+                        >
+                          <Heart className="w-4 h-4 text-red-500" />
+                          <span>{t('wishlist.title')} ({wishlistCount})</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCurrentPage('my-orders');
+                            setUserDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2"
+                        >
+                          <Package className="w-4 h-4 text-blue-600" />
+                          <span>{t('nav.myOrders')}</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsChangePasswordOpen(true);
+                            setUserDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2"
+                        >
+                          <KeyRound className="w-4 h-4 text-amber-500" />
+                          <span>Change Password</span>
+                        </button>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setCurrentPage('admin');
+                              setUserDropdownOpen(false);
+                            }}
+                            className="w-full text-left px-4 py-2 text-xs text-indigo-700 dark:text-indigo-300 bg-indigo-50/70 dark:bg-indigo-950/60 font-bold flex items-center space-x-2"
+                          >
+                            <ShieldAlert className="w-4 h-4 text-indigo-600" />
+                            <span>{t('nav.adminDash')}</span>
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsFaceSetupOpen(true);
+                            setUserDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2"
+                        >
+                          <ScanFace className="w-4 h-4 text-purple-500" />
+                          <span>{localStorage.getItem('dbuy_enrolled_face_user') ? 'Face ID Active' : 'Setup Face ID'}</span>
+                        </button>
+                      </div>
+                      <div className="border-t border-slate-100 dark:border-slate-800 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            logoutUser();
+                            setUserDropdownOpen(false);
+                          }}
+                          className="w-full text-left px-4 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center space-x-2"
+                        >
+                          <LogOut className="w-4 h-4" />
+                          <span>{t('nav.signOut')}</span>
+                        </button>
+                      </div>
+                    </div>
                   )}
                 </div>
-                <span className="hidden sm:inline text-xs">{t('nav.cart')}</span>
-              </button>
-            </div>
-          </>
-        )}
+
+                {/* Shopping Cart Icon with Blue Count Badge */}
+                <button
+                  type="button"
+                  onClick={() => setIsCartOpen(true)}
+                  className="relative p-1.5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 transition-colors cursor-pointer"
+                  aria-label="Open Cart"
+                >
+                  <ShoppingCart className="w-[22px] h-[22px] stroke-[1.8]" />
+                  <span className="absolute -top-1 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#2563EB] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
+                    {cartTotalCount}
+                  </span>
+                </button>
+
+                {/* Admin Quick Button when logged in as admin */}
+                {isAdmin && (
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage('admin')}
+                    className="hidden xl:inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-700 cursor-pointer"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" />
+                    <span>Admin</span>
+                  </button>
+                )}
+              </div>
+            </>
+          )}
+        </div>
       </div>
 
-      {/* 3. Top Utility Nav Bar (Sleek auto-fitting bar below header for quick controls) */}
-      <div className="bg-slate-50/80 dark:bg-slate-900/90 text-[10px] sm:text-xs text-slate-600 dark:text-slate-300 border-b border-slate-100 dark:border-slate-800">
-        <div className="flex items-center justify-between max-w-7xl px-2.5 sm:px-4 py-1 sm:py-1.5 mx-auto gap-1 sm:gap-2 overflow-x-auto scrollbar-none">
-          {/* Left: Quick Links (Daily Deals & Help) */}
-          <div className="flex items-center space-x-2 sm:space-x-3 shrink-0">
+      {/* BOTTOM ROW: Top Navigation Bar */}
+      <div className="w-full bg-white dark:bg-slate-900 border-b border-slate-100 dark:border-slate-800/80">
+        <div className="max-w-[1320px] h-[46px] mx-auto px-4 lg:px-6 flex items-center justify-between gap-4 overflow-x-auto scrollbar-none">
+          {/* Left Navigation Links */}
+          <div className="flex items-center gap-5 lg:gap-7 shrink-0">
+            {/* All Categories Pill Dropdown */}
+            <div className="relative" ref={catDropdownRef}>
+              <button
+                type="button"
+                onClick={() => setCatDropdownOpen(!catDropdownOpen)}
+                className="flex items-center gap-2 px-3.5 py-1.5 rounded-lg bg-[#F8FAFC] dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700 text-[13px] font-semibold text-[#0F172A] dark:text-white transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <LayoutGrid className="w-4 h-4 text-[#334155] dark:text-slate-300" />
+                <span>All Categories</span>
+                <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+              </button>
+
+              {catDropdownOpen && (
+                <div className="absolute left-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-50">
+                  {categoryMenuItems.map((item) => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      onClick={() => handleCategorySelect(item.id)}
+                      className={`w-full text-left px-4 py-2 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors flex items-center justify-between ${
+                        selectedCategory === item.id
+                          ? 'text-blue-600 font-bold bg-blue-50/50 dark:bg-blue-950/30'
+                          : 'text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      <span>{item.label}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Deals */}
             <button
-              onClick={() => {
-                handleCategorySelect('deals');
-              }}
-              className="flex items-center space-x-1 font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors text-[10px] sm:text-xs"
+              type="button"
+              onClick={() => handleNavFilterClick('deals')}
+              className="flex items-center gap-1.5 text-[13px] font-medium text-[#1E293B] dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer whitespace-nowrap"
             >
-              <Sparkles className="w-3 h-3 text-amber-400 shrink-0" />
-              <span className="whitespace-nowrap">{t('top.dailyDeals')}</span>
+              <Flame className="w-4 h-4 text-orange-500 fill-orange-500 shrink-0" />
+              <span>Deals</span>
             </button>
-            <span className="text-slate-300 dark:text-slate-700 dark:text-slate-200">|</span>
+
+            {/* New Arrivals */}
             <button
-              onClick={() => setCurrentPage('contact')}
-              className="flex items-center space-x-1 hover:text-blue-600 dark:hover:text-blue-400 transition-colors text-[10px] sm:text-xs"
+              type="button"
+              onClick={() => handleNavFilterClick('new')}
+              className="text-[13px] font-medium text-[#1E293B] dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer whitespace-nowrap"
             >
-              <HelpCircle className="w-3 h-3 shrink-0" />
-              <span className="whitespace-nowrap">{t('top.help')}</span>
+              New Arrivals
+            </button>
+
+            {/* Bestsellers */}
+            <button
+              type="button"
+              onClick={() => handleNavFilterClick('bestsellers')}
+              className="text-[13px] font-medium text-[#1E293B] dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              Bestsellers
+            </button>
+
+            {/* Brands */}
+            <button
+              type="button"
+              onClick={() => handleNavFilterClick('brands')}
+              className="text-[13px] font-medium text-[#1E293B] dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              Brands
+            </button>
+
+            {/* Gift Cards */}
+            <button
+              type="button"
+              onClick={() => handleNavFilterClick('giftcards')}
+              className="text-[13px] font-medium text-[#1E293B] dark:text-slate-200 hover:text-blue-600 dark:hover:text-blue-400 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              Gift Cards
             </button>
           </div>
 
-          {/* Right: Currency & Language Selectors & Theme Toggle & Admin Portal */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2.5 shrink-0">
-            {/* Currency Select */}
-            <div className="relative inline-flex items-center">
-              <select
-                value={currency}
-                onChange={e => setCurrency(e.target.value as Currency)}
-                aria-label="Select Currency"
-                className="px-1.5 py-0.5 font-bold bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 rounded-md text-[10px] sm:text-[11px] hover:border-slate-300 focus:ring-1 focus:ring-blue-500 cursor-pointer shadow-2xs transition-colors"
-              >
-                <option value="USD">$ USD</option>
-                <option value="EUR">€ EUR</option>
-                <option value="GEL">₾ GEL</option>
-              </select>
+          {/* Right Trust Promises */}
+          <div className="hidden md:flex items-center gap-6 shrink-0 text-[12.5px] font-medium text-[#334155] dark:text-slate-300">
+            <div className="flex items-center gap-2 whitespace-nowrap">
+              <Truck className="w-4 h-4 text-[#475569] dark:text-slate-400 shrink-0" />
+              <span>Free Shipping on Orders Over $50</span>
             </div>
-
-            {/* Language Selector */}
-            <LanguageSelector variant="light" />
-
-            {/* Theme Toggle */}
+            <span className="text-slate-200 dark:text-slate-700">|</span>
             <button
-              onClick={toggleDarkMode}
-              className="flex items-center space-x-1 px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer shadow-2xs border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
-              title={isDarkMode ? (language === 'ka' ? 'სინათლის რეჟიმი' : 'Switch to Light Mode') : (language === 'ka' ? 'მუქი რეჟიმი' : 'Switch to Dark Mode')}
-              aria-label="Toggle Theme Mode"
+              type="button"
+              onClick={() => setCurrentPage('returns')}
+              className="flex items-center gap-1.5 hover:text-blue-600 transition-colors cursor-pointer whitespace-nowrap"
             >
-              {isDarkMode ? (
-                <>
-                  <Sun className="w-3 h-3 text-amber-400 shrink-0" />
-                  <span className="text-amber-300 text-[10px] hidden xs:inline">{language === 'ka' ? 'ნათელი' : 'Light'}</span>
-                </>
-              ) : (
-                <>
-                  <Moon className="w-3 h-3 text-slate-600 dark:text-slate-300 shrink-0" />
-                  <span className="text-slate-700 dark:text-slate-300 text-[10px] hidden xs:inline">{language === 'ka' ? 'მუქი' : 'Dark'}</span>
-                </>
-              )}
+              <CornerUpLeft className="w-3.5 h-3.5 text-[#475569] dark:text-slate-400 shrink-0" />
+              <span>Easy Returns</span>
             </button>
-
-            {/* Admin Panel Link */}
-            {isAdmin && (
-              <>
-                <span className="text-slate-200 dark:text-slate-700 dark:text-slate-200">|</span>
-                <button
-                  onClick={() => setCurrentPage('admin')}
-                  className={`flex items-center space-x-1 px-1.5 py-0.5 rounded-md text-[10px] sm:text-[11px] font-bold transition-all cursor-pointer shadow-2xs ${
-                    currentPage === 'admin'
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                  }`}
-                >
-                  <ShieldAlert className="w-3 h-3 text-amber-300 shrink-0" />
-                  <span>Admin</span>
-                </button>
-              </>
-            )}
           </div>
         </div>
       </div>

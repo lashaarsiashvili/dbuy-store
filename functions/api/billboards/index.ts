@@ -1,8 +1,6 @@
-import { EventContext } from '../products';
-
 interface Env {
-  DB: D1Database;
-  R2: R2Bucket;
+  DB: any;
+  R2: any;
 }
 
 const CORS_HEADERS = {
@@ -48,7 +46,7 @@ async function uploadToR2(env: Env, file: File, title: string): Promise<{ url: s
   return { url: imageUrl, key: r2Key };
 }
 
-export const onRequest: PagesFunction<Env> = async (context) => {
+export const onRequest = async (context: { request: Request; env: Env; params?: Record<string, any> }) => {
   const { request, env } = context;
 
   if (request.method === 'OPTIONS') {
@@ -62,9 +60,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         "SELECT * FROM billboards WHERE is_active = 1 ORDER BY sort_order ASC, created_at DESC"
       ).all();
       
-      // Map D1 snake_case to Frontend camelCase if needed, or just return as is
-      // Frontend expects: id, title, titleKa, subtitle, subtitleKa, image, bgImage, bgGradient, isActive, etc.
-      const billboards = results.map((b: any) => ({
+      const billboards = (results || []).map((b: any) => ({
         id: b.id,
         title: b.title,
         titleKa: b.title_ka,
@@ -74,12 +70,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         buttonTextKa: b.button_text_ka,
         buttonLink: b.button_link,
         image: b.image_url,
-        bgImage: b.image_url, // Using same image for background if not provided
+        bgImage: b.image_url,
         bgGradient: b.bg_gradient || 'from-slate-900 via-slate-950 to-blue-950',
         r2Key: b.r2_key,
         sortOrder: b.sort_order,
         isActive: b.is_active === 1,
         productId: b.product_id,
+        productSlug: b.product_slug,
         category: b.category,
         priceTag: b.price_tag,
         origPriceTag: b.orig_price_tag,
@@ -120,11 +117,24 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       const title = (formData.get('title') as string) || 'New Billboard';
       const { url, key } = await uploadToR2(env, file, title);
 
+      // Ensure product_slug column exists (graceful bootstrap)
+      try {
+        await env.DB.exec("ALTER TABLE billboards ADD COLUMN product_slug TEXT;").catch(() => {});
+      } catch (e) {}
+
       const id = (formData.get('id') as string) || crypto.randomUUID();
       const subtitle = (formData.get('subtitle') as string) || '';
       const buttonText = (formData.get('buttonText') as string) || '';
       const buttonLink = (formData.get('buttonLink') as string) || '';
       const sortOrder = parseInt(formData.get('sortOrder') as string) || 0;
+      const productId = (formData.get('productId') as string) || '';
+      const productSlug = (formData.get('productSlug') as string) || '';
+      const category = (formData.get('category') as string) || '';
+      const priceTag = (formData.get('priceTag') as string) || '';
+      const origPriceTag = (formData.get('origPriceTag') as string) || '';
+      const discountTag = (formData.get('discountTag') as string) || '';
+      const badge = (formData.get('badge') as string) || '';
+      const badgeKa = (formData.get('badgeKa') as string) || '';
       
       // Localized fields
       const titleKa = (formData.get('titleKa') as string) || title;
@@ -136,12 +146,16 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         INSERT INTO billboards (
           id, title, title_ka, subtitle, subtitle_ka, 
           button_text, button_text_ka, button_link, 
-          image_url, r2_key, sort_order, bg_gradient
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          image_url, r2_key, sort_order, bg_gradient,
+          product_id, product_slug, category, price_tag, 
+          orig_price_tag, discount_tag, badge, badge_ka
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).bind(
         id, title, titleKa, subtitle, subtitleKa,
         buttonText, buttonTextKa, buttonLink,
-        url, key, sortOrder, bgGradient
+        url, key, sortOrder, bgGradient,
+        productId, productSlug, category, priceTag,
+        origPriceTag, discountTag, badge, badgeKa
       ).run();
 
       return new Response(JSON.stringify({ success: true, id, imageUrl: url }), {

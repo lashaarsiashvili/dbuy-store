@@ -143,6 +143,7 @@ export interface BillboardSlide {
   bgGradient: string; // e.g. "from-slate-950 via-slate-900 to-indigo-950"
   accentColor?: string; // e.g. "blue" | "indigo" | "amber" | "emerald" | "rose"
   productId?: string; // Associated product in store
+  productSlug?: string; // Associated product slug
   category?: Category; // Associated category
   priceTag?: string; // e.g. "$79.99"
   origPriceTag?: string; // e.g. "$109.99"

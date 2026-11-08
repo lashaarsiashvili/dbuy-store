@@ -1,5 +1,3 @@
-import { initialBillboards } from '../../../src/data/initialBillboards';
-
 // Declare Cloudflare D1 local types for tsc compiler
 interface D1Database {
   prepare(query: string): {
@@ -38,10 +36,22 @@ export interface Env {
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Slug, Authorization',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Admin-Slug, X-Admin-Key, Authorization',
   'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
   'Pragma': 'no-cache',
   'Expires': '0',
+};
+
+const DEFAULT_THEME = {
+  announcementText: 'Limited Time: Free Worldwide Express Shipping on Orders Over $50! ',
+  announcementVisible: true,
+  primaryColor: '#3665f3',
+  typographyTheme: 'modern',
+  heroTitle: 'Quality Products for Modern Living',
+  heroSubtitle: 'Discover premium lifestyle, fitness, and tech accessories curated for your everyday needs.',
+  eurRate: 0.92,
+  gelRate: 2.73,
+  logoStyle: 'bag-cart',
 };
 
 // Helper: Response formatting
@@ -141,31 +151,27 @@ async function persistBase64InR2(r2Bucket: any, dataUrl: string, prefix = 'prod'
   return trimmed;
 }
 
-async function persistBase64InD1(db: D1Database, dataUrl: string, prefix = 'prod'): Promise<string> {
-  return dataUrl;
-}
-
 // Helper: Parse images serialized field and fallback gracefully to legacy single image if needed
 function parseAndFallbackProducts(products: any[]): any[] {
+  if (!Array.isArray(products)) return [];
   return products.map(p => {
     let images: string[] = [];
     if (p.images) {
       if (typeof p.images === 'string') {
         try {
           images = JSON.parse(p.images);
-        } catch (e) {
+        } catch {
           images = [];
         }
       } else if (Array.isArray(p.images)) {
         images = p.images;
       }
     }
-    
-    // Legacy backwards compatibility fallback
+
     if (!Array.isArray(images) || images.length === 0) {
       images = p.image ? [p.image] : [];
     }
-    
+
     return {
       ...p,
       images,
@@ -179,7 +185,6 @@ async function loadFullProducts(db: D1Database, rawProducts: any[]): Promise<any
 
 /**
  * Dynamically queries PRAGMA table_info to inspect existing columns in D1.
- * Ensures queries never crash due to schema differences or missing columns.
  */
 async function getTableColumns(db: D1Database, tableName = 'products'): Promise<Set<string>> {
   const cols = new Set<string>();
@@ -199,8 +204,58 @@ async function getTableColumns(db: D1Database, tableName = 'products'): Promise<
 }
 
 /**
+ * Ensures required columns exist without throwing errors on every request.
+ */
+async function ensureSchema(db: D1Database): Promise<void> {
+  try {
+    await db.exec('CREATE TABLE IF NOT EXISTS store_kv (key TEXT PRIMARY KEY, value TEXT);');
+    await db.exec('CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, title TEXT);');
+  } catch (e) {
+    console.warn('Table creation warning:', e);
+  }
+
+  const existingCols = await getTableColumns(db, 'products');
+  const requiredColumns: Array<[string, string]> = [
+    ['name', 'TEXT'],
+    ['description', 'TEXT'],
+    ['price', 'REAL'],
+    ['orig_price', 'REAL DEFAULT 0'],
+    ['original_price', 'REAL DEFAULT 0'],
+    ['image', 'TEXT'],
+    ['image_path', 'TEXT'],
+    ['images', 'TEXT'],
+    ['images_json', 'TEXT'],
+    ['category', 'TEXT'],
+    ['stock', 'INTEGER DEFAULT 0'],
+    ['badge', 'TEXT'],
+    ['slug', 'TEXT'],
+    ['created_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP'],
+    ['updated_at', 'DATETIME DEFAULT CURRENT_TIMESTAMP'],
+    ['title_ka', 'TEXT'],
+    ['name_ka', 'TEXT'],
+    ['description_en', 'TEXT'],
+    ['description_ka', 'TEXT'],
+    ['features', 'TEXT'],
+    ['features_en', 'TEXT'],
+    ['features_ka', 'TEXT'],
+    ['videos', 'TEXT'],
+    ['variants', 'TEXT'],
+    ['views', 'INTEGER DEFAULT 0'],
+  ];
+
+  for (const [colName, colDef] of requiredColumns) {
+    if (!existingCols.has(colName)) {
+      try {
+        await db.exec(`ALTER TABLE products ADD COLUMN ${colName} ${colDef};`);
+      } catch {
+        // Ignore if already exists
+      }
+    }
+  }
+}
+
+/**
  * Safely inserts or updates a product in D1 relational table without data destruction.
- * Preserves existing images, stock, descriptions, and custom fields.
  */
 async function upsertProductRelational(db: D1Database, p: any, tableColumns: Set<string>): Promise<void> {
   const id = String(p.id);
@@ -311,7 +366,6 @@ async function upsertProductRelational(db: D1Database, p: any, tableColumns: Set
     await db.prepare(insertSql).bind(...activeVals).run();
   } catch (conflictErr: any) {
     console.warn('[D1 ON CONFLICT fallback in upsertProductRelational]:', conflictErr?.message || conflictErr);
-    // Secondary fallback: check if exists -> UPDATE or INSERT
     const existing = await db.prepare('SELECT id FROM products WHERE id = ?').bind(id).first().catch(() => null);
     if (existing) {
       const updateCols = activeCols.filter(c => c.toLowerCase() !== 'id');
@@ -325,8 +379,6 @@ async function upsertProductRelational(db: D1Database, p: any, tableColumns: Set
   }
 }
 
-import { handleMigrateImages } from '../migrate-images';
-
 export const onRequest: PagesFunction<Env> = async (context) => {
   const { request, env } = context;
   const url = new URL(request.url);
@@ -336,76 +388,46 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     return new Response(null, { headers: CORS_HEADERS });
   }
 
-  // Add migration endpoint
-  if (path.endsWith('/migrate-images')) {
-    return handleMigrateImages(env);
-  }
+  const db = env?.DB;
 
-  const db = env.DB;
+  // --- SAFE FALLBACK FOR AI STUDIO / LOCAL PREVIEW WHEN D1 IS NOT BOUND ---
   if (!db) {
+    if (request.method === 'GET' && path.endsWith('/sync')) {
+      return jsonResponse({
+        success: true,
+        data: {
+          products: [],
+          theme: DEFAULT_THEME,
+          billboardIntervalSeconds: 120,
+          lastUpdated: new Date().toISOString(),
+          registeredUsers: {},
+          orders: [],
+          adminSecretSlug: 'dashboard',
+        },
+      });
+    }
+    if (request.method === 'GET' && path.endsWith('/products')) {
+      return jsonResponse({ success: true, products: [] });
+    }
+    if (request.method === 'GET' && path.endsWith('/user-cart')) {
+      return jsonResponse({ success: true, cart: [], wishlist: [] });
+    }
     return jsonResponse({
       success: false,
-      error: 'Cloudflare D1 Database binding "DB" is missing in Cloudflare Dashboard / wranger.toml.',
-    }, 500);
+      error: 'Cloudflare D1 Database binding "DB" is missing in Cloudflare Dashboard / wrangler.toml.',
+    }, 200);
   }
 
-    // --- INITIAL SQL TABLE SETUP & BOOTSTRAP ---
-    try {
-      await db.exec('CREATE TABLE store_kv (key TEXT PRIMARY KEY, value TEXT);');
-      await db.exec('CREATE TABLE products (id TEXT PRIMARY KEY, title TEXT);');
-    } catch (e) {
-      console.warn('Table creation warning:', e);
-    }
-    
-    try {
-      await db.exec('ALTER TABLE products ADD COLUMN name TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN description TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN price REAL;');
-      await db.exec('ALTER TABLE products ADD COLUMN orig_price REAL DEFAULT 0;');
-      await db.exec('ALTER TABLE products ADD COLUMN original_price REAL DEFAULT 0;');
-      await db.exec('ALTER TABLE products ADD COLUMN image TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN image_path TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN images TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN images_json TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN category TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN stock INTEGER DEFAULT 0;');
-      await db.exec('ALTER TABLE products ADD COLUMN badge TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN slug TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN created_at DATETIME DEFAULT CURRENT_TIMESTAMP;');
-      await db.exec('ALTER TABLE products ADD COLUMN updated_at DATETIME DEFAULT CURRENT_TIMESTAMP;');
-      await db.exec('ALTER TABLE products ADD COLUMN title_ka TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN name_ka TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN description_en TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN description_ka TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN features TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN features_en TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN features_ka TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN videos TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN variants TEXT;');
-      await db.exec('ALTER TABLE products ADD COLUMN views INTEGER DEFAULT 0;');
-    } catch (e) {
-      console.warn('Column addition warning:', e);
-    }
+  // --- INITIAL SQL TABLE SETUP & BOOTSTRAP ---
+  await ensureSchema(db);
 
-  // --- INITIAL STORE_KV SETUP (NO AUTOMATIC PRODUCT SEEDING OR OVERWRITING) ---
-  const existingKvRes = await db.prepare("SELECT value FROM store_kv WHERE key = 'last_updated'").all();
+  // --- INITIAL STORE_KV SETUP ---
+  const existingKvRes = await db.prepare("SELECT value FROM store_kv WHERE key = 'last_updated'").all().catch(() => null);
   const kvExists = Boolean(existingKvRes?.results && existingKvRes.results.length > 0);
   if (!kvExists) {
-    console.log('[INIT] Initializing store KV configuration...');
-    await dbPut(db, 'billboards', JSON.stringify(initialBillboards));
     await dbPut(db, 'billboardIntervalSeconds', '120');
     await dbPut(db, 'adminSecretSlug', 'dashboard');
-    await dbPut(db, 'theme', JSON.stringify({
-      announcementText: 'Limited Time: Free Worldwide Express Shipping on Orders Over $50! ',
-      announcementVisible: true,
-      primaryColor: '#3665f3',
-      typographyTheme: 'modern',
-      heroTitle: 'Quality Products for Modern Living',
-      heroSubtitle: 'Discover premium lifestyle, fitness, and tech accessories curated for your everyday needs.',
-      eurRate: 0.92,
-      gelRate: 2.73,
-      logoStyle: 'bag-cart',
-    }));
+    await dbPut(db, 'theme', JSON.stringify(DEFAULT_THEME));
     await dbPut(db, 'orders', JSON.stringify([]));
     await dbPut(db, 'registered_users', JSON.stringify({}));
     await dbPut(db, 'last_updated', new Date().toISOString());
@@ -436,7 +458,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             if (row.images) {
               try {
                 imagesArr = typeof row.images === 'string' ? JSON.parse(row.images) : row.images;
-              } catch (e) {
+              } catch {
                 imagesArr = [];
               }
             }
@@ -445,11 +467,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             }
             let videosArr: any[] = [];
             if (row.videos) {
-              try { videosArr = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos; } catch (e) { videosArr = []; }
+              try { videosArr = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos; } catch { videosArr = []; }
             }
             let variantsArr: any[] = [];
             if (row.variants) {
-              try { variantsArr = typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants; } catch (e) { variantsArr = []; }
+              try { variantsArr = typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants; } catch { variantsArr = []; }
             }
             return {
               id: String(row.id),
@@ -474,7 +496,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             };
           });
         }
-      } catch (err) {}
+      } catch {}
 
       if (products.length === 0) {
         const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
@@ -482,13 +504,11 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       }
 
       const theme = JSON.parse(await dbGet(db, 'theme') || '{}');
-      const billboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
       const billboardIntervalSeconds = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
       const adminSecretSlug = await dbGet(db, 'adminSecretSlug') || 'dashboard';
 
-      // Security authorization check for users and orders
-      const clientAdminSlug = request.headers.get('x-admin-slug') || 
-        request.headers.get('x-admin-key') || 
+      const clientAdminSlug = request.headers.get('x-admin-slug') ||
+        request.headers.get('x-admin-key') ||
         request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
       const isAuthorizedAdmin = clientAdminSlug && clientAdminSlug.trim() === adminSecretSlug.trim();
 
@@ -500,7 +520,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         data: {
           products,
           theme,
-          billboards,
           billboardIntervalSeconds,
           lastUpdated,
           registeredUsers,
@@ -512,7 +531,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     if (path.endsWith('/user-cart')) {
       try {
-        const url = new URL(request.url);
         const email = (url.searchParams.get('email') || '').trim().toLowerCase();
         if (!email) {
           return jsonResponse({ success: true, cart: [], wishlist: [] });
@@ -544,18 +562,18 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           const formatted = results.map((row: any) => {
             let imagesArr: string[] = [];
             if (row.images) {
-              try { imagesArr = typeof row.images === 'string' ? JSON.parse(row.images) : row.images; } catch (e) { imagesArr = []; }
+              try { imagesArr = typeof row.images === 'string' ? JSON.parse(row.images) : row.images; } catch { imagesArr = []; }
             }
             if (!Array.isArray(imagesArr) || imagesArr.length === 0) {
               imagesArr = row.image && row.image !== 'null' ? [row.image] : [];
             }
             let videosArr: any[] = [];
             if (row.videos) {
-              try { videosArr = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos; } catch (e) { videosArr = []; }
+              try { videosArr = typeof row.videos === 'string' ? JSON.parse(row.videos) : row.videos; } catch { videosArr = []; }
             }
             let variantsArr: any[] = [];
             if (row.variants) {
-              try { variantsArr = typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants; } catch (e) { variantsArr = []; }
+              try { variantsArr = typeof row.variants === 'string' ? JSON.parse(row.variants) : row.variants; } catch { variantsArr = []; }
             }
             const primaryImg = imagesArr[0] || row.image || row.imageUrl || row.image_path || '';
             const titleVal = row.title || row.name || 'Product';
@@ -589,7 +607,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             };
           });
 
-          // Sort newest first
           formatted.sort((a: any, b: any) => {
             const tA = new Date(a.createdAt || 0).getTime();
             const tB = new Date(b.createdAt || 0).getTime();
@@ -598,7 +615,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
           return jsonResponse({ success: true, products: formatted });
         }
-      } catch (err) {}
+      } catch {}
 
       const rawProducts = JSON.parse(await dbGet(db, 'products') || '[]');
       const products = await loadFullProducts(db, rawProducts);
@@ -610,14 +627,12 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   if (request.method === 'POST') {
     const lastUpdatedNew = new Date().toISOString();
 
-    // Endpoints that do not require administrative header
     if (path.includes('/products/') && path.endsWith('/view')) {
       try {
         const match = path.match(/\/products\/([^\/]+)\/view$/);
         const prodId = match ? decodeURIComponent(match[1]) : '';
         if (prodId) {
           try {
-            await db.exec('ALTER TABLE products ADD COLUMN views INTEGER DEFAULT 0;').catch(() => {});
             await db.prepare('UPDATE products SET views = COALESCE(views, 0) + 1 WHERE id = ? OR slug = ?').bind(prodId, prodId).run();
             const row: any = await db.prepare('SELECT views FROM products WHERE id = ? OR slug = ?').bind(prodId, prodId).first();
             const newViews = row ? (Number(row.views) || 1) : 1;
@@ -700,7 +715,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         await dbPut(db, 'registered_users', JSON.stringify(registeredUsers));
         await dbPut(db, 'last_updated', lastUpdatedNew);
 
-        // Map users list for client response (hide password fields)
         const usersList = Object.values(sanitizeUsersDict(registeredUsers));
 
         return jsonResponse({
@@ -745,7 +759,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         }
 
         const usersList = Object.values(sanitizeUsersDict(registeredUsers));
-
         return jsonResponse({ success: true, registeredUsers: usersList });
       } catch (err: any) {
         return jsonResponse({ success: false, error: err?.message || 'Failed to delete user' }, 500);
@@ -764,7 +777,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         userCarts[cleanEmail] = {
           cart: Array.isArray(cart) ? cart : [],
           wishlist: Array.isArray(wishlist) ? wishlist : [],
-          updatedAt: new Date().toISOString()
+          updatedAt: new Date().toISOString(),
         };
         await dbPut(db, 'user_carts', JSON.stringify(userCarts));
         return jsonResponse({ success: true, message: 'User cart synced successfully' });
@@ -775,13 +788,13 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     // --- ADMINISTRATIVE AUTHENTICATION REQUIRED ---
     const adminSecretSlug = await dbGet(db, 'adminSecretSlug') || 'dashboard';
-    const clientAdminSlug = request.headers.get('x-admin-slug') || 
-      request.headers.get('x-admin-key') || 
+    const clientAdminSlug = request.headers.get('x-admin-slug') ||
+      request.headers.get('x-admin-key') ||
       request.headers.get('Authorization')?.replace(/^Bearer\s+/i, '');
 
     const isAuthorizedAdmin = Boolean(
       clientAdminSlug && (
-        clientAdminSlug.trim() === adminSecretSlug.trim() || 
+        clientAdminSlug.trim() === adminSecretSlug.trim() ||
         clientAdminSlug.trim() === 'dashboard' ||
         adminSecretSlug.trim() === 'dashboard'
       )
@@ -817,7 +830,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             images: imagesArray,
           });
 
-          // Write directly and safely to products relational table in D1 without data destruction
           try {
             await upsertProductRelational(db, p, tableColumns);
           } catch (relationalDbErr: any) {
@@ -825,19 +837,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             return jsonResponse({
               success: false,
               error: `D1 Query Error: ${relationalDbErr?.message || String(relationalDbErr)}`,
-              stack: relationalDbErr?.stack
+              stack: relationalDbErr?.stack,
             }, 500);
           }
         }
 
-        // CRITICAL PRODUCTION DATA SAFETY:
-        // Do NOT run destructive bulk deletion commands (e.g. DELETE WHERE id NOT IN).
-        // Individual product deletions are handled strictly by dedicated DELETE endpoints.
-
         await dbPut(db, 'products', JSON.stringify(sanitizedProducts));
         await dbPut(db, 'last_updated', lastUpdatedNew);
 
-        // Load full products with images joined back for response
         const returnedProducts = await loadFullProducts(db, sanitizedProducts);
         return jsonResponse({ success: true, products: returnedProducts, lastUpdated: lastUpdatedNew });
       } catch (err: any) {
@@ -861,40 +868,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
       }
     }
 
-    if (path.endsWith('/billboards')) {
-      try {
-        const { billboards, billboardIntervalSeconds }: any = await request.json();
-
-        const sanitizedBillboards = [];
-        if (Array.isArray(billboards)) {
-          for (const b of billboards) {
-            const image = b.image ? await persistBase64InD1(db, b.image, 'billboard') : b.image;
-            const bgImage = b.bgImage ? await persistBase64InD1(db, b.bgImage, 'billboard-bg') : b.bgImage;
-            sanitizedBillboards.push({ ...b, image, bgImage });
-          }
-          await dbPut(db, 'billboards', JSON.stringify(sanitizedBillboards));
-        }
-
-        if (typeof billboardIntervalSeconds === 'number') {
-          await dbPut(db, 'billboardIntervalSeconds', String(billboardIntervalSeconds));
-        }
-
-        await dbPut(db, 'last_updated', lastUpdatedNew);
-
-        const currentInterval = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
-        const savedBillboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
-
-        return jsonResponse({
-          success: true,
-          billboards: savedBillboards,
-          billboardIntervalSeconds: currentInterval,
-          lastUpdated: lastUpdatedNew,
-        });
-      } catch (err: any) {
-        return jsonResponse({ success: false, error: err?.message || 'Failed to save billboards' }, 500);
-      }
-    }
-
     if (path.endsWith('/orders')) {
       try {
         const { orders }: any = await request.json();
@@ -911,7 +884,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
     if (path.endsWith('/sync')) {
       try {
-        const { products, registeredUsers, orders, theme, billboards, billboardIntervalSeconds, adminSecretSlug: newSlug } = await request.json() as any;
+        const { products, registeredUsers, orders, theme, billboardIntervalSeconds, adminSecretSlug: newSlug } = await request.json() as any;
 
         if (Array.isArray(products)) {
           const r2Bucket = env.R2_BUCKET || env.MEDIA_BUCKET || env.BUCKET;
@@ -939,7 +912,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
               images: imagesStr,
             });
 
-            // Write directly and safely to products relational table in D1 without data destruction
             try {
               await upsertProductRelational(db, p, tableColumns);
             } catch (relationalDbErr) {
@@ -963,17 +935,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
           await dbPut(db, 'theme', JSON.stringify({ ...currentTheme, ...theme }));
         }
 
-        if (Array.isArray(billboards)) {
-          const r2Bucket = env.R2_BUCKET || env.MEDIA_BUCKET || env.BUCKET;
-          const sanitizedBillboards = [];
-          for (const b of billboards) {
-            const image = b.image ? await persistBase64InR2(r2Bucket, b.image, 'billboard') : b.image;
-            const bgImage = b.bgImage ? await persistBase64InR2(r2Bucket, b.bgImage, 'billboard-bg') : b.bgImage;
-            sanitizedBillboards.push({ ...b, image, bgImage });
-          }
-          await dbPut(db, 'billboards', JSON.stringify(sanitizedBillboards));
-        }
-
         if (typeof billboardIntervalSeconds === 'number') {
           await dbPut(db, 'billboardIntervalSeconds', String(billboardIntervalSeconds));
         }
@@ -986,7 +947,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
         const currentProducts = JSON.parse(await dbGet(db, 'products') || '[]');
         const currentTheme = JSON.parse(await dbGet(db, 'theme') || '{}');
-        const currentBillboards = JSON.parse(await dbGet(db, 'billboards') || '[]');
         const currentInterval = parseInt(await dbGet(db, 'billboardIntervalSeconds') || '120', 10);
         const finalSlug = await dbGet(db, 'adminSecretSlug') || 'dashboard';
         const currentUsers = JSON.parse(await dbGet(db, 'registered_users') || '{}');
@@ -999,7 +959,6 @@ export const onRequest: PagesFunction<Env> = async (context) => {
             registeredUsers: sanitizeUsersDict(currentUsers),
             orders: currentOrders,
             theme: currentTheme,
-            billboards: currentBillboards,
             billboardIntervalSeconds: currentInterval,
             adminSecretSlug: finalSlug,
             lastUpdated: lastUpdatedNew,

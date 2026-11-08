@@ -17,8 +17,22 @@ import {
   BillboardSlide
 } from '../types';
 import { initialProducts, DB_VERSION } from '../data/initialProducts';
+import { flagshipReferenceProducts } from '../data/flagshipProducts';
 import productsData from '../data/products.json';
-import { initialBillboards } from '../data/initialBillboards';
+import {
+  HomepageCategoryId,
+  HomepageSlideConfig,
+  HomepageCategoryConfig,
+  HomepageFeaturedProductConfig,
+  HomepageSectionConfig,
+  HomepageSettingsConfig,
+  INITIAL_HOMEPAGE_SLIDES,
+  INITIAL_HOMEPAGE_CATEGORIES,
+  INITIAL_HOMEPAGE_FEATURED_PRODUCTS,
+  INITIAL_HOMEPAGE_SECTIONS,
+  INITIAL_HOMEPAGE_SETTINGS,
+} from '../data/initialHomepageConfig';
+
 import { categoryIdToSlug, slugToCategoryId } from '../data/categoryNavigationData';
 import { translations } from '../data/translations';
 import { getTranslation } from '../utils/i18n';
@@ -233,6 +247,31 @@ interface StoreContextType {
   excludeAdminVisits: boolean;
   setExcludeAdminVisits: (exclude: boolean) => void;
   purgeAdminLogs: () => void;
+
+  // Dedicated Homepage Configuration Tables (Presentation Layer Only - Never Modifies Products)
+  homepageSlides: HomepageSlideConfig[];
+  homepageCategories: HomepageCategoryConfig[];
+  homepageFeaturedProducts: HomepageFeaturedProductConfig[];
+  homepageSections: HomepageSectionConfig[];
+  homepageSettings: HomepageSettingsConfig;
+  activeHomepageCategory: HomepageCategoryId | 'all';
+  setActiveHomepageCategory: (cat: HomepageCategoryId | 'all') => void;
+  updateHomepageSlides: (slides: HomepageSlideConfig[]) => void;
+  addHomepageSlide: (slide: Omit<HomepageSlideConfig, 'id' | 'updatedAt'>) => void;
+  updateHomepageSlide: (id: string, patch: Partial<HomepageSlideConfig>) => void;
+  deleteHomepageSlide: (id: string) => void;
+  reorderHomepageSlides: (slideId: string, direction: 'up' | 'down' | number) => void;
+  resetHomepageSlides: () => void;
+  updateHomepageCategories: (categories: HomepageCategoryConfig[]) => void;
+  assignProductToHomepageCategory: (categoryId: HomepageCategoryId, productId: string) => void;
+  removeProductFromHomepageCategory: (categoryId: HomepageCategoryId, productId: string) => void;
+  toggleHomepageCategoryProductPin: (categoryId: HomepageCategoryId, productId: string) => void;
+  toggleHomepageCategoryProductFeature: (categoryId: HomepageCategoryId, productId: string) => void;
+  toggleHomepageCategoryProductHide: (categoryId: HomepageCategoryId, productId: string) => void;
+  reorderHomepageCategoryProduct: (categoryId: HomepageCategoryId, productId: string, direction: 'up' | 'down') => void;
+  resetHomepageCategories: () => void;
+  updateHomepageSections: (sections: HomepageSectionConfig[]) => void;
+  updateHomepageSettings: (settings: Partial<HomepageSettingsConfig>) => void;
 }
 
 const defaultTheme: ThemeSettings = {
@@ -719,7 +758,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const sanitizeProducts = (rawProducts: Product[]): Product[] => {
     if (!rawProducts || !Array.isArray(rawProducts) || rawProducts.length === 0) return initialProducts;
-    return rawProducts;
+    const existingIds = new Set(rawProducts.map(p => p.id));
+    const missingFlagship = flagshipReferenceProducts.filter(fp => !existingIds.has(fp.id));
+    return [...missingFlagship, ...rawProducts];
   };
 
   const sanitizeProductUrls = (p: Product): Product => p;
@@ -741,18 +782,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         const response = await fetch('/api/billboards');
         if (response.ok) {
           const data = await response.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             setBillboards(data);
-          } else {
-            // Fallback to initial if database is empty
-            setBillboards(initialBillboards.map(sanitizeBillboardUrls));
           }
-        } else {
-          setBillboards(initialBillboards.map(sanitizeBillboardUrls));
         }
       } catch (err) {
-        console.warn('Failed to fetch billboards from server, using defaults:', err);
-        setBillboards(initialBillboards.map(sanitizeBillboardUrls));
+        console.warn('Failed to fetch billboards from server:', err);
       } finally {
         setIsLoadingBillboards(false);
       }
@@ -765,13 +800,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const saveBillboards = async (slides: BillboardSlide[]) => {
     setBillboards(slides);
-    localStorage.setItem('dbuy_billboards', JSON.stringify(slides));
   };
 
   const updateBillboard = async (id: string, updated: Partial<BillboardSlide>) => {
     const next = billboards.map(b => (b.id === id ? { ...b, ...updated } : b));
     setBillboards(next);
-    localStorage.setItem('dbuy_billboards', JSON.stringify(next));
 
     try {
       const formData = new FormData();
@@ -793,21 +826,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const addBillboard = async (slideData: Omit<BillboardSlide, 'id'>) => {
-    const id = 'billboard-' + Date.now();
-    const newSlide: BillboardSlide = {
-      ...slideData,
-      id,
-      isActive: slideData.isActive !== undefined ? slideData.isActive : true,
-    };
-    const next = [...billboards, newSlide];
-    setBillboards(next);
-    localStorage.setItem('dbuy_billboards', JSON.stringify(next));
-
-    // For addBillboard (internal), we assume it might not have a File object, 
-    // so we'll try to use the server API if it's a URL, but the user specifically
-    // asked for POST /api/billboards with binary upload.
-    // If we have a URL, we'll just keep it in local state for now.
-    addToast('New billboard slide added locally!', 'success');
+    // Legacy method - redirect to addBillboardServer
+    const { isActive, ...rest } = slideData;
+    addBillboardServer({ ...rest, isActive: isActive !== undefined ? isActive : true });
   };
 
   const addBillboardServer = async (newBillboard: { file?: File; imageUrl?: string; title?: string; link?: string; [key: string]: any }) => {
@@ -816,10 +837,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (newBillboard.file) formData.append('file', newBillboard.file);
       if (newBillboard.title) formData.append('title', newBillboard.title);
       if (newBillboard.link) formData.append('buttonLink', newBillboard.link);
+      if (newBillboard.productSlug) formData.append('productSlug', newBillboard.productSlug);
+      if (newBillboard.productId) formData.append('productId', newBillboard.productId);
       
       // Map other fields
       Object.entries(newBillboard).forEach(([key, val]) => {
-        if (key !== 'file' && key !== 'imageUrl' && key !== 'title' && key !== 'link') {
+        if (key !== 'file' && key !== 'imageUrl' && key !== 'title' && key !== 'link' && key !== 'productSlug' && key !== 'productId') {
           formData.append(key, String(val));
         }
       });
@@ -836,26 +859,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         throw new Error('Failed to save billboard to server');
       }
 
-      const result: any = await response.json();
-      
-      // Refetch all to get latest state including mapping
-      const refetch = await fetch('/api/billboards');
+      // Refetch all to get latest state
+      const refetch = await fetch('/api/billboards', { cache: 'no-store' });
       if (refetch.ok) {
         const data = await refetch.json();
         setBillboards(data);
       }
       
-      addToast('New billboard slide added to server!', 'success');
+      addToast(language === 'ka' ? 'ბანერი წარმატებით დაემატა!' : 'New billboard slide added!', 'success');
     } catch (error) {
       console.error("Error saving slideshow billboard:", error);
-      throw error;
+      addToast('Error saving billboard', 'error');
     }
   };
 
   const deleteBillboard = async (id: string) => {
     const next = billboards.filter(b => b.id !== id);
     setBillboards(next);
-    localStorage.setItem('dbuy_billboards', JSON.stringify(next));
 
     try {
       await fetch(`/api/billboards/${id}`, {
@@ -869,8 +889,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const resetBillboards = () => {
-    saveBillboards(initialBillboards.map(sanitizeBillboardUrls));
-    addToast('Billboards reset to defaults', 'info');
+    setBillboards([]);
+    addToast('Billboards cleared', 'info');
   };
 
   const setBillboardIntervalSeconds = (seconds: number) => {
@@ -902,8 +922,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       .then(res => res.json())
       .then((data: any) => {
         if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
-          setProducts(data.products);
-          localStorage.setItem('dbuy_products', JSON.stringify(data.products));
+          const merged = sanitizeProducts(data.products);
+          setProducts(merged);
+          localStorage.setItem('dbuy_products', JSON.stringify(merged));
         }
       })
       .catch(() => {});
@@ -1591,6 +1612,343 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return `$${converted.toFixed(2)}`;
   };
 
+  // ============================================================================
+  // DEDICATED HOMEPAGE CONFIGURATION TABLES (PRESENTATION LAYER ONLY)
+  // ============================================================================
+  const [homepageSlides, setHomepageSlides] = useState<HomepageSlideConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem('dbuy_homepage_slides');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed.map((s: HomepageSlideConfig) => ({
+            ...s,
+            desktopBannerImage: sanitizeImageUrl(s.desktopBannerImage) || s.desktopBannerImage,
+            mobileBannerImage: sanitizeImageUrl(s.mobileBannerImage) || s.mobileBannerImage || sanitizeImageUrl(s.desktopBannerImage) || s.desktopBannerImage,
+          }));
+        }
+      }
+    } catch (e) {}
+    return INITIAL_HOMEPAGE_SLIDES;
+  });
+
+  const [homepageCategories, setHomepageCategories] = useState<HomepageCategoryConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem('dbuy_homepage_categories');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return INITIAL_HOMEPAGE_CATEGORIES;
+  });
+
+  const [homepageFeaturedProducts, setHomepageFeaturedProducts] = useState<HomepageFeaturedProductConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem('dbuy_homepage_featured_products');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_HOMEPAGE_FEATURED_PRODUCTS;
+  });
+
+  const [homepageSections, setHomepageSections] = useState<HomepageSectionConfig[]>(() => {
+    try {
+      const saved = localStorage.getItem('dbuy_homepage_sections');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch (e) {}
+    return INITIAL_HOMEPAGE_SECTIONS;
+  });
+
+  const [homepageSettings, setHomepageSettings] = useState<HomepageSettingsConfig>(() => {
+    try {
+      const saved = localStorage.getItem('dbuy_homepage_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return { ...INITIAL_HOMEPAGE_SETTINGS, ...parsed };
+      }
+    } catch (e) {}
+    return INITIAL_HOMEPAGE_SETTINGS;
+  });
+
+  const [activeHomepageCategory, setActiveHomepageCategory] = useState<HomepageCategoryId | 'all'>('electronics');
+
+  const syncHomepageConfigToServer = (payload: {
+    homepage_slides?: HomepageSlideConfig[];
+    homepage_categories?: HomepageCategoryConfig[];
+    homepage_featured_products?: HomepageFeaturedProductConfig[];
+    homepage_sections?: HomepageSectionConfig[];
+    homepage_settings?: HomepageSettingsConfig;
+  }) => {
+    fetch('/api/homepage-config', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Admin-Slug': adminSecretSlug || getStoredSecretSlug(),
+      },
+      body: JSON.stringify(payload),
+    }).catch(() => {});
+  };
+
+  useEffect(() => {
+    fetch(`/api/homepage-config?_t=${Date.now()}`, { cache: 'no-store' })
+      .then(res => res.json())
+      .then((data: any) => {
+        if (data && data.success && data.tables) {
+          const { homepage_slides, homepage_categories, homepage_featured_products, homepage_sections, homepage_settings } = data.tables;
+          if (Array.isArray(homepage_slides) && homepage_slides.length > 0) {
+            setHomepageSlides(homepage_slides);
+            localStorage.setItem('dbuy_homepage_slides', JSON.stringify(homepage_slides));
+          }
+          if (Array.isArray(homepage_categories) && homepage_categories.length > 0) {
+            setHomepageCategories(homepage_categories);
+            localStorage.setItem('dbuy_homepage_categories', JSON.stringify(homepage_categories));
+          }
+          if (Array.isArray(homepage_featured_products) && homepage_featured_products.length > 0) {
+            setHomepageFeaturedProducts(homepage_featured_products);
+            localStorage.setItem('dbuy_homepage_featured_products', JSON.stringify(homepage_featured_products));
+          }
+          if (Array.isArray(homepage_sections) && homepage_sections.length > 0) {
+            setHomepageSections(homepage_sections);
+            localStorage.setItem('dbuy_homepage_sections', JSON.stringify(homepage_sections));
+          }
+          if (homepage_settings && typeof homepage_settings === 'object') {
+            setHomepageSettings(prev => ({ ...prev, ...homepage_settings }));
+            localStorage.setItem('dbuy_homepage_settings', JSON.stringify(homepage_settings));
+          }
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const updateHomepageSlides = (slides: HomepageSlideConfig[]) => {
+    const normalized = [...slides]
+      .sort((a, b) => a.slideOrder - b.slideOrder)
+      .map((s, idx) => ({ ...s, slideOrder: idx + 1, updatedAt: new Date().toISOString() }));
+    setHomepageSlides(normalized);
+    localStorage.setItem('dbuy_homepage_slides', JSON.stringify(normalized));
+    syncHomepageConfigToServer({ homepage_slides: normalized });
+  };
+
+  const addHomepageSlide = (slideData: Omit<HomepageSlideConfig, 'id' | 'updatedAt'>) => {
+    const newSlide: HomepageSlideConfig = {
+      ...slideData,
+      id: `slide-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      updatedAt: new Date().toISOString(),
+    };
+    const next = [...homepageSlides, newSlide]
+      .sort((a, b) => a.slideOrder - b.slideOrder)
+      .map((s, idx) => ({ ...s, slideOrder: idx + 1 }));
+    setHomepageSlides(next);
+    localStorage.setItem('dbuy_homepage_slides', JSON.stringify(next));
+    syncHomepageConfigToServer({ homepage_slides: next });
+    addToast(language === 'ka' ? 'ჰერო სლაიდი დაემატა!' : 'Hero slide created and saved to homepage_slides!', 'success');
+  };
+
+  const updateHomepageSlide = (id: string, patch: Partial<HomepageSlideConfig>) => {
+    const next = homepageSlides
+      .map(s => (s.id === id ? { ...s, ...patch, updatedAt: new Date().toISOString() } : s))
+      .sort((a, b) => a.slideOrder - b.slideOrder);
+    setHomepageSlides(next);
+    localStorage.setItem('dbuy_homepage_slides', JSON.stringify(next));
+    syncHomepageConfigToServer({ homepage_slides: next });
+    addToast(language === 'ka' ? 'სლაიდის კონფიგურაცია განახლდა!' : 'Hero slide configuration updated!', 'success');
+  };
+
+  const deleteHomepageSlide = (id: string) => {
+    const filtered = homepageSlides
+      .filter(s => s.id !== id)
+      .sort((a, b) => a.slideOrder - b.slideOrder)
+      .map((s, idx) => ({ ...s, slideOrder: idx + 1 }));
+    setHomepageSlides(filtered);
+    localStorage.setItem('dbuy_homepage_slides', JSON.stringify(filtered));
+    syncHomepageConfigToServer({ homepage_slides: filtered });
+    addToast(language === 'ka' ? 'სლაიდი წაიშალა' : 'Hero slide removed from homepage_slides', 'info');
+  };
+
+  const reorderHomepageSlides = (slideId: string, direction: 'up' | 'down' | number) => {
+    const sorted = [...homepageSlides].sort((a, b) => a.slideOrder - b.slideOrder);
+    const idx = sorted.findIndex(s => s.id === slideId);
+    if (idx === -1) return;
+
+    if (typeof direction === 'number') {
+      const targetIndex = Math.max(0, Math.min(sorted.length - 1, direction - 1));
+      const [moved] = sorted.splice(idx, 1);
+      sorted.splice(targetIndex, 0, moved);
+    } else {
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= sorted.length) return;
+      const temp = sorted[idx];
+      sorted[idx] = sorted[swapIdx];
+      sorted[swapIdx] = temp;
+    }
+
+    const reindexed = sorted.map((s, i) => ({
+      ...s,
+      slideOrder: i + 1,
+      updatedAt: new Date().toISOString(),
+    }));
+    setHomepageSlides(reindexed);
+    localStorage.setItem('dbuy_homepage_slides', JSON.stringify(reindexed));
+    syncHomepageConfigToServer({ homepage_slides: reindexed });
+  };
+
+  const resetHomepageSlides = () => {
+    setHomepageSlides(INITIAL_HOMEPAGE_SLIDES);
+    localStorage.setItem('dbuy_homepage_slides', JSON.stringify(INITIAL_HOMEPAGE_SLIDES));
+    syncHomepageConfigToServer({ homepage_slides: INITIAL_HOMEPAGE_SLIDES });
+    addToast(language === 'ka' ? 'სლაიდერის საწყისი პარამეტრები აღდგენილია' : 'Hero slides reset to default configuration', 'info');
+  };
+
+  const updateHomepageCategories = (categories: HomepageCategoryConfig[]) => {
+    setHomepageCategories(categories);
+    localStorage.setItem('dbuy_homepage_categories', JSON.stringify(categories));
+    syncHomepageConfigToServer({ homepage_categories: categories });
+  };
+
+  const assignProductToHomepageCategory = (categoryId: HomepageCategoryId, productId: string) => {
+    const next = homepageCategories.map(cat => {
+      if (cat.id !== categoryId) return cat;
+      const exists = cat.items.some(item => item.productId === productId);
+      if (exists) {
+        return {
+          ...cat,
+          items: cat.items.map(item =>
+            item.productId === productId ? { ...item, isHidden: false } : item
+          ),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+      const nextOrder = cat.items.length + 1;
+      return {
+        ...cat,
+        items: [
+          ...cat.items,
+          {
+            productId,
+            displayOrder: nextOrder,
+            isPinned: false,
+            isFeatured: true,
+            isHidden: false,
+          },
+        ],
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    updateHomepageCategories(next);
+    addToast(language === 'ka' ? 'პროდუქტი მიება კატეგორიას!' : 'Product linked to homepage category!', 'success');
+  };
+
+  const removeProductFromHomepageCategory = (categoryId: HomepageCategoryId, productId: string) => {
+    const next = homepageCategories.map(cat => {
+      if (cat.id !== categoryId) return cat;
+      const filtered = cat.items
+        .filter(item => item.productId !== productId)
+        .map((item, i) => ({ ...item, displayOrder: i + 1 }));
+      return {
+        ...cat,
+        items: filtered,
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    updateHomepageCategories(next);
+    addToast(language === 'ka' ? 'პროდუქტი მოიხსნა კატეგორიიდან' : 'Product unassigned from homepage category', 'info');
+  };
+
+  const toggleHomepageCategoryProductPin = (categoryId: HomepageCategoryId, productId: string) => {
+    const next = homepageCategories.map(cat => {
+      if (cat.id !== categoryId) return cat;
+      return {
+        ...cat,
+        items: cat.items.map(item =>
+          item.productId === productId ? { ...item, isPinned: !item.isPinned } : item
+        ),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    updateHomepageCategories(next);
+  };
+
+  const toggleHomepageCategoryProductFeature = (categoryId: HomepageCategoryId, productId: string) => {
+    const next = homepageCategories.map(cat => {
+      if (cat.id !== categoryId) return cat;
+      return {
+        ...cat,
+        items: cat.items.map(item =>
+          item.productId === productId ? { ...item, isFeatured: !item.isFeatured } : item
+        ),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    updateHomepageCategories(next);
+  };
+
+  const toggleHomepageCategoryProductHide = (categoryId: HomepageCategoryId, productId: string) => {
+    const next = homepageCategories.map(cat => {
+      if (cat.id !== categoryId) return cat;
+      return {
+        ...cat,
+        items: cat.items.map(item =>
+          item.productId === productId ? { ...item, isHidden: !item.isHidden } : item
+        ),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    updateHomepageCategories(next);
+  };
+
+  const reorderHomepageCategoryProduct = (
+    categoryId: HomepageCategoryId,
+    productId: string,
+    direction: 'up' | 'down'
+  ) => {
+    const next = homepageCategories.map(cat => {
+      if (cat.id !== categoryId) return cat;
+      const sorted = [...cat.items].sort((a, b) => a.displayOrder - b.displayOrder);
+      const idx = sorted.findIndex(item => item.productId === productId);
+      if (idx === -1) return cat;
+      const swapIdx = direction === 'up' ? idx - 1 : idx + 1;
+      if (swapIdx < 0 || swapIdx >= sorted.length) return cat;
+      const temp = sorted[idx];
+      sorted[idx] = sorted[swapIdx];
+      sorted[swapIdx] = temp;
+      return {
+        ...cat,
+        items: sorted.map((item, i) => ({ ...item, displayOrder: i + 1 })),
+        updatedAt: new Date().toISOString(),
+      };
+    });
+    updateHomepageCategories(next);
+  };
+
+  const resetHomepageCategories = () => {
+    setHomepageCategories(INITIAL_HOMEPAGE_CATEGORIES);
+    localStorage.setItem('dbuy_homepage_categories', JSON.stringify(INITIAL_HOMEPAGE_CATEGORIES));
+    syncHomepageConfigToServer({ homepage_categories: INITIAL_HOMEPAGE_CATEGORIES });
+    addToast(language === 'ka' ? 'კატეგორიების კონფიგურაცია აღდგენილია' : 'Homepage categories reset to defaults', 'info');
+  };
+
+  const updateHomepageSections = (sections: HomepageSectionConfig[]) => {
+    setHomepageSections(sections);
+    localStorage.setItem('dbuy_homepage_sections', JSON.stringify(sections));
+    syncHomepageConfigToServer({ homepage_sections: sections });
+  };
+
+  const updateHomepageSettings = (patch: Partial<HomepageSettingsConfig>) => {
+    const next = { ...homepageSettings, ...patch, updatedAt: new Date().toISOString() };
+    setHomepageSettings(next);
+    localStorage.setItem('dbuy_homepage_settings', JSON.stringify(next));
+    syncHomepageConfigToServer({ homepage_settings: next });
+    addToast(language === 'ka' ? 'მთავარი გვერდის პარამეტრები შენახულია!' : 'Homepage settings saved!', 'success');
+  };
+
   return (
     <StoreContext.Provider
       value={{
@@ -1627,6 +1985,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         toasts, addToast, removeToast,
         visitorLogs, analyticsData, recordVisit, clearAnalytics,
         simulateVisitor, excludeAdminVisits, setExcludeAdminVisits, purgeAdminLogs,
+        homepageSlides,
+        homepageCategories,
+        homepageFeaturedProducts,
+        homepageSections,
+        homepageSettings,
+        activeHomepageCategory,
+        setActiveHomepageCategory,
+        updateHomepageSlides,
+        addHomepageSlide,
+        updateHomepageSlide,
+        deleteHomepageSlide,
+        reorderHomepageSlides,
+        resetHomepageSlides,
+        updateHomepageCategories,
+        assignProductToHomepageCategory,
+        removeProductFromHomepageCategory,
+        toggleHomepageCategoryProductPin,
+        toggleHomepageCategoryProductFeature,
+        toggleHomepageCategoryProductHide,
+        reorderHomepageCategoryProduct,
+        resetHomepageCategories,
+        updateHomepageSections,
+        updateHomepageSettings,
       }}
     >
       {children}

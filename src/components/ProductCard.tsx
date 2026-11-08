@@ -1,45 +1,46 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { Star, ShoppingCart, Eye, Check, Heart, Link as LinkIcon, Play } from 'lucide-react';
+import { Star, ShoppingCart, Check, Heart } from 'lucide-react';
 import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
-import { ScrollReveal } from './ScrollReveal';
 import { getProductTitle } from '../utils/productLanguage';
-
-const getCardImageSrc = (product: Product): string => {
-  return getProductImage(product);
-};
 
 interface ProductCardProps {
   product: Product;
   index?: number;
 }
 
-export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) => {
-  const { 
-    t, 
-    language, 
-    formatPrice, 
-    addToCart, 
-    setQuickViewProduct,
+const formatReviewCount = (count?: number): string => {
+  if (!count || count <= 0) return '124';
+  if (count >= 1000) {
+    return `${(count / 1000).toFixed(1)}k`;
+  }
+  return String(count);
+};
+
+export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+  const {
+    t,
+    language,
+    formatPrice,
+    addToCart,
     navigateToProduct,
-    copyProductUrl,
     isInWishlist,
     toggleWishlist,
   } = useStore();
+
   const [justAdded, setJustAdded] = useState(false);
-  const [isHovered, setIsHovered] = useState(false);
 
   const isFavorite = isInWishlist(product.id);
   const displayTitle = getProductTitle(product, language);
-  const youtubeId = product.youtubeId || product.youtubeVideoId || (product as any).youtube_id;
+  const imgSrc = getProductImage(product);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
     addToCart(product, 1);
     setJustAdded(true);
-    setTimeout(() => setJustAdded(false), 1500);
+    setTimeout(() => setJustAdded(false), 1400);
   };
 
   const handleWishlistToggle = (e: React.MouseEvent) => {
@@ -51,237 +52,158 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product, index = 0 }) 
     navigateToProduct(product.id);
   };
 
-  const handleCopyLink = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    copyProductUrl(product.id);
-  };
+  const discountPercent =
+    product.origPrice && product.origPrice > product.price
+      ? Math.round(((product.origPrice - product.price) / product.origPrice) * 100)
+      : 0;
 
-  const discountPercent = product.origPrice
-    ? Math.round(((product.origPrice - product.price) / product.origPrice) * 100)
-    : 0;
-
-  const getBadgeLabel = (badge?: string) => {
-    if (!badge) return '';
-    if (language === 'ka') {
-      if (badge === 'Best Seller') return 'ბესტსელერი';
-      if (badge === 'Hot Deal') return 'ცხელი შეთავაზება';
-      if (badge === 'Trending') return 'ტრენდული';
-      if (badge === 'New') return 'ახალი';
-    } else if (language === 'ru') {
-      if (badge === 'Best Seller') return 'Хит продаж';
-      if (badge === 'Hot Deal') return 'Горячая цена';
-      if (badge === 'Trending') return 'В тренде';
-      if (badge === 'New') return 'Новинка';
-    } else if (language === 'es') {
-      if (badge === 'Best Seller') return 'Más vendido';
-      if (badge === 'Hot Deal') return 'Oferta Top';
-      if (badge === 'Trending') return 'Tendencia';
-      if (badge === 'New') return 'Nuevo';
-    } else if (language === 'de') {
-      if (badge === 'Best Seller') return 'Bestseller';
-      if (badge === 'Hot Deal') return 'Top Angebot';
-      if (badge === 'Trending') return 'Im Trend';
-      if (badge === 'New') return 'Neu';
-    } else if (language === 'fr') {
-      if (badge === 'Best Seller') return 'Meilleure vente';
-      if (badge === 'Hot Deal') return 'Offre spéciale';
-      if (badge === 'Trending') return 'Tendance';
-      if (badge === 'New') return 'Nouveau';
+  // Determine badge type matching the reference picture:
+  // - If discountPercent > 0 (like -20% on HyperX or -25% on Sony Blue), show `-XX%` in soft pink pill
+  // - Else if product.badge === 'Best Seller', show `Bestseller` in solid blue pill
+  // - Else if product.badge === 'New', show `New` in solid green pill
+  const renderBadge = () => {
+    if (discountPercent > 0) {
+      return (
+        <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FFD9DF] text-[#9F1239] tracking-tight">
+          -{discountPercent}%
+        </span>
+      );
     }
-    return badge;
+    if (product.badge === 'Best Seller') {
+      return (
+        <span className="inline-flex items-center justify-center px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#2563EB] text-white tracking-tight shadow-2xs">
+          Bestseller
+        </span>
+      );
+    }
+    if (product.badge === 'New') {
+      return (
+        <span className="inline-flex items-center justify-center px-3 py-0.5 rounded-full text-[11px] font-bold bg-[#10B981] text-white tracking-tight shadow-2xs">
+          New
+        </span>
+      );
+    }
+    if (product.badge === 'Hot Deal') {
+      return (
+        <span className="inline-flex items-center justify-center px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#FFD9DF] text-[#9F1239] tracking-tight">
+          Deal
+        </span>
+      );
+    }
+    return null;
   };
+
+  const ratingValue = product.rating ?? 4.8;
+  const reviewsText = formatReviewCount(product.reviewsCount);
 
   return (
-    <ScrollReveal delay={Math.min((index % 4) * 60, 240)} className="h-full">
-      <div 
-        className="product-card-root group relative flex flex-col bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 shadow-xs hover:shadow-xl transition-all duration-300 overflow-hidden cursor-pointer transform-gpu h-full"
-        style={{ contentVisibility: 'auto', containIntrinsicSize: '0 380px' }}
-        onClick={handleCardClick}
-      >
-        {/* Badge */}
-        {product.badge && (
-          <div className="product-card-badge-container absolute top-3 left-3 z-10">
-            <span className={`product-card-badge px-2.5 py-1 text-[11px] font-bold rounded-md uppercase tracking-wider shadow-xs ${
-              product.badge === 'Best Seller'
-                ? 'bg-amber-500 text-slate-950'
-                : product.badge === 'Hot Deal'
-                ? 'bg-red-600 text-white'
-                : product.badge === 'Trending'
-                ? 'bg-blue-600 text-white'
-                : 'bg-emerald-600 text-white'
-            }`}>
-              {getBadgeLabel(product.badge)}
-            </span>
-          </div>
-        )}
-
-      {/* Top Right Controls: Quick Copy URL & Wishlist Button & Discount Tag */}
-      <div className="product-card-controls absolute top-3 right-3 z-10 flex items-center space-x-1.5">
-        {discountPercent > 0 && (
-          <span className="product-card-discount px-2 py-0.5 text-[10px] font-extrabold rounded-full bg-red-100 text-red-700 border border-red-200">
-            -{discountPercent}%
-          </span>
-        )}
+    <div
+      onClick={handleCardClick}
+      className="group relative flex flex-col justify-between bg-white dark:bg-slate-900 rounded-[20px] p-3.5 cursor-pointer select-none transition-all duration-300 ease-out hover:-translate-y-2 w-full h-[395px] sm:h-[405px]"
+      style={{
+        border: '1px solid rgba(15, 23, 42, 0.06)',
+        boxShadow: '0 8px 24px rgba(15, 23, 42, 0.08)',
+      }}
+    >
+      {/* Top Row: Badge (Left) & Wishlist Heart (Right) */}
+      <div className="relative z-10 flex items-center justify-between min-h-[24px]">
+        <div>{renderBadge()}</div>
         <button
-          onClick={handleCopyLink}
-          className="product-card-copy-btn p-2 rounded-full shadow-md bg-white/90 dark:bg-slate-800/90 text-slate-500 dark:text-slate-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-white dark:hover:bg-slate-800 transition-all cursor-pointer"
-          title={t('product.card.copyUrl')}
-          aria-label={t('product.card.copyUrl')}
-        >
-          <LinkIcon className="w-3.5 h-3.5" />
-        </button>
-        <button
+          type="button"
           onClick={handleWishlistToggle}
-          className={`product-card-wishlist-btn p-2 rounded-full shadow-md backdrop-blur-xs transition-all cursor-pointer ${
-            isFavorite 
-              ? 'bg-white dark:bg-slate-800 text-red-500 hover:scale-110' 
-              : 'bg-white/90 dark:bg-slate-800/90 text-slate-500 dark:text-slate-300 hover:text-red-500 hover:bg-white dark:hover:bg-slate-800'
-          }`}
-          title={isFavorite ? t('wishlist.remove') : t('wishlist.add')}
-          aria-label={t('wishlist.title')}
+          aria-label={isFavorite ? t('wishlist.remove') : t('wishlist.add')}
+          className="w-7 h-7 rounded-full flex items-center justify-center text-[#64748B] hover:text-red-500 transition-colors cursor-pointer"
         >
-          <Heart className={`w-4 h-4 ${isFavorite ? 'fill-red-500 text-red-500' : ''}`} />
+          <Heart
+            className={`w-[18px] h-[18px] transition-transform duration-200 group-hover:scale-105 ${
+              isFavorite ? 'fill-red-500 text-red-500' : 'stroke-[1.8]'
+            }`}
+          />
         </button>
       </div>
 
-      {/* Product Image Container */}
-      <div 
-        className="product-card-image-wrapper relative w-full aspect-square bg-white dark:bg-slate-900/60 overflow-hidden group cursor-pointer flex items-center justify-center"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-      >
-        {getCardImageSrc(product) ? (
+      {/* Product Studio Photograph Container */}
+      <div className="relative w-full h-[165px] sm:h-[175px] flex items-center justify-center overflow-hidden bg-white dark:bg-slate-900 my-1">
+        {imgSrc ? (
           <CachedImage
-            src={getCardImageSrc(product)}
+            src={imgSrc}
             alt={displayTitle}
-            className="product-card-img w-full h-full object-contain p-4 sm:p-6 transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-full object-contain p-1 transition-transform duration-300 ease-out group-hover:scale-105"
             loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
           />
         ) : (
-          <div className="w-full h-full bg-white dark:bg-slate-800/50 flex items-center justify-center text-slate-400 dark:text-slate-500 text-xs font-medium">
-            Ready for upload
+          <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs">
+            No image
           </div>
         )}
-
-        {/* YouTube Video Hover Preview Overlay */}
-        {youtubeId && (
-          <div 
-            className={`youtube-hover-preview absolute inset-0 w-full h-full z-15 overflow-hidden transition-opacity duration-300 pointer-events-none bg-black ${
-              isHovered ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            {isHovered && (
-              <iframe
-                src={`https://www.youtube.com/embed/${youtubeId}?autoplay=1&mute=1&loop=1&playlist=${youtubeId}&controls=0&modestbranding=1&rel=0&playsinline=1&enablejsapi=1&disablekb=1&fs=0`}
-                title={`${displayTitle} - Video Preview`}
-                className="w-[140%] h-[140%] -translate-x-[15%] -translate-y-[15%] object-cover border-0 pointer-events-none scale-105 transform-gpu"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            )}
-          </div>
-        )}
-
-        {/* Video Availability Badge Indicator */}
-        {youtubeId && !isHovered && (
-          <div className="absolute bottom-2.5 left-2.5 z-10 flex items-center space-x-1 px-2 py-0.5 rounded-full bg-slate-900/80 backdrop-blur-md text-white text-[9.5px] font-extrabold uppercase tracking-wider shadow-sm pointer-events-none transition-opacity duration-300">
-            <Play className="w-2.5 h-2.5 fill-white text-white" />
-            <span>{t('product.card.video')}</span>
-          </div>
-        )}
-
-        {/* Quick View Hover Overlay Button */}
-        <div className="product-card-quickview-overlay absolute inset-0 z-20 bg-slate-900/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center space-x-2 pointer-events-none">
-          <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setQuickViewProduct(product);
-            }}
-            className="pointer-events-auto flex items-center space-x-1.5 px-3 py-2 rounded-xl bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-bold text-xs shadow-lg hover:bg-slate-50 dark:hover:bg-slate-700 transition-transform transform translate-y-2 group-hover:translate-y-0 duration-200 cursor-pointer"
-          >
-            <Eye className="w-3.5 h-3.5 text-blue-600" />
-            <span>{t('products.quickView')}</span>
-          </button>
-        </div>
       </div>
 
-      {/* Card Body */}
-      <div className="product-card-body flex-1 p-4 flex flex-col justify-between space-y-3">
-        <div>
-          {/* Category & Rating */}
-          <div className="product-card-meta flex items-center justify-between text-xs text-slate-400 mb-1.5">
-            <span className="product-card-category uppercase font-semibold tracking-wider text-[10px] text-blue-600 dark:text-blue-400">
-              {product.category}
-            </span>
-            <div className="product-card-rating flex items-center space-x-1 text-slate-700 dark:text-slate-300 font-medium">
-              <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
-              <span>{(product.rating ?? 5.0).toFixed(1)}</span>
-              <span className="text-slate-400 text-[10px]">({product.reviewsCount ?? 1})</span>
-            </div>
-          </div>
+      {/* Product Details & CTA Bottom Block */}
+      <div className="flex flex-col justify-end flex-1 pt-1">
+        {/* Product Name (2 lines) */}
+        <h3 className="text-[13px] sm:text-[13.5px] font-bold text-[#0F172A] dark:text-slate-100 leading-[1.32] line-clamp-2 min-h-[35px] group-hover:text-[#2563EB] transition-colors">
+          {displayTitle}
+        </h3>
 
-          {/* Product Title */}
-          <h3 className="product-card-title text-sm font-bold text-slate-900 dark:text-slate-100 group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors line-clamp-2 leading-snug">
-            {displayTitle}
-          </h3>
+        {/* Star Rating & Review Count */}
+        <div className="flex items-center gap-1.5 mt-2">
+          <div className="flex items-center gap-0.5">
+            {[1, 2, 3, 4, 5].map((starIdx) => (
+              <Star
+                key={starIdx}
+                className={`w-3.5 h-3.5 ${
+                  starIdx <= Math.round(ratingValue)
+                    ? 'fill-[#FBBF24] text-[#FBBF24]'
+                    : 'fill-slate-200 text-slate-200'
+                }`}
+              />
+            ))}
+          </div>
+          <span className="text-[11.5px] font-medium text-[#64748B] dark:text-slate-400 tabular-nums">
+            {ratingValue.toFixed(1)} ({reviewsText})
+          </span>
         </div>
 
-        {/* Price & Stock */}
-        <div className="product-card-footer pt-2 border-t border-slate-100 dark:border-slate-800">
-          <div className="product-card-price-row flex items-baseline justify-between mb-3">
-            <div className="flex items-baseline space-x-2">
-              <span className="product-card-price text-lg font-black text-slate-900 dark:text-slate-100">
-                {formatPrice(product.price)}
-              </span>
-              {product.origPrice && (
-                <span className="product-card-orig-price text-xs text-slate-400 line-through">
-                  {formatPrice(product.origPrice)}
-                </span>
-              )}
-            </div>
-
-            <span className={`product-card-stock text-[10px] font-semibold px-2 py-0.5 rounded-full ${
-              product.stock > 0
-                ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
-                : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300'
-            }`}>
-              {product.stock > 0
-                ? product.stock < 10
-                  ? t('products.stockLeft', { count: product.stock })
-                  : t('products.inStock')
-                : t('products.outOfStock')}
+        {/* Price & Previous Price */}
+        <div className="flex items-baseline gap-2 mt-2 mb-3">
+          <span className="text-[17px] sm:text-[18px] font-extrabold text-[#0F172A] dark:text-white tracking-tight tabular-nums">
+            {formatPrice(product.price)}
+          </span>
+          {product.origPrice && product.origPrice > product.price && (
+            <span className="text-[12.5px] font-medium text-[#94A3B8] line-through tabular-nums">
+              {formatPrice(product.origPrice)}
             </span>
-          </div>
-
-          {/* Add to Cart Button */}
-          <button
-            onClick={handleAddToCart}
-            disabled={product.stock <= 0}
-            className={`product-card-btn w-full py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center space-x-2 transition-all duration-200 cursor-pointer active:scale-95 ${
-              justAdded
-                ? 'animate-cart-pulse bg-emerald-600 text-white shadow-md shadow-emerald-500/25 ring-2 ring-emerald-400/50'
-                : product.stock > 0
-                ? 'bg-blue-600 hover:bg-blue-700 text-white shadow-xs hover:shadow-md hover:scale-[1.01]'
-                : 'bg-slate-100 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
-            }`}
-          >
-            {justAdded ? (
-              <>
-                <Check className="w-4 h-4 animate-check-pop text-white" />
-                <span className="font-extrabold tracking-wide">{t('products.added')}</span>
-              </>
-            ) : (
-              <>
-                <ShoppingCart className="w-4 h-4 transition-transform group-hover:scale-110" />
-                <span className="font-extrabold tracking-wide">{t('products.addToCart')}</span>
-              </>
-            )}
-          </button>
+          )}
         </div>
+
+        {/* Blue Add to Cart Button */}
+        <button
+          type="button"
+          onClick={handleAddToCart}
+          disabled={product.stock <= 0}
+          className={`w-full h-[38px] rounded-[10px] font-semibold text-[12.5px] flex items-center justify-center gap-1.5 transition-all duration-200 cursor-pointer active:scale-95 ${
+            justAdded
+              ? 'bg-emerald-600 text-white shadow-sm'
+              : product.stock > 0
+              ? 'bg-[#1D63FF] hover:bg-[#1550DB] text-white shadow-[0_4px_12px_rgba(29,99,255,0.25)]'
+              : 'bg-slate-100 text-slate-400 cursor-not-allowed'
+          }`}
+        >
+          {justAdded ? (
+            <>
+              <Check className="w-4 h-4 stroke-[2.5]" />
+              <span>Added</span>
+            </>
+          ) : (
+            <>
+              <ShoppingCart className="w-3.5 h-3.5 stroke-[2.2]" />
+              <span>Add to Cart</span>
+            </>
+          )}
+        </button>
       </div>
     </div>
-  </ScrollReveal>
-);
+  );
 };
-

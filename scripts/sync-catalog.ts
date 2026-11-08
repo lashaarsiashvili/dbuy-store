@@ -140,14 +140,11 @@ export const initialProducts: Product[] = productsJson as Product[];
     console.log(`Synced ${db.products.length} products & verified all images to initialProducts.ts`);
   }
 
-  if (db.billboards && Array.isArray(db.billboards) && db.billboards.length > 0) {
-    const tsContent = `import { BillboardSlide } from '../types';
+  const emptyBillboardsTs = `import { BillboardSlide } from '../types';
 
-export const initialBillboards: BillboardSlide[] = ${JSON.stringify(db.billboards, null, 2)};
+export const initialBillboards: BillboardSlide[] = [];
 `;
-    fs.writeFileSync(billboardsOut, tsContent);
-    console.log(`Synced ${db.billboards.length} billboards to initialBillboards.ts`);
-  }
+  fs.writeFileSync(billboardsOut, emptyBillboardsTs);
 
   ensureUploadsDirectorySync();
 }

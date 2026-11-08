@@ -7,7 +7,7 @@ import { CachedImage } from './CachedImage';
 import { getProductOpenGraphPayload, updateOpenGraphMetaTags, resetStoreMetaTags } from '../utils/metaTags';
 import { analytics } from './AdminAnalyticsDashboard';
 import { ProductReviewsSection, reviewService } from './ProductReviewsSection';
-import { ProductSEO, ProductSEOData } from '@hooks/useDynamicMetaTags';
+import { ProductSEO, ProductSEOData } from '../hooks/useDynamicMetaTags';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { 
   Star, 

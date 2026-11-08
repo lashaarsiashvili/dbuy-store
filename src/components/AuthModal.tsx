@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useStore } from "../context/StoreContext";
 import { BrandLogo } from "./BrandLogo";
-import { GoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google";
+import { GoogleOAuthProvider as RawGoogleOAuthProvider, useGoogleLogin } from "@react-oauth/google";
+const GoogleOAuthProvider = RawGoogleOAuthProvider as React.ComponentType<{ clientId: string; children?: React.ReactNode }>;
 import {
   X,
   Lock,
