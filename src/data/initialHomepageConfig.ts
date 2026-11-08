@@ -4,16 +4,6 @@ import { Product } from '../types';
  * ============================================================================
  * PRESENTATION-LAYER HOMEPAGE CONFIGURATION TABLES
  * ============================================================================
- * CRITICAL DATA SAFETY GUARANTEE:
- * These data structures store presentation-layer settings and Product ID
- * references ONLY. They NEVER modify source product records in D1 or assets in R2.
- *
- * Dedicated Tables:
- * 1. homepage_slides
- * 2. homepage_featured_products
- * 3. homepage_categories
- * 4. homepage_sections
- * 5. homepage_settings
  */
 
 export type HomepageCategoryId =
@@ -31,14 +21,11 @@ export interface HomepageSlideConfig {
   id: string;
   slideOrder: number;
   isEnabled: boolean;
-  // Banner images (presentation layer only)
   desktopBannerImage: string;
   mobileBannerImage: string;
-  // Text fields required by Admin Panel
   title: string;
   subtitle: string;
   secondaryText: string;
-  // Optional styling/layout presentation fields to preserve flagship hero look
   headlineTop?: string;
   headlineBottomPrefix?: string;
   headlineAccent?: string;
@@ -51,10 +38,8 @@ export interface HomepageSlideConfig {
   primaryCategory?: string;
   themeVariant?: 'everyday' | 'smarthome' | 'gaming';
   signatureLines?: string[];
-  // Schedule window (ISO date strings or empty for always active)
   startDate?: string;
   endDate?: string;
-  // Product Linking System: stores Product ID ONLY
   productId: string;
   updatedAt: string;
 }
@@ -114,23 +99,7 @@ export interface HomepageDatabaseTables {
   homepage_settings: HomepageSettingsConfig;
 }
 
-/**
- * Read-only helper to derive a deterministic SKU and display reference number
- * for any existing product without altering the product object itself.
- */
-const DETERMINISTIC_NUMERIC_IDS: Record<string, string> = {
-  'prod-ref-sony-blue': '258',
-  'prod-ref-blink': '781',
-  'prod-ref-razer': '1042',
-  'prod-ref-nextmug': '310',
-  'prod-ref-hyperx': '519',
-  'prod-ref-sony-pink': '624',
-};
-
 export function getProductReadOnlyReferenceNumber(product: Product, index: number = 0): string {
-  if (DETERMINISTIC_NUMERIC_IDS[product.id]) {
-    return DETERMINISTIC_NUMERIC_IDS[product.id];
-  }
   const digits = product.id.replace(/\D/g, '');
   if (digits.length >= 4) {
     return digits.slice(-4);
@@ -155,12 +124,6 @@ export function getProductReadOnlySku(product: Product, index: number = 0): stri
   return `DBUY-${catPrefix}-${titleWords}-${refNum}`;
 }
 
-/**
- * Matches a product against a search query by:
- * - Product Name (English or Georgian)
- * - SKU (derived or explicit)
- * - Product ID (exact ID or numeric reference like #258, #781, #1042)
- */
 export function matchesProductSearch(product: Product, query: string, index: number = 0): boolean {
   const q = query.trim().toLowerCase().replace(/^#/, '');
   if (!q) return true;
@@ -183,86 +146,8 @@ export function matchesProductSearch(product: Product, query: string, index: num
   );
 }
 
-export const INITIAL_HOMEPAGE_SLIDES: HomepageSlideConfig[] = [
-  {
-    id: 'slide-everyday-1',
-    slideOrder: 1,
-    isEnabled: true,
-    desktopBannerImage: '/uploads/ref-hero-everyday.jpg',
-    mobileBannerImage: '/uploads/ref-hero-everyday.jpg',
-    title: 'Level Up Your Everyday',
-    subtitle: 'Premium tech, home essentials and lifestyle picks for a smarter, happier you.',
-    secondaryText: 'Sony WH-1000XM6 · Noise Cancelling Headphones',
-    headlineTop: 'Level Up',
-    headlineBottomPrefix: 'Your ',
-    headlineAccent: 'Everyday',
-    accentGradient: 'linear-gradient(90deg, #56B4FF 0%, #3B82F6 52%, #1D4ED8 100%)',
-    overlayLine1: 'Sound',
-    overlayLine2: 'Without Limits',
-    overlayStyle: 'split-weight',
-    primaryCtaText: 'Shop Now',
-    rightCtaText: 'Shop Product',
-    primaryCategory: 'electronics',
-    themeVariant: 'everyday',
-    signatureLines: ['Good', 'Tech', 'Brighter', 'Days'],
-    startDate: '',
-    endDate: '',
-    productId: 'prod-ref-sony-blue', // Product #258
-    updatedAt: '2026-11-08T00:00:00.000Z',
-  },
-  {
-    id: 'slide-smarthome-2',
-    slideOrder: 2,
-    isEnabled: true,
-    desktopBannerImage: '/uploads/ref-hero-smarthome.jpg',
-    mobileBannerImage: '/uploads/ref-hero-smarthome.jpg',
-    title: 'A Smarter Home for a Brighter You',
-    subtitle: 'Smart devices that make everyday life easier, safer and more comfortable.',
-    secondaryText: 'Create a smarter, more connected home.',
-    headlineTop: 'A Smarter',
-    headlineBottomPrefix: 'Home for a ',
-    headlineAccent: 'Brighter You',
-    accentGradient: 'linear-gradient(90deg, #FDBA74 0%, #FB923C 52%, #F59E0B 100%)',
-    overlayLine1: 'Small Devices',
-    overlayLine2: 'Big Possibilities',
-    overlayStyle: 'bold-white',
-    primaryCtaText: 'Shop Smart Home',
-    rightCtaText: 'Shop Smart Devices',
-    primaryCategory: 'smart-home',
-    themeVariant: 'smarthome',
-    signatureLines: ['A', 'Smarter', 'Tomorrow'],
-    startDate: '',
-    endDate: '',
-    productId: 'prod-ref-blink', // Product #781
-    updatedAt: '2026-11-08T00:00:00.000Z',
-  },
-  {
-    id: 'slide-gaming-3',
-    slideOrder: 3,
-    isEnabled: true,
-    desktopBannerImage: '/uploads/ref-hero-gaming.jpg',
-    mobileBannerImage: '/uploads/ref-hero-gaming.jpg',
-    title: 'Game Without Limits',
-    subtitle: 'Top-tier gear for higher performance, bigger victories.',
-    secondaryText: 'Next-Gen Gear for Real Players.',
-    headlineTop: '',
-    headlineBottomPrefix: 'Game ',
-    headlineAccent: 'Without Limits',
-    accentGradient: 'linear-gradient(90deg, #60A5FA 0%, #818CF8 45%, #A855F7 100%)',
-    overlayLine1: 'PLAY',
-    overlayLine2: 'BEYOND',
-    overlayStyle: 'uppercase-lavender',
-    primaryCtaText: 'Shop Gaming',
-    rightCtaText: 'Shop Gaming',
-    primaryCategory: 'gaming',
-    themeVariant: 'gaming',
-    signatureLines: ['Play', 'Without', 'Limits'],
-    startDate: '',
-    endDate: '',
-    productId: 'prod-ref-razer', // Product #1042
-    updatedAt: '2026-11-08T00:00:00.000Z',
-  },
-];
+// ამოშლილია ყალბი პროდუქტები, სლაიდერები ცარიელია სანამ თქვენს რეალურ ID-ს არ მიუთითებთ
+export const INITIAL_HOMEPAGE_SLIDES: HomepageSlideConfig[] = [];
 
 export const INITIAL_HOMEPAGE_CATEGORIES: HomepageCategoryConfig[] = [
   {
@@ -270,175 +155,103 @@ export const INITIAL_HOMEPAGE_CATEGORIES: HomepageCategoryConfig[] = [
     name: 'Electronics',
     nameKa: 'ელექტრონიკა',
     slug: 'electronics',
-    description: 'Curated flagship electronics, noise-cancelling audio, smart mugs, and daily tech essentials.',
+    description: 'Curated electronics and daily tech essentials.',
     isEnabled: true,
     displayOrder: 1,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-ref-nextmug', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-hyperx', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-razer', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-blink', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-sony-blue', displayOrder: 5, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-sony-pink', displayOrder: 6, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789155706235-izasbyx', displayOrder: 7, isPinned: false, isFeatured: false, isHidden: false },
-      { productId: 'prod-1788722697137', displayOrder: 8, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
   {
     id: 'gaming',
     name: 'Gaming',
     nameKa: 'გეიმინგი',
     slug: 'gaming',
-    description: 'Pro-grade esports keyboards, headsets, and ultra-lightweight wireless gaming mice.',
+    description: 'Pro-grade esports gear and accessories.',
     isEnabled: true,
     displayOrder: 2,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-ref-hyperx', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-razer', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788876872896', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788787675363', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788785750636', displayOrder: 5, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-sony-blue', displayOrder: 6, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
   {
     id: 'smart-home',
     name: 'Smart Home',
     nameKa: 'ჭკვიანი სახლი',
     slug: 'smart-home',
-    description: 'Connected home security cameras, temperature-controlled drinkware, and smart automation.',
+    description: 'Connected home devices and automation.',
     isEnabled: true,
     displayOrder: 3,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-ref-blink', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-nextmug', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789155706235-izasbyx', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789138804362-0ilsgso', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788722697137', displayOrder: 5, isPinned: false, isFeatured: false, isHidden: false },
-      { productId: 'prod-1788877210563', displayOrder: 6, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
   {
     id: 'audio',
     name: 'Audio',
     nameKa: 'აუდიო',
     slug: 'audio',
-    description: 'Studio-grade wireless noise-cancelling headphones, broadcast microphones, and headsets.',
+    description: 'Wireless headphones and audio gear.',
     isEnabled: true,
     displayOrder: 4,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-ref-sony-blue', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-sony-pink', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788722508271', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-razer', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788787675363', displayOrder: 5, isPinned: false, isFeatured: false, isHidden: false },
-      { productId: 'prod-ref-hyperx', displayOrder: 6, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
   {
     id: 'office',
     name: 'Office',
     nameKa: 'ოფისი',
     slug: 'office',
-    description: 'Desk upgrades, self-heating coffee mugs, USB broadcast mics, and ergonomic accessories.',
+    description: 'Desk upgrades and ergonomic accessories.',
     isEnabled: true,
     displayOrder: 5,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-ref-nextmug', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789155706235-izasbyx', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789138804362-0ilsgso', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788722508271', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-sony-blue', displayOrder: 5, isPinned: false, isFeatured: false, isHidden: false },
-      { productId: 'prod-1788877024412', displayOrder: 6, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
   {
     id: 'wearables',
     name: 'Wearables',
     nameKa: 'სმარტ სამაჯურები',
     slug: 'wearables',
-    description: 'Biometric health trackers, performance bands, and smart hydration companions.',
+    description: 'Smart health and fitness trackers.',
     isEnabled: true,
     displayOrder: 6,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-1788724361112', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788722861679', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788877210563', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788775639253', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788724519740', displayOrder: 5, isPinned: false, isFeatured: false, isHidden: false },
-      { productId: 'prod-ref-sony-pink', displayOrder: 6, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
   {
     id: 'beauty-health',
     name: 'Beauty & Health',
     nameKa: 'სილამაზე და ჯანმრთელობა',
     slug: 'beauty-health',
-    description: 'Concentrated skincare serums, marine collagen peptides, and daily wellness supplements.',
+    description: 'Skincare and daily wellness items.',
     isEnabled: true,
     displayOrder: 7,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-1789153418419-mz6ptx2', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788777272471', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788777425106', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789155168687-cjhtzu4', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789154824924-h5n6wq0', displayOrder: 5, isPinned: false, isFeatured: false, isHidden: false },
-      { productId: 'prod-1789154372786-fyldxaj', displayOrder: 6, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
   {
     id: 'pets',
     name: 'Pets',
     nameKa: 'ცხოველებისთვის',
     slug: 'pets',
-    description: 'Smart home pet monitoring cameras, outdoor hydration flasks, and travel essentials.',
+    description: 'Pet accessories and essentials.',
     isEnabled: true,
     displayOrder: 8,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-ref-blink', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788723441741', displayOrder: 2, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788723082932', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789138699002-hmxeg6s', displayOrder: 4, isPinned: false, isFeatured: false, isHidden: false },
-      { productId: 'prod-1789138614222-4evc5wn', displayOrder: 5, isPinned: false, isFeatured: false, isHidden: false },
-      { productId: 'prod-1789156058368-ilikcwu', displayOrder: 6, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
   {
     id: 'deals',
     name: 'Deals',
     nameKa: 'ფასდაკლებები',
     slug: 'deals',
-    description: 'Limited-time offers and highest savings across flagship tech, audio, and gaming gear.',
+    description: 'Special offers and discounts.',
     isEnabled: true,
     displayOrder: 9,
     updatedAt: '2026-11-08T00:00:00.000Z',
-    items: [
-      { productId: 'prod-ref-hyperx', displayOrder: 1, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-ref-sony-blue', displayOrder: 2, isPinned: true, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789155706235-izasbyx', displayOrder: 3, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788785750636', displayOrder: 4, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1788787675363', displayOrder: 5, isPinned: false, isFeatured: true, isHidden: false },
-      { productId: 'prod-1789156058368-ilikcwu', displayOrder: 6, isPinned: false, isFeatured: false, isHidden: false },
-    ],
+    items: [],
   },
 ];
 
-export const INITIAL_HOMEPAGE_FEATURED_PRODUCTS: HomepageFeaturedProductConfig[] = [
-  { productId: 'prod-ref-nextmug', displayOrder: 1, tab: 'featured', isPinned: true, isHidden: false },
-  { productId: 'prod-ref-hyperx', displayOrder: 2, tab: 'featured', isPinned: true, isHidden: false },
-  { productId: 'prod-ref-razer', displayOrder: 3, tab: 'featured', isPinned: false, isHidden: false },
-  { productId: 'prod-ref-blink', displayOrder: 4, tab: 'featured', isPinned: false, isHidden: false },
-  { productId: 'prod-ref-sony-blue', displayOrder: 5, tab: 'featured', isPinned: false, isHidden: false },
-  { productId: 'prod-ref-sony-pink', displayOrder: 6, tab: 'featured', isPinned: false, isHidden: false },
-];
+export const INITIAL_HOMEPAGE_FEATURED_PRODUCTS: HomepageFeaturedProductConfig[] = [];
 
 export const INITIAL_HOMEPAGE_SECTIONS: HomepageSectionConfig[] = [
   {
@@ -468,7 +281,7 @@ export const INITIAL_HOMEPAGE_SECTIONS: HomepageSectionConfig[] = [
   {
     id: 'sec-promo-banners',
     title: 'Promotional Highlights',
-    subtitle: 'Smart Living, Gaming & Drinkware spotlights',
+    subtitle: 'Spotlights and promotions',
     sectionType: 'promo_banners',
     displayOrder: 4,
     isEnabled: true,
@@ -476,7 +289,7 @@ export const INITIAL_HOMEPAGE_SECTIONS: HomepageSectionConfig[] = [
   {
     id: 'sec-trust-strip',
     title: 'Customer Trust Commitments',
-    subtitle: 'Reviews, payment security, 24/7 support & sustainability',
+    subtitle: 'Reviews, payment security and support',
     sectionType: 'trust_strip',
     displayOrder: 5,
     isEnabled: true,
