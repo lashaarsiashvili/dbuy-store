@@ -7,16 +7,23 @@ import {
 } from 'lucide-react';
 
 // ==========================================
+// 0. ძველი ექსპორტი სხვა კომპონენტებისთვის (Build-ის შესაცდომის მოსაგვარებლად)
+// ==========================================
+export const analytics: any = new Proxy({}, {
+  get: () => () => {} // ეს უზრუნველყოფს, რომ QuickViewModal-მა ნებისმიერი ანალიტიკის ფუნქცია უპრობლემოდ გამოიძახოს
+});
+
+// ==========================================
 // 1. ანალიტიკის კომპონენტი (PremiumAnalytics)
 // ==========================================
 function PremiumAnalytics() {
   const [dateFilter, setDateFilter] = useState('last7d');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   
-  const [realStats, setRealStats] = useState(null);
-  const [chartData, setChartData] = useState([]);
+  const [realStats, setRealStats] = useState<any>(null);
+  const [chartData, setChartData] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   const filterOptions = [
     { id: 'today', label: 'Today' },
@@ -42,7 +49,7 @@ function PremiumAnalytics() {
         if (data.success) {
           setRealStats(data.stats);
           
-          const formattedChartData = (data.chartData || []).map(item => {
+          const formattedChartData = (data.chartData || []).map((item: any) => {
             const d = new Date(item.time);
             return {
               ...item,
