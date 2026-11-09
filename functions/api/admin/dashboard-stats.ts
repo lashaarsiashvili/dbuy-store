@@ -13,8 +13,11 @@ export const onRequest: PagesFunction<any> = async (context) => {
   }
 
   console.log('Request headers:', Object.fromEntries(request.headers.entries()));
+  
+  // url ცვლადი ცხადდება ერთხელ
   const url = new URL(request.url);
   const adminSlug = request.headers.get('X-Admin-Slug') || request.headers.get('x-admin-slug') || url.searchParams.get('adminSlug');
+  
   // Temporary hardcoded check for debugging if slug is not available via env
   const VALID_SLUG = env.ADMIN_SECRET_SLUG || 'lasha-admin-x98'; 
   
@@ -25,7 +28,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
     });
   }
 
-  const url = new URL(request.url);
+  // აქ ეწერა მეორე const url = ..., რომელიც წავშალეთ. ვიყენებთ უკვე არსებულ url-ს.
   const range = url.searchParams.get('dateRange') || 'last7d';
   
   let whereClause = "1=1";
