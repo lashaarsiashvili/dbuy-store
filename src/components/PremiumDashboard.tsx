@@ -2,25 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { 
   ComposedChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer 
 } from 'recharts';
-import { Calendar, ChevronDown, TrendingUp, ShoppingCart, Activity, DollarSign, Globe, Link, Loader2 } from 'lucide-react';
-
-// დროებითი ჩარტის მონაცემები (სანამ ტრენდის API-ს არ დავამატებთ)
-const chartData = [
-  { time: 'Mon', views: 4000, carts: 2400, purchases: 400 },
-  { time: 'Tue', views: 3000, carts: 1398, purchases: 310 },
-  { time: 'Wed', views: 2000, carts: 3800, purchases: 520 },
-  { time: 'Thu', views: 2780, carts: 3908, purchases: 650 },
-  { time: 'Fri', views: 1890, carts: 4800, purchases: 720 },
-  { time: 'Sat', views: 2390, carts: 3800, purchases: 590 },
-  { time: 'Sun', views: 3490, carts: 4300, purchases: 800 },
-];
+import { Calendar, ChevronDown, TrendingUp, ShoppingCart, Activity, DollarSign, Loader2 } from 'lucide-react';
 
 export default function PremiumDashboard() {
   const [dateFilter, setDateFilter] = useState('last7d');
   const [dropdownOpen, setDropdownOpen] = useState(false);
   
-  // რეალური მონაცემების State
   const [realStats, setRealStats] = useState(null);
+  const [chartData, setChartData] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -34,7 +23,6 @@ export default function PremiumDashboard() {
     { id: 'last90d', label: 'Last 90 Days' },
   ];
 
-  // API-დან მონაცემების წამოღება (Fetch) არჩეული თარიღის მიხედვით
   useEffect(() => {
     const fetchDashboardStats = async () => {
       setIsLoading(true);
@@ -42,7 +30,7 @@ export default function PremiumDashboard() {
       try {
         const response = await fetch(`/api/admin/dashboard-stats?dateRange=${dateFilter}`, {
           headers: {
-            'x-admin-slug': 'lasha-admin-x98' // ავტორიზაცია, რაც ბექენდში გავწერეთ
+            'x-admin-slug': 'lasha-admin-x98'
           }
         });
         
@@ -50,6 +38,18 @@ export default function PremiumDashboard() {
         
         if (data.success) {
           setRealStats(data.stats);
+          
+          // გრაფიკის თარიღების გალამაზება (მაგ: "2026-11-09" -> "Nov 09")
+          const formattedChartData = (data.chartData || []).map(item => {
+            const d = new Date(item.time);
+            return {
+              ...item,
+              time: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              carts: item.carts || 0,
+              purchases: item.purchases || 0
+            };
+          });
+          setChartData(formattedChartData);
         } else {
           setError(data.error || 'Failed to load data');
         }
@@ -61,9 +61,8 @@ export default function PremiumDashboard() {
     };
 
     fetchDashboardStats();
-  }, [dateFilter]); // ყოველთვის, როცა dateFilter შეიცვლება, თავიდან იძახებს
+  }, [dateFilter]);
 
-  // დინამიური KPI ბარათების აწყობა რეალური მონაცემებით
   const kpiCards = [
     { 
       label: 'Total Revenue', 
@@ -72,12 +71,12 @@ export default function PremiumDashboard() {
     },
     { 
       label: 'Total Orders (Paid)', 
-      value: realStats ? realStats.total_sales : '0', 
+      value: realStats ? (realStats.total_sales || 0) : '0', 
       trend: 'Completed', icon: ShoppingCart, color: 'text-blue-400' 
     },
     { 
       label: 'Initiated Checkouts', 
-      value: realStats ? realStats.total_initiated_checkouts : '0', 
+      value: realStats ? (realStats.total_initiated_checkouts || 0) : '0', 
       trend: realStats ? `${realStats.total_abandoned || 0} abandoned` : '0 abandoned', icon: Activity, color: 'text-amber-400' 
     },
     { 
@@ -95,7 +94,7 @@ export default function PremiumDashboard() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-white tracking-tight">Analytics Overview</h1>
-            <p className="text-slate-400 text-sm mt-1">Real-time store performance from Cloudflare D1</p>
+            <p className="text-slate-400 text-sm mt-1">Real-time transactional data from Cloudflare D1</p>
           </div>
           
           <div className="relative">
@@ -124,10 +123,9 @@ export default function PremiumDashboard() {
           </div>
         </div>
 
-        {/* Error State */}
         {error && (
           <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-4 rounded-xl text-sm">
-            Error loading real data: {error}
+            Error loading data: {error}
           </div>
         )}
 
@@ -156,32 +154,39 @@ export default function PremiumDashboard() {
           ))}
         </div>
 
-        {/* Main Chart (Placeholder pending analytics API) */}
+        {/* Real Main Chart */}
         <div className="bg-white/5 border border-white/10 backdrop-blur-xl p-6 rounded-2xl relative">
           {isLoading && (
              <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-sm flex items-center justify-center z-10 rounded-2xl">
                <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
              </div>
           )}
-          <h3 className="text-lg font-semibold text-white mb-6">Store Traffic (Demo)</h3>
-          <div className="h-[350px] w-full">
-            <ResponsiveContainer height="100%" width="100%">
-              <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorViews" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid stroke="#ffffff10" strokeDasharray="3 3" vertical={false}/>
-                <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false}/>
-                <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false}/>
-                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }} itemStyle={{ color: '#e2e8f0' }}/>
-                <Bar dataKey="views" name="Views" fill="url(#colorViews)" radius={[4, 4, 0, 0]} maxBarSize={40}/>
-                <Line type="monotone" dataKey="purchases" name="Purchases" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6 }}/>
-              </ComposedChart>
-            </ResponsiveContainer>
-          </div>
+          <h3 className="text-lg font-semibold text-white mb-6">Checkout & Sales Dynamics</h3>
+          
+          {chartData.length === 0 && !isLoading ? (
+            <div className="h-[350px] w-full flex items-center justify-center text-slate-500">
+              No data available for the selected period.
+            </div>
+          ) : (
+            <div className="h-[350px] w-full">
+              <ResponsiveContainer height="100%" width="100%">
+                <ComposedChart data={chartData} margin={{ top: 10, right: 0, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorCarts" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid stroke="#ffffff10" strokeDasharray="3 3" vertical={false}/>
+                  <XAxis dataKey="time" stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false}/>
+                  <YAxis stroke="#94a3b8" fontSize={12} tickLine={false} axisLine={false} allowDecimals={false}/>
+                  <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', borderRadius: '12px' }} itemStyle={{ color: '#e2e8f0' }}/>
+                  <Bar dataKey="carts" name="Initiated Checkouts" fill="url(#colorCarts)" radius={[4, 4, 0, 0]} maxBarSize={40}/>
+                  <Line type="monotone" dataKey="purchases" name="Completed Purchases" stroke="#10b981" strokeWidth={3} dot={{ r: 4, fill: '#0f172a', stroke: '#10b981', strokeWidth: 2 }} activeDot={{ r: 6 }}/>
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
 
       </div>
