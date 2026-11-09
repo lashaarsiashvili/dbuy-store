@@ -35,6 +35,7 @@
     "lucide-react": "^0.475.0",
     "motion": "^12.4.7",
     "nodemailer": "^6.10.0",
+    "posthog-js": "^1.447.5",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.1",

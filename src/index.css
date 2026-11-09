@@ -277,28 +277,34 @@ apple-pay-button {
   box-sizing: border-box;
 }
 
-/* Mobile responsive rules (< 768px) */
-@media (max-width: 768px) {
-  .hero-section {
-    min-height: auto !important;
-    height: auto !important;
-    padding-top: 1.25rem !important;
-    padding-bottom: 1.25rem !important;
-  }
+/* Proportional Hero Scaler: Scales desktop layout down to fit mobile screens like an image */
+.hero-scaler-outer {
+  width: 100%;
+  overflow: hidden;
+  position: relative;
+}
 
-  .hero-actions-container-mobile {
-    display: flex !important;
-    flex-direction: row !important;
-    flex-wrap: wrap !important;
-    align-items: center !important;
-    gap: 0.625rem !important;
-    width: 100% !important;
+@media (max-width: 1279px) {
+  .hero-scaler-outer {
+    height: calc(340px * (100vw / 1280));
+    max-height: 340px;
   }
+  .hero-scaler-inner {
+    width: 1280px;
+    height: 340px;
+    transform: scale(calc(100vw / 1280));
+    transform-origin: top left;
+  }
+}
 
-  .hero-actions-container-mobile button {
-    height: 36px !important;
-    font-size: 11.5px !important;
-    padding: 0 16px !important;
+@media (min-width: 1280px) {
+  .hero-scaler-outer {
+    height: 340px;
+  }
+  .hero-scaler-inner {
+    width: 100%;
+    height: 100%;
+    transform: none;
   }
 }
 

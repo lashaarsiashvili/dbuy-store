@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
+import { GeminiChat } from './GeminiChat';
 import { smartApiFetch } from '../lib/api';
 import { Product, Order, BillboardSlide, LogoOptionId, ProductVideo, ProductVariant } from '../types';
 import { generateProductFeatures, isGeorgianText } from '../utils/productFeatures';
@@ -77,7 +78,8 @@ import {
   Server,
   Share2,
   Megaphone,
-  Instagram
+  Instagram,
+  Bot
 } from 'lucide-react';
 import { SocialShareModal } from './SocialShareModal';
 import { formatInstagramUrl, getInstagramHandle } from '../utils/instagram';
@@ -133,6 +135,7 @@ export const AdminDashboard: React.FC = () => {
 
   const isKa = language === 'ka';
   const [isSyncing, setIsSyncing] = useState(false);
+  const [isChatOpen, setIsChatOpen] = useState(false);
 
   const handleManualSync = async () => {
     setIsSyncing(true);
@@ -6570,6 +6573,13 @@ export const AdminDashboard: React.FC = () => {
         isKa={isKa}
       />
 
+      <GeminiChat isOpen={isChatOpen} onClose={() => setIsChatOpen(false)} />
+      <button 
+        onClick={() => setIsChatOpen(true)}
+        className="fixed bottom-6 left-6 p-4 bg-blue-600 text-white rounded-full shadow-xl hover:bg-blue-500 z-50"
+      >
+        <Bot className="w-6 h-6" />
+      </button>
     </div>
   );
 };

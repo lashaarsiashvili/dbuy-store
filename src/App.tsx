@@ -1,4 +1,5 @@
 import React, { useEffect } from 'react';
+import { initPostHog } from './lib/posthog';
 import { PayPalScriptProvider } from '@paypal/react-paypal-js';
 import { StoreProvider, useStore } from './context/StoreContext';
 import { LanguageProvider } from './context/LanguageContext';
@@ -354,6 +355,10 @@ const MainLayout: React.FC = () => {
 };
 
 export function App() {
+  useEffect(() => {
+    initPostHog();
+  }, []);
+
   return (
     <LanguageProvider>
       <StoreProvider>

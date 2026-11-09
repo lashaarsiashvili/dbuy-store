@@ -421,6 +421,7 @@ app.use((req, res, next) => {
   const reqPath = req.path.toLowerCase();
   if (reqPath.startsWith('/api/admin/') || reqPath.startsWith('/api/contact/messages')) {
     const clientAdminSlug = req.headers['x-admin-slug'] as string | undefined;
+    console.log('Server received slug:', clientAdminSlug, 'Expected:', storeDb.adminSecretSlug);
     if (!clientAdminSlug || clientAdminSlug !== storeDb.adminSecretSlug) {
       console.warn(`[SECURITY-ALERT] Blocked unauthorized access attempt to: ${req.method} ${req.originalUrl}`);
       return res.status(403).json({ success: false, error: 'Access Denied: Administrative authority required' });
@@ -1538,6 +1539,37 @@ app.post('/api/gemini/generate-ad', async (req, res) => {
 // ==========================================
 // FACEBOOK GRAPH API ENDPOINTS
 // ==========================================
+app.post('/api/chat', async (req, res) => {
+  try {
+    const { message, history, systemInstruction, model } = req.body;
+    
+    const allowedModels = ['gemini-4-argon', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
+    const selectedModel = allowedModels.includes(model) ? model : 'gemini-3.8-flash';
+
+    const ai = new GoogleGenAI({
+      apiKey: process.env.GEMINI_API_KEY,
+      httpOptions: {
+        headers: {
+          'User-Agent': 'aistudio-build',
+        }
+      }
+    });
+
+    const chat = ai.chats.create({
+      model: selectedModel,
+      config: {
+        systemInstruction: systemInstruction || "You are a helpful assistant.",
+      },
+      history: history // Expects array of Content
+    });
+
+    const response = await chat.sendMessage({ message });
+    res.json({ success: true, response: response.text });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 app.post('/api/facebook/post-photo', async (req, res) => {
   try {
     const { imageUrl, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};

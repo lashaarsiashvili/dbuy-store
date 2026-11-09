@@ -1204,16 +1204,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     } catch (e) {}
   }, [wishlist, user?.isLoggedIn, user?.email]);
 
-  const [orders, setOrders] = useState<Order[]>(() => {
-    try {
-      const saved = localStorage.getItem('dbuy_orders');
-      if (saved) {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed)) return parsed;
-      }
-    } catch (e) {}
-    return [];
-  });
+  const [orders, setOrders] = useState<Order[]>([]);
+
+  useEffect(() => {
+    fetch('/api/orders')
+      .then(r => r.json())
+      .then(d => {
+        if (d.success) setOrders(d.orders);
+      })
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     try {
@@ -1595,12 +1595,22 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return newOrder;
   };
 
-  const updateOrderStatus = (orderId: string, status: Order['status']) => {
+  const updateOrderStatus = async (orderId: string, status: Order['status']) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status } : o));
+    await fetch(`/api/orders/${orderId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status })
+    }).catch(console.error);
   };
 
-  const updateOrderTracking = (orderId: string, details: any) => {
+  const updateOrderTracking = async (orderId: string, details: any) => {
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, ...details } : o));
+    await fetch(`/api/orders/${orderId}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(details)
+    }).catch(console.error);
   };
 
   const deleteOrder = (orderId: string) => {
