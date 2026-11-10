@@ -32,7 +32,7 @@ const baseRequest = {
   apiVersionMinor: 0,
 };
 
-const allowedCardNetworks = ["AMEX", "DISCOVER", "INTERAC", "JCB", "MASTERCARD", "VISA"];
+const allowedCardNetworks = ["AMEX", "DISCOVER", "JCB", "MASTERCARD", "VISA"];
 const allowedCardAuthMethods = ["PAN_ONLY", "CRYPTOGRAM_3DS"];
 
 const baseCardPaymentMethod = {
@@ -51,8 +51,8 @@ const baseCardPaymentMethod = {
 const tokenizationSpecification = {
   type: 'PAYMENT_GATEWAY',
   parameters: {
-    gateway: PAYPAL_GATEWAY_NAME, // Processed through PayPal Secure Checkout
-    gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID,
+    gateway: 'paypal', // Explicitly 'paypal' as required by PayPal JS SDK
+    gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID, // Maps to your live PayPal Account / Client ID
   },
 };
 
@@ -138,9 +138,23 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
         const strictMerchantId = String(merchantId || GOOGLE_PAY_MERCHANT_ID || 'BCR2DN6DVKZOLJDJ').trim();
         const strictMerchantName = String(merchantName || GOOGLE_PAY_MERCHANT_NAME || 'DBUY Store').trim();
 
+        // Attempt to fetch live configuration from PayPal JS SDK if available
+        let activeAllowedPaymentMethods = [cardPaymentMethod];
+        try {
+          if ((window as any).paypal?.Googlepay) {
+            const paypalGooglepay = (window as any).paypal.Googlepay();
+            const sdkConfig = await paypalGooglepay.config();
+            if (sdkConfig?.allowedPaymentMethods && sdkConfig.allowedPaymentMethods.length > 0) {
+              activeAllowedPaymentMethods = sdkConfig.allowedPaymentMethods;
+            }
+          }
+        } catch (sdkErr) {
+          console.warn('[Google Pay] Using direct PayPal gateway parameters:', sdkErr);
+        }
+
         const paymentDataRequest: any = {
           ...baseRequest,
-          allowedPaymentMethods: [cardPaymentMethod],
+          allowedPaymentMethods: activeAllowedPaymentMethods,
           transactionInfo: {
             totalPriceStatus: 'FINAL',
             totalPrice: safeAmountStr,

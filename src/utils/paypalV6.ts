@@ -329,8 +329,8 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
           tokenizationSpecification: {
             type: 'PAYMENT_GATEWAY',
             parameters: {
-              gateway: PAYPAL_GATEWAY_NAME, // Processed through PayPal Secure Gateway
-              gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID,
+              gateway: 'paypal', // Explicitly 'paypal' as required by PayPal JS SDK
+              gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID, // Maps to your live PayPal account / client ID
             },
           },
         },
@@ -340,12 +340,34 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
       callbackIntents: ['PAYMENT_AUTHORIZATION'],
     };
 
-    const isReadyToPayRequest = defaultIsReadyToPayRequest;
+    // Prefer PayPal SDK generated configuration if available from PayPal session
+    let activeAllowedMethods = defaultPaymentDataRequest.allowedPaymentMethods;
+    if (googlePayConfig?.allowedPaymentMethods && googlePayConfig.allowedPaymentMethods.length > 0) {
+      activeAllowedMethods = googlePayConfig.allowedPaymentMethods;
+    } else {
+      try {
+        if ((window as any).paypal?.Googlepay) {
+          const sdkConfig = await (window as any).paypal.Googlepay().config();
+          if (sdkConfig?.allowedPaymentMethods && sdkConfig.allowedPaymentMethods.length > 0) {
+            activeAllowedMethods = sdkConfig.allowedPaymentMethods;
+          }
+        }
+      } catch (sdkErr) {
+        console.warn('[PAYPAL-v6-GOOGLEPAY] Using direct PayPal gateway parameters:', sdkErr);
+      }
+    }
+
+    const isReadyToPayRequest = {
+      apiVersion: 2,
+      apiVersionMinor: 0,
+      allowedPaymentMethods: activeAllowedMethods,
+    };
 
     const readyToPay = await paymentsClient.isReadyToPay(isReadyToPayRequest);
 
     if (readyToPay?.result || readyToPay) {
       const paymentDataRequest = JSON.parse(JSON.stringify(defaultPaymentDataRequest));
+      paymentDataRequest.allowedPaymentMethods = activeAllowedMethods;
 
       paymentDataRequest.transactionInfo = {
         totalPriceStatus: 'FINAL',

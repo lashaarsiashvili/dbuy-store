@@ -50,7 +50,7 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
   const tokenizationSpecification = {
     type: 'PAYMENT_GATEWAY',
     parameters: {
-      gateway: PAYPAL_GATEWAY_NAME, // Processed through PayPal Secure Checkout
+      gateway: 'paypal', // Explicitly 'paypal' as required by PayPal JS SDK
       gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID,
     },
   };
