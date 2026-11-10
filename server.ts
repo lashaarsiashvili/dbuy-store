@@ -430,31 +430,72 @@ app.use((req, res, next) => {
   next();
 });
 
+const liveStoreEvents: Array<{
+  event_type: string;
+  session_id: string;
+  page_path: string;
+  item_id: string | null;
+  referrer: string;
+  country: string;
+  amount: number;
+  created_at: string;
+}> = Array.isArray((storeDb as any).storeEvents) ? (storeDb as any).storeEvents : [];
+
+app.post('/api/event', (req, res) => {
+  try {
+    const body = req.body || {};
+    const headerCountry = (req.headers['cf-ipcountry'] as string) || body.countryCode || body.country || 'GE';
+    const ev = {
+      event_type: String(body.event_type || 'page_view'),
+      session_id: String(body.session_id || 'anonymous'),
+      page_path: String(body.page_path || body.path || '/'),
+      item_id: body.item_id || body.productId ? String(body.item_id || body.productId) : null,
+      referrer: String(body.referrer || 'Direct'),
+      country: String(headerCountry).toUpperCase().slice(0, 2) || 'GE',
+      amount: Number(body.amount || body.revenue || 0) || 0,
+      created_at: new Date().toISOString(),
+    };
+    liveStoreEvents.unshift(ev);
+    if (liveStoreEvents.length > 5000) liveStoreEvents.length = 5000;
+    (storeDb as any).storeEvents = liveStoreEvents;
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to record event' });
+  }
+});
+
 app.get('/api/admin/dashboard-stats', (req, res) => {
   try {
     const range = String(req.query.dateRange || 'last7d');
+    const startDate = req.query.startDate as string | undefined;
+    const endDate = req.query.endDate as string | undefined;
     const now = new Date();
     const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const dayMs = 86400000;
 
     let minTime = new Date(startOfToday.getTime() - 7 * dayMs).getTime();
     let maxTime = Infinity;
+    let isSingleDay = false;
 
     switch (range) {
       case 'today':
         minTime = startOfToday.getTime();
+        isSingleDay = true;
         break;
       case '1d_ago':
         minTime = startOfToday.getTime() - 1 * dayMs;
         maxTime = startOfToday.getTime();
+        isSingleDay = true;
         break;
       case '2d_ago':
         minTime = startOfToday.getTime() - 2 * dayMs;
         maxTime = startOfToday.getTime() - 1 * dayMs;
+        isSingleDay = true;
         break;
       case '7d_ago':
         minTime = startOfToday.getTime() - 7 * dayMs;
         maxTime = startOfToday.getTime() - 6 * dayMs;
+        isSingleDay = true;
         break;
       case 'last7d':
         minTime = startOfToday.getTime() - 7 * dayMs;
@@ -467,6 +508,10 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
         break;
       case 'last90d':
         minTime = startOfToday.getTime() - 90 * dayMs;
+        break;
+      case 'custom':
+        if (startDate) minTime = new Date(startDate).getTime() || minTime;
+        if (endDate) maxTime = (new Date(endDate).getTime() || Date.now()) + dayMs;
         break;
       default:
         minTime = startOfToday.getTime() - 7 * dayMs;
@@ -481,12 +526,28 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
       return t >= minTime && t < maxTime;
     });
 
+    const filteredEvents = liveStoreEvents.filter((ev) => {
+      const t = new Date(ev.created_at).getTime();
+      if (isNaN(t)) return true;
+      return t >= minTime && t < maxTime;
+    });
+
     let total_initiated_checkouts = filteredOrders.length;
     let total_revenue = 0;
     let total_abandoned = 0;
     let total_sales = 0;
 
-    const groupedByDate: Record<string, { time: string; carts: number; purchases: number }> = {};
+    const groupedByBucket: Record<string, { time: string; views: number; carts: number; purchases: number }> = {};
+
+    const getBucketKey = (isoStr: string) => {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return isSingleDay ? '12:00' : new Date().toISOString().split('T')[0];
+      if (isSingleDay) {
+        const hh = String(d.getUTCHours()).padStart(2, '0');
+        return `${hh}:00`;
+      }
+      return d.toISOString().split('T')[0];
+    };
 
     for (const o of filteredOrders) {
       const status = String(o.status || '').toLowerCase();
@@ -502,34 +563,103 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
       }
 
       const rawDate = o.created_at || o.createdAt || o.date || new Date().toISOString();
-      const dObj = new Date(rawDate);
-      const dateKey = !isNaN(dObj.getTime()) ? dObj.toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
-
-      if (!groupedByDate[dateKey]) {
-        groupedByDate[dateKey] = { time: dateKey, carts: 0, purchases: 0 };
+      const bucketKey = getBucketKey(rawDate);
+      if (!groupedByBucket[bucketKey]) {
+        groupedByBucket[bucketKey] = { time: bucketKey, views: 0, carts: 0, purchases: 0 };
       }
-      groupedByDate[dateKey].carts += 1;
+      groupedByBucket[bucketKey].carts += 1;
       if (isPaid) {
-        groupedByDate[dateKey].purchases += 1;
+        groupedByBucket[bucketKey].purchases += 1;
       }
     }
 
+    let total_views = 0;
+    let total_add_to_cart = 0;
+    let total_event_purchases = 0;
+    const distinctSessions = new Set<string>();
+    const countrySessionMap: Record<string, Set<string>> = {};
+    const sourceSessionMap: Record<string, Set<string>> = {};
+    const productStatsMap: Record<string, { item_id: string; views: number; carts: number; purchases: number }> = {};
+
+    for (const ev of filteredEvents) {
+      distinctSessions.add(ev.session_id);
+      const bucketKey = getBucketKey(ev.created_at);
+      if (!groupedByBucket[bucketKey]) {
+        groupedByBucket[bucketKey] = { time: bucketKey, views: 0, carts: 0, purchases: 0 };
+      }
+
+      if (ev.event_type === 'page_view' || ev.event_type === '$pageview') {
+        total_views += 1;
+        groupedByBucket[bucketKey].views += 1;
+      } else if (ev.event_type === 'add_to_cart') {
+        total_add_to_cart += 1;
+        groupedByBucket[bucketKey].carts += 1;
+      } else if (ev.event_type === 'purchase') {
+        total_event_purchases += 1;
+        groupedByBucket[bucketKey].purchases += 1;
+        if (ev.amount > 0) total_revenue += ev.amount;
+      }
+
+      const cCode = (ev.country || 'GE').toUpperCase();
+      if (!countrySessionMap[cCode]) countrySessionMap[cCode] = new Set();
+      countrySessionMap[cCode].add(ev.session_id);
+
+      const src = ev.referrer || 'Direct';
+      if (!sourceSessionMap[src]) sourceSessionMap[src] = new Set();
+      sourceSessionMap[src].add(ev.session_id);
+
+      if (ev.item_id) {
+        if (!productStatsMap[ev.item_id]) {
+          productStatsMap[ev.item_id] = { item_id: ev.item_id, views: 0, carts: 0, purchases: 0 };
+        }
+        if (ev.event_type === 'page_view' || ev.event_type === '$pageview') {
+          productStatsMap[ev.item_id].views += 1;
+        } else if (ev.event_type === 'add_to_cart') {
+          productStatsMap[ev.item_id].carts += 1;
+        } else if (ev.event_type === 'purchase') {
+          productStatsMap[ev.item_id].purchases += 1;
+        }
+      }
+    }
+
+    const total_visitors = Math.max(distinctSessions.size, serverAnalytics.visits || 0);
+    const final_sales = Math.max(total_sales, total_event_purchases);
     const conversion_rate = total_initiated_checkouts > 0
-      ? Number(((total_sales / total_initiated_checkouts) * 100).toFixed(2))
+      ? Number(((final_sales / total_initiated_checkouts) * 100).toFixed(2))
       : 0;
 
-    const chartData = Object.values(groupedByDate).sort((a, b) => a.time.localeCompare(b.time));
+    const chartData = Object.values(groupedByBucket).sort((a, b) => a.time.localeCompare(b.time));
+    const topCountries = Object.entries(countrySessionMap)
+      .map(([code, set]) => ({ code, users: set.size }))
+      .sort((a, b) => b.users - a.users);
+    const topSources = Object.entries(sourceSessionMap)
+      .map(([name, set]) => ({ name, visits: set.size }))
+      .sort((a, b) => b.visits - a.visits);
+    const topProducts = Object.values(productStatsMap).sort((a, b) => b.views - a.views);
 
     res.json({
       success: true,
+      timestamp: new Date().toISOString(),
+      posthog: {
+        projectId: '661027',
+        projectToken: 'phc_xBZDpwYNkS5gaEPe5EAT3wcBSyeSryw9wYY3qnEsMErJ',
+        region: 'US Cloud',
+        connected: true,
+      },
       stats: {
         total_initiated_checkouts,
         total_revenue: Number(total_revenue.toFixed(2)),
         total_abandoned,
-        total_sales,
+        total_sales: final_sales,
+        total_views,
+        total_visitors,
+        total_add_to_cart,
         conversion_rate,
       },
       chartData,
+      topProducts,
+      topCountries,
+      topSources,
     });
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Failed to compute dashboard stats' });

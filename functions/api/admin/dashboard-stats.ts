@@ -1,3 +1,48 @@
+const POSTHOG_PROJECT_ID = '661027';
+const POSTHOG_PROJECT_TOKEN = 'phc_xBZDpwYNkS5gaEPe5EAT3wcBSyeSryw9wYY3qnEsMErJ';
+const POSTHOG_API_HOST = 'https://us.posthog.com';
+
+async function fetchPostHogCloudStats(personalApiKey: string, days: number) {
+  try {
+    const query = `
+      SELECT
+        countIf(event = '$pageview' OR event = 'page_view') AS total_views,
+        uniq(distinct_id) AS total_visitors,
+        countIf(event = 'add_to_cart') AS total_add_to_cart,
+        countIf(event = 'purchase') AS total_purchases
+      FROM events
+      WHERE timestamp >= now() - INTERVAL ${days} DAY
+    `;
+
+    const res = await fetch(`${POSTHOG_API_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${personalApiKey}`,
+      },
+      body: JSON.stringify({
+        query: {
+          kind: 'HogQLQuery',
+          query,
+        },
+      }),
+    });
+
+    if (!res.ok) return null;
+    const data: any = await res.json();
+    const row = data?.results?.[0];
+    if (!Array.isArray(row)) return null;
+    return {
+      total_views: Number(row[0]) || 0,
+      total_visitors: Number(row[1]) || 0,
+      total_add_to_cart: Number(row[2]) || 0,
+      total_purchases: Number(row[3]) || 0,
+    };
+  } catch {
+    return null;
+  }
+}
+
 export const onRequest: PagesFunction<any> = async (context) => {
   const { env, request } = context;
 
@@ -12,80 +57,100 @@ export const onRequest: PagesFunction<any> = async (context) => {
   }
 
   const url = new URL(request.url);
-  const adminSlug =
-    request.headers.get('X-Admin-Slug') ||
-    request.headers.get('x-admin-slug') ||
-    url.searchParams.get('adminSlug');
-  const VALID_SLUG = env.ADMIN_SECRET_SLUG || 'lasha-admin-x98';
-
-  if (adminSlug && adminSlug !== VALID_SLUG && adminSlug !== 'lasha-admin-x98') {
-    // Allow if matching either env slug or default admin slug
-  }
-
   const range = url.searchParams.get('dateRange') || 'last7d';
+  const startDate = url.searchParams.get('startDate');
+  const endDate = url.searchParams.get('endDate');
 
   let whereClause = '1=1';
+  let daysCount = 7;
+  let isSingleDay = false;
+
   switch (range) {
     case 'today':
-      whereClause = "created_at >= date('now', 'start of day')";
+      whereClause = "created_at >= datetime('now', 'start of day')";
+      daysCount = 1;
+      isSingleDay = true;
       break;
     case '1d_ago':
-      whereClause = "created_at >= date('now', '-1 day') AND created_at < date('now', 'start of day')";
+      whereClause = "created_at >= datetime('now', '-1 day', 'start of day') AND created_at < datetime('now', 'start of day')";
+      daysCount = 1;
+      isSingleDay = true;
       break;
     case '2d_ago':
-      whereClause = "created_at >= date('now', '-2 days') AND created_at < date('now', '-1 day')";
-      break;
-    case '3d_ago':
-      whereClause = "created_at >= date('now', '-3 days') AND created_at < date('now', '-2 days')";
-      break;
-    case '4d_ago':
-      whereClause = "created_at >= date('now', '-4 days') AND created_at < date('now', '-3 days')";
-      break;
-    case '5d_ago':
-      whereClause = "created_at >= date('now', '-5 days') AND created_at < date('now', '-4 days')";
-      break;
-    case '6d_ago':
-      whereClause = "created_at >= date('now', '-6 days') AND created_at < date('now', '-5 days')";
+      whereClause = "created_at >= datetime('now', '-2 days', 'start of day') AND created_at < datetime('now', '-1 day', 'start of day')";
+      daysCount = 2;
+      isSingleDay = true;
       break;
     case '7d_ago':
-      whereClause = "created_at >= date('now', '-7 days') AND created_at < date('now', '-6 days')";
+      whereClause = "created_at >= datetime('now', '-7 days', 'start of day') AND created_at < datetime('now', '-6 days', 'start of day')";
+      daysCount = 7;
+      isSingleDay = true;
       break;
     case 'last7d':
-      whereClause = "created_at >= date('now', '-7 days')";
+      whereClause = "created_at >= datetime('now', '-7 days')";
+      daysCount = 7;
       break;
     case 'last30d':
-      whereClause = "created_at >= date('now', '-30 days')";
+      whereClause = "created_at >= datetime('now', '-30 days')";
+      daysCount = 30;
       break;
     case 'last60d':
-      whereClause = "created_at >= date('now', '-60 days')";
+      whereClause = "created_at >= datetime('now', '-60 days')";
+      daysCount = 60;
       break;
     case 'last90d':
-      whereClause = "created_at >= date('now', '-90 days')";
+      whereClause = "created_at >= datetime('now', '-90 days')";
+      daysCount = 90;
+      break;
+    case 'custom':
+      if (startDate && endDate) {
+        const safeStart = startDate.replace(/[^0-9-]/g, '');
+        const safeEnd = endDate.replace(/[^0-9-]/g, '');
+        whereClause = `date(created_at) >= date('${safeStart}') AND date(created_at) <= date('${safeEnd}')`;
+      } else {
+        whereClause = "created_at >= datetime('now', '-7 days')";
+      }
+      daysCount = 14;
       break;
     default:
-      whereClause = "created_at >= date('now', '-7 days')";
+      whereClause = "created_at >= datetime('now', '-7 days')";
+      daysCount = 7;
   }
 
   const statsQuery = `
     SELECT 
         COUNT(*) as total_initiated_checkouts,
-        SUM(CASE WHEN status = 'paid' THEN total_amount ELSE 0 END) as total_revenue,
+        SUM(CASE WHEN status IN ('paid', 'completed', 'Processing', 'Shipped', 'Delivered') THEN total_amount ELSE 0 END) as total_revenue,
         SUM(CASE WHEN status = 'abandoned' THEN 1 ELSE 0 END) as total_abandoned,
-        SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as total_sales,
-        ROUND((CAST(SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) AS FLOAT) / NULLIF(CAST(COUNT(*) AS FLOAT), 0)) * 100, 2) as conversion_rate
+        SUM(CASE WHEN status IN ('paid', 'completed', 'Processing', 'Shipped', 'Delivered') THEN 1 ELSE 0 END) as total_sales,
+        ROUND((CAST(SUM(CASE WHEN status IN ('paid', 'completed', 'Processing', 'Shipped', 'Delivered') THEN 1 ELSE 0 END) AS FLOAT) / NULLIF(CAST(COUNT(*) AS FLOAT), 0)) * 100, 2) as conversion_rate
     FROM orders
     WHERE ${whereClause}
   `;
 
-  const chartQuery = `
+  const bucketExpr = isSingleDay ? "strftime('%H:00', created_at)" : 'date(created_at)';
+
+  const eventsChartQuery = `
     SELECT 
-        date(created_at) as time,
+        ${bucketExpr} as time,
+        COUNT(CASE WHEN event_type = 'page_view' THEN 1 END) as views,
+        COUNT(CASE WHEN event_type = 'add_to_cart' THEN 1 END) as carts,
+        COUNT(CASE WHEN event_type = 'purchase' THEN 1 END) as purchases
+    FROM store_events
+    WHERE ${whereClause}
+    GROUP BY ${bucketExpr}
+    ORDER BY ${bucketExpr} ASC
+  `;
+
+  const ordersChartQuery = `
+    SELECT 
+        ${bucketExpr} as time,
         COUNT(*) as carts,
-        SUM(CASE WHEN status = 'paid' THEN 1 ELSE 0 END) as purchases
+        SUM(CASE WHEN status IN ('paid', 'completed', 'Processing', 'Shipped', 'Delivered') THEN 1 ELSE 0 END) as purchases
     FROM orders
     WHERE ${whereClause}
-    GROUP BY date(created_at)
-    ORDER BY date(created_at) ASC
+    GROUP BY ${bucketExpr}
+    ORDER BY ${bucketExpr} ASC
   `;
 
   try {
@@ -103,13 +168,57 @@ export const onRequest: PagesFunction<any> = async (context) => {
     let topSources: any[] = [];
 
     if (env?.DB) {
+      // Ensure store_events table exists
+      try {
+        await env.DB.exec(`
+          CREATE TABLE IF NOT EXISTS store_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            event_type TEXT,
+            session_id TEXT,
+            page_path TEXT,
+            device_type TEXT,
+            item_id TEXT,
+            referrer TEXT,
+            country TEXT,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          );
+        `);
+      } catch {}
+
       try {
         stats = (await env.DB.prepare(statsQuery).first()) || stats;
       } catch {}
 
       try {
-        const chartRes = await env.DB.prepare(chartQuery).all();
-        chartData = chartRes?.results || [];
+        const [evChartRes, ordChartRes] = await Promise.all([
+          env.DB.prepare(eventsChartQuery).all().catch(() => ({ results: [] })),
+          env.DB.prepare(ordersChartQuery).all().catch(() => ({ results: [] })),
+        ]);
+
+        const mergedMap: Record<string, { time: string; views: number; carts: number; purchases: number }> = {};
+
+        for (const r of evChartRes?.results || []) {
+          const t = String((r as any).time || '');
+          if (!t) continue;
+          mergedMap[t] = {
+            time: t,
+            views: Number((r as any).views) || 0,
+            carts: Number((r as any).carts) || 0,
+            purchases: Number((r as any).purchases) || 0,
+          };
+        }
+
+        for (const r of ordChartRes?.results || []) {
+          const t = String((r as any).time || '');
+          if (!t) continue;
+          if (!mergedMap[t]) {
+            mergedMap[t] = { time: t, views: 0, carts: 0, purchases: 0 };
+          }
+          mergedMap[t].carts = Math.max(mergedMap[t].carts, Number((r as any).carts) || 0);
+          mergedMap[t].purchases = Math.max(mergedMap[t].purchases, Number((r as any).purchases) || 0);
+        }
+
+        chartData = Object.values(mergedMap).sort((a, b) => a.time.localeCompare(b.time));
       } catch {}
 
       try {
@@ -131,7 +240,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
           WHERE ${whereClause} AND country IS NOT NULL AND country != 'Unknown'
           GROUP BY country
           ORDER BY users DESC
-          LIMIT 6
+          LIMIT 10
         `).all();
         topCountries = countriesRes?.results || [];
       } catch {}
@@ -143,7 +252,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
           WHERE ${whereClause}
           GROUP BY COALESCE(referrer, 'Direct')
           ORDER BY visits DESC
-          LIMIT 6
+          LIMIT 10
         `).all();
         topSources = sourcesRes?.results || [];
       } catch {}
@@ -165,14 +274,32 @@ export const onRequest: PagesFunction<any> = async (context) => {
       } catch {}
     }
 
+    let phCloudStats: any = null;
+    if (env?.POSTHOG_PERSONAL_API_KEY) {
+      phCloudStats = await fetchPostHogCloudStats(env.POSTHOG_PERSONAL_API_KEY, daysCount);
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
+        timestamp: new Date().toISOString(),
+        posthog: {
+          projectId: POSTHOG_PROJECT_ID,
+          projectToken: POSTHOG_PROJECT_TOKEN,
+          region: 'US Cloud',
+          ingestionHost: 'https://us.i.posthog.com',
+          connected: true,
+        },
         stats: {
           ...stats,
-          total_views: eventStats?.total_views || 0,
-          total_visitors: eventStats?.total_visitors || 0,
-          total_add_to_cart: eventStats?.total_add_to_cart || 0,
+          total_views: Math.max(Number(phCloudStats?.total_views) || 0, Number(eventStats?.total_views) || 0),
+          total_visitors: Math.max(Number(phCloudStats?.total_visitors) || 0, Number(eventStats?.total_visitors) || 0),
+          total_add_to_cart: Math.max(Number(phCloudStats?.total_add_to_cart) || 0, Number(eventStats?.total_add_to_cart) || 0),
+          total_sales: Math.max(
+            Number(stats?.total_sales) || 0,
+            Number(eventStats?.total_purchases) || 0,
+            Number(phCloudStats?.total_purchases) || 0
+          ),
         },
         chartData,
         topProducts,
@@ -183,6 +310,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
+          'Cache-Control': 'no-store, no-cache, must-revalidate, max-age=0',
         },
       }
     );

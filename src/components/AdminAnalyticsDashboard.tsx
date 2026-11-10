@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import PremiumDashboard from './PremiumDashboard';
 import { isExcludedAdminDevice } from '../utils/analytics';
+import { safeCapture, detectPostHogTrafficSource, getPostHogSessionId } from '../lib/posthog';
 
 export interface AnalyticsStorage {
   dailyVisits: Record<string, number>;
@@ -18,40 +19,6 @@ export interface AnalyticsSummary {
   todayVisits: number;
   cartAdditions: Record<string, number>;
   checkoutAttempts: number;
-}
-
-function getOrCreateSessionId(): string {
-  if (typeof window === 'undefined') return 'server';
-  try {
-    let sid = sessionStorage.getItem('dbuy_session_id');
-    if (!sid) {
-      sid = 'sess_' + Math.random().toString(36).substring(2, 11) + '_' + Date.now();
-      sessionStorage.setItem('dbuy_session_id', sid);
-    }
-    return sid;
-  } catch {
-    return 'anonymous';
-  }
-}
-
-function detectTrafficSource(): string {
-  if (typeof window === 'undefined') return 'Direct';
-  try {
-    const params = new URLSearchParams(window.location.search);
-    const utmSource = (params.get('utm_source') || params.get('source') || '').toLowerCase();
-    if (utmSource.includes('fb') || utmSource.includes('facebook') || params.has('fbclid')) return 'Facebook';
-    if (utmSource.includes('ig') || utmSource.includes('instagram')) return 'Instagram';
-    if (utmSource.includes('google') || params.has('gclid')) return 'Google';
-
-    const ref = (document.referrer || '').toLowerCase();
-    if (!ref || ref.includes(window.location.hostname)) return 'Direct';
-    if (ref.includes('facebook.com') || ref.includes('fb.com') || ref.includes('m.facebook.com')) return 'Facebook';
-    if (ref.includes('instagram.com')) return 'Instagram';
-    if (ref.includes('google.')) return 'Google';
-    return 'Direct';
-  } catch {
-    return 'Direct';
-  }
 }
 
 export const isUserAdmin = (): boolean => {
@@ -69,19 +36,49 @@ export const isUserAdmin = (): boolean => {
 
 export const trackStoreEvent = (
   eventName: 'page_view' | 'add_to_cart' | 'purchase' | string,
-  data?: { itemId?: string; itemName?: string; [key: string]: any }
+  data?: { itemId?: string; itemName?: string; price?: number; revenue?: number; [key: string]: any }
 ) => {
   if (typeof window === 'undefined' || isUserAdmin()) return;
   try {
+    const referrer = detectPostHogTrafficSource();
+    const sessionId = getPostHogSessionId();
+    const currentPath = window.location.pathname || '/';
+
+    // 1. Send directly to PostHog US Cloud (Project ID: 661027)
+    safeCapture(eventName, {
+      ...data,
+      itemId: data?.itemId ? String(data.itemId) : undefined,
+      product_id: data?.itemId ? String(data.itemId) : undefined,
+      product_name: data?.itemName,
+      referrer,
+      path: currentPath,
+    });
+
+    if (eventName === 'page_view') {
+      safeCapture('$pageview', {
+        itemId: data?.itemId ? String(data.itemId) : undefined,
+        referrer,
+        path: currentPath,
+      });
+    }
+
+    // 2. Mirror to backend D1 / Express analytics endpoints
     const payload = {
       event_type: eventName,
-      type: eventName === 'page_view' ? (data?.itemId ? 'product_view' : 'visit') : eventName === 'add_to_cart' ? 'cart' : 'checkout',
-      session_id: getOrCreateSessionId(),
-      page_path: window.location.pathname || '/',
-      path: window.location.pathname || '/',
+      type:
+        eventName === 'page_view'
+          ? data?.itemId
+            ? 'product_view'
+            : 'visit'
+          : eventName === 'add_to_cart'
+            ? 'cart'
+            : 'checkout',
+      session_id: sessionId,
+      page_path: currentPath,
+      path: currentPath,
       item_id: data?.itemId ? String(data.itemId) : null,
       productId: data?.itemId ? String(data.itemId) : undefined,
-      referrer: detectTrafficSource(),
+      referrer,
     };
 
     fetch('/api/track', {

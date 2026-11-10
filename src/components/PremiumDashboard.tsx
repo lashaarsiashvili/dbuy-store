@@ -1,5 +1,10 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { safeCapture } from '../lib/posthog';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import {
+  safeCapture,
+  POSTHOG_CONFIG,
+  loadLocalPostHogEvents,
+  getPostHogSessionId,
+} from '../lib/posthog';
 import {
   ComposedChart,
   Line,
@@ -23,118 +28,50 @@ import {
   CreditCard,
   Box,
   ArrowUpRight,
+  CheckCircle2,
+  ExternalLink,
+  Zap,
+  RefreshCw,
 } from 'lucide-react';
 import { useStore } from '../context/StoreContext';
 
-const BASE_CHART_DATA_TODAY = [
-  { time: '08:00', views: 1200, carts: 50, purchases: 5 },
-  { time: '10:00', views: 2100, carts: 80, purchases: 25 },
-  { time: '12:00', views: 3400, carts: 140, purchases: 42 },
-  { time: '14:00', views: 2800, carts: 110, purchases: 35 },
-  { time: '16:00', views: 4200, carts: 190, purchases: 55 },
-  { time: '18:00', views: 5100, carts: 260, purchases: 72 },
-  { time: '20:00', views: 6300, carts: 320, purchases: 95 },
-];
-
-const BASE_TOP_PRODUCTS = [
-  {
-    id: 'prod-1',
-    name: 'Asus Zenbook S 14',
-    views: 4200,
-    carts: 380,
-    purchases: 142,
-    progress: 75,
-  },
-  {
-    id: 'prod-2',
-    name: 'HP ProBook 440 G10',
-    views: 2890,
-    carts: 245,
-    purchases: 115,
-    progress: 52,
-  },
-  {
-    id: 'prod-3',
-    name: 'La Roche-Posay Cicaplast Baume B5+',
-    views: 5600,
-    carts: 610,
-    purchases: 320,
-    progress: 92,
-  },
-  {
-    id: 'prod-4',
-    name: 'Audio-Technica AT2020USB-XP',
-    views: 2100,
-    carts: 190,
-    purchases: 89,
-    progress: 38,
-  },
-  {
-    id: 'prod-5',
-    name: 'Multi-Collagen Peptide Powder',
-    views: 3100,
-    carts: 410,
-    purchases: 275,
-    progress: 58,
-  },
-];
-
-const BASE_COUNTRIES = [
-  {
-    name: 'Georgia',
-    code: 'GE',
-    users: 18450,
-    percentage: 65,
-    barColor: 'bg-[#3b82f6]',
-  },
-  {
-    name: 'United States',
-    code: 'US',
-    users: 4250,
-    percentage: 15,
-    barColor: 'bg-[#10b981]',
-  },
-  {
-    name: 'Germany',
-    code: 'DE',
-    users: 2830,
-    percentage: 10,
-    barColor: 'bg-[#f59e0b]',
-  },
-  {
-    name: 'United Kingdom',
-    code: 'GB',
-    users: 1700,
-    percentage: 6,
-    barColor: 'bg-[#a855f7]',
-  },
-  {
-    name: 'Ukraine',
-    code: 'UA',
-    users: 1130,
-    percentage: 4,
-    barColor: 'bg-[#06b6d4]',
-  },
-];
-
-const BASE_TRAFFIC_SOURCES = [
-  { name: 'Google', percentage: 45, visits: 16155, barColor: 'bg-[#3b82f6]' },
-  { name: 'Facebook', percentage: 30, visits: 10770, barColor: 'bg-[#a855f7]' },
-  { name: 'Instagram', percentage: 15, visits: 5385, barColor: 'bg-[#ec4899]' },
-  { name: 'Direct', percentage: 10, visits: 3590, barColor: 'bg-[#94a3b8]' },
-];
-
-const RANGE_MULTIPLIERS: Record<string, number> = {
-  today: 0.18,
-  '1d_ago': 0.16,
-  '2d_ago': 0.15,
-  '7d_ago': 0.14,
-  last7d: 1,
-  last30d: 3.4,
-  last60d: 6.2,
-  last90d: 8.9,
-  custom: 1.5,
+const COUNTRY_NAME_MAP: Record<string, string> = {
+  GE: 'Georgia',
+  US: 'United States',
+  DE: 'Germany',
+  GB: 'United Kingdom',
+  UA: 'Ukraine',
+  FR: 'France',
+  IT: 'Italy',
+  ES: 'Spain',
+  PL: 'Poland',
+  TR: 'Turkey',
+  NL: 'Netherlands',
+  CA: 'Canada',
 };
+
+const COUNTRY_BAR_COLORS = [
+  'bg-[#3b82f6]',
+  'bg-[#10b981]',
+  'bg-[#f59e0b]',
+  'bg-[#a855f7]',
+  'bg-[#06b6d4]',
+];
+
+const SOURCE_BAR_COLORS: Record<string, string> = {
+  Google: 'bg-[#3b82f6]',
+  Facebook: 'bg-[#a855f7]',
+  Instagram: 'bg-[#ec4899]',
+  Direct: 'bg-[#94a3b8]',
+};
+
+const DEFAULT_PRODUCT_CATALOG = [
+  { id: 'prod-1', name: 'Asus Zenbook S 14' },
+  { id: 'prod-2', name: 'HP ProBook 440 G10' },
+  { id: 'prod-3', name: 'La Roche-Posay Cicaplast Baume B5+' },
+  { id: 'prod-4', name: 'Audio-Technica AT2020USB-XP' },
+  { id: 'prod-5', name: 'Multi-Collagen Peptide Powder' },
+];
 
 const CustomChartTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null;
@@ -195,13 +132,17 @@ export default function PremiumDashboard() {
   const [apiProducts, setApiProducts] = useState<any[]>([]);
   const [apiCountries, setApiCountries] = useState<any[]>([]);
   const [apiSources, setApiSources] = useState<any[]>([]);
+  const [localPhEvents, setLocalPhEvents] = useState<any[]>(() => loadLocalPostHogEvents());
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [pingSent, setPingSent] = useState(false);
+  const [lastSyncedAt, setLastSyncedAt] = useState<string>(() => new Date().toLocaleTimeString());
 
   const storeContext = useStore();
   const adminSecretSlug = storeContext?.adminSecretSlug || 'lasha-admin-x98';
   const storeProducts = storeContext?.products || [];
   const storeOrders = storeContext?.orders || [];
-  const analyticsData = storeContext?.analyticsData;
+  const visitorLogs = storeContext?.visitorLogs || [];
 
   const filterOptions = [
     { id: 'today', label: 'Today' },
@@ -215,68 +156,224 @@ export default function PremiumDashboard() {
     { id: 'custom', label: 'Custom Range' },
   ];
 
-  useEffect(() => {
-    safeCapture('$pageview');
+  // Calculate date range time bounds for local PostHog event filtering
+  const timeBounds = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const dayMs = 86400000;
 
-    let isMounted = true;
-    const fetchDashboardStats = async () => {
-      setIsLoading(true);
+    let minTime = startOfToday - 7 * dayMs;
+    let maxTime = Infinity;
+    let isSingleDay = false;
+
+    switch (dateFilter) {
+      case 'today':
+        minTime = startOfToday;
+        isSingleDay = true;
+        break;
+      case '1d_ago':
+        minTime = startOfToday - 1 * dayMs;
+        maxTime = startOfToday;
+        isSingleDay = true;
+        break;
+      case '2d_ago':
+        minTime = startOfToday - 2 * dayMs;
+        maxTime = startOfToday - 1 * dayMs;
+        isSingleDay = true;
+        break;
+      case '7d_ago':
+        minTime = startOfToday - 7 * dayMs;
+        maxTime = startOfToday - 6 * dayMs;
+        isSingleDay = true;
+        break;
+      case 'last7d':
+        minTime = startOfToday - 7 * dayMs;
+        break;
+      case 'last30d':
+        minTime = startOfToday - 30 * dayMs;
+        break;
+      case 'last60d':
+        minTime = startOfToday - 60 * dayMs;
+        break;
+      case 'last90d':
+        minTime = startOfToday - 90 * dayMs;
+        break;
+      case 'custom':
+        minTime = new Date(customStartDate).getTime() || minTime;
+        maxTime = (new Date(customEndDate).getTime() || Date.now()) + dayMs;
+        break;
+      default:
+        minTime = startOfToday - 7 * dayMs;
+    }
+
+    return { minTime, maxTime, isSingleDay };
+  }, [dateFilter, customStartDate, customEndDate]);
+
+  const fetchDashboardStats = useCallback(
+    async (silent = false) => {
+      if (!silent) setIsLoading(true);
+      setIsRefreshing(true);
+      setLocalPhEvents(loadLocalPostHogEvents());
+
       try {
         const slugToSend = adminSecretSlug || 'lasha-admin-x98';
-        const response = await fetch(
-          `/api/admin/dashboard-stats?dateRange=${encodeURIComponent(dateFilter)}&adminSlug=${encodeURIComponent(slugToSend)}`,
-          {
-            headers: {
-              'X-Admin-Slug': slugToSend,
-              'x-admin-slug': slugToSend,
-            },
-          }
-        );
+        const queryUrl = `/api/admin/dashboard-stats?dateRange=${encodeURIComponent(dateFilter)}&startDate=${encodeURIComponent(customStartDate)}&endDate=${encodeURIComponent(customEndDate)}&adminSlug=${encodeURIComponent(slugToSend)}&_t=${Date.now()}`;
+        const response = await fetch(queryUrl, {
+          headers: {
+            'X-Admin-Slug': slugToSend,
+            'x-admin-slug': slugToSend,
+          },
+          cache: 'no-store',
+        });
 
         if (response.ok) {
           const data = await response.json();
-          if (isMounted && data.success) {
+          if (data.success) {
             setRealStats(data.stats || null);
-            if (Array.isArray(data.chartData) && data.chartData.length > 0) {
-              setApiChartData(data.chartData);
-            } else {
-              setApiChartData([]);
-            }
-            if (Array.isArray(data.topProducts)) setApiProducts(data.topProducts);
-            if (Array.isArray(data.topCountries)) setApiCountries(data.topCountries);
-            if (Array.isArray(data.topSources)) setApiSources(data.topSources);
+            setApiChartData(Array.isArray(data.chartData) ? data.chartData : []);
+            setApiProducts(Array.isArray(data.topProducts) ? data.topProducts : []);
+            setApiCountries(Array.isArray(data.topCountries) ? data.topCountries : []);
+            setApiSources(Array.isArray(data.topSources) ? data.topSources : []);
+            setLastSyncedAt(new Date().toLocaleTimeString());
           }
         }
       } catch (err) {
-        console.warn('Dashboard stats fallback active:', err);
+        console.warn('Live dashboard fetch notice:', err);
       } finally {
-        if (isMounted) setIsLoading(false);
+        setIsLoading(false);
+        setIsRefreshing(false);
       }
+    },
+    [dateFilter, customStartDate, customEndDate, adminSecretSlug]
+  );
+
+  // Initial fetch + live 4-second polling + instant DOM event listener
+  useEffect(() => {
+    fetchDashboardStats(false);
+
+    const pollInterval = setInterval(() => {
+      fetchDashboardStats(true);
+    }, 4000);
+
+    const handleLiveEvent = () => {
+      setLocalPhEvents(loadLocalPostHogEvents());
+      setLastSyncedAt(new Date().toLocaleTimeString());
+      fetchDashboardStats(true);
     };
 
-    fetchDashboardStats();
+    window.addEventListener('posthog-live-update', handleLiveEvent);
+    window.addEventListener('storage', handleLiveEvent);
+
     return () => {
-      isMounted = false;
+      clearInterval(pollInterval);
+      window.removeEventListener('posthog-live-update', handleLiveEvent);
+      window.removeEventListener('storage', handleLiveEvent);
     };
-  }, [dateFilter, adminSecretSlug, customStartDate, customEndDate]);
+  }, [fetchDashboardStats]);
 
-  const multiplier = RANGE_MULTIPLIERS[dateFilter] || 1;
+  const handleSendPostHogTestPing = async () => {
+    const sampleProd = storeProducts[0] || DEFAULT_PRODUCT_CATALOG[0];
+    const prodId = sampleProd.id;
+    const prodName = (sampleProd as any).title || (sampleProd as any).name || 'Product';
 
-  // Compute KPI metrics combining real data with visual baseline
+    // 1. Capture live event to PostHog US Cloud (Project #661027) + local ledger
+    safeCapture('page_view', {
+      itemId: prodId,
+      itemName: prodName,
+      source: 'Google',
+      countryCode: 'GE',
+      country: 'Georgia',
+      path: `/product/${prodId}`,
+    });
+
+    // 2. Also post to backend /api/event so D1 / server immediately updates
+    try {
+      await fetch('/api/event', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          event_type: 'page_view',
+          session_id: getPostHogSessionId(),
+          page_path: `/product/${prodId}`,
+          item_id: prodId,
+          referrer: 'Google',
+          country: 'GE',
+        }),
+      });
+    } catch {}
+
+    setLocalPhEvents(loadLocalPostHogEvents());
+    setPingSent(true);
+    fetchDashboardStats(true);
+    setTimeout(() => setPingSent(false), 2500);
+  };
+
+  // Filter local PostHog events and visitor logs by the active date filter
+  const filteredLocalEvents = useMemo(() => {
+    return localPhEvents.filter((ev) => {
+      const t = new Date(ev.timestamp).getTime();
+      if (isNaN(t)) return true;
+      return t >= timeBounds.minTime && t < timeBounds.maxTime;
+    });
+  }, [localPhEvents, timeBounds]);
+
+  const filteredVisitorLogs = useMemo(() => {
+    return visitorLogs.filter((l) => {
+      const t = new Date(l.timestamp).getTime();
+      if (isNaN(t)) return true;
+      return t >= timeBounds.minTime && t < timeBounds.maxTime;
+    });
+  }, [visitorLogs, timeBounds]);
+
+  const filteredStoreOrders = useMemo(() => {
+    return storeOrders.filter((o: any) => {
+      const rawDate = o.created_at || o.createdAt || o.date;
+      if (!rawDate) return true;
+      const t = new Date(rawDate).getTime();
+      if (isNaN(t)) return true;
+      return t >= timeBounds.minTime && t < timeBounds.maxTime;
+    });
+  }, [storeOrders, timeBounds]);
+
+  // 100% Live KPI Metrics (no fake offsets)
   const kpiMetrics = useMemo(() => {
-    const realRev = Number(realStats?.total_revenue) || 0;
-    const storeOrdersRev = storeOrders.reduce((acc, o) => acc + (Number(o.total) || 0), 0);
-    const baseRev = Math.round(24590 * multiplier * 100) / 100;
-    const totalRevenue = realRev > 0 ? realRev : storeOrdersRev > 0 ? storeOrdersRev : baseRev;
+    const apiRev = Number(realStats?.total_revenue) || 0;
+    const localOrdersRev = filteredStoreOrders.reduce(
+      (acc: number, o: any) => acc + (Number(o.total_amount ?? o.total ?? o.subtotal) || 0),
+      0
+    );
+    const localEventsRev = filteredLocalEvents
+      .filter((e) => e.event === 'purchase')
+      .reduce((acc, e) => acc + (Number(e.amount) || 0), 0);
+    const totalRevenue = Math.max(apiRev, localOrdersRev, localEventsRev);
 
-    const realVisitors = Number(realStats?.total_visitors) || Number(analyticsData?.totalAllTime) || 0;
-    const totalVisitors = Math.round(35900 * multiplier) + realVisitors;
+    const localSessions = new Set(filteredLocalEvents.map((e) => e.sessionId)).size;
+    const localViewsCount = filteredLocalEvents.filter(
+      (e) => e.event === 'page_view' || e.event === '$pageview'
+    ).length;
+    const apiVisitors = Number(realStats?.total_visitors) || 0;
+    const apiViews = Number(realStats?.total_views) || 0;
+    const totalVisitors = Math.max(
+      apiVisitors,
+      apiViews,
+      localViewsCount,
+      localSessions,
+      filteredVisitorLogs.length
+    );
 
-    const realCarts = Number(realStats?.total_add_to_cart) || Number(realStats?.total_initiated_checkouts) || 0;
-    const totalCarts = Math.round(3730 * multiplier) + realCarts;
+    const localCartsCount = filteredLocalEvents.filter((e) => e.event === 'add_to_cart').length;
+    const apiCarts =
+      (Number(realStats?.total_add_to_cart) || 0) +
+      (Number(realStats?.total_initiated_checkouts) || 0);
+    const totalCarts = Math.max(apiCarts, localCartsCount);
 
-    const realPurchases = Number(realStats?.total_sales) || storeOrders.length || 0;
-    const totalPurchases = realPurchases > 0 ? realPurchases + Math.round(1080 * multiplier) : Math.round(1080 * multiplier);
+    const localPurchasesCount = filteredLocalEvents.filter((e) => e.event === 'purchase').length;
+    const apiPurchases = Number(realStats?.total_sales) || 0;
+    const totalPurchases = Math.max(
+      apiPurchases,
+      filteredStoreOrders.length,
+      localPurchasesCount
+    );
 
     return {
       totalRevenue,
@@ -284,107 +381,282 @@ export default function PremiumDashboard() {
       totalCarts,
       totalPurchases,
     };
-  }, [realStats, storeOrders, analyticsData, multiplier]);
+  }, [realStats, filteredStoreOrders, filteredLocalEvents, filteredVisitorLogs]);
 
-  // Compute Chart Data
+  // 100% Live Chart Data (Views, Carts & Purchases)
   const displayChartData = useMemo(() => {
-    if (apiChartData.length > 0) {
-      return apiChartData.map((item: any, idx: number) => {
-        const d = new Date(item.time);
-        const formattedTime = !isNaN(d.getTime())
-          ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })
-          : String(item.time);
-        const baseItem = BASE_CHART_DATA_TODAY[idx % BASE_CHART_DATA_TODAY.length];
-        return {
-          time: formattedTime,
-          views: Number(item.views) || Math.round(baseItem.views * multiplier),
-          carts: Number(item.carts) || Math.round(baseItem.carts * multiplier),
-          purchases: Number(item.purchases) || Math.round(baseItem.purchases * multiplier),
-        };
+    const bucketMap: Record<string, { time: string; views: number; carts: number; purchases: number }> = {};
+
+    if (timeBounds.isSingleDay) {
+      const defaultHours = ['08:00', '10:00', '12:00', '14:00', '16:00', '18:00', '20:00'];
+      const currentHour = `${String(new Date().getHours()).padStart(2, '0')}:00`;
+      if (!defaultHours.includes(currentHour)) defaultHours.push(currentHour);
+      defaultHours.sort().forEach((h) => {
+        bucketMap[h] = { time: h, views: 0, carts: 0, purchases: 0 };
       });
+    } else {
+      const daysToShow = dateFilter === 'last30d' ? 10 : dateFilter === 'last60d' || dateFilter === 'last90d' ? 12 : 7;
+      for (let i = daysToShow - 1; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 86400000);
+        const key = d.toISOString().split('T')[0];
+        bucketMap[key] = { time: key, views: 0, carts: 0, purchases: 0 };
+      }
     }
 
-    return BASE_CHART_DATA_TODAY.map((row) => ({
-      time: row.time,
-      views: Math.max(10, Math.round(row.views * multiplier)),
-      carts: Math.max(2, Math.round(row.carts * multiplier)),
-      purchases: Math.max(1, Math.round(row.purchases * multiplier)),
-    }));
-  }, [apiChartData, multiplier]);
+    // Merge backend API chart data
+    apiChartData.forEach((row: any) => {
+      const key = String(row.time || '');
+      if (!key) return;
+      if (!bucketMap[key]) {
+        bucketMap[key] = { time: key, views: 0, carts: 0, purchases: 0 };
+      }
+      bucketMap[key].views = Math.max(bucketMap[key].views, Number(row.views) || 0);
+      bucketMap[key].carts = Math.max(bucketMap[key].carts, Number(row.carts) || 0);
+      bucketMap[key].purchases = Math.max(bucketMap[key].purchases, Number(row.purchases) || 0);
+    });
 
-  // Compute Top Trending Products (Views, Added to Cart, Purchases)
-  const displayTopProducts = useMemo(() => {
-    const baseScaled = BASE_TOP_PRODUCTS.map((p) => ({
-      ...p,
-      views: Math.max(15, Math.round(p.views * multiplier)),
-      carts: Math.max(5, Math.round(p.carts * multiplier)),
-      purchases: Math.max(1, Math.round(p.purchases * multiplier)),
-    }));
+    // Merge local PostHog events if higher
+    const localBuckets: Record<string, { views: number; carts: number; purchases: number }> = {};
+    filteredLocalEvents.forEach((ev) => {
+      const d = new Date(ev.timestamp);
+      if (isNaN(d.getTime())) return;
+      const key = timeBounds.isSingleDay
+        ? `${String(d.getHours()).padStart(2, '0')}:00`
+        : d.toISOString().split('T')[0];
 
-    if (apiProducts.length > 0) {
-      const merged = [...baseScaled];
-      apiProducts.forEach((ap: any, index: number) => {
-        const matchedStoreProd = storeProducts.find(
-          (sp) => String(sp.id) === String(ap.item_id) || sp.customSlug === ap.item_id
-        );
-        if (matchedStoreProd && index < merged.length) {
-          merged[index] = {
-            id: matchedStoreProd.id,
-            name: matchedStoreProd.title || matchedStoreProd.titleKa || merged[index].name,
-            views: (Number(ap.views) || 0) + merged[index].views,
-            carts: (Number(ap.carts) || 0) + merged[index].carts,
-            purchases: (Number(ap.purchases) || 0) + merged[index].purchases,
-            progress: merged[index].progress,
-          };
+      if (!localBuckets[key]) localBuckets[key] = { views: 0, carts: 0, purchases: 0 };
+      if (ev.event === 'page_view' || ev.event === '$pageview') localBuckets[key].views += 1;
+      else if (ev.event === 'add_to_cart') localBuckets[key].carts += 1;
+      else if (ev.event === 'purchase') localBuckets[key].purchases += 1;
+    });
+
+    Object.entries(localBuckets).forEach(([key, counts]) => {
+      if (!bucketMap[key]) {
+        bucketMap[key] = { time: key, views: 0, carts: 0, purchases: 0 };
+      }
+      bucketMap[key].views = Math.max(bucketMap[key].views, counts.views);
+      bucketMap[key].carts = Math.max(bucketMap[key].carts, counts.carts);
+      bucketMap[key].purchases = Math.max(bucketMap[key].purchases, counts.purchases);
+    });
+
+    return Object.values(bucketMap)
+      .sort((a, b) => a.time.localeCompare(b.time))
+      .map((item) => {
+        if (!timeBounds.isSingleDay && item.time.includes('-')) {
+          const d = new Date(item.time);
+          if (!isNaN(d.getTime())) {
+            return {
+              ...item,
+              time: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            };
+          }
         }
+        return item;
       });
-      return merged;
-    }
+  }, [apiChartData, filteredLocalEvents, timeBounds, dateFilter]);
 
-    return baseScaled;
-  }, [apiProducts, storeProducts, multiplier]);
+  // 100% Live Top Trending Products
+  const displayTopProducts = useMemo(() => {
+    const productStatsMap: Record<
+      string,
+      { id: string; name: string; views: number; carts: number; purchases: number }
+    > = {};
 
-  // Compute Sessions by Country
+    // Seed with store catalog products
+    const sourceCatalog = storeProducts.length > 0 ? storeProducts : DEFAULT_PRODUCT_CATALOG;
+    sourceCatalog.forEach((p: any) => {
+      const id = String(p.id);
+      productStatsMap[id] = {
+        id,
+        name: p.title || p.name || p.titleKa || 'Product',
+        views: Number(p.views) || 0,
+        carts: 0,
+        purchases: 0,
+      };
+    });
+
+    // Merge backend API product events
+    apiProducts.forEach((ap: any) => {
+      const id = String(ap.item_id || '');
+      if (!id) return;
+      const matched = storeProducts.find(
+        (sp) => String(sp.id) === id || sp.customSlug === id
+      );
+      const targetId = matched ? String(matched.id) : id;
+      if (!productStatsMap[targetId]) {
+        productStatsMap[targetId] = {
+          id: targetId,
+          name: matched?.title || matched?.titleKa || id,
+          views: 0,
+          carts: 0,
+          purchases: 0,
+        };
+      }
+      productStatsMap[targetId].views = Math.max(
+        productStatsMap[targetId].views,
+        Number(ap.views) || 0
+      );
+      productStatsMap[targetId].carts = Math.max(
+        productStatsMap[targetId].carts,
+        Number(ap.carts) || 0
+      );
+      productStatsMap[targetId].purchases = Math.max(
+        productStatsMap[targetId].purchases,
+        Number(ap.purchases) || 0
+      );
+    });
+
+    // Merge local PostHog product events
+    const localProdCounts: Record<string, { views: number; carts: number; purchases: number }> = {};
+    filteredLocalEvents.forEach((ev) => {
+      if (!ev.itemId) return;
+      const id = String(ev.itemId);
+      if (!localProdCounts[id]) localProdCounts[id] = { views: 0, carts: 0, purchases: 0 };
+      if (ev.event === 'page_view' || ev.event === '$pageview') localProdCounts[id].views += 1;
+      else if (ev.event === 'add_to_cart') localProdCounts[id].carts += 1;
+      else if (ev.event === 'purchase') localProdCounts[id].purchases += 1;
+    });
+
+    Object.entries(localProdCounts).forEach(([id, counts]) => {
+      if (!productStatsMap[id]) {
+        productStatsMap[id] = {
+          id,
+          name: id,
+          views: 0,
+          carts: 0,
+          purchases: 0,
+        };
+      }
+      productStatsMap[id].views = Math.max(productStatsMap[id].views, counts.views);
+      productStatsMap[id].carts = Math.max(productStatsMap[id].carts, counts.carts);
+      productStatsMap[id].purchases = Math.max(productStatsMap[id].purchases, counts.purchases);
+    });
+
+    // Also count purchases from storeOrders items
+    filteredStoreOrders.forEach((order: any) => {
+      if (Array.isArray(order.items)) {
+        order.items.forEach((item: any) => {
+          const pid = String(item.productId || item.id || '');
+          if (pid && productStatsMap[pid]) {
+            productStatsMap[pid].purchases += Number(item.quantity) || 1;
+          }
+        });
+      }
+    });
+
+    const sorted = Object.values(productStatsMap)
+      .sort((a, b) => b.views + b.carts * 2 + b.purchases * 5 - (a.views + a.carts * 2 + a.purchases * 5))
+      .slice(0, 5);
+
+    const maxViews = Math.max(...sorted.map((p) => p.views), 1);
+
+    return sorted.map((p) => ({
+      ...p,
+      progress: p.views > 0 ? Math.max(8, Math.round((p.views / maxViews) * 100)) : 0,
+    }));
+  }, [storeProducts, apiProducts, filteredLocalEvents, filteredStoreOrders]);
+
+  // 100% Live Sessions by Country
   const displayCountries = useMemo(() => {
-    const baseScaled = BASE_COUNTRIES.map((c) => ({
-      ...c,
-      users: Math.max(10, Math.round(c.users * multiplier)),
-    }));
+    const countryCounts: Record<string, number> = {
+      GE: 0,
+      US: 0,
+      DE: 0,
+      GB: 0,
+      UA: 0,
+    };
 
-    if (apiCountries.length > 0) {
-      const countryCodeMap: Record<string, number> = {};
-      apiCountries.forEach((c: any) => {
-        if (c.code) countryCodeMap[String(c.code).toUpperCase()] = Number(c.users) || 0;
-      });
-      return baseScaled.map((c) => ({
-        ...c,
-        users: c.users + (countryCodeMap[c.code] || 0),
+    // From backend API
+    apiCountries.forEach((c: any) => {
+      const code = String(c.code || '').toUpperCase();
+      if (!code) return;
+      countryCounts[code] = Math.max(countryCounts[code] || 0, Number(c.users) || 0);
+    });
+
+    // From local PostHog events
+    const localCountryMap: Record<string, number> = {};
+    filteredLocalEvents.forEach((ev) => {
+      if (ev.event === 'page_view' || ev.event === '$pageview') {
+        const code = String(ev.countryCode || 'GE').toUpperCase();
+        localCountryMap[code] = (localCountryMap[code] || 0) + 1;
+      }
+    });
+    Object.entries(localCountryMap).forEach(([code, cnt]) => {
+      countryCounts[code] = Math.max(countryCounts[code] || 0, cnt);
+    });
+
+    // From visitorLogs
+    const logCountryMap: Record<string, number> = {};
+    filteredVisitorLogs.forEach((l) => {
+      const code = String(l.countryCode || 'GE').toUpperCase();
+      logCountryMap[code] = (logCountryMap[code] || 0) + 1;
+    });
+    Object.entries(logCountryMap).forEach(([code, cnt]) => {
+      countryCounts[code] = Math.max(countryCounts[code] || 0, cnt);
+    });
+
+    const totalUsers = Object.values(countryCounts).reduce((a, b) => a + b, 0);
+
+    return Object.entries(countryCounts)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([code, users], idx) => ({
+        code,
+        name: COUNTRY_NAME_MAP[code] || code,
+        users,
+        percentage: totalUsers > 0 ? Math.round((users / totalUsers) * 100) : 0,
+        barColor: COUNTRY_BAR_COLORS[idx % COUNTRY_BAR_COLORS.length],
       }));
-    }
+  }, [apiCountries, filteredLocalEvents, filteredVisitorLogs]);
 
-    return baseScaled;
-  }, [apiCountries, multiplier]);
-
-  // Compute Traffic Sources
+  // 100% Live Traffic Sources
   const displayTrafficSources = useMemo(() => {
-    const baseScaled = BASE_TRAFFIC_SOURCES.map((s) => ({
-      ...s,
-      visits: Math.max(5, Math.round(s.visits * multiplier)),
-    }));
+    const sourceCounts: Record<string, number> = {
+      Google: 0,
+      Facebook: 0,
+      Instagram: 0,
+      Direct: 0,
+    };
 
-    if (apiSources.length > 0) {
-      const sourceMap: Record<string, number> = {};
-      apiSources.forEach((s: any) => {
-        if (s.name) sourceMap[String(s.name).toLowerCase()] = Number(s.visits) || 0;
-      });
-      return baseScaled.map((s) => ({
-        ...s,
-        visits: s.visits + (sourceMap[s.name.toLowerCase()] || 0),
-      }));
-    }
+    const normalizeSourceName = (raw: string): string => {
+      const lower = String(raw || '').toLowerCase();
+      if (lower.includes('google')) return 'Google';
+      if (lower.includes('fb') || lower.includes('facebook')) return 'Facebook';
+      if (lower.includes('ig') || lower.includes('instagram')) return 'Instagram';
+      return 'Direct';
+    };
 
-    return baseScaled;
-  }, [apiSources, multiplier]);
+    // From backend API
+    apiSources.forEach((s: any) => {
+      const key = normalizeSourceName(s.name);
+      sourceCounts[key] = Math.max(sourceCounts[key] || 0, Number(s.visits) || 0);
+    });
+
+    // From local PostHog events
+    const localSourceMap: Record<string, number> = {};
+    filteredLocalEvents.forEach((ev) => {
+      if (ev.event === 'page_view' || ev.event === '$pageview') {
+        const key = normalizeSourceName(ev.source);
+        localSourceMap[key] = (localSourceMap[key] || 0) + 1;
+      }
+    });
+    Object.entries(localSourceMap).forEach(([key, cnt]) => {
+      sourceCounts[key] = Math.max(sourceCounts[key] || 0, cnt);
+    });
+
+    const totalVisits = Object.values(sourceCounts).reduce((a, b) => a + b, 0);
+
+    return ['Google', 'Facebook', 'Instagram', 'Direct'].map((name) => {
+      const visits = sourceCounts[name] || 0;
+      const percentage = totalVisits > 0 ? Math.round((visits / totalVisits) * 100) : 0;
+      return {
+        name,
+        visits,
+        percentage,
+        barColor: SOURCE_BAR_COLORS[name] || 'bg-[#3b82f6]',
+      };
+    });
+  }, [apiSources, filteredLocalEvents]);
 
   const selectedFilterLabel =
     filterOptions.find((o) => o.id === dateFilter)?.label || 'Last 7 Days';
@@ -392,18 +664,62 @@ export default function PremiumDashboard() {
   return (
     <div className="min-h-screen bg-[#080b12] text-slate-200 p-6 md:p-8 font-sans rounded-3xl border border-slate-800/80 shadow-2xl">
       <div className="max-w-7xl mx-auto space-y-8">
-        {/* Top Bar: Title & Date Range Filter */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        {/* Top Bar: Title, PostHog Live Connection Badge & Controls */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
-            <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
-              Analytics Overview
-            </h1>
+            <div className="flex flex-wrap items-center gap-3">
+              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">
+                Analytics Overview
+              </h1>
+              <span className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                LIVE • PostHog ID #{POSTHOG_CONFIG.projectId} ({POSTHOG_CONFIG.region})
+              </span>
+            </div>
             <p className="text-slate-400 text-sm mt-1">
-              Live store visitors, product views, cart activity, purchases & traffic sources
+              Real-time live metrics from PostHog ({POSTHOG_CONFIG.projectToken.slice(0, 12)}...) & D1 • Last synced: {lastSyncedAt}
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => fetchDashboardStats(false)}
+              className="flex items-center gap-2 px-3.5 py-2.5 bg-[#141926] hover:bg-[#1b2234] border border-slate-700/80 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
+              title="Refresh live PostHog & D1 numbers"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>Sync Now</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleSendPostHogTestPing}
+              className="flex items-center gap-2 px-3.5 py-2.5 bg-blue-600/15 hover:bg-blue-600/25 border border-blue-500/30 rounded-xl text-xs font-semibold text-blue-400 transition-all cursor-pointer"
+            >
+              {pingSent ? (
+                <>
+                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                  <span className="text-emerald-400">Live Event Recorded!</span>
+                </>
+              ) : (
+                <>
+                  <Zap className="w-4 h-4 text-blue-400" />
+                  <span>Send Test Event</span>
+                </>
+              )}
+            </button>
+
+            <a
+              href={`https://us.posthog.com/project/${POSTHOG_CONFIG.projectId}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-3.5 py-2.5 bg-[#141926] hover:bg-[#1b2234] border border-slate-700/80 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition-all"
+            >
+              <span>PostHog Cloud</span>
+              <ExternalLink className="w-3.5 h-3.5 text-slate-400" />
+            </a>
+
             {dateFilter === 'custom' && (
               <div className="flex items-center gap-2 bg-[#131824] border border-slate-700/80 rounded-xl px-3 py-1.5 text-xs text-slate-200">
                 <input
@@ -426,7 +742,7 @@ export default function PremiumDashboard() {
               <button
                 type="button"
                 onClick={() => setDropdownOpen(!dropdownOpen)}
-                className="flex items-center gap-2.5 px-4 py-2.5 bg-[#141926] hover:bg-[#1b2234] border border-slate-700/80 rounded-xl text-sm font-medium text-white transition-all shadow-lg"
+                className="flex items-center gap-2.5 px-4 py-2.5 bg-[#141926] hover:bg-[#1b2234] border border-slate-700/80 rounded-xl text-sm font-medium text-white transition-all shadow-lg cursor-pointer"
               >
                 <Calendar className="w-4 h-4 text-blue-400" />
                 <span>{selectedFilterLabel}</span>
@@ -443,7 +759,7 @@ export default function PremiumDashboard() {
                         setDateFilter(option.id);
                         setDropdownOpen(false);
                       }}
-                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between ${
+                      className={`w-full text-left px-4 py-2.5 text-sm transition-colors flex items-center justify-between cursor-pointer ${
                         dateFilter === option.id
                           ? 'bg-blue-600/20 text-blue-400 font-semibold'
                           : 'text-slate-200 hover:bg-[#1a2133]'
@@ -461,7 +777,7 @@ export default function PremiumDashboard() {
           </div>
         </div>
 
-        {/* 4 KPI Cards (Matches Reference Image 4) */}
+        {/* 4 Live KPI Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Card 1: Total Revenue */}
           <div className="bg-[#0e131f] border border-slate-800/90 p-7 rounded-3xl flex items-center justify-between relative overflow-hidden shadow-xl">
@@ -481,9 +797,9 @@ export default function PremiumDashboard() {
               </h3>
               <div className="flex items-center gap-3 pt-1">
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                  <ArrowUpRight className="w-3.5 h-3.5" /> +12.5%
+                  <ArrowUpRight className="w-3.5 h-3.5" /> Live
                 </span>
-                <span className="text-slate-500 text-xs font-medium">vs last period</span>
+                <span className="text-slate-500 text-xs font-medium">{selectedFilterLabel}</span>
               </div>
             </div>
             <div className="w-14 h-14 rounded-2xl bg-[#161d2f] border border-slate-700/50 flex items-center justify-center text-cyan-400 shrink-0">
@@ -500,9 +816,9 @@ export default function PremiumDashboard() {
               </h3>
               <div className="flex items-center gap-3 pt-1">
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                  <ArrowUpRight className="w-3.5 h-3.5" /> +18.2%
+                  <ArrowUpRight className="w-3.5 h-3.5" /> Live PostHog
                 </span>
-                <span className="text-slate-500 text-xs font-medium">vs last period</span>
+                <span className="text-slate-500 text-xs font-medium">{selectedFilterLabel}</span>
               </div>
             </div>
             <div className="w-14 h-14 rounded-2xl bg-[#161d2f] border border-slate-700/50 flex items-center justify-center text-purple-400 shrink-0">
@@ -519,9 +835,9 @@ export default function PremiumDashboard() {
               </h3>
               <div className="flex items-center gap-3 pt-1">
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                  <ArrowUpRight className="w-3.5 h-3.5" /> +14.8%
+                  <ArrowUpRight className="w-3.5 h-3.5" /> Live PostHog
                 </span>
-                <span className="text-slate-500 text-xs font-medium">vs last period</span>
+                <span className="text-slate-500 text-xs font-medium">{selectedFilterLabel}</span>
               </div>
             </div>
             <div className="w-14 h-14 rounded-2xl bg-[#161d2f] border border-slate-700/50 flex items-center justify-center text-pink-400 shrink-0">
@@ -538,9 +854,9 @@ export default function PremiumDashboard() {
               </h3>
               <div className="flex items-center gap-3 pt-1">
                 <span className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
-                  <ArrowUpRight className="w-3.5 h-3.5" /> +8.4%
+                  <ArrowUpRight className="w-3.5 h-3.5" /> Live
                 </span>
-                <span className="text-slate-500 text-xs font-medium">vs last period</span>
+                <span className="text-slate-500 text-xs font-medium">{selectedFilterLabel}</span>
               </div>
             </div>
             <div className="w-14 h-14 rounded-2xl bg-[#161d2f] border border-slate-700/50 flex items-center justify-center text-emerald-400 shrink-0">
@@ -549,13 +865,13 @@ export default function PremiumDashboard() {
           </div>
         </div>
 
-        {/* Main Chart: Views, Carts & Purchases (Matches Reference Image 1) */}
+        {/* Main Chart: Views, Carts & Purchases */}
         <div className="bg-[#0e131f] border border-slate-800/90 p-7 rounded-3xl shadow-xl">
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div>
               <h3 className="text-xl font-bold text-white">Views, Carts & Purchases</h3>
               <p className="text-slate-400 text-sm mt-1">
-                Trend analysis for {selectedFilterLabel}
+                Live trend analysis for {selectedFilterLabel}
               </p>
             </div>
 
@@ -599,6 +915,7 @@ export default function PremiumDashboard() {
                   fontSize={12}
                   axisLine={false}
                   tickLine={false}
+                  allowDecimals={false}
                 />
                 <Tooltip
                   content={<CustomChartTooltip />}
@@ -644,7 +961,7 @@ export default function PremiumDashboard() {
 
         {/* Bottom Widgets: Top Trending Products, Sessions by Country, Traffic Sources */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          {/* Top Trending Products (Matches Reference Image 2 + Views, Carts & Purchases) */}
+          {/* Top Trending Products */}
           <div className="lg:col-span-7 bg-[#0e131f] border border-slate-800/90 p-7 rounded-3xl shadow-xl">
             <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2.5">
               <TrendingUp className="w-5 h-5 text-slate-300" />
@@ -683,7 +1000,7 @@ export default function PremiumDashboard() {
 
                     <div className="hidden xl:block w-24 bg-slate-800/90 rounded-full h-2 overflow-hidden">
                       <div
-                        className="bg-[#06b6d4] h-2 rounded-full shadow-[0_0_8px_#06b6d4]"
+                        className="bg-[#06b6d4] h-2 rounded-full shadow-[0_0_8px_#06b6d4] transition-all duration-500"
                         style={{ width: `${Math.min(100, product.progress)}%` }}
                       />
                     </div>
@@ -702,7 +1019,7 @@ export default function PremiumDashboard() {
 
           {/* Right Column: Sessions by Country & Traffic Sources */}
           <div className="lg:col-span-5 space-y-8">
-            {/* Sessions by Country (Matches Reference Image 3) */}
+            {/* Sessions by Country */}
             <div className="bg-[#0e131f] border border-slate-800/90 p-7 rounded-3xl shadow-xl">
               <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2.5">
                 <Globe className="w-5 h-5 text-slate-300" />
@@ -739,7 +1056,7 @@ export default function PremiumDashboard() {
               </div>
             </div>
 
-            {/* Traffic Sources (Matches Reference Image 5) */}
+            {/* Traffic Sources */}
             <div className="bg-[#0e131f] border border-slate-800/90 p-7 rounded-3xl shadow-xl">
               <h3 className="text-xl font-bold text-white mb-6 flex items-center gap-2.5">
                 <Activity className="w-5 h-5 text-slate-300" />
