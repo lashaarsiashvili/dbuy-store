@@ -29,9 +29,16 @@ import { getPayPalV6Instance } from './utils/paypalV6';
 import { analytics, isUserAdmin } from './components/AdminAnalyticsDashboard';
 import { useAnalytics } from './hooks/useAnalytics';
 
-import { LIVE_PAYPAL_CLIENT_ID } from './utils/environment';
+// =========================================================================
+// PAYPAL PRODUCTION CONFIGURATION
+// Paste your live PayPal production Client ID here to connect to live checkout:
+// =========================================================================
+export const PAYPAL_PRODUCTION_CLIENT_ID = "BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8";
 
-const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || LIVE_PAYPAL_CLIENT_ID;
+const paypalClientId =
+  (typeof window !== 'undefined' && (window as any).VITE_PAYPAL_CLIENT_ID) ||
+  import.meta.env.VITE_PAYPAL_CLIENT_ID ||
+  PAYPAL_PRODUCTION_CLIENT_ID;
 
 const MainLayout: React.FC = () => {
   const { 
@@ -365,7 +372,8 @@ export function App() {
       <StoreProvider>
         <PayPalScriptProvider
           options={{
-            clientId: paypalClientId,
+            // Production PayPal Client ID placeholder (paste your live Client ID here or in PAYPAL_PRODUCTION_CLIENT_ID above)
+            clientId: paypalClientId || "BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8",
             currency: 'USD',
             intent: 'capture',
             components: 'buttons,googlepay,applepay',
