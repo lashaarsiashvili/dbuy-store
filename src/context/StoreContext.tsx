@@ -1087,6 +1087,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setProducts(prev =>
       prev.map(p => (p.id === productId ? { ...p, views: (Number(p.views) || 0) + 1 } : p))
     );
+    analytics.trackProductView(productId);
   };
 
   const [selectedCategory, setSelectedCategory] = useState<Category>('all');
@@ -1452,6 +1453,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } catch (e) {}
       return next;
     });
+    analytics.trackAddToCart(product.id, isAdmin);
     addToast(language === 'ka' ? `დაემატა კალათაში!` : `Added to cart!`, 'success');
   };
 

@@ -1114,7 +1114,7 @@
     }
   },
   "lastUpdated": "2026-11-07T19:47:16.059Z",
-  "dbVersion": "2026_v5_local_uploads",
+  "dbVersion": "2026_v7_clean_real_catalog",
   "smtpConfig": {
     "host": "smtp.zoho.eu",
     "port": 465,
