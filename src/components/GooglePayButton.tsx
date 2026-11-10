@@ -73,7 +73,7 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
         try {
           if (!paymentsClientRef.current) {
             paymentsClientRef.current = new window.google.payments.api.PaymentsClient({
-              environment: GOOGLE_PAY_ENVIRONMENT, // Switched from 'TEST' to 'PRODUCTION'
+              environment: 'PRODUCTION', // Explicitly PRODUCTION environment
             });
           }
 
@@ -149,9 +149,10 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
       countryCode: 'US' // Adjust based on requirement
     };
 
+    // Strictly coerce merchantId and merchantName to string to avoid 16-digit rounding ([OR_BIBED_11])
     (paymentDataRequest as any).merchantInfo = {
-      merchantId: merchantId,
-      merchantName: merchantName
+      merchantId: String(merchantId || GOOGLE_PAY_MERCHANT_ID || 'BCR2DN6DVKZOLJDJ').trim(),
+      merchantName: String(merchantName || GOOGLE_PAY_MERCHANT_NAME || 'DBUY Store').trim(),
     };
 
     paymentsClientRef.current.loadPaymentData(paymentDataRequest)

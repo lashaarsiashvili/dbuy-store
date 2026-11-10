@@ -156,7 +156,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           const paymentsClient = new (
             window as any
           ).google.payments.api.PaymentsClient({
-            environment: GOOGLE_PAY_ENVIRONMENT, // Switched from "TEST" to "PRODUCTION"
+            environment: "PRODUCTION",
           });
           const ready = await paymentsClient.isReadyToPay({
             apiVersion: 2,

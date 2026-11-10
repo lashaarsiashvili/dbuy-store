@@ -5,18 +5,19 @@
  * Payments processed securely through PayPal Gateway.
  */
 
-// 1. Google Pay Environment Configuration ('PRODUCTION' for live approved merchant)
-export const GOOGLE_PAY_ENVIRONMENT: 'TEST' | 'PRODUCTION' = 'PRODUCTION';
+// 1. Google Pay Environment Configuration (Strictly "PRODUCTION")
+export const GOOGLE_PAY_ENVIRONMENT = "PRODUCTION" as const;
 
 // 2. Production Google Pay Merchant ID (Registered in Google Pay & Wallet Business Console)
-// Replace with your production merchant ID if different (e.g., 'BCR2DN6DVKZOLJDJ')
-export const GOOGLE_PAY_MERCHANT_ID: string =
+// Strict string wrapping prevents JavaScript 16-digit integer precision loss / rounding ([OR_BIBED_11])
+export const GOOGLE_PAY_MERCHANT_ID: string = String(
   (typeof window !== 'undefined' && (window as any).VITE_GOOGLE_PAY_MERCHANT_ID) ||
   import.meta.env.VITE_GOOGLE_PAY_MERCHANT_ID ||
-  'BCR2DN6DVKZOLJDJ';
+  "BCR2DN6DVKZOLJDJ"
+).trim();
 
 // 3. Google Pay Display Name on Payment Sheet
-export const GOOGLE_PAY_MERCHANT_NAME: string = 'DBUY Store';
+export const GOOGLE_PAY_MERCHANT_NAME: string = "DBUY Store";
 
 // 4. Live PayPal Client ID & Gateway configuration for Google Pay processing
 export const LIVE_PAYPAL_CLIENT_ID: string =

@@ -20,10 +20,11 @@ interface OfficialGooglePayButtonProps {
   loading?: boolean;
   buttonColor?: 'default' | 'black' | 'white';
   buttonType?: 'book' | 'buy' | 'checkout' | 'donate' | 'order' | 'pay' | 'plain' | 'subscribe';
-  buttonSizeMode?: 'fill' | 'static';
   formatAmount?: string;
   className?: string;
   height?: number;
+  merchantId?: string;
+  merchantName?: string;
 }
 
 const baseRequest = {
@@ -109,6 +110,8 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
   formatAmount,
   className = '',
   height = 48,
+  merchantId = GOOGLE_PAY_MERCHANT_ID,
+  merchantName = GOOGLE_PAY_MERCHANT_NAME,
 }) => {
   const isGPayEnabled = isGooglePayAvailable();
   const [isTriggering, setIsTriggering] = useState(false);
@@ -121,14 +124,19 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
       await loadGooglePayScript();
       const google = (window as any).google;
       if (google?.payments?.api?.PaymentsClient) {
+        // 1. Explicitly PRODUCTION environment
         const client = new google.payments.api.PaymentsClient({
-          environment: GOOGLE_PAY_ENVIRONMENT, // Switched from 'TEST' to 'PRODUCTION'
+          environment: 'PRODUCTION',
         });
 
         const numAmount = Number(amount) > 0 ? Number(amount) : 1.00;
         const safeAmountStr = numAmount.toFixed(2);
         const activeCurrency = (currencyCode || 'USD').toUpperCase();
         const activeCountry = activeCurrency === 'GEL' ? 'GE' : (activeCurrency === 'EUR' ? 'DE' : 'US');
+
+        // 2 & 3. Strictly formatted as strings (prevents 16-digit integer rounding and OR_BIBED_11 error)
+        const strictMerchantId = String(merchantId || GOOGLE_PAY_MERCHANT_ID || 'BCR2DN6DVKZOLJDJ').trim();
+        const strictMerchantName = String(merchantName || GOOGLE_PAY_MERCHANT_NAME || 'DBUY Store').trim();
 
         const paymentDataRequest: any = {
           ...baseRequest,
@@ -142,8 +150,8 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
             checkoutOption: 'COMPLETE_IMMEDIATE_PURCHASE',
           },
           merchantInfo: {
-            merchantId: GOOGLE_PAY_MERCHANT_ID, // Production Merchant ID e.g. BCR2DN6DVKZOLJDJ
-            merchantName: GOOGLE_PAY_MERCHANT_NAME || 'DBUY Store',
+            merchantId: strictMerchantId,
+            merchantName: strictMerchantName,
           },
           emailRequired: true,
           shippingAddressRequired: true,

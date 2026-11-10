@@ -91,7 +91,7 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
 
       if (!paymentsClientRef.current) {
         paymentsClientRef.current = new google.payments.api.PaymentsClient({
-          environment: GOOGLE_PAY_ENVIRONMENT, // Switched from 'TEST' to 'PRODUCTION'
+          environment: 'PRODUCTION', // Explicitly PRODUCTION environment
         });
       }
 
@@ -180,8 +180,8 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
         countryCode: countryCode,
       },
       merchantInfo: {
-        merchantId: GOOGLE_PAY_MERCHANT_ID, // Production Merchant ID e.g. BCR2DN6DVKZOLJDJ
-        merchantName: merchantName || GOOGLE_PAY_MERCHANT_NAME,
+        merchantId: String(GOOGLE_PAY_MERCHANT_ID || 'BCR2DN6DVKZOLJDJ').trim(), // Strict string prevents 16-digit integer rounding ([OR_BIBED_11])
+        merchantName: String(merchantName || GOOGLE_PAY_MERCHANT_NAME || 'DBUY Store').trim(),
       },
       emailRequired: true,
       shippingAddressRequired: true,

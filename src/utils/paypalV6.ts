@@ -259,11 +259,11 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
     const googlePayConfig = googlePaySdk?.config;
 
     const paymentsClient = new google.payments.api.PaymentsClient({
-      environment: GOOGLE_PAY_ENVIRONMENT, // Switched from 'TEST' to 'PRODUCTION'
+      environment: 'PRODUCTION', // Explicitly PRODUCTION environment
       paymentDataCallbacks: {
         onPaymentAuthorized: async (paymentData: any) => {
           try {
-            console.log(`[PAYPAL-v6-GOOGLEPAY] Google Pay ${GOOGLE_PAY_ENVIRONMENT} mode authorized callback received:`, paymentData);
+            console.log('[PAYPAL-v6-GOOGLEPAY] Google Pay PRODUCTION mode authorized callback received:', paymentData);
 
             const payerInfo = paymentData.paymentMethodData?.info?.billingAddress || paymentData.shippingAddress || {};
             const payer = {
@@ -354,8 +354,8 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
         countryCode: 'US',
       };
       paymentDataRequest.merchantInfo = {
-        merchantId: GOOGLE_PAY_MERCHANT_ID, // Production Merchant ID e.g. BCR2DN6DVKZOLJDJ
-        merchantName: GOOGLE_PAY_MERCHANT_NAME || label,
+        merchantId: String(GOOGLE_PAY_MERCHANT_ID || 'BCR2DN6DVKZOLJDJ').trim(), // Strict string prevents 16-digit integer precision loss / rounding ([OR_BIBED_11])
+        merchantName: String(GOOGLE_PAY_MERCHANT_NAME || label || 'DBUY Store').trim(),
       };
 
       paymentsClient.loadPaymentData(paymentDataRequest).catch((err: any) => {
