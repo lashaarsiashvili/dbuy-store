@@ -331,19 +331,35 @@ export const CartDrawer: React.FC = () => {
                       <ApplePayLogo className="h-3 w-auto" fill="#FFFFFF" />
                     </div>
                     {/* Official Google Pay Badge */}
-                    <div className="h-6 px-2 bg-white rounded-md flex items-center justify-center shadow-2xs border border-[#DADCE0] select-none" title="Google Pay">
-                      <GooglePayVector className="h-3 w-auto" isDark={false} />
+                    <div
+                      className="gpay-official-pill gpay-capsule-badge payment-badge-light h-6 px-3 py-1 bg-[#ffffff] dark:bg-[#ffffff] rounded-full flex items-center justify-center shadow-2xs border-[1.5px] border-[#3C4043] select-none"
+                      style={{ backgroundColor: '#ffffff', borderColor: '#3C4043' }}
+                      title="Google Pay"
+                    >
+                      <GooglePayVector className="h-3.5 w-auto" isDark={false} />
                     </div>
                     {/* Official PayPal Badge */}
-                    <div className="h-6 px-2 bg-white rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none" title="PayPal">
+                    <div
+                      className="payment-badge-light h-6 px-2 bg-[#ffffff] dark:bg-[#ffffff] rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none"
+                      style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
+                      title="PayPal"
+                    >
                       <PayPalLogo className="h-3 w-auto" />
                     </div>
                     {/* Official Visa Badge */}
-                    <div className="h-6 px-2 bg-white rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none" title="Visa">
+                    <div
+                      className="payment-badge-light h-6 px-2 bg-[#ffffff] dark:bg-[#ffffff] rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none"
+                      style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
+                      title="Visa"
+                    >
                       <VisaLogo className="h-2.5 w-auto" />
                     </div>
                     {/* Official Mastercard Badge */}
-                    <div className="h-6 px-1.5 bg-white rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none" title="Mastercard">
+                    <div
+                      className="payment-badge-light h-6 px-1.5 bg-[#ffffff] dark:bg-[#ffffff] rounded-md flex items-center justify-center shadow-2xs border border-slate-200 select-none"
+                      style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
+                      title="Mastercard"
+                    >
                       <MastercardLogo className="h-3.5 w-auto" />
                     </div>
                   </div>

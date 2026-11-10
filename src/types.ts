@@ -83,6 +83,10 @@ export interface Product {
   features_en?: string[] | null;
   features_ka?: string[] | null;
   isDeal?: boolean;
+  hasDiscount?: boolean;
+  isFeatured?: boolean;
+  salesCount?: number;
+  cartAdds?: number;
   isPublishedGlobally?: boolean;
   publishedAt?: string;
   views?: number;

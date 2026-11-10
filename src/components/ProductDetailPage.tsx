@@ -570,7 +570,8 @@ export const ProductDetailPage: React.FC = () => {
         <div className="lg:col-span-6 xl:col-span-6 space-y-4">
           <div 
             key={`main-display-var-${selectedVariantIndex}`} 
-            className="relative w-full aspect-square rounded-3xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-sm group select-none flex items-center justify-center"
+            className="product-image-showcase relative w-full aspect-square rounded-3xl bg-[#ffffff] dark:bg-[#ffffff] border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-sm group select-none flex items-center justify-center"
+            style={{ backgroundColor: '#ffffff' }}
           >
             {/* Main Media Display (Image or Video) */}
             {currentMediaItem ? (
@@ -610,7 +611,7 @@ export const ProductDetailPage: React.FC = () => {
                     referrerPolicy="no-referrer"
                     loading="eager"
                     fetchPriority="high"
-                    className="w-full h-full object-contain p-4 sm:p-6 select-none pointer-events-none"
+                    className="product-card-img w-full h-full object-contain p-4 sm:p-6 select-none pointer-events-none opacity-100 dark:opacity-100 brightness-100 dark:brightness-100 mix-blend-normal dark:mix-blend-normal"
                   />
                 </div>
               )
@@ -1076,12 +1077,15 @@ export const ProductDetailPage: React.FC = () => {
                   onClick={() => navigateToProduct(rel.id)}
                   className="group bg-white dark:bg-slate-900 rounded-2xl border border-slate-200/80 dark:border-slate-800 p-3 flex flex-col justify-between hover:shadow-xl transition-all cursor-pointer"
                 >
-                  <div className="relative aspect-square rounded-xl bg-white dark:bg-slate-950 overflow-hidden mb-3 flex items-center justify-center">
+                  <div
+                    className="product-card-image-wrapper relative aspect-square rounded-xl bg-[#ffffff] dark:bg-[#ffffff] opacity-100 dark:opacity-100 brightness-100 dark:brightness-100 overflow-hidden mb-3 flex items-center justify-center"
+                    style={{ backgroundColor: '#ffffff' }}
+                  >
                     <CachedImage
                       src={getProductImage(rel)}
                       alt={relTitle}
                       referrerPolicy="no-referrer"
-                      className="w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300"
+                      className="product-card-img w-full h-full object-contain p-2 group-hover:scale-105 transition-transform duration-300 opacity-100 dark:opacity-100 brightness-100 dark:brightness-100 mix-blend-normal dark:mix-blend-normal"
                     />
                   </div>
                   <div>

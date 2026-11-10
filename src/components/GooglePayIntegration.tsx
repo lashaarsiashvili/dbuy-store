@@ -84,7 +84,7 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
 
       if (!paymentsClientRef.current) {
         paymentsClientRef.current = new google.payments.api.PaymentsClient({
-          environment: 'PRODUCTION', // Live production environment
+          environment: 'TEST', // Google Pay TEST mode environment
         });
       }
 
@@ -129,8 +129,8 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
 
       buttonContainerRef.current.innerHTML = '';
       const button = paymentsClientRef.current.createButton({
-        buttonColor: 'default',
-        buttonType: 'buy',
+        buttonColor: 'white',
+        buttonType: 'plain',
         buttonRadius: 24, // Pill-shaped rounded capsule radius
         buttonBorderType: 'default_border',
         buttonSizeMode: 'fill',

@@ -43,8 +43,8 @@ const baseCardPaymentMethod = {
 const tokenizationSpecification = {
   type: 'PAYMENT_GATEWAY',
   parameters: {
-    gateway: 'paypal',
-    gatewayMerchantId: 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8',
+    gateway: 'example',
+    gatewayMerchantId: 'exampleGatewayMerchantId',
   },
 };
 
@@ -97,11 +97,11 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
   currencyCode = 'USD',
   disabled = false,
   loading = false,
-  buttonColor = 'default',
-  buttonType = 'buy',
+  buttonColor = 'white',
+  buttonType = 'plain',
   formatAmount,
   className = '',
-  height = 44,
+  height = 48,
 }) => {
   const isGPayEnabled = isGooglePayAvailable();
   const [isTriggering, setIsTriggering] = useState(false);
@@ -115,7 +115,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
       const google = (window as any).google;
       if (google?.payments?.api?.PaymentsClient) {
         const client = new google.payments.api.PaymentsClient({
-          environment: 'PRODUCTION',
+          environment: 'TEST',
         });
 
         const numAmount = Number(amount) > 0 ? Number(amount) : 1.00;
@@ -135,7 +135,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
             checkoutOption: 'COMPLETE_IMMEDIATE_PURCHASE',
           },
           merchantInfo: {
-            merchantId: 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8',
+            merchantId: '12345678901234567890',
             merchantName: 'DBUY Store',
           },
           emailRequired: true,
@@ -204,34 +204,22 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
           borderRadius: '9999px',
           boxSizing: 'border-box',
           WebkitAppearance: 'none',
+          backgroundColor: '#ffffff',
+          borderColor: '#3C4043',
         }}
-        className={`w-full relative px-6 flex items-center justify-center transition-all duration-150 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-md active:scale-[0.99] ${
-          buttonColor === 'white'
-            ? 'bg-white text-slate-900 hover:bg-slate-50 border border-[#DADCE0]'
-            : 'bg-black text-white hover:bg-zinc-900 border border-black'
-        }`}
+        className="gpay-official-pill gpay-capsule-badge payment-badge-light w-full relative px-6 py-2.5 flex items-center justify-center rounded-full bg-[#ffffff] dark:bg-[#ffffff] hover:bg-gray-50 text-[#3C4043] border-2 border-[#3C4043] transition-all duration-150 select-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-xs active:scale-[0.99]"
         aria-label={`Pay with Google Pay ${formatAmount ? `total ${formatAmount}` : ''}`}
       >
         {loading || isTriggering ? (
           <div className="flex items-center space-x-2.5">
-            <Loader2 className={`w-5 h-5 animate-spin ${buttonColor === 'white' ? 'text-slate-700' : 'text-white'}`} />
-            <span className={`text-xs sm:text-sm font-semibold tracking-wide ${buttonColor === 'white' ? 'text-slate-700' : 'text-white'}`}>
+            <Loader2 className="w-5 h-5 animate-spin text-[#3C4043]" />
+            <span className="text-xs sm:text-sm font-semibold tracking-wide text-[#3C4043]">
               Connecting Google Pay...
             </span>
           </div>
         ) : (
-          <div className="flex items-center justify-center space-x-2 pointer-events-none">
-            <span className={`text-sm sm:text-base font-medium leading-none whitespace-nowrap ${buttonColor === 'white' ? 'text-slate-900' : 'text-white'}`}>
-              {buttonType === 'book' ? 'Book with' : buttonType === 'buy' ? 'Buy with' : buttonType === 'checkout' ? 'Checkout with' : buttonType === 'donate' ? 'Donate with' : buttonType === 'order' ? 'Order with' : buttonType === 'pay' ? 'Pay with' : buttonType === 'subscribe' ? 'Subscribe with' : buttonType === 'plain' ? '' : 'Buy with'}
-            </span>
-            <div className="flex items-center shrink-0">
-              <GooglePayVector className="h-6 sm:h-7 w-auto inline-block align-middle shrink-0" isDark={buttonColor !== 'white'} />
-            </div>
-            {formatAmount && (
-              <span className={`${buttonColor === 'white' ? 'text-slate-500' : 'text-slate-300'} font-mono text-xs sm:text-sm pl-1 font-normal opacity-90`}>
-                • {formatAmount}
-              </span>
-            )}
+          <div className="flex items-center justify-center pointer-events-none">
+            <GooglePayVector className="h-6 sm:h-7 w-auto inline-block align-middle shrink-0" isDark={false} />
           </div>
         )}
       </button>

@@ -252,40 +252,15 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
     const googlePayConfig = googlePaySdk?.config;
 
     const paymentsClient = new google.payments.api.PaymentsClient({
-      environment: 'PRODUCTION', // Live production environment routed through PayPal Business
+      environment: 'TEST', // Google Pay TEST mode environment
       paymentDataCallbacks: {
         onPaymentAuthorized: async (paymentData: any) => {
           try {
-            console.log('[PAYPAL-v6-GOOGLEPAY] Google Pay authorized callback received:', paymentData);
-            
-            const orderRes = await fetch('/paypal-api/checkout/orders', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                amountUSD: formattedAmount,
-                paymentSource: 'google_pay',
-              }),
-            });
-            const orderData: any = await orderRes.json();
-            if (!orderData.orderId && !orderData.id) throw new Error(orderData.error || 'Failed to create PayPal order');
-            const orderId = orderData.orderId || orderData.id;
+            console.log('[PAYPAL-v6-GOOGLEPAY] Google Pay TEST mode authorized callback received:', paymentData);
 
-            if (googlePaySession && typeof googlePaySession.confirmPayment === 'function') {
-              await googlePaySession.confirmPayment({
-                orderId,
-                paymentMethodData: paymentData.paymentMethodData
-              });
-            }
-
-            const captureRes = await fetch(`/paypal-api/checkout/orders/${orderId}/capture`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-            });
-            const captureResult: any = await captureRes.json();
-
-            const payerInfo = paymentData.paymentMethodData?.info?.billingAddress || {};
+            const payerInfo = paymentData.paymentMethodData?.info?.billingAddress || paymentData.shippingAddress || {};
             const payer = {
-              name: payerInfo.name || customerInfo?.name || 'Google Pay Customer',
+              name: payerInfo.name || customerInfo?.name || 'Google Pay Test Customer',
               email: paymentData.email || customerInfo?.email || 'customer@dbuystore.com',
               address: payerInfo.address1 || customerInfo?.address || 'Shipping Address',
               city: payerInfo.locality || customerInfo?.city || 'Tbilisi',
@@ -293,13 +268,13 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
               country: payerInfo.countryCode || customerInfo?.country || 'Georgia',
             };
 
-            const txnId = captureResult?.capture?.id || captureResult?.id || `GPAY-PP-${orderId}`;
+            const testTxnId = `GPAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
             onSuccess({
-              transactionId: txnId,
-              orderId,
+              transactionId: testTxnId,
+              orderId: testTxnId,
               payer,
-              token: paymentData.paymentMethodData?.tokenizationData?.token
+              token: paymentData.paymentMethodData?.tokenizationData?.token || 'TEST_GOOGLE_PAY_TOKEN',
             });
 
             return { transactionState: 'SUCCESS' };
@@ -329,7 +304,7 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
       ],
     };
 
-    const defaultPaymentDataRequest = {
+    const defaultPaymentDataRequest: any = {
       apiVersion: 2,
       apiVersionMinor: 0,
       allowedPaymentMethods: [
@@ -338,28 +313,32 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
           parameters: {
             allowedAuthMethods: ['PAN_ONLY', 'CRYPTOGRAM_3DS'],
             allowedCardNetworks: ['AMEX', 'DISCOVER', 'JCB', 'MASTERCARD', 'VISA'],
+            billingAddressRequired: true,
+            billingAddressParameters: {
+              format: 'FULL',
+              phoneNumberRequired: true,
+            },
           },
           tokenizationSpecification: {
             type: 'PAYMENT_GATEWAY',
             parameters: {
-              gateway: 'paypal',
-              gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID,
+              gateway: 'example',
+              gatewayMerchantId: 'exampleGatewayMerchantId',
             },
           },
         },
       ],
+      emailRequired: true,
+      shippingAddressRequired: true,
+      callbackIntents: ['PAYMENT_AUTHORIZATION'],
     };
 
-    const isReadyToPayRequest = googlePayConfig?.isReadyToPayRequest 
-      ? Object.assign({}, googlePayConfig.isReadyToPayRequest)
-      : defaultIsReadyToPayRequest;
+    const isReadyToPayRequest = defaultIsReadyToPayRequest;
 
     const readyToPay = await paymentsClient.isReadyToPay(isReadyToPayRequest);
 
     if (readyToPay?.result || readyToPay) {
-      const paymentDataRequest = googlePayConfig?.paymentDataRequest 
-        ? Object.assign({}, googlePayConfig.paymentDataRequest)
-        : JSON.parse(JSON.stringify(defaultPaymentDataRequest));
+      const paymentDataRequest = JSON.parse(JSON.stringify(defaultPaymentDataRequest));
 
       paymentDataRequest.transactionInfo = {
         totalPriceStatus: 'FINAL',
@@ -368,6 +347,7 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
         countryCode: 'US',
       };
       paymentDataRequest.merchantInfo = {
+        merchantId: '12345678901234567890',
         merchantName: label,
       };
 

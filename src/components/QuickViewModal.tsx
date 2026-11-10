@@ -296,7 +296,8 @@ export const QuickViewModal: React.FC = () => {
             <div>
               {/* Main Featured Active Image with Manual Zoom Trigger */}
               <div 
-                className="relative w-full aspect-square rounded-2xl overflow-hidden bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-center cursor-pointer select-none group"
+                className="product-image-showcase relative w-full aspect-square rounded-2xl overflow-hidden bg-[#ffffff] dark:bg-[#ffffff] border border-slate-200/80 dark:border-slate-800 shadow-xs flex items-center justify-center cursor-pointer select-none group"
+                style={{ backgroundColor: '#ffffff' }}
                 onClick={handleOpenZoom}
                 title={language === 'ka' ? 'დააწკაპუნეთ სურათის გასადიდებლად' : 'Click to zoom image'}
               >
@@ -304,7 +305,7 @@ export const QuickViewModal: React.FC = () => {
                   src={currentImage}
                   alt={`${displayTitle} - photo ${activeImageIndex + 1}`}
                   referrerPolicy="no-referrer"
-                  className="w-full h-full object-contain p-4 sm:p-6 select-none pointer-events-none"
+                  className="product-card-img w-full h-full object-contain p-4 sm:p-6 select-none pointer-events-none opacity-100 dark:opacity-100 brightness-100 dark:brightness-100 mix-blend-normal dark:mix-blend-normal"
                 />
 
                 {/* Dedicated Manual Zoom / Magnifying Glass Button */}

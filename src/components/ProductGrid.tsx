@@ -24,6 +24,8 @@ export const ProductGrid: React.FC = () => {
     searchQuery,
     setSearchQuery,
     products,
+    orders,
+    cart,
     navigateToProduct,
     homepageCategories,
     activeHomepageCategory,
@@ -31,6 +33,42 @@ export const ProductGrid: React.FC = () => {
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<FeaturedTab>('featured');
+
+  // Collect IDs of products marked as featured/pinned by the admin in Homepage Manager
+  const adminFeaturedProductIds = useMemo(() => {
+    const ids = new Set<string>();
+    homepageCategories.forEach((cat) => {
+      cat.items.forEach((item) => {
+        if (!item.isHidden && (item.isFeatured || item.isPinned)) {
+          ids.add(item.productId);
+        }
+      });
+    });
+    return ids;
+  }, [homepageCategories]);
+
+  // Compute historical sales and active cart additions per product ID
+  const productEngagementMap = useMemo(() => {
+    const salesMap = new Map<string, number>();
+    const cartMap = new Map<string, number>();
+
+    orders.forEach((order) => {
+      if (order.status !== 'Cancelled' && Array.isArray(order.items)) {
+        order.items.forEach((item) => {
+          salesMap.set(item.productId, (salesMap.get(item.productId) ?? 0) + (item.quantity || 1));
+        });
+      }
+    });
+
+    cart.forEach((item) => {
+      cartMap.set(
+        item.product.id,
+        (cartMap.get(item.product.id) ?? 0) + (item.quantity || 1)
+      );
+    });
+
+    return { salesMap, cartMap };
+  }, [orders, cart]);
 
   // Dynamically pull ALL real products from the live admin product catalog,
   // strictly excluding any fake/studio products (such as prod-ref-*).
@@ -74,13 +112,41 @@ export const ProductGrid: React.FC = () => {
       case 'pets':
         return c === 'pets' || c === 'accessories' || c === 'drinkware' || c === 'everyday';
       case 'deals':
-        return Boolean(prod.isDeal || (prod.origPrice && prod.origPrice > prod.price));
+        return Boolean(prod.isDeal || prod.hasDiscount || (prod.origPrice && prod.origPrice > prod.price));
       default:
         return true;
     }
   };
 
-  // Dynamically resolve products from the real admin catalog
+  // Helper: Check if a product has a discount applied OR has the admin featured flag set
+  const isFeaturedOrDiscounted = (product: Product): boolean => {
+    const originalPriceVal =
+      product.origPrice ?? product.originalPrice ?? product.original_price ?? 0;
+    const hasDiscount = Boolean(
+      product.hasDiscount ||
+        product.isDeal ||
+        (originalPriceVal > 0 && originalPriceVal > product.price)
+    );
+    const isFeatured = Boolean(
+      product.isFeatured || adminFeaturedProductIds.has(product.id)
+    );
+    return hasDiscount || isFeatured;
+  };
+
+  // Helper: Parse creation timestamp for New Arrivals sorting
+  const getCreatedTimestamp = (product: Product): number => {
+    const dateRaw = product.createdAt || product.created_at || product.publishedAt;
+    if (dateRaw) {
+      const parsed = new Date(dateRaw).getTime();
+      if (!Number.isNaN(parsed) && parsed > 0) {
+        return parsed;
+      }
+    }
+    const idTimestampMatch = String(product.id).match(/(\d{10,13})/);
+    return idTimestampMatch ? Number(idTimestampMatch[1]) : 0;
+  };
+
+  // Dynamically resolve, filter, and sort products based on the active tab
   const filteredList = useMemo(() => {
     // 1. Search query overrides category filter and searches by Name, SKU, or Product ID
     if (searchQuery && searchQuery.trim().length > 0) {
@@ -89,7 +155,7 @@ export const ProductGrid: React.FC = () => {
 
     let baseList: Product[] = [];
 
-    // 2. If a specific homepage category is selected, prioritize configured items + matching category products, followed by the rest of the catalog
+    // 2. If a specific homepage category is selected, resolve products for that category
     if (activeCategoryConfig && activeHomepageCategory !== 'all') {
       const hiddenIds = new Set(
         activeCategoryConfig.items.filter((i) => i.isHidden).map((i) => i.productId)
@@ -111,8 +177,6 @@ export const ProductGrid: React.FC = () => {
       for (const item of visibleConfigItems) {
         const found = catalogProducts.find((p) => p.id === item.productId);
         if (found && !seenIds.has(found.id)) {
-          // If the product was explicitly assigned one of the 9 exact Admin categories,
-          // ensure it matches the selected category pill.
           const isExplicitAdminCat = ADMIN_PRODUCT_CATEGORIES.includes(found.category as any);
           if (!isExplicitAdminCat || matchesHomepageCategoryPill(found, activeHomepageCategory)) {
             resolvedProducts.push(found);
@@ -121,7 +185,6 @@ export const ProductGrid: React.FC = () => {
         }
       }
 
-      // Include any remaining real catalog products matching this category
       for (const p of catalogProducts) {
         if (!seenIds.has(p.id) && !hiddenIds.has(p.id) && matchesHomepageCategoryPill(p, activeHomepageCategory)) {
           resolvedProducts.push(p);
@@ -129,7 +192,6 @@ export const ProductGrid: React.FC = () => {
         }
       }
 
-      // If still empty, fall back to all non-hidden real catalog products
       if (resolvedProducts.length === 0) {
         for (const p of catalogProducts) {
           if (!seenIds.has(p.id) && !hiddenIds.has(p.id)) {
@@ -141,8 +203,7 @@ export const ProductGrid: React.FC = () => {
 
       baseList = resolvedProducts;
     } else {
-      // 'All Categories' view (Default): dynamically display ALL real products from the admin catalog,
-      // ordering any pinned/featured items first.
+      // 'All Categories' view (Default): aggregate all real catalog products
       const seen = new Set<string>();
       const aggregated: Product[] = [];
 
@@ -171,25 +232,59 @@ export const ProductGrid: React.FC = () => {
       baseList = aggregated;
     }
 
-    // 3. Apply secondary tab sorting when user clicks Bestsellers / New Arrivals / Top Rated
-    if (activeTab === 'bestsellers') {
-      const best = baseList.filter((p) => p.badge === 'Best Seller' || (p.reviewsCount ?? 0) >= 100 || p.isDeal);
-      const rest = baseList.filter((p) => !best.includes(p));
-      return [...best, ...rest];
-    }
+    // 3. Apply exact tab-based filtering & sorting logic
+    switch (activeTab) {
+      case 'featured': {
+        // Filter and show only products that have a discount applied OR have the admin featured flag set
+        return baseList.filter((product) => isFeaturedOrDiscounted(product));
+      }
 
-    if (activeTab === 'new') {
-      const newest = baseList.filter((p) => p.badge === 'New');
-      const rest = baseList.filter((p) => !newest.includes(p));
-      return [...newest, ...rest];
-    }
+      case 'bestsellers': {
+        // Sort products by highest combined sales count and cart additions first
+        return [...baseList].sort((a, b) => {
+          const totalA =
+            (a.salesCount ?? 0) +
+            (a.cartAdds ?? 0) +
+            (productEngagementMap.salesMap.get(a.id) ?? 0) +
+            (productEngagementMap.cartMap.get(a.id) ?? 0);
+          const totalB =
+            (b.salesCount ?? 0) +
+            (b.cartAdds ?? 0) +
+            (productEngagementMap.salesMap.get(b.id) ?? 0) +
+            (productEngagementMap.cartMap.get(b.id) ?? 0);
 
-    if (activeTab === 'top-rated') {
-      return [...baseList].sort((a, b) => (b.rating ?? 5) - (a.rating ?? 5));
-    }
+          if (totalB !== totalA) {
+            return totalB - totalA;
+          }
+          return (b.reviewsCount ?? 0) - (a.reviewsCount ?? 0);
+        });
+      }
 
-    return baseList;
-  }, [catalogProducts, searchQuery, activeCategoryConfig, activeHomepageCategory, homepageCategories, activeTab]);
+      case 'new': {
+        // Sort products by creation date (most recently added products at the very top)
+        return [...baseList].sort(
+          (a, b) => getCreatedTimestamp(b) - getCreatedTimestamp(a)
+        );
+      }
+
+      case 'top-rated': {
+        // Sort products by the highest number of views (most viewed products first)
+        return [...baseList].sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
+      }
+
+      default:
+        return baseList;
+    }
+  }, [
+    catalogProducts,
+    searchQuery,
+    activeCategoryConfig,
+    activeHomepageCategory,
+    homepageCategories,
+    activeTab,
+    adminFeaturedProductIds,
+    productEngagementMap,
+  ]);
 
   // Resolve real products for the 3 promotional banners dynamically
   const promoSmartHomeProduct = useMemo(

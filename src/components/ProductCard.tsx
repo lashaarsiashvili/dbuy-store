@@ -107,7 +107,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     >
       {/* Product Image Wrapper - Showcase Area (Top portion of the card) */}
       <div 
-        className="product-card-image-wrapper relative w-full h-[195px] sm:h-[205px] flex items-center justify-center overflow-hidden bg-white dark:bg-[#ffffff] rounded-t-[20px] p-0"
+        className="product-card-image-wrapper relative w-full h-[195px] sm:h-[205px] flex items-center justify-center overflow-hidden bg-[#ffffff] dark:bg-[#ffffff] opacity-100 dark:opacity-100 brightness-100 dark:brightness-100 rounded-t-[20px] p-0"
         style={{
           backgroundColor: '#ffffff',
           borderTopLeftRadius: '20px',
@@ -121,7 +121,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             type="button"
             onClick={handleWishlistToggle}
             aria-label={isFavorite ? t('wishlist.remove') : t('wishlist.add')}
-            className="product-card-wishlist-btn pointer-events-auto w-7 h-7 rounded-full flex items-center justify-center text-[#64748B] hover:text-red-500 transition-colors cursor-pointer bg-white/80 backdrop-blur-xs shadow-2xs"
+            className="product-card-wishlist-btn pointer-events-auto w-7 h-7 rounded-full flex items-center justify-center text-[#64748B] dark:text-slate-200 hover:text-red-500 dark:hover:text-red-400 transition-colors cursor-pointer bg-white/90 dark:bg-slate-900/85 backdrop-blur-xs shadow-2xs"
           >
             <Heart
               className={`w-[18px] h-[18px] transition-transform duration-200 group-hover:scale-110 ${
@@ -135,21 +135,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           <CachedImage
             src={imgSrc}
             alt={displayTitle}
-            className="product-card-img w-full h-full object-contain object-center scale-105 group-hover:scale-110 transition-transform duration-300 ease-out mix-blend-multiply"
+            className="product-card-img w-full h-full object-contain object-center scale-105 group-hover:scale-110 transition-transform duration-300 ease-out opacity-100 dark:opacity-100 brightness-100 dark:brightness-100 contrast-100 dark:contrast-100 mix-blend-normal dark:mix-blend-normal"
             style={{
               width: '100%',
               height: '100%',
               objectFit: 'contain',
               objectPosition: 'center',
               transform: 'scale(1.05)',
-              mixBlendMode: 'multiply',
+              mixBlendMode: 'normal',
+              opacity: 1,
+              filter: 'brightness(1) contrast(1)',
             }}
             loading="lazy"
             decoding="async"
             referrerPolicy="no-referrer"
           />
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-slate-300 text-xs">
+          <div className="w-full h-full flex items-center justify-center text-slate-400 text-xs">
             No image
           </div>
         )}

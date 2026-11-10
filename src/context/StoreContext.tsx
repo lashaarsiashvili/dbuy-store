@@ -537,6 +537,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const prod = products.find(p => p.id === productId || p.customSlug === productId || (p.customSlug && p.customSlug.toLowerCase() === productId.toLowerCase()));
     const slug = prod?.customSlug?.trim() || (prod ? generateProductSlug(prod.title) : '');
     const id = prod?.id || productId;
+    setProducts(prev =>
+      prev.map(p => (p.id === id ? { ...p, views: (p.views ?? 0) + 1 } : p))
+    );
     const targetPath = prod?.customSlug ? `/b/${encodeURIComponent(slug)}` : (slug ? `/product/${id}/${encodeURIComponent(slug)}` : `/product/${id}`);
     if (typeof window !== 'undefined' && window.location.pathname !== targetPath) {
       window.history.pushState({ page: 'product', productId }, '', targetPath);
@@ -696,7 +699,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const metaThemeColor = document.querySelector('meta[name="theme-color"]');
     if (isDarkMode) {
       document.documentElement.classList.add('dark');
-      document.documentElement.style.colorScheme = 'dark';
+      document.documentElement.style.colorScheme = 'normal';
       if (metaThemeColor) metaThemeColor.setAttribute('content', '#020617');
     } else {
       document.documentElement.classList.remove('dark');
@@ -1453,6 +1456,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       } catch (e) {}
       return next;
     });
+    setProducts(prev =>
+      prev.map(p => (p.id === product.id ? { ...p, cartAdds: (p.cartAdds ?? 0) + quantity } : p))
+    );
     analytics.trackAddToCart(product.id, isAdmin);
     addToast(language === 'ka' ? `დაემატა კალათაში!` : `Added to cart!`, 'success');
   };
@@ -1565,10 +1571,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const total = Math.max(0, subtotal - discount + shipping + tax);
 
     const userEmail = (orderDetails.email || user.email || 'customer@dbuystore.com').toLowerCase().trim();
+    const defaultTxnId = `GPAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+    const resolvedPaypalTxnId =
+      orderDetails.paypalTransactionId ||
+      orderDetails.googlePayTransactionId ||
+      orderDetails.applePayTransactionId ||
+      defaultTxnId;
+    const resolvedGooglePayTxnId =
+      orderDetails.googlePayTransactionId ||
+      (orderDetails.paymentMethod === 'googlepay' ? resolvedPaypalTxnId : undefined);
+
     const newOrder: Order = {
       id: `DBUY-${Math.floor(10000 + Math.random() * 90000)}`,
       date: new Date().toISOString().split('T')[0],
+      trackingNumber: orderDetails.trackingNumber || `TRK-GE-${Math.floor(1000000 + Math.random() * 9000000)}`,
       ...orderDetails,
+      paypalTransactionId: resolvedPaypalTxnId,
+      ...(resolvedGooglePayTxnId ? { googlePayTransactionId: resolvedGooglePayTxnId } : {}),
       userId: user.isLoggedIn && user.email ? user.email.toLowerCase().trim() : 'guest',
       email: userEmail,
       items: cart.map(i => ({ productId: i.product.id, title: i.product.title, price: i.product.price, quantity: i.quantity, image: i.product.image })),
@@ -1576,6 +1595,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       currency,
       status: 'Processing',
     };
+
+    const purchasedQuantities = new Map<string, number>();
+    cart.forEach(item => {
+      purchasedQuantities.set(
+        item.product.id,
+        (purchasedQuantities.get(item.product.id) ?? 0) + item.quantity
+      );
+    });
+    if (purchasedQuantities.size > 0) {
+      setProducts(prev =>
+        prev.map(p =>
+          purchasedQuantities.has(p.id)
+            ? { ...p, salesCount: (p.salesCount ?? 0) + (purchasedQuantities.get(p.id) ?? 0) }
+            : p
+        )
+      );
+    }
 
     setOrders(prev => [newOrder, ...prev]);
     setLastPlacedOrder(newOrder);

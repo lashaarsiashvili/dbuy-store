@@ -274,13 +274,47 @@ html.dark {
 }
 
 /* 3. Surfaces, Cards & Containers in Dark Mode */
-.dark .bg-white,
-.dark .bg-white\/95,
-.dark .bg-white\/90,
-.dark .bg-white\/80,
-.dark .bg-white\/60,
-.dark .bg-white\/50 {
+.dark .bg-white:not(.product-card-image-wrapper):not(.product-image-showcase):not(.gpay-capsule-badge):not(.gpay-official-pill):not(.payment-badge-light),
+.dark .bg-white\/95:not(.product-card-image-wrapper):not(.product-image-showcase):not(.payment-badge-light),
+.dark .bg-white\/90:not(.product-card-image-wrapper):not(.product-image-showcase):not(.product-card-wishlist-btn):not(.payment-badge-light),
+.dark .bg-white\/80:not(.product-card-image-wrapper):not(.product-image-showcase):not(.product-card-wishlist-btn):not(.payment-badge-light),
+.dark .bg-white\/60:not(.product-card-image-wrapper):not(.product-image-showcase):not(.payment-badge-light),
+.dark .bg-white\/50:not(.product-card-image-wrapper):not(.product-image-showcase):not(.payment-badge-light) {
   background-color: #0f172a !important;
+}
+
+/* Payment Method Badges (Google Pay, PayPal, Visa, Mastercard) - Always Bright White in Dark Mode */
+.payment-badge-light,
+.dark .payment-badge-light,
+html.dark .payment-badge-light,
+.dark div.payment-badge-light,
+.dark span.payment-badge-light {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+/* Product Card Image Containers & Product Images - Always Fully Illuminated in Dark Mode */
+.product-card-image-wrapper,
+.dark .product-card-image-wrapper,
+.product-image-showcase,
+.dark .product-image-showcase {
+  background-color: #ffffff !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+.product-card-img,
+.dark .product-card-img,
+.product-card-image-wrapper img,
+.dark .product-card-image-wrapper img,
+.product-image-showcase img,
+.dark .product-image-showcase img {
+  mix-blend-mode: normal !important;
+  opacity: 1 !important;
+  filter: brightness(1) contrast(1) !important;
+  -webkit-filter: brightness(1) contrast(1) !important;
 }
 
 .dark .bg-slate-50,
@@ -774,7 +808,7 @@ apple-pay-button {
     height: 11px !important;
   }
 
-  /* 5. Product Card Image Showcase (Maximized size, zero excessive padding, solid white showcase in dark mode, mix-blend-mode: multiply) */
+  /* 5. Product Card Image Showcase (Maximized size, zero excessive padding, solid white showcase in dark mode, full illumination) */
   .product-card-image-wrapper {
     position: relative !important;
     width: 100% !important;
@@ -790,12 +824,16 @@ apple-pay-button {
     align-items: center !important;
     justify-content: center !important;
     overflow: hidden !important;
+    opacity: 1 !important;
+    filter: none !important;
   }
 
   .dark .product-card-image-wrapper {
     background-color: #ffffff !important;
     border-top-left-radius: 12px !important;
     border-top-right-radius: 12px !important;
+    opacity: 1 !important;
+    filter: none !important;
   }
 
   .product-card-img {
@@ -809,14 +847,18 @@ apple-pay-button {
     background-color: transparent !important;
     padding: 0 !important;
     display: block !important;
-    mix-blend-mode: multiply !important;
+    mix-blend-mode: normal !important;
+    opacity: 1 !important;
+    filter: brightness(1) contrast(1) !important;
     transform: scale(1.05) !important;
     transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
   }
 
   .dark .product-card-img {
     background-color: transparent !important;
-    mix-blend-mode: multiply !important;
+    mix-blend-mode: normal !important;
+    opacity: 1 !important;
+    filter: brightness(1) contrast(1) !important;
     transform: scale(1.05) !important;
   }
 
@@ -931,29 +973,52 @@ apple-pay-button {
    Google Pay Brand Guidelines - Official Rounded Capsule Badge & Button Wrapper
    Adheres strictly to Google Pay UI Guidelines for automated validation:
    - Pill-shaped rounded container (border-radius: 9999px)
-   - Official border: 1px solid #DADCE0 (Google standard)
+   - Official border: #3C4043 (Google Pay brand mark outline)
    - Standard clear space padding and uncompromised aspect ratio
    ========================================================================== */
-.gpay-capsule-badge {
+.gpay-capsule-badge,
+.gpay-official-pill {
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
   border-radius: 9999px !important; /* Required pill / capsule shape */
-  border: 1px solid #DADCE0 !important;
+  border: 2px solid #3C4043 !important;
   background-color: #ffffff !important;
+  color: #3C4043 !important;
   box-sizing: border-box !important;
   box-shadow: 0 1px 2px rgba(60, 64, 67, 0.08) !important;
   transition: all 0.15s ease-in-out !important;
 }
 
-.gpay-capsule-badge:hover {
-  border-color: #BDC1C6 !important;
-  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.15) !important;
+.gpay-capsule-badge:hover,
+.gpay-official-pill:hover {
+  background-color: #f8f9fa !important;
+  border-color: #202124 !important;
+  box-shadow: 0 1px 3px rgba(60, 64, 67, 0.16) !important;
 }
 
-.dark .gpay-capsule-badge {
+.dark .gpay-capsule-badge,
+.dark .gpay-official-pill,
+html.dark .gpay-capsule-badge,
+html.dark .gpay-official-pill,
+html.dark button.gpay-official-pill,
+html.dark div.gpay-capsule-badge,
+.dark button.gpay-official-pill,
+.dark div.gpay-capsule-badge {
   background-color: #ffffff !important;
-  border-color: #DADCE0 !important;
+  border-color: #3C4043 !important;
+  color: #3C4043 !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+
+.dark .gpay-capsule-badge:hover,
+.dark .gpay-official-pill:hover,
+html.dark .gpay-capsule-badge:hover,
+html.dark .gpay-official-pill:hover,
+.dark button.gpay-official-pill:hover {
+  background-color: #f8f9fa !important;
+  border-color: #202124 !important;
 }
 
 .gpay-button-wrapper {
@@ -1144,6 +1209,30 @@ body {
   box-shadow: none !important;
 }
 
+/* ==========================================================================
+   PayPal Smart Payment Buttons Dark Mode & Iframe Transparency Enforcement
+   Prevents browsers from painting a white canvas behind cross-origin PayPal
+   iframes or leaving a white background to the right of max-width buttons.
+   ========================================================================== */
+.paypal-buttons,
+.paypal-buttons > div,
+.paypal-buttons iframe,
+.paypal-buttons .component-frame,
+iframe[name^="__zoid__paypal_buttons"],
+iframe[title*="PayPal"] {
+  background: transparent !important;
+  background-color: transparent !important;
+  color-scheme: light !important;
+  border: none !important;
+  box-shadow: none !important;
+}
 
-
+.paypal-buttons {
+  display: block !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+}
 

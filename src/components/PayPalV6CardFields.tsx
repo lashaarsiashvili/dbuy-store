@@ -227,9 +227,19 @@ export const PayPalV6CardFields: React.FC<PayPalV6CardFieldsProps> = ({
           </span>
         </div>
         <div className="flex items-center space-x-1.5">
-          <VisaLogo className="h-3.5 w-auto" />
-          <MastercardLogo className="h-3.5 w-auto" />
-          <AmexLogo className="h-3.5 w-auto" />
+          <span
+            className="payment-badge-light inline-flex items-center justify-center h-6 px-2 rounded-md bg-[#ffffff] dark:bg-[#ffffff] border border-slate-200 shadow-2xs"
+            style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
+          >
+            <VisaLogo className="h-3 w-auto" />
+          </span>
+          <span
+            className="payment-badge-light inline-flex items-center justify-center h-6 px-1.5 rounded-md bg-[#ffffff] dark:bg-[#ffffff] border border-slate-200 shadow-2xs"
+            style={{ backgroundColor: '#ffffff', borderColor: '#e2e8f0' }}
+          >
+            <MastercardLogo className="h-3.5 w-auto" />
+          </span>
+          <AmexLogo className="h-5 w-auto" />
         </div>
       </div>
 

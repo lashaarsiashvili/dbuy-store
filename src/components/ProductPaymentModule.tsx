@@ -156,7 +156,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           const paymentsClient = new (
             window as any
           ).google.payments.api.PaymentsClient({
-            environment: "PRODUCTION",
+            environment: "TEST",
           });
           const ready = await paymentsClient.isReadyToPay({
             apiVersion: 2,
@@ -634,7 +634,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
   };
 
   return (
-    <div className="isolate relative z-0 rounded-3xl border-2 border-slate-200 dark:border-slate-800 bg-gradient-to-b from-slate-50/90 via-white to-white dark:from-slate-900/90 dark:via-slate-900 dark:to-slate-900 p-5 sm:p-6 shadow-sm space-y-5">
+    <div className="isolate relative z-0 rounded-3xl border-2 border-slate-200 dark:border-slate-800 bg-transparent dark:bg-slate-900 p-5 sm:p-6 shadow-sm space-y-5">
       {/* Header with Amount & Live PayPal Security Badge */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pb-4 border-b border-slate-200 dark:border-slate-800">
         <div>
@@ -647,17 +647,15 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
               : `Total: ${formatPrice(totalAmountUSD)} (${quantity} item${quantity > 1 ? "s" : ""})`}
           </p>
         </div>
-
-        
       </div>
 
       {/* ACTIVE METHOD PAYMENT INTERFACE BOX */}
-      <div className="rounded-2xl bg-white dark:bg-slate-900 border-2 border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-4">
+      <div className="rounded-2xl bg-transparent dark:bg-slate-900 border-2 border-slate-200/90 dark:border-slate-800 p-4 sm:p-5 shadow-xs space-y-4 overflow-hidden">
         
         {/* Apple Pay & Google Pay 2-Column Row */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {/* Left Card: Apple Pay */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent dark:bg-slate-900 p-2.5 overflow-hidden">
             <button
               type="button"
               onClick={handleApplePay}
@@ -686,33 +684,21 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             </button>
           </div>
 
-          {/* Right Card: Google Pay - UNCONDITIONAL RENDER */}
-          <div className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+          {/* Right Card: Google Pay - Official Brand Mark Pill */}
+          <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-transparent dark:bg-slate-900 p-2.5 overflow-hidden">
             <button
               type="button"
               onClick={handleGooglePay}
-              className="bg-black hover:bg-neutral-900 text-white h-12 w-full rounded-xl flex items-center justify-center gap-2 transition-colors cursor-pointer select-none"
-              aria-label="Buy with Google Pay"
+              className="gpay-official-pill gpay-capsule-badge bg-white hover:bg-gray-50 text-[#3C4043] border-2 border-[#3C4043] h-12 w-full rounded-full px-6 py-2.5 flex items-center justify-center transition-all cursor-pointer select-none shadow-2xs active:scale-[0.99]"
+              aria-label="Google Pay"
             >
-              <span
-                className="text-[16px] font-medium tracking-normal leading-none text-white"
-                style={{ fontFamily: '"Google Sans", Roboto, Arial, sans-serif' }}
-              >
-                Buy with
-              </span>
-              <svg className="h-[20px] w-auto" viewBox="0 0 41 17" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <path d="M13.09 8.18c0-.57-.05-1.12-.14-1.65H6.66v3.12h3.61a3.09 3.09 0 0 1-1.34 2.03v2.02h2.17c1.27-1.17 1.99-2.89 1.99-5.52Z" fill="#4285F4"/>
-                <path d="M6.66 14.73c1.81 0 3.33-.6 4.44-1.62l-2.17-1.68c-.6.4-1.37.64-2.27.64-1.74 0-3.22-1.18-3.75-2.76H.67v1.73a6.66 6.66 0 0 0 5.99 3.69Z" fill="#34A853"/>
-                <path d="M2.91 9.31a4.01 4.01 0 0 1 0-2.54V5.04H.67a6.67 6.67 0 0 0 0 5.99l2.24-1.72Z" fill="#FBBC04"/>
-                <path d="M6.66 4.06c.98 0 1.87.34 2.56 1l1.92-1.92C9.98 2.05 8.47 1.4 6.66 1.4A6.66 6.66 0 0 0 .67 5.04l2.24 1.73c.53-1.58 2.01-2.71 3.75-2.71Z" fill="#EA4335"/>
-                <path d="M18.66 9.33v4.4h-1.4v-11h3.73c.94 0 1.75.31 2.42.93.68.62 1.02 1.38 1.02 2.28 0 .92-.34 1.68-1.02 2.3-.66.61-1.48.92-2.42.92h-2.33v.17Zm0-4.96v3.63h2.36c.56 0 1.03-.18 1.4-.55.38-.37.57-.81.57-1.33 0-.51-.19-.95-.57-1.31-.37-.37-.84-.54-1.4-.54h-2.36ZM28.32 5.95c1.04 0 1.86.28 2.46.83.6.55.9 1.31.9 2.27v4.68h-1.34v-1.05h-.06c-.58.86-1.35 1.29-2.31 1.29-.82 0-1.51-.24-2.06-.73-.55-.49-.82-1.1-.82-1.84 0-.78.29-1.4.87-1.87.58-.47 1.36-.7 2.33-.7.83 0 1.51.15 2.04.46v-.32c0-.5-.2-.92-.59-1.26-.39-.34-.88-.51-1.46-.51-.84 0-1.51.36-1.99 1.07l-1.24-.78c.68-.98 1.68-1.54 3.27-1.54Zm-1.81 5.5c0 .37.16.69.47.94.32.25.69.38 1.12.38.6 0 1.14-.22 1.61-.67.47-.45.7-.98.7-1.58-.44-.35-1.05-.52-1.83-.52-.57 0-1.05.14-1.44.42-.39.28-.63.62-.63 1.03ZM40.75 6.19l-4.71 10.84h-1.45l1.75-3.79-3.1-7.05h1.53l2.24 5.4h.03l2.18-5.4h1.53Z" fill="#FFFFFF"/>
-              </svg>
+              <GooglePayVector className="h-6 w-auto" isDark={false} />
             </button>
           </div>
         </div>
 
-        {/* Right above the yellow PayPal Buy Now button */}
-        <div className="space-y-3.5 pt-3 border-t border-slate-100 dark:border-slate-800">
+        {/* PayPal Checkout Section */}
+        <div className="w-full space-y-3.5 pt-3 border-t border-slate-100 dark:border-slate-800 overflow-hidden bg-transparent">
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
               {isKa ? "PayPal-ით უსაფრთხო გადახდა" : "Pay with PayPal"}
@@ -733,15 +719,12 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             </div>
           )}
 
-          {/* Official PayPal Buttons */}
-          <div className="relative min-h-[50px] overflow-hidden rounded-xl">
+          {/* Direct Transparent Full-Width PayPal Wrapper */}
+          <div className="w-full bg-transparent overflow-hidden [&_iframe]:!bg-transparent [&_.paypal-buttons]:!bg-transparent [color-scheme:light]">
             <PayPalButtons
               style={{
                 layout: "vertical",
-                color: "gold",
                 shape: "rect",
-                label: "buynow",
-                height: 48,
               }}
               disabled={isProcessing}
               createOrder={async (data, actions) => {
@@ -913,44 +896,72 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
             </div>
 
             {/* Receipt Summary */}
-            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2 text-xs">
-              <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+            <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5 text-xs font-medium">
+              <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
                 <span className="text-slate-500 dark:text-slate-400">
-                  {isKa ? "შეკვეთის ნომერი" : "Order ID"}
+                  {isKa ? "შეკვეთის ნომერი:" : "Order Number:"}
                 </span>
-                <span className="font-mono font-bold text-slate-900 dark:text-white">
-                  #{lastPlacedOrder.id}
+                <span className="font-mono font-bold text-blue-600 dark:text-blue-400">
+                  {lastPlacedOrder.id}
                 </span>
               </div>
-              <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+              <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
                 <span className="text-slate-500 dark:text-slate-400">
                   {isKa ? "გადახდის მეთოდი" : "Payment Method"}
                 </span>
-                <span className="font-bold uppercase text-blue-700 dark:text-blue-400">
-                  {lastPlacedOrder.paymentMethod}
-                </span>
+                <div className="flex items-center space-x-1.5 font-semibold text-slate-800 dark:text-slate-200">
+                  {lastPlacedOrder.paymentMethod === "googlepay" ? (
+                    <GooglePayMark className="h-4 w-auto" />
+                  ) : lastPlacedOrder.paymentMethod === "applepay" ? (
+                    <span className="font-bold">Apple Pay</span>
+                  ) : lastPlacedOrder.paymentMethod === "paypal" ? (
+                    <span className="font-bold">PayPal</span>
+                  ) : (
+                    <span className="font-bold uppercase text-slate-800 dark:text-slate-200">
+                      {lastPlacedOrder.paymentMethod}
+                    </span>
+                  )}
+                </div>
               </div>
-              {lastPlacedOrder.paypalTransactionId && (
-                <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+              {(lastPlacedOrder.paypalTransactionId || lastPlacedOrder.googlePayTransactionId) && (
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2 gap-4">
                   <span className="text-slate-500 dark:text-slate-400">
-                    {isKa ? "ტრანზაქციის ID" : "Transaction ID"}
+                    {isKa ? "PayPal ტრანზაქციის ID: (PayPal)" : "PayPal Transaction ID: (PayPal)"}
                   </span>
-                  <span className="font-mono text-[11px] font-semibold text-slate-800 dark:text-slate-200">
-                    {lastPlacedOrder.paypalTransactionId}
+                  <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-200 text-right break-all">
+                    {lastPlacedOrder.paypalTransactionId || lastPlacedOrder.googlePayTransactionId}
                   </span>
                 </div>
               )}
-              <div className="flex justify-between border-b border-slate-200 dark:border-slate-700 pb-2">
+              {(lastPlacedOrder.googlePayTransactionId || lastPlacedOrder.paymentMethod === "googlepay") && (
+                <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2 gap-4">
+                  <span className="text-slate-500 dark:text-slate-400">
+                    {isKa ? "PayPal ტრანზაქციის ID: (Google Pay)" : "PayPal Transaction ID: (Google Pay)"}
+                  </span>
+                  <span className="font-mono text-[11px] font-bold text-slate-800 dark:text-slate-200 text-right break-all">
+                    {lastPlacedOrder.googlePayTransactionId || lastPlacedOrder.paypalTransactionId}
+                  </span>
+                </div>
+              )}
+              <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
                 <span className="text-slate-500 dark:text-slate-400">
-                  {isKa ? "გზავნილის ნომერი (Tracking)" : "Tracking Number"}
+                  {isKa ? "სავარაუდო მიწოდება:" : "Estimated Delivery:"}
                 </span>
-                <span className="font-mono font-bold text-emerald-700 dark:text-emerald-400">
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {isKa ? "3-5 სამუშაო დღე" : "3-5 Business Days"}
+                </span>
+              </div>
+              <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
+                <span className="text-slate-500 dark:text-slate-400">
+                  {isKa ? "გზავნილის ნომერი:" : "Tracking Number:"}
+                </span>
+                <span className="font-mono font-bold text-slate-800 dark:text-slate-200">
                   {lastPlacedOrder.trackingNumber}
                 </span>
               </div>
-              <div className="flex justify-between pt-1 text-sm font-black text-slate-900 dark:text-white">
-                <span>{isKa ? "სულ გადახდილი თანხა" : "Total Paid"}</span>
-                <span className="text-blue-600 dark:text-blue-400">
+              <div className="flex justify-between items-center pt-1 text-sm font-bold text-slate-900 dark:text-white">
+                <span className="font-bold">{isKa ? "სულ:" : "Total:"}</span>
+                <span className="font-bold text-blue-500 dark:text-blue-400">
                   {formatPrice(lastPlacedOrder.total)}
                 </span>
               </div>

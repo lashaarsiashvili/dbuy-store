@@ -107,45 +107,37 @@ export const ApplePayBadgeIcon: React.FC<{ className?: string }> = ({ className 
   </svg>
 );
 
-// 5. Official Google Pay Vector (viewBox: 0 0 64 24, aspect-ratio ~2.67:1)
+// 5. Official Google Pay Vector (viewBox: 52 26 322 122, exact Google Pay Brand Mark)
 export const GooglePayBadgeIcon: React.FC<{ className?: string }> = ({ className = 'w-[34px] h-auto max-h-[14px]' }) => (
   <svg
-    viewBox="0 0 64 24"
+    viewBox="52 26 322 122"
     className={className}
     fill="none"
     xmlns="http://www.w3.org/2000/svg"
     aria-label="Google Pay"
     role="img"
   >
+    {/* Official Google Sans Pay */}
+    <path
+      fill="#3C4043"
+      d="M206.2 84.6v35.1h-11.2V33.1h29.8c7.5 0 13.9 2.5 19.2 7.4 5.4 4.9 8 11 8 18.2 0 7.4-2.6 13.5-8 18.4-5.2 4.9-11.6 7.5-19.2 7.5h-18.6zm0-40.8v30h18.9c4.5 0 8.2-1.5 11.2-4.5 3-3 4.5-6.5 4.5-10.5s-1.5-7.5-4.5-10.4c-3-3-6.7-4.6-11.2-4.6h-18.9zM278.4 59.3c8.3 0 14.9 2.2 19.7 6.7 4.8 4.5 7.2 10.6 7.2 18.4v35.3h-10.7v-7.9h-.5c-4.6 6.8-10.8 10.2-18.5 10.2-6.6 0-12.1-2-16.6-5.9-4.5-3.9-6.7-8.8-6.7-14.8 0-6.3 2.4-11.3 7.1-15 4.8-3.7 11.1-5.6 19-5.6 6.8 0 12.3 1.2 16.7 3.7v-2.6c0-4-1.6-7.3-4.8-10-3.2-2.7-6.9-4-11.3-4-6.5 0-11.7 2.8-15.5 8.3l-9.9-6.2c5.4-7.7 13.7-10.6 24.8-10.6zm-14.6 42.3c0 3 1.3 5.5 3.8 7.5 2.5 2 5.5 3 9 3 4.8 0 9.1-1.8 12.9-5.4 3.8-3.6 5.7-7.8 5.7-12.6-3.6-2.8-8.6-4.2-15-4.2-4.7 0-8.6 1.1-11.7 3.4-3.1 2.2-4.7 5-4.7 8.3zM371.9 61.2l-37.1 85.4h-11.5l13.8-29.8-24.5-55.6h12.1l17.7 42.7h.2l17.2-42.7h12.1z"
+    />
     {/* 4-Color Google G */}
     <path
-      d="M21.3 10.18h-9.36v3.64h5.39c-.23 1.25-.94 2.31-1.99 3.02l3.22 2.5c1.88-1.74 2.97-4.3 2.97-7.34 0-.61-.06-1.22-.18-1.82z"
       fill="#4285F4"
+      d="M148.9 77.7c0-3.4-.3-6.7-.9-9.9H102v18.7h26.4c-1.1 6.1-4.6 11.3-9.8 14.8v12.1h15.8c9.3-8.5 14.5-21.1 14.5-35.7z"
     />
     <path
-      d="M11.94 22c2.7 0 4.97-.9 6.63-2.43l-3.22-2.5c-.9.6-2.05.95-3.41.95-2.62 0-4.84-1.77-5.63-4.15L2.97 16.4C4.66 19.74 8.04 22 11.94 22z"
       fill="#34A853"
+      d="M102 125.5c13.2 0 24.3-4.3 32.4-11.8l-15.8-12.1c-4.4 3-10.1 4.8-16.6 4.8-12.7 0-23.5-8.6-27.4-20.1H58.3v12.5c8.1 16.1 24.7 26.7 43.7 26.7z"
     />
     <path
-      d="M6.31 13.87c-.2-.6-.31-1.24-.31-1.87s.11-1.27.31-1.87L2.97 7.6A9.98 9.98 0 001.94 12c0 1.61.38 3.14 1.03 4.4l3.34-2.53z"
-      fill="#FBBC05"
+      fill="#FBBC04"
+      d="M74.6 86.3c-1-3-1.6-6.2-1.6-9.5s.6-6.5 1.6-9.5V54.8H58.3C55 61.4 53.1 68.9 53.1 76.8s1.9 15.4 5.2 22l16.3-12.5z"
     />
     <path
-      d="M11.94 5.98c1.47 0 2.79.51 3.83 1.5l2.87-2.87C16.9 3.01 14.63 2 11.94 2 8.04 2 4.66 4.26 2.97 7.6l3.34 2.53c.79-2.38 3.01-4.15 5.63-4.15z"
       fill="#EA4335"
-    />
-    {/* Google Sans Pay */}
-    <path
-      d="M26 18.67V1h6c1.06 0 2.02.23 2.88.69.86.44 1.54 1.08 2.05 1.9.52.81.78 1.74.78 2.81 0 1.06-.26 2-.78 2.82-.5.82-1.19 1.46-2.05 1.92-.86.45-1.82.67-2.88.67h-3.32v6.86H26zm2.68-9.43h3.39c.63 0 1.17-.13 1.61-.4.44-.27.77-.63 1-1.06.24-.44.37-.9.37-1.38 0-.48-.13-.93-.37-1.36-.23-.43-.56-.78-1-1.06-.44-.28-.98-.42-1.61-.42h-3.39v5.68z"
-      fill="#3C4043"
-    />
-    <path
-      d="M43.44 19.06c-.91 0-1.71-.18-2.39-.54-.68-.36-1.23-.86-1.63-1.48-.39-.64-.59-1.37-.59-2.2 0-.9.23-1.67.68-2.3.47-.62 1.09-1.1 1.85-1.43.78-.33 1.65-.49 2.59-.49.54 0 1.02.04 1.46.12.44.07.83.15 1.17.25.34.1.61.2.81.32v-.67c0-.82-.3-1.48-.88-1.97-.59-.5-1.34-.74-2.27-.74-.63 0-1.24.15-1.8.44-.57.28-1.03.67-1.39 1.16l-1.78-1.4c.36-.52.79-.95 1.29-1.31.52-.37 1.1-.65 1.73-.84.64-.2 1.31-.3 2.03-.3 1.78 0 3.17.45 4.14 1.35.98.89 1.46 2.14 1.46 3.75v7.88h-2.53v-1.56h-.15c-.23.33-.53.64-.9.94-.36.3-.78.54-1.27.72-.49.19-1.03.29-1.63.29zm.46-2.17c.69 0 1.29-.16 1.81-.49.52-.33.93-.76 1.22-1.28.31-.55.46-1.13.46-1.76-.37-.21-.81-.38-1.31-.51-.51-.15-1.05-.23-1.64-.23-1.06 0-1.81.22-2.27.65-.45.42-.68.96-.68 1.6 0 .59.21 1.08.63 1.46.44.37 1.04.56 1.78.56z"
-      fill="#3C4043"
-    />
-    <path
-      d="M56.59 23.38c-.05.12-.11.23-.17.35-.05.13-.08.22-.1.27h-2.8c.08-.18.2-.43.34-.76.16-.33.32-.66.46-.99.1-.21.2-.44.3-.69.11-.25.22-.5.34-.77.13-.26.25-.51.36-.76l.93-2.05-5.2-11.9h2.93l3.56 8.59h.12l3.56-8.59H64l-6.44 15.01c-.11.28-.24.58-.39.89-.13.31-.25.59-.36.84-.1.26-.18.45-.22.56z"
-      fill="#3C4043"
+      d="M102 47.2c7.2 0 13.7 2.5 18.8 7.3l14-14C126.2 32.6 115.2 28 102 28 83 28 66.4 38.6 58.3 54.8l16.3 12.5c3.9-11.5 14.7-20.1 27.4-20.1z"
     />
   </svg>
 );
@@ -157,18 +149,18 @@ interface PaymentBadgesProps {
 
 /**
  * Standard Payment Badges Component
- * - Standard 48x30px card container
- * - Crisp white background
- * - Subtle 1px border with 4px border-radius
- * - No nested inner pills or duplicate secondary borders
- * - Consistent padding and centered alignment
+ * - Standard 48x30px card container for cards/wallets
+ * - Official Google Pay rounded pill container with #3C4043 border and white background
  */
 export const PaymentBadges: React.FC<PaymentBadgesProps> = ({
   className = '',
   badgeClassName = '',
 }) => {
   const defaultCardClass =
-    'w-[48px] h-[30px] bg-white rounded-[4px] border border-slate-200 shadow-2xs flex items-center justify-center p-1 shrink-0 select-none hover:border-slate-300 transition-colors';
+    'payment-badge-light w-[48px] h-[30px] bg-[#ffffff] dark:bg-[#ffffff] rounded-[4px] border border-slate-200 shadow-2xs flex items-center justify-center p-1 shrink-0 select-none hover:border-slate-300 transition-colors';
+
+  const gpayPillClass =
+    'gpay-official-pill gpay-capsule-badge payment-badge-light min-w-[54px] h-[30px] bg-[#ffffff] dark:bg-[#ffffff] rounded-full border-[1.5px] border-[#3C4043] shadow-2xs flex items-center justify-center px-2.5 py-1 shrink-0 select-none hover:bg-gray-50 transition-colors';
 
   const cardClass = badgeClassName ? `${defaultCardClass} ${badgeClassName}`.trim() : defaultCardClass;
 
@@ -189,7 +181,12 @@ export const PaymentBadges: React.FC<PaymentBadgesProps> = ({
       {paymentMethods.map(method => (
         <div
           key={method.id}
-          className={cardClass}
+          className={method.id === 'googlepay' ? gpayPillClass : cardClass}
+          style={
+            method.id === 'googlepay'
+              ? { backgroundColor: '#ffffff', borderColor: '#3C4043' }
+              : { backgroundColor: '#ffffff', borderColor: '#e2e8f0' }
+          }
           title={method.name}
           aria-label={method.name}
         >
