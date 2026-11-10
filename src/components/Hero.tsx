@@ -519,7 +519,7 @@ export const Hero: React.FC = () => {
                   <button
                     type="button"
                     onClick={handleShopHeroProduct}
-                    className="h-[33px] px-4.5 rounded-[999px] bg-white hover:bg-slate-100 text-[#0F172A] font-bold text-[11px] inline-flex items-center justify-center gap-1.5 shadow-lg transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0"
+                    className="h-[33px] px-4.5 rounded-[999px] bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-900 dark:text-white font-bold text-[11px] inline-flex items-center justify-center gap-1.5 shadow-lg transition-all duration-200 active:scale-95 cursor-pointer whitespace-nowrap shrink-0 border border-transparent dark:border-slate-700/80"
                   >
                     <span>{slide.rightCtaText || (variant === 'smarthome' ? 'Shop Smart Devices' : variant === 'gaming' ? 'Shop Gaming' : 'Shop Product')}</span>
                     <ArrowRight className="w-3 h-3 stroke-[2.5]" />

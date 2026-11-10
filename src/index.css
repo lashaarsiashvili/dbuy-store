@@ -174,6 +174,8 @@ html.dark {
 .dark .text-black,
 .dark .text-slate-950:not(.bg-amber-400):not(.bg-amber-500):not(.bg-emerald-400):not(.bg-emerald-500):not(.bg-yellow-400),
 .dark .text-slate-900:not(.bg-amber-400):not(.bg-amber-500):not(.bg-emerald-400):not(.bg-emerald-500):not(.bg-yellow-400),
+.dark .text-\[\#0F172A\],
+.dark .text-\[\#0f172a\],
 .dark .text-slate-800,
 .dark .text-slate-700,
 .dark .text-gray-950,

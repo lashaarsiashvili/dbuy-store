@@ -3,7 +3,7 @@ import { useStore } from '../context/StoreContext';
 import { ProductCard } from './ProductCard';
 import { initialProducts, isFakeStudioProduct } from '../data/initialProducts';
 import { matchesProductSearch } from '../data/initialHomepageConfig';
-import { ADMIN_PRODUCT_CATEGORIES, matchesCategory } from '../data/categoryNavigationData';
+import { ADMIN_PRODUCT_CATEGORIES, matchesCategory, normalizeProductCategory } from '../data/categoryNavigationData';
 import { Product } from '../types';
 import {
   ArrowRight,
@@ -88,34 +88,33 @@ export const ProductGrid: React.FC = () => {
     return homepageCategories.find((c) => c.id === activeHomepageCategory) || null;
   }, [homepageCategories, activeHomepageCategory]);
 
-  // Helper to match a product's store category to the selected homepage category pill
-  const matchesHomepageCategoryPill = (prod: Product, catId: string): boolean => {
-    if (matchesCategory(prod, catId)) return true;
-    const c = (prod.category || '').trim().toLowerCase();
-    switch (catId) {
-      case 'electronics':
-        return c === 'electronics' || c === 'tech' || c === 'audio' || c === 'security' || c === 'everyday';
-      case 'gaming':
-        return c === 'gaming';
-      case 'smart-home':
-        return c === 'smart home' || c === 'smart-home' || c === 'tech' || c === 'security' || c === 'drinkware';
-      case 'audio':
-        return c === 'audio';
-      case 'office':
-        return c === 'office' || c === 'tech' || c === 'drinkware' || c === 'audio';
-      case 'wearables':
-        return c === 'wearables' || c === 'fitness';
-      case 'smart-bottles':
-        return c === 'smart bottles' || c === 'smart-bottles' || c === 'drinkware';
-      case 'beauty-health':
-        return c === 'beauty & health' || c === 'beauty-health' || c === 'fitness' || c === 'supplements';
-      case 'pets':
-        return c === 'pets' || c === 'accessories' || c === 'drinkware' || c === 'everyday';
-      case 'deals':
-        return Boolean(prod.isDeal || prod.hasDiscount || (prod.origPrice && prod.origPrice > prod.price));
-      default:
-        return true;
+  // Strict category matching: strictly isolates each category tab and handles normalization
+  const matchesActiveCategory = (prod: Product, activeCat: string): boolean => {
+    if (!activeCat || activeCat === 'all' || activeCat === 'explore-all') {
+      return true;
     }
+
+    if (activeCat === 'deals' || activeCat === 'daily-deals') {
+      const orig = prod.origPrice ?? prod.originalPrice ?? 0;
+      return Boolean(prod.isDeal || prod.hasDiscount || (orig > 0 && orig > prod.price));
+    }
+
+    // 1. Direct exact string match (product.category === activeCategory)
+    if (prod.category === activeCat) {
+      return true;
+    }
+
+    // 2. Case-insensitive and slug-normalized string match
+    const prodClean = (prod.category || '').trim().toLowerCase().replace(/[-_]+/g, ' ');
+    const targetClean = activeCat.trim().toLowerCase().replace(/[-_]+/g, ' ');
+    if (prodClean === targetClean) {
+      return true;
+    }
+
+    // 3. Strict canonical category match (e.g., legacy D1 'drinkware' -> 'Smart Bottles')
+    const prodCanonical = normalizeProductCategory(prod.category, prod.title).toLowerCase();
+    const targetCanonical = normalizeProductCategory(activeCat).toLowerCase();
+    return prodCanonical === targetCanonical;
   };
 
   // Helper: Check if a product has a discount applied OR has the admin featured flag set
@@ -146,64 +145,24 @@ export const ProductGrid: React.FC = () => {
     return idTimestampMatch ? Number(idTimestampMatch[1]) : 0;
   };
 
-  // Dynamically resolve, filter, and sort products based on the active tab
+  // Dynamically resolve, filter, and sort products based on the active tab and category
   const filteredList = useMemo(() => {
     // 1. Search query overrides category filter and searches by Name, SKU, or Product ID
     if (searchQuery && searchQuery.trim().length > 0) {
       return catalogProducts.filter((p, idx) => matchesProductSearch(p, searchQuery, idx));
     }
 
+    // Determine the active category from selectedCategory or activeHomepageCategory
+    const activeCategory =
+      selectedCategory && selectedCategory !== 'all'
+        ? selectedCategory
+        : (activeHomepageCategory && activeHomepageCategory !== 'all' ? activeHomepageCategory : 'all');
+
     let baseList: Product[] = [];
 
-    // 2. If a specific homepage category is selected, resolve products for that category
-    if (activeCategoryConfig && activeHomepageCategory !== 'all') {
-      const hiddenIds = new Set(
-        activeCategoryConfig.items.filter((i) => i.isHidden).map((i) => i.productId)
-      );
-
-      const visibleConfigItems = [...activeCategoryConfig.items]
-        .filter((i) => !i.isHidden && !String(i.productId).startsWith('prod-ref-'))
-        .sort((a, b) => {
-          if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
-          if (activeTab === 'featured' && a.isFeatured !== b.isFeatured) {
-            return a.isFeatured ? -1 : 1;
-          }
-          return a.displayOrder - b.displayOrder;
-        });
-
-      const resolvedProducts: Product[] = [];
-      const seenIds = new Set<string>();
-
-      for (const item of visibleConfigItems) {
-        const found = catalogProducts.find((p) => p.id === item.productId);
-        if (found && !seenIds.has(found.id)) {
-          const isExplicitAdminCat = ADMIN_PRODUCT_CATEGORIES.includes(found.category as any);
-          if (!isExplicitAdminCat || matchesHomepageCategoryPill(found, activeHomepageCategory)) {
-            resolvedProducts.push(found);
-            seenIds.add(found.id);
-          }
-        }
-      }
-
-      for (const p of catalogProducts) {
-        if (!seenIds.has(p.id) && !hiddenIds.has(p.id) && matchesHomepageCategoryPill(p, activeHomepageCategory)) {
-          resolvedProducts.push(p);
-          seenIds.add(p.id);
-        }
-      }
-
-      if (resolvedProducts.length === 0) {
-        for (const p of catalogProducts) {
-          if (!seenIds.has(p.id) && !hiddenIds.has(p.id)) {
-            resolvedProducts.push(p);
-            seenIds.add(p.id);
-          }
-        }
-      }
-
-      baseList = resolvedProducts;
-    } else {
-      // 'All Categories' view (Default): aggregate all real catalog products
+    // 2. Category filtering
+    if (activeCategory === 'all') {
+      // "All Categories" is selected: bypass category filter to show all genuine catalog products
       const seen = new Set<string>();
       const aggregated: Product[] = [];
 
@@ -230,17 +189,60 @@ export const ProductGrid: React.FC = () => {
       });
 
       baseList = aggregated;
+    } else {
+      // Specific category is selected: strictly filter so only matching products are included
+      const matchingProducts = catalogProducts.filter((p) => matchesActiveCategory(p, activeCategory));
+
+      // If active category has configured pinned/featured display order from Homepage Manager, apply it
+      if (activeCategoryConfig && activeCategoryConfig.items.length > 0) {
+        const hiddenIds = new Set(
+          activeCategoryConfig.items.filter((i) => i.isHidden).map((i) => i.productId)
+        );
+
+        const visibleConfigItems = [...activeCategoryConfig.items]
+          .filter((i) => !i.isHidden && !String(i.productId).startsWith('prod-ref-'))
+          .sort((a, b) => {
+            if (a.isPinned !== b.isPinned) return a.isPinned ? -1 : 1;
+            if (activeTab === 'featured' && a.isFeatured !== b.isFeatured) {
+              return a.isFeatured ? -1 : 1;
+            }
+            return a.displayOrder - b.displayOrder;
+          });
+
+        const orderedList: Product[] = [];
+        const seenIds = new Set<string>();
+
+        // First add pinned/configured items that STRICTLY belong to this category
+        for (const item of visibleConfigItems) {
+          const found = matchingProducts.find((p) => p.id === item.productId);
+          if (found && !seenIds.has(found.id)) {
+            orderedList.push(found);
+            seenIds.add(found.id);
+          }
+        }
+
+        // Then add the remaining products that strictly belong to this category
+        for (const p of matchingProducts) {
+          if (!seenIds.has(p.id) && !hiddenIds.has(p.id)) {
+            orderedList.push(p);
+            seenIds.add(p.id);
+          }
+        }
+
+        baseList = orderedList;
+      } else {
+        baseList = matchingProducts;
+      }
     }
 
     // 3. Apply exact tab-based filtering & sorting logic
     switch (activeTab) {
       case 'featured': {
-        // Filter and show only products that have a discount applied OR have the admin featured flag set
-        return baseList.filter((product) => isFeaturedOrDiscounted(product));
+        const featuredOrDiscounted = baseList.filter((product) => isFeaturedOrDiscounted(product));
+        return featuredOrDiscounted.length > 0 ? featuredOrDiscounted : baseList;
       }
 
       case 'bestsellers': {
-        // Sort products by highest combined sales count and cart additions first
         return [...baseList].sort((a, b) => {
           const totalA =
             (a.salesCount ?? 0) +
@@ -261,14 +263,12 @@ export const ProductGrid: React.FC = () => {
       }
 
       case 'new': {
-        // Sort products by creation date (most recently added products at the very top)
         return [...baseList].sort(
           (a, b) => getCreatedTimestamp(b) - getCreatedTimestamp(a)
         );
       }
 
       case 'top-rated': {
-        // Sort products by the highest number of views (most viewed products first)
         return [...baseList].sort((a, b) => (b.views ?? 0) - (a.views ?? 0));
       }
 
@@ -278,6 +278,7 @@ export const ProductGrid: React.FC = () => {
   }, [
     catalogProducts,
     searchQuery,
+    selectedCategory,
     activeCategoryConfig,
     activeHomepageCategory,
     homepageCategories,
@@ -336,7 +337,7 @@ export const ProductGrid: React.FC = () => {
                 <span className="px-2.5 py-0.5 rounded-full bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold tabular-nums">
                   {filteredList.length}
                 </span>
-                {(searchQuery || activeHomepageCategory !== 'all') && (
+                {(searchQuery || (selectedCategory && selectedCategory !== 'all') || (activeHomepageCategory && activeHomepageCategory !== 'all')) && (
                   <button
                     type="button"
                     onClick={() => {
@@ -349,7 +350,9 @@ export const ProductGrid: React.FC = () => {
                     <span>
                       {searchQuery
                         ? `Search: "${searchQuery}"`
-                        : activeCategoryConfig?.name || 'Reset Filter'}
+                        : (selectedCategory && selectedCategory !== 'all'
+                            ? selectedCategory
+                            : (activeCategoryConfig?.name || 'Reset Filter'))}
                     </span>
                     <X className="w-3 h-3" />
                   </button>
@@ -470,7 +473,7 @@ export const ProductGrid: React.FC = () => {
                       e.preventDefault();
                       navigateToCategory('smart-home');
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-[#0F172A] font-bold text-[10.5px] lg:text-[11px] shadow-sm transition-all whitespace-nowrap shrink-0 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white font-bold text-[10.5px] lg:text-[11px] shadow-sm border border-transparent dark:border-slate-700/60 transition-all whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <span>Shop Smart Home</span>
                     <ArrowRight className="w-3 h-3 stroke-[2.5]" />
@@ -575,7 +578,7 @@ export const ProductGrid: React.FC = () => {
                       e.preventDefault();
                       navigateToCategory('smart-bottles');
                     }}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white hover:bg-slate-50 text-[#0F172A] font-bold text-[10.5px] lg:text-[11px] shadow-sm transition-all whitespace-nowrap shrink-0 cursor-pointer"
+                    className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-white dark:bg-slate-900 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-white font-bold text-[10.5px] lg:text-[11px] shadow-sm border border-transparent dark:border-slate-700/60 transition-all whitespace-nowrap shrink-0 cursor-pointer"
                   >
                     <span>Shop Drinkware</span>
                     <ArrowRight className="w-3 h-3 stroke-[2.5]" />

@@ -115,9 +115,6 @@ export const normalizeProductCategory = (
   if (c === 'fitness' || c === 'supplements') {
     return 'Beauty & Health';
   }
-  if (c === 'accessories') {
-    return 'Pets';
-  }
   if (c === 'everyday' || c === 'everyday carry') {
     return 'Electronics';
   }
@@ -152,7 +149,7 @@ export const categoryLabelToHomepageId = (
   ) {
     return 'beauty-health';
   }
-  if (c === 'pets' || c === 'accessories') return 'pets';
+  if (c === 'pets' || c === 'pet') return 'pets';
   return 'electronics';
 };
 
@@ -362,47 +359,22 @@ export const matchesCategory = (
   // Direct exact match or normalized frontend category match
   const prodRawCat = (product.category || '').trim().toLowerCase();
   const prodSlugCat = (product.categorySlug || '').trim().toLowerCase();
-  if (prodRawCat === targetLower || prodSlugCat === targetLower) {
+  const targetClean = targetLower.replace(/[-_]+/g, ' ');
+  const prodClean = prodRawCat.replace(/[-_]+/g, ' ');
+
+  if (
+    prodRawCat === targetLower ||
+    prodClean === targetClean ||
+    prodSlugCat === targetLower ||
+    prodSlugCat === targetLower.replace(/\s+/g, '-')
+  ) {
     return true;
   }
 
   const normalizedProductCat = normalizeProductCategory(product.category, product.title);
   const normalizedTargetCat = normalizeProductCategory(catIdOrSlug);
 
-  if (normalizedProductCat.toLowerCase() === normalizedTargetCat.toLowerCase()) {
-    return true;
-  }
-
-  // Secondary cross-category compatibility for legacy D1 products
-  const targetHomepageId = categoryLabelToHomepageId(catIdOrSlug);
-  switch (targetHomepageId) {
-    case 'electronics':
-      return prodRawCat === 'tech' || prodRawCat === 'audio' || prodRawCat === 'security' || prodRawCat === 'everyday';
-    case 'gaming':
-      return prodRawCat === 'gaming';
-    case 'smart-home':
-      return prodRawCat === 'tech' || prodRawCat === 'security';
-    case 'audio':
-      return prodRawCat === 'audio';
-    case 'wearables':
-      return prodRawCat === 'wearables';
-    case 'smart-bottles':
-      return prodRawCat === 'drinkware';
-    case 'office':
-      return (
-        prodRawCat === 'office' ||
-        (prodRawCat === 'tech' &&
-          ((product.title || '').toLowerCase().includes('mug') ||
-            (product.title || '').toLowerCase().includes('ember') ||
-            (product.title || '').toLowerCase().includes('nextmug')))
-      );
-    case 'beauty-health':
-      return prodRawCat === 'fitness' || prodRawCat === 'supplements';
-    case 'pets':
-      return prodRawCat === 'accessories' || prodRawCat === 'pets';
-    default:
-      return false;
-  }
+  return normalizedProductCat.toLowerCase() === normalizedTargetCat.toLowerCase();
 };
 
 import { initialProducts } from './initialProducts';

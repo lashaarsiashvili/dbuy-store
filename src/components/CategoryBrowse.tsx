@@ -93,6 +93,7 @@ const CATEGORIES_LIST: CategoryItem[] = [
 
 export const CategoryBrowse: React.FC = () => {
   const {
+    selectedCategory,
     setSelectedCategory,
     activeHomepageCategory,
     setActiveHomepageCategory,
@@ -104,7 +105,7 @@ export const CategoryBrowse: React.FC = () => {
     if (item.key === 'all') {
       setActiveHomepageCategory('all');
       setSelectedCategory('all');
-    } else if (activeHomepageCategory === item.key) {
+    } else if (activeHomepageCategory === item.key || selectedCategory === item.storeCategory) {
       setActiveHomepageCategory('all');
       setSelectedCategory('all');
     } else {
@@ -134,8 +135,8 @@ export const CategoryBrowse: React.FC = () => {
           {visibleItems.map((item) => {
             const isActive =
               item.key === 'all'
-                ? activeHomepageCategory === 'all'
-                : activeHomepageCategory === item.key;
+                ? (activeHomepageCategory === 'all' && (selectedCategory === 'all' || !selectedCategory))
+                : (activeHomepageCategory === item.key || selectedCategory === item.storeCategory);
             const displayLabel = language === 'ka' ? item.labelKa : item.label;
 
             return (
