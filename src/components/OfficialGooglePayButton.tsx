@@ -1,7 +1,14 @@
 import React, { useState } from 'react';
 import { Loader2 } from 'lucide-react';
 import { GooglePayVector } from './PaymentLogos';
-import { isGooglePayAvailable } from '../utils/environment';
+import {
+  isGooglePayAvailable,
+  GOOGLE_PAY_ENVIRONMENT,
+  GOOGLE_PAY_MERCHANT_ID,
+  GOOGLE_PAY_MERCHANT_NAME,
+  LIVE_PAYPAL_CLIENT_ID,
+  PAYPAL_GATEWAY_NAME,
+} from '../utils/environment';
 
 interface OfficialGooglePayButtonProps {
   onSuccess: (paymentData: any) => void;
@@ -43,8 +50,8 @@ const baseCardPaymentMethod = {
 const tokenizationSpecification = {
   type: 'PAYMENT_GATEWAY',
   parameters: {
-    gateway: 'example',
-    gatewayMerchantId: 'exampleGatewayMerchantId',
+    gateway: PAYPAL_GATEWAY_NAME, // Processed through PayPal Secure Checkout
+    gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID,
   },
 };
 
@@ -115,7 +122,7 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
       const google = (window as any).google;
       if (google?.payments?.api?.PaymentsClient) {
         const client = new google.payments.api.PaymentsClient({
-          environment: 'TEST',
+          environment: GOOGLE_PAY_ENVIRONMENT, // Switched from 'TEST' to 'PRODUCTION'
         });
 
         const numAmount = Number(amount) > 0 ? Number(amount) : 1.00;
@@ -135,8 +142,8 @@ export const OfficialGooglePayButton: React.FC<OfficialGooglePayButtonProps> = (
             checkoutOption: 'COMPLETE_IMMEDIATE_PURCHASE',
           },
           merchantInfo: {
-            merchantId: '12345678901234567890',
-            merchantName: 'DBUY Store',
+            merchantId: GOOGLE_PAY_MERCHANT_ID, // Production Merchant ID e.g. BCR2DN6DVKZOLJDJ
+            merchantName: GOOGLE_PAY_MERCHANT_NAME || 'DBUY Store',
           },
           emailRequired: true,
           shippingAddressRequired: true,

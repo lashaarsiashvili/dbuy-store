@@ -29,7 +29,8 @@ import { getPayPalV6Instance } from './utils/paypalV6';
 import { analytics, isUserAdmin } from './components/AdminAnalyticsDashboard';
 import { useAnalytics } from './hooks/useAnalytics';
 
-const LIVE_PAYPAL_CLIENT_ID = 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
+import { LIVE_PAYPAL_CLIENT_ID } from './utils/environment';
+
 const paypalClientId = import.meta.env.VITE_PAYPAL_CLIENT_ID || LIVE_PAYPAL_CLIENT_ID;
 
 const MainLayout: React.FC = () => {

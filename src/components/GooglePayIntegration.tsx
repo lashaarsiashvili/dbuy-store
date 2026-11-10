@@ -1,6 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ShoppingBag, ShieldCheck, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
-import { isGooglePayAvailable } from '../utils/environment';
+import {
+  isGooglePayAvailable,
+  GOOGLE_PAY_ENVIRONMENT,
+  GOOGLE_PAY_MERCHANT_ID,
+  GOOGLE_PAY_MERCHANT_NAME,
+  LIVE_PAYPAL_CLIENT_ID,
+  PAYPAL_GATEWAY_NAME,
+} from '../utils/environment';
 
 interface GooglePayIntegrationProps {
   productTitle?: string;
@@ -39,12 +46,12 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
   const allowedCardNetworks = ["AMEX", "DISCOVER", "JCB", "MASTERCARD", "VISA"];
   const allowedCardAuthMethods = ["PAN_ONLY", "CRYPTOGRAM_3DS"];
 
-  // 3. Tokenization Specification for TEST Mode
+  // 3. Tokenization Specification for PayPal Gateway
   const tokenizationSpecification = {
     type: 'PAYMENT_GATEWAY',
     parameters: {
-      gateway: 'example',
-      gatewayMerchantId: 'exampleGatewayMerchantId',
+      gateway: PAYPAL_GATEWAY_NAME, // Processed through PayPal Secure Checkout
+      gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID,
     },
   };
 
@@ -84,7 +91,7 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
 
       if (!paymentsClientRef.current) {
         paymentsClientRef.current = new google.payments.api.PaymentsClient({
-          environment: 'TEST', // Google Pay TEST mode environment
+          environment: GOOGLE_PAY_ENVIRONMENT, // Switched from 'TEST' to 'PRODUCTION'
         });
       }
 
@@ -173,8 +180,8 @@ export const GooglePayIntegration: React.FC<GooglePayIntegrationProps> = ({
         countryCode: countryCode,
       },
       merchantInfo: {
-        merchantId: '12345678901234567890',
-        merchantName: merchantName,
+        merchantId: GOOGLE_PAY_MERCHANT_ID, // Production Merchant ID e.g. BCR2DN6DVKZOLJDJ
+        merchantName: merchantName || GOOGLE_PAY_MERCHANT_NAME,
       },
       emailRequired: true,
       shippingAddressRequired: true,

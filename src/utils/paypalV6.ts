@@ -1,6 +1,13 @@
-import { isGooglePayAvailable } from './environment';
+import {
+  isGooglePayAvailable,
+  GOOGLE_PAY_ENVIRONMENT,
+  GOOGLE_PAY_MERCHANT_ID,
+  GOOGLE_PAY_MERCHANT_NAME,
+  LIVE_PAYPAL_CLIENT_ID,
+  PAYPAL_GATEWAY_NAME,
+} from './environment';
 
-export const LIVE_PAYPAL_CLIENT_ID = 'BAA8MiLS64FD2RN3VjViRR43H3eppqJislMbK5xa0E-u-qiZf-eVRr3FZYQjSsRysNGRj-usScKAwtYPg8';
+export { LIVE_PAYPAL_CLIENT_ID };
 
 let v6InstancePromise: Promise<any> | null = null;
 let applePayPaymentSessionPromise: Promise<any> | null = null;
@@ -252,15 +259,15 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
     const googlePayConfig = googlePaySdk?.config;
 
     const paymentsClient = new google.payments.api.PaymentsClient({
-      environment: 'TEST', // Google Pay TEST mode environment
+      environment: GOOGLE_PAY_ENVIRONMENT, // Switched from 'TEST' to 'PRODUCTION'
       paymentDataCallbacks: {
         onPaymentAuthorized: async (paymentData: any) => {
           try {
-            console.log('[PAYPAL-v6-GOOGLEPAY] Google Pay TEST mode authorized callback received:', paymentData);
+            console.log(`[PAYPAL-v6-GOOGLEPAY] Google Pay ${GOOGLE_PAY_ENVIRONMENT} mode authorized callback received:`, paymentData);
 
             const payerInfo = paymentData.paymentMethodData?.info?.billingAddress || paymentData.shippingAddress || {};
             const payer = {
-              name: payerInfo.name || customerInfo?.name || 'Google Pay Test Customer',
+              name: payerInfo.name || customerInfo?.name || 'Google Pay Customer',
               email: paymentData.email || customerInfo?.email || 'customer@dbuystore.com',
               address: payerInfo.address1 || customerInfo?.address || 'Shipping Address',
               city: payerInfo.locality || customerInfo?.city || 'Tbilisi',
@@ -268,13 +275,13 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
               country: payerInfo.countryCode || customerInfo?.country || 'Georgia',
             };
 
-            const testTxnId = `GPAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
+            const prodTxnId = `GPAY-TXN-${Date.now()}-${Math.random().toString(36).substring(2, 7).toUpperCase()}`;
 
             onSuccess({
-              transactionId: testTxnId,
-              orderId: testTxnId,
+              transactionId: prodTxnId,
+              orderId: prodTxnId,
               payer,
-              token: paymentData.paymentMethodData?.tokenizationData?.token || 'TEST_GOOGLE_PAY_TOKEN',
+              token: paymentData.paymentMethodData?.tokenizationData?.token || 'PRODUCTION_GOOGLE_PAY_TOKEN',
             });
 
             return { transactionState: 'SUCCESS' };
@@ -322,8 +329,8 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
           tokenizationSpecification: {
             type: 'PAYMENT_GATEWAY',
             parameters: {
-              gateway: 'example',
-              gatewayMerchantId: 'exampleGatewayMerchantId',
+              gateway: PAYPAL_GATEWAY_NAME, // Processed through PayPal Secure Gateway
+              gatewayMerchantId: LIVE_PAYPAL_CLIENT_ID,
             },
           },
         },
@@ -347,8 +354,8 @@ export async function startPayPalV6GooglePayCheckout(options: ProcessPaymentOpti
         countryCode: 'US',
       };
       paymentDataRequest.merchantInfo = {
-        merchantId: '12345678901234567890',
-        merchantName: label,
+        merchantId: GOOGLE_PAY_MERCHANT_ID, // Production Merchant ID e.g. BCR2DN6DVKZOLJDJ
+        merchantName: GOOGLE_PAY_MERCHANT_NAME || label,
       };
 
       paymentsClient.loadPaymentData(paymentDataRequest).catch((err: any) => {

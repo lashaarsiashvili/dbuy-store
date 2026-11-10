@@ -1,5 +1,12 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { isGooglePayAvailable } from '../utils/environment';
+import {
+  isGooglePayAvailable,
+  GOOGLE_PAY_ENVIRONMENT,
+  GOOGLE_PAY_MERCHANT_ID,
+  GOOGLE_PAY_MERCHANT_NAME,
+  LIVE_PAYPAL_CLIENT_ID,
+  PAYPAL_GATEWAY_NAME,
+} from '../utils/environment';
 
 declare global {
   interface Window {
@@ -43,10 +50,10 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
   onSuccess,
   onError,
   onCancel,
-  gateway = 'example',
-  gatewayMerchantId = 'exampleGatewayMerchantId',
-  merchantId = '01234567890123456789',
-  merchantName = 'Dbuy Store',
+  gateway = PAYPAL_GATEWAY_NAME,
+  gatewayMerchantId = LIVE_PAYPAL_CLIENT_ID,
+  merchantId = GOOGLE_PAY_MERCHANT_ID,
+  merchantName = GOOGLE_PAY_MERCHANT_NAME,
   buttonType = 'buy',
   buttonColor = 'black'
 }) => {
@@ -65,7 +72,9 @@ export const GooglePayButton: React.FC<GooglePayButtonProps> = ({
         
         try {
           if (!paymentsClientRef.current) {
-            paymentsClientRef.current = new window.google.payments.api.PaymentsClient({ environment: 'TEST' });
+            paymentsClientRef.current = new window.google.payments.api.PaymentsClient({
+              environment: GOOGLE_PAY_ENVIRONMENT, // Switched from 'TEST' to 'PRODUCTION'
+            });
           }
 
           const isReadyToPayRequest = Object.assign({}, baseRequest, {

@@ -3,7 +3,7 @@ import { PayPalButtons, FUNDING } from "@paypal/react-paypal-js";
 import { Product } from "../types";
 import { useStore } from "../context/StoreContext";
 import { safeApiFetch } from "../utils/apiSafe";
-import { isGooglePayAvailable } from "../utils/environment";
+import { isGooglePayAvailable, GOOGLE_PAY_ENVIRONMENT } from "../utils/environment";
 import { OfficialApplePayButton } from "./OfficialApplePayButton";
 import { OfficialGooglePayButton } from "./OfficialGooglePayButton";
 import { PayPalV6CardFields } from "./PayPalV6CardFields";
@@ -156,7 +156,7 @@ export const ProductPaymentModule: React.FC<ProductPaymentModuleProps> = ({
           const paymentsClient = new (
             window as any
           ).google.payments.api.PaymentsClient({
-            environment: "TEST",
+            environment: GOOGLE_PAY_ENVIRONMENT, // Switched from "TEST" to "PRODUCTION"
           });
           const ready = await paymentsClient.isReadyToPay({
             apiVersion: 2,
