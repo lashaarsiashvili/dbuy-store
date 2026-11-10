@@ -2413,8 +2413,8 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Products Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                <table className="w-full text-left text-xs text-slate-900 dark:text-gray-100">
+                  <thead className="bg-slate-50 dark:bg-slate-800/90 text-slate-500 dark:text-gray-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                     <tr>
                       <th className="p-4">{isKa ? 'სურათი' : 'Image'}</th>
                       <th className="p-4">{isKa ? 'დასახელება & ID' : 'Title & Identifier'}</th>
@@ -2427,15 +2427,15 @@ export const AdminDashboard: React.FC = () => {
                       <th className="p-4 text-right">{isKa ? 'მოქმედებები' : 'Actions'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {filteredProducts.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="p-12 text-center text-slate-400">
-                          <Package className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                          <p className="font-semibold text-slate-700 dark:text-slate-200">
+                        <td colSpan={9} className="p-12 text-center text-slate-400 dark:text-gray-400">
+                          <Package className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-gray-500" />
+                          <p className="font-semibold text-slate-700 dark:text-gray-100">
                             {isKa ? 'პროდუქტი ვერ მოიძებნა' : 'No products match your criteria'}
                           </p>
-                          <p className="text-xs text-slate-400 mt-1">
+                          <p className="text-xs text-slate-400 dark:text-gray-400 mt-1">
                             {isKa ? 'სცადეთ შეცვალოთ ფილტრი ან საძიებო სიტყვა' : 'Try clearing search or adjusting your filters'}
                           </p>
                           {(productSearch || categoryFilter !== 'all' || stockFilter !== 'all') && (
@@ -2447,7 +2447,7 @@ export const AdminDashboard: React.FC = () => {
                                 setStockFilter('all');
                                 setProductSort('default');
                               }}
-                              className="mt-3 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 cursor-pointer"
+                              className="mt-3 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-900/60 cursor-pointer"
                             >
                               {isKa ? 'ფილტრების გასუფთავება' : 'Reset All Filters'}
                             </button>
@@ -2456,9 +2456,9 @@ export const AdminDashboard: React.FC = () => {
                       </tr>
                     ) : (
                       filteredProducts.map(prod => (
-                        <tr key={prod.id} className="hover:bg-slate-50/80 transition-colors">
+                        <tr key={prod.id} className="bg-white dark:bg-slate-900 odd:bg-white even:bg-slate-50/40 dark:odd:bg-slate-900 dark:even:bg-slate-800/60 hover:bg-slate-50/80 dark:hover:bg-slate-800 transition-colors">
                           <td className="p-4">
-                            <div className="relative group/thumb w-12 h-12 rounded-xl overflow-hidden bg-slate-100 border border-slate-200">
+                            <div className="relative group/thumb w-12 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
                               <CachedImage
                                 src={prod.image}
                                 alt={prod.title}
@@ -2471,23 +2471,23 @@ export const AdminDashboard: React.FC = () => {
                             <div className="flex items-center space-x-1.5">
                               <span className="font-bold text-slate-900 dark:text-white line-clamp-1">{prod.title}</span>
                               {prod.isPublishedGlobally && (
-                                <span className="inline-flex items-center space-x-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0" title="Published globally across all devices">
-                                  <Globe className="w-2.5 h-2.5 text-emerald-600 animate-pulse" />
+                                <span className="inline-flex items-center space-x-0.5 px-2 py-0.5 rounded-full text-[9px] font-black bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-700 shrink-0" title="Published globally across all devices">
+                                  <Globe className="w-2.5 h-2.5 text-emerald-600 dark:text-emerald-400 animate-pulse" />
                                   <span>{isKa ? 'გლობალური' : 'Global'}</span>
                                 </span>
                               )}
                             </div>
                             {prod.titleKa && (
-                              <div className="text-[11px] text-slate-500 line-clamp-1">{prod.titleKa}</div>
+                              <div className="text-[11px] text-slate-500 dark:text-gray-300 line-clamp-1">{prod.titleKa}</div>
                             )}
-                            <div className="text-[10px] text-slate-400 font-mono mt-0.5">
+                            <div className="text-[10px] text-slate-400 dark:text-gray-400 font-mono mt-0.5">
                               ID: {prod.id}
                             </div>
                           </td>
                           <td className="p-4">
                             <div className="flex items-center space-x-1.5">
                               <code 
-                                className="text-[11px] bg-slate-100 px-2 py-1 rounded-md font-mono text-slate-700 dark:text-slate-200 select-all max-w-[180px] truncate block cursor-pointer hover:bg-slate-200 transition-colors"
+                                className="text-[11px] bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded-md font-mono text-slate-700 dark:text-gray-200 select-all max-w-[180px] truncate block cursor-pointer hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                                 onClick={() => copyProductUrl(prod.id)}
                                 title={getProductUrl(prod.id)}
                               >
@@ -2495,22 +2495,22 @@ export const AdminDashboard: React.FC = () => {
                               </code>
                               <button
                                 onClick={() => copyProductUrl(prod.id)}
-                                className="p-1 rounded-md text-slate-500 hover:text-blue-600 hover:bg-blue-50 transition-colors cursor-pointer shrink-0"
+                                className="p-1 rounded-md text-slate-500 dark:text-gray-300 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                                 title="Copy full unique product URL"
                               >
                                 <Copy className="w-3.5 h-3.5" />
                               </button>
                             </div>
                           </td>
-                          <td className="p-4 font-semibold text-[10px] text-blue-600">
-                            <span className="px-2 py-1 rounded-md bg-blue-50 border border-blue-100">
+                          <td className="p-4 font-semibold text-[10px] text-blue-600 dark:text-blue-300">
+                            <span className="px-2 py-1 rounded-md bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-800/60">
                               {normalizeProductCategory(prod.category, prod.title)}
                             </span>
                           </td>
                           <td className="p-4 font-black text-slate-900 dark:text-white">
                             {formatPrice(prod.price)}
                             {prod.origPrice && (
-                              <span className="text-[10px] text-slate-400 line-through ml-1.5 font-normal">
+                              <span className="text-[10px] text-slate-400 dark:text-gray-400 line-through ml-1.5 font-normal">
                                 {formatPrice(prod.origPrice)}
                               </span>
                             )}
@@ -2523,19 +2523,19 @@ export const AdminDashboard: React.FC = () => {
                                   const newStock = Math.max(0, prod.stock - 1);
                                   updateProduct({ ...prod, stock: newStock });
                                 }}
-                                className="w-5 h-5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
+                                className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-gray-100 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
                                 title={isKa ? 'მარაგის შემცირება (-1)' : 'Decrease stock (-1)'}
                               >
                                 -
                               </button>
                               <span className={`inline-flex items-center space-x-1 px-2.5 py-1 rounded-full font-bold text-[10px] border ${
                                 prod.stock > 5
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                                   : prod.stock > 0
-                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                  : 'bg-red-50 text-red-700 border-red-200'
+                                  ? 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
+                                  : 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
                               }`}>
-                                {prod.stock <= 5 && prod.stock > 0 && <AlertTriangle className="w-2.5 h-2.5 text-amber-600" />}
+                                {prod.stock <= 5 && prod.stock > 0 && <AlertTriangle className="w-2.5 h-2.5 text-amber-600 dark:text-amber-400" />}
                                 <span>{prod.stock} {isKa ? 'ცალი' : 'units'}</span>
                               </span>
                               <button
@@ -2544,7 +2544,7 @@ export const AdminDashboard: React.FC = () => {
                                   const newStock = prod.stock + 1;
                                   updateProduct({ ...prod, stock: newStock });
                                 }}
-                                className="w-5 h-5 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
+                                className="w-5 h-5 rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-gray-100 font-bold flex items-center justify-center text-xs transition-colors cursor-pointer select-none"
                                 title={isKa ? 'მარაგის გაზრდა (+1)' : 'Increase stock (+1)'}
                               >
                                 +
@@ -2553,16 +2553,16 @@ export const AdminDashboard: React.FC = () => {
                           </td>
                           <td className="p-4">
                             {prod.badge ? (
-                              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 dark:text-slate-200 font-bold text-[10px] border border-slate-200">
+                              <span className="px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-gray-200 font-bold text-[10px] border border-slate-200 dark:border-slate-700">
                                 {prod.badge}
                               </span>
                             ) : (
-                              <span className="text-slate-300 text-[10px]">—</span>
+                              <span className="text-slate-300 dark:text-gray-500 text-[10px]">—</span>
                             )}
                           </td>
-                          <td className="p-4 font-bold text-slate-800 dark:text-slate-100">
+                          <td className="p-4 font-bold text-slate-800 dark:text-gray-100">
                             <div className="flex items-center space-x-1">
-                              <Eye className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <Eye className="w-3.5 h-3.5 text-slate-400 dark:text-gray-400 shrink-0" />
                               <span>{prod.views || 0}</span>
                             </div>
                           </td>
@@ -2572,12 +2572,12 @@ export const AdminDashboard: React.FC = () => {
                               onClick={() => publishProductGlobally(prod.id)}
                               className={`px-2.5 py-1.5 rounded-xl font-bold text-xs transition-all cursor-pointer inline-flex items-center space-x-1 shadow-xs border ${
                                 prod.isPublishedGlobally
-                                  ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border-emerald-300'
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 border-emerald-300 dark:border-emerald-700'
                                   : 'bg-blue-600 hover:bg-blue-700 text-white border-blue-600'
                               }`}
                               title={isKa ? 'პროდუქტის გლობალზე გამოქვეყნება (ყველა მოწყობილობისთვის)' : 'Publish product globally across all devices'}
                             >
-                              <Globe className={`w-3.5 h-3.5 ${prod.isPublishedGlobally ? 'animate-pulse text-emerald-600' : 'text-white'}`} />
+                              <Globe className={`w-3.5 h-3.5 ${prod.isPublishedGlobally ? 'animate-pulse text-emerald-600 dark:text-emerald-400' : 'text-white'}`} />
                               <span>
                                 {prod.isPublishedGlobally 
                                   ? (isKa ? 'გამოქვეყნებულია' : 'Published') 
@@ -3503,8 +3503,8 @@ export const AdminDashboard: React.FC = () => {
               </div>
 
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead className="bg-slate-50 text-slate-500 font-semibold border-b border-slate-200">
+                <table className="w-full text-left text-xs text-slate-900 dark:text-gray-100">
+                  <thead className="bg-slate-50 dark:bg-slate-800/90 text-slate-500 dark:text-gray-300 font-semibold border-b border-slate-200 dark:border-slate-700">
                     <tr>
                       <th className="p-4">{isKa ? 'შეკვეთის ID' : 'Order ID'}</th>
                       <th className="p-4">{isKa ? 'მომხმარებელი' : 'Customer'}</th>
@@ -3516,12 +3516,12 @@ export const AdminDashboard: React.FC = () => {
                       <th className="p-4 text-right">{isKa ? 'მოქმედებები' : 'Actions'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
                     {filteredOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="p-12 text-center text-slate-400">
-                          <ShoppingBag className="w-8 h-8 mx-auto mb-2 text-slate-300" />
-                          <p className="font-semibold text-slate-700 dark:text-slate-200">
+                        <td colSpan={8} className="p-12 text-center text-slate-400 dark:text-gray-400">
+                          <ShoppingBag className="w-8 h-8 mx-auto mb-2 text-slate-300 dark:text-gray-500" />
+                          <p className="font-semibold text-slate-700 dark:text-gray-100">
                             {orders.length === 0 
                               ? (isKa ? 'შეკვეთები ჯერ არ არის დაფიქსირებული' : 'No orders recorded yet')
                               : (isKa ? 'შეკვეთები ვერ მოიძებნა მითითებული ფილტრით' : 'No orders match your search criteria')}
@@ -3533,7 +3533,7 @@ export const AdminDashboard: React.FC = () => {
                                 setOrderSearch('');
                                 setOrderStatusFilter('all');
                               }}
-                              className="mt-3 px-3 py-1.5 rounded-xl bg-blue-50 text-blue-700 font-bold text-xs hover:bg-blue-100 cursor-pointer"
+                              className="mt-3 px-3 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 font-bold text-xs hover:bg-blue-100 dark:hover:bg-blue-900/60 cursor-pointer"
                             >
                               {isKa ? 'ფილტრის გასუფთავება' : 'Reset Filters'}
                             </button>
@@ -3542,27 +3542,27 @@ export const AdminDashboard: React.FC = () => {
                       </tr>
                     ) : (
                       filteredOrders.map(order => (
-                        <tr key={order.id} className="hover:bg-slate-50/80 transition-colors">
-                          <td className="p-4 font-mono font-bold text-blue-700">
+                        <tr key={order.id} className="bg-white dark:bg-slate-900 odd:bg-white even:bg-slate-50/40 dark:odd:bg-slate-900 dark:even:bg-slate-800/60 hover:bg-slate-50/80 dark:hover:bg-slate-800 transition-colors">
+                          <td className="p-4 font-mono font-bold text-blue-700 dark:text-blue-300">
                             <div>{order.id}</div>
                             {order.paypalTransactionId && (
-                              <div className="text-[10px] text-emerald-600 font-normal mt-0.5">
+                              <div className="text-[10px] text-emerald-600 dark:text-emerald-400 font-normal mt-0.5">
                                 PP: {order.paypalTransactionId}
                               </div>
                             )}
                           </td>
                           <td className="p-4">
                             <div className="font-bold text-slate-900 dark:text-white">{order.customerName}</div>
-                            <div className="text-[11px] text-slate-500">{order.email}</div>
-                            <div className="text-[10px] text-slate-400">{order.city}, {order.country}</div>
+                            <div className="text-[11px] text-slate-500 dark:text-gray-300">{order.email}</div>
+                            <div className="text-[10px] text-slate-400 dark:text-gray-400">{order.city}, {order.country}</div>
                           </td>
-                          <td className="p-4 text-slate-500 whitespace-nowrap">
+                          <td className="p-4 text-slate-500 dark:text-gray-300 whitespace-nowrap">
                             {order.date}
                           </td>
                           <td className="p-4">
                             <div className="space-y-1 max-w-xs">
                               {order.items.map((it, idx) => (
-                                <div key={idx} className="text-[11px] text-slate-700 dark:text-slate-200 truncate">
+                                <div key={idx} className="text-[11px] text-slate-700 dark:text-gray-100 truncate">
                                   • <span className="font-semibold">{it.quantity}x</span> {it.title}
                                 </div>
                               ))}
@@ -3577,12 +3577,12 @@ export const AdminDashboard: React.FC = () => {
                               onChange={e => updateOrderStatus(order.id, e.target.value as Order['status'])}
                               className={`px-2.5 py-1 rounded-lg text-xs font-bold cursor-pointer border ${
                                 order.status === 'Delivered'
-                                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                  ? 'bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
                                   : order.status === 'Shipped'
-                                  ? 'bg-blue-50 text-blue-700 border-blue-200'
+                                  ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border-blue-200 dark:border-blue-800'
                                   : order.status === 'Cancelled'
-                                  ? 'bg-red-50 text-red-700 border-red-200'
-                                  : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  ? 'bg-red-50 dark:bg-red-950/60 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800'
+                                  : 'bg-amber-50 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800'
                               }`}
                             >
                               <option value="Processing">Processing</option>
@@ -3594,12 +3594,12 @@ export const AdminDashboard: React.FC = () => {
                           <td className="p-4">
                             <div className="flex flex-col space-y-1">
                               <div className="flex items-center space-x-1.5">
-                                <span className="font-mono text-xs font-bold text-slate-800 dark:text-slate-100 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                                <span className="font-mono text-xs font-bold text-slate-800 dark:text-gray-100 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded border border-slate-200 dark:border-slate-700">
                                   {order.trackingNumber || 'Pending'}
                                 </span>
                               </div>
                               {order.carrier && (
-                                <span className="text-[10px] font-semibold text-indigo-700 flex items-center space-x-1">
+                                <span className="text-[10px] font-semibold text-indigo-700 dark:text-indigo-300 flex items-center space-x-1">
                                   <Truck className="w-3 h-3" />
                                   <span>{order.carrier}</span>
                                 </span>
@@ -3607,7 +3607,7 @@ export const AdminDashboard: React.FC = () => {
                               <button
                                 type="button"
                                 onClick={() => openTrackingModal(order)}
-                                className="text-[11px] font-bold text-blue-600 hover:text-blue-800 hover:underline flex items-center space-x-1 pt-0.5 cursor-pointer"
+                                className="text-[11px] font-bold text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 hover:underline flex items-center space-x-1 pt-0.5 cursor-pointer"
                               >
                                 <Edit3 className="w-3 h-3" />
                                 <span>{isKa ? 'თრექინგის შეცვლა' : 'Edit Tracking'}</span>
@@ -3622,7 +3622,7 @@ export const AdminDashboard: React.FC = () => {
                                   deleteOrder(order.id);
                                 }
                               }}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors cursor-pointer"
                               title="Delete order"
                             >
                               <Trash2 className="w-4 h-4" />
@@ -3775,9 +3775,9 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="w-full text-left text-xs border-collapse text-slate-900 dark:text-gray-100">
                   <thead>
-                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                    <tr className="bg-slate-50/80 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">
                       <th className="py-3.5 px-4">{isKa ? 'მომხმარებელი' : 'Customer'}</th>
                       <th className="py-3.5 px-4">{isKa ? 'ელ-ფოსტა (Email)' : 'Email'}</th>
                       <th className="py-3.5 px-4">{isKa ? 'ავტორიზაცია' : 'Auth Provider'}</th>
@@ -3789,7 +3789,7 @@ export const AdminDashboard: React.FC = () => {
                       <th className="py-3.5 px-4 text-right">{isKa ? 'მოქმედება' : 'Actions'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700 dark:text-slate-200">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-gray-100">
                     {registeredUsers
                       .filter(u => {
                         if (!userSearch.trim()) return true;
@@ -3808,20 +3808,20 @@ export const AdminDashboard: React.FC = () => {
                         const initials = u.name ? u.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase() : 'U';
 
                         return (
-                          <tr key={u.email || idx} className="hover:bg-slate-50/60 transition-colors">
+                          <tr key={u.email || idx} className="bg-white dark:bg-slate-900 odd:bg-white even:bg-slate-50/40 dark:odd:bg-slate-900 dark:even:bg-slate-800/60 hover:bg-slate-50/60 dark:hover:bg-slate-800 transition-colors">
                             {/* User Name + Avatar */}
                             <td className="py-3.5 px-4">
                               <div className="flex items-center space-x-3">
                                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
                                   isPrimaryAdmin 
-                                    ? 'bg-amber-100 text-amber-800 border border-amber-300'
-                                    : 'bg-blue-100 text-blue-700 border border-blue-200'
+                                    ? 'bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700'
+                                    : 'bg-blue-100 dark:bg-blue-950/70 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
                                 }`}>
                                   {initials}
                                 </div>
                                 <div className="min-w-0">
                                   <p className="font-bold text-slate-900 dark:text-white truncate">{u.name}</p>
-                                  {u.phone && <p className="text-[11px] text-slate-400 font-mono">{u.phone}</p>}
+                                  {u.phone && <p className="text-[11px] text-slate-400 dark:text-gray-400 font-mono">{u.phone}</p>}
                                 </div>
                               </div>
                             </td>
@@ -3829,7 +3829,7 @@ export const AdminDashboard: React.FC = () => {
                             {/* Email */}
                             <td className="py-3.5 px-4">
                               <div className="flex items-center space-x-1.5">
-                                <span className="font-mono text-xs font-semibold text-slate-800 dark:text-slate-100 select-all">
+                                <span className="font-mono text-xs font-semibold text-slate-800 dark:text-gray-100 select-all">
                                   {u.email}
                                 </span>
                                 <button
@@ -3840,13 +3840,13 @@ export const AdminDashboard: React.FC = () => {
                                     setTimeout(() => setCopiedEmail(null), 2000);
                                     addToast(isKa ? 'ელ-ფოსტა დაკოპირდა' : 'Email copied to clipboard', 'info');
                                   }}
-                                  className="p-1 rounded text-slate-400 hover:text-blue-600 hover:bg-blue-50 transition-colors"
+                                  className="p-1 rounded text-slate-400 dark:text-gray-400 hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50 dark:hover:bg-slate-800 transition-colors"
                                   title="Copy Email"
                                 >
                                   {copiedEmail === u.email ? (
-                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                    <Check className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
                                   ) : (
-                                    <span className="text-[10px] px-1 py-0.5 bg-slate-100 rounded text-slate-600 dark:text-slate-300 hover:bg-slate-200">Copy</span>
+                                    <span className="text-[10px] px-1 py-0.5 bg-slate-100 dark:bg-slate-800 rounded text-slate-600 dark:text-gray-300 hover:bg-slate-200 dark:hover:bg-slate-700">Copy</span>
                                   )}
                                 </button>
                               </div>
@@ -3855,7 +3855,7 @@ export const AdminDashboard: React.FC = () => {
                             {/* Auth Provider */}
                             <td className="py-3.5 px-4">
                               {(u.authProvider === 'google' || u.provider === 'google') ? (
-                                <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
+                                <span className="inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800">
                                   <svg className="w-3 h-3 shrink-0" viewBox="0 0 24 24">
                                     <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
                                     <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
@@ -3865,8 +3865,8 @@ export const AdminDashboard: React.FC = () => {
                                   <span>Google OAuth</span>
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
-                                  <Mail className="w-3 h-3 text-slate-500" />
+                                <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-gray-300 border border-slate-200 dark:border-slate-700">
+                                  <Mail className="w-3 h-3 text-slate-500 dark:text-gray-400" />
                                   <span>Standard Email</span>
                                 </span>
                               )}
@@ -3878,14 +3878,14 @@ export const AdminDashboard: React.FC = () => {
                                 {[u.city, u.country].filter(Boolean).join(', ') || 'Tbilisi, Georgia'}
                               </p>
                               {u.address && (
-                                <p className="text-[11px] text-slate-400 truncate" title={u.address}>
+                                <p className="text-[11px] text-slate-400 dark:text-gray-400 truncate" title={u.address}>
                                   {u.address}
                                 </p>
                               )}
                             </td>
 
                             {/* Registered Date */}
-                            <td className="py-3.5 px-4 text-slate-600 dark:text-slate-300 text-xs">
+                            <td className="py-3.5 px-4 text-slate-600 dark:text-gray-300 text-xs">
                               {u.createdAt ? new Date(u.createdAt).toLocaleDateString(language === 'ka' ? 'ka-GE' : 'en-US', {
                                 year: 'numeric',
                                 month: 'short',
@@ -3898,11 +3898,11 @@ export const AdminDashboard: React.FC = () => {
                             {/* Role */}
                             <td className="py-3.5 px-4">
                               {isPrimaryAdmin ? (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-800 border border-amber-300">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-300 dark:border-amber-700">
                                   👑 {isKa ? 'ადმინისტრატორი' : 'Admin'}
                                 </span>
                               ) : (
-                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 dark:text-slate-200 border border-slate-200">
+                                <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-gray-200 border border-slate-200 dark:border-slate-700">
                                   👤 {isKa ? 'მომხმარებელი' : 'Customer'}
                                 </span>
                               )}
@@ -3911,7 +3911,7 @@ export const AdminDashboard: React.FC = () => {
                             {/* Orders Placed */}
                             <td className="py-3.5 px-4">
                               <span className={`inline-flex items-center px-2 py-0.5 rounded-lg text-xs font-bold ${
-                                userOrdersCount > 0 ? 'bg-blue-50 text-blue-700 border border-blue-200' : 'text-slate-400'
+                                userOrdersCount > 0 ? 'bg-blue-50 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800' : 'text-slate-400 dark:text-gray-400'
                               }`}>
                                 {userOrdersCount} {isKa ? 'შეკვეთა' : 'orders'}
                               </span>
@@ -3919,8 +3919,8 @@ export const AdminDashboard: React.FC = () => {
 
                             {/* Password Status (Strictly Hidden & Protected) */}
                             <td className="py-3.5 px-4">
-                              <div className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                                <Lock className="w-3 h-3 text-emerald-600" />
+                              <div className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
+                                <Lock className="w-3 h-3 text-emerald-600 dark:text-emerald-400" />
                                 <span>{isKa ? '🔒 დაშიფრული (არ ჩანს)' : '🔒 Encrypted (Hidden)'}</span>
                               </div>
                             </td>
@@ -3931,7 +3931,7 @@ export const AdminDashboard: React.FC = () => {
                                 <button
                                   type="button"
                                   onClick={() => setInspectingUser(u)}
-                                  className="px-2.5 py-1.5 rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold text-xs flex items-center space-x-1 transition-colors cursor-pointer border border-blue-200 shadow-2xs"
+                                  className="px-2.5 py-1.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold text-xs flex items-center space-x-1 transition-colors cursor-pointer border border-blue-200 dark:border-blue-800 shadow-2xs"
                                   title={isKa ? 'მომხმარებლის შეკვეთების და კალათის ნახვა' : 'Inspect user orders & live cart'}
                                 >
                                   <Eye className="w-3.5 h-3.5" />
@@ -3941,7 +3941,7 @@ export const AdminDashboard: React.FC = () => {
                                   <button
                                     type="button"
                                     onClick={() => setUserToDelete(u.email)}
-                                    className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                                    className="p-1.5 rounded-lg text-slate-400 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors cursor-pointer"
                                     title={isKa ? 'მომხმარებლის წაშლა' : 'Delete user'}
                                   >
                                     <Trash2 className="w-4 h-4" />
@@ -4554,9 +4554,9 @@ export const AdminDashboard: React.FC = () => {
 
               {/* Messages Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
+                <table className="w-full text-left text-xs border-collapse text-slate-900 dark:text-gray-100">
                   <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase tracking-wider text-[11px]">
+                    <tr className="bg-slate-50 dark:bg-slate-800/90 border-b border-slate-200 dark:border-slate-700 text-slate-500 dark:text-gray-300 font-bold uppercase tracking-wider text-[11px]">
                       <th className="py-3 px-4">{isKa ? 'თარიღი' : 'Date'}</th>
                       <th className="py-3 px-4">{isKa ? 'მომხმარებელი' : 'Customer'}</th>
                       <th className="py-3 px-4">{isKa ? 'თემა / შეკვეთა #' : 'Subject / Order #'}</th>
@@ -4565,7 +4565,7 @@ export const AdminDashboard: React.FC = () => {
                       <th className="py-3 px-4 text-right">{isKa ? 'მოქმედება' : 'Actions'}</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-slate-100 font-medium text-slate-700 dark:text-slate-200">
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800 font-medium text-slate-700 dark:text-gray-100">
                     {contactMessages
                       .filter(m => {
                         if (!messageSearch.trim()) return true;
@@ -4579,8 +4579,8 @@ export const AdminDashboard: React.FC = () => {
                         );
                       })
                       .map(msg => (
-                        <tr key={msg.id} className={`hover:bg-slate-50/80 transition-colors ${msg.status === 'unread' ? 'bg-blue-50/30 font-semibold' : ''}`}>
-                          <td className="py-3.5 px-4 text-slate-500 whitespace-nowrap text-[11px]">
+                        <tr key={msg.id} className={`hover:bg-slate-50/80 dark:hover:bg-slate-800 transition-colors ${msg.status === 'unread' ? 'bg-blue-50/30 dark:bg-blue-950/35 font-semibold' : 'bg-white dark:bg-slate-900 odd:bg-white even:bg-slate-50/40 dark:odd:bg-slate-900 dark:even:bg-slate-800/60'}`}>
+                          <td className="py-3.5 px-4 text-slate-500 dark:text-gray-300 whitespace-nowrap text-[11px]">
                             {new Date(msg.createdAt).toLocaleString(isKa ? 'ka-GE' : 'en-US', {
                               month: 'short',
                               day: 'numeric',
@@ -4590,34 +4590,34 @@ export const AdminDashboard: React.FC = () => {
                           </td>
                           <td className="py-3.5 px-4">
                             <p className="font-bold text-slate-900 dark:text-white">{msg.name}</p>
-                            <a href={`mailto:${msg.email}`} className="text-blue-600 font-mono text-[11px] hover:underline">
+                            <a href={`mailto:${msg.email}`} className="text-blue-600 dark:text-blue-400 font-mono text-[11px] hover:underline">
                               {msg.email}
                             </a>
                           </td>
                           <td className="py-3.5 px-4">
-                            <p className="font-bold text-slate-800 dark:text-slate-100">{msg.subject}</p>
+                            <p className="font-bold text-slate-800 dark:text-gray-100">{msg.subject}</p>
                             {msg.orderNumber && (
-                              <span className="inline-block text-[10px] px-2 py-0.5 rounded bg-slate-100 text-slate-600 dark:text-slate-300 font-mono mt-0.5">
+                              <span className="inline-block text-[10px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-gray-300 font-mono mt-0.5">
                                 #{msg.orderNumber}
                               </span>
                             )}
                           </td>
                           <td className="py-3.5 px-4 max-w-[280px]">
-                            <p className="line-clamp-2 text-slate-600 dark:text-slate-300 text-xs">
+                            <p className="line-clamp-2 text-slate-600 dark:text-gray-300 text-xs">
                               {msg.message}
                             </p>
                           </td>
                           <td className="py-3.5 px-4 whitespace-nowrap">
                             {msg.status === 'unread' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-200">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950/70 text-amber-800 dark:text-amber-300 border border-amber-200 dark:border-amber-700">
                                 🔴 {isKa ? 'წაუკითხავი' : 'Unread'}
                               </span>
                             ) : msg.status === 'replied' ? (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/70 text-emerald-800 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-700">
                                 ✅ {isKa ? 'უპასუხა' : 'Replied'}
                               </span>
                             ) : (
-                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700 dark:text-slate-200 border border-slate-200">
+                              <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-gray-200 border border-slate-200 dark:border-slate-700">
                                 👁️ {isKa ? 'წაკითხული' : 'Read'}
                               </span>
                             )}
@@ -4629,14 +4629,14 @@ export const AdminDashboard: React.FC = () => {
                                 setSelectedMessage(msg);
                                 if (msg.status === 'unread') handleMarkMessageRead(msg.id, 'read');
                               }}
-                              className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 dark:text-slate-200 text-xs font-bold transition-colors cursor-pointer"
+                              className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-gray-200 text-xs font-bold transition-colors cursor-pointer"
                             >
                               {isKa ? 'ნახვა' : 'View'}
                             </button>
                             <a
                               href={`mailto:${msg.email}?subject=Re: ${encodeURIComponent(msg.subject)} [DBUY Support]`}
                               onClick={() => handleMarkMessageRead(msg.id, 'replied')}
-                              className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold transition-colors"
+                              className="inline-flex items-center px-2.5 py-1 rounded-lg bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 text-blue-700 dark:text-blue-300 text-xs font-bold transition-colors"
                             >
                               <Send className="w-3 h-3 mr-1" />
                               <span>{isKa ? 'პასუხი' : 'Reply'}</span>
@@ -4644,7 +4644,7 @@ export const AdminDashboard: React.FC = () => {
                             <button
                               type="button"
                               onClick={() => handleDeleteMessage(msg.id)}
-                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+                              className="p-1.5 rounded-lg text-slate-400 dark:text-gray-400 hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors cursor-pointer"
                               title="Delete Message"
                             >
                               <Trash2 className="w-3.5 h-3.5" />

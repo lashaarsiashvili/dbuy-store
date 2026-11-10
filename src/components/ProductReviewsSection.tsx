@@ -403,19 +403,19 @@ export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products =
       </div>
 
       {/* Product Cart Stats Table (Safe Read-Only) */}
-      <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 mb-3">Cart Additions by Product</h3>
+      <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-3">Cart Additions by Product</h3>
       <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden mb-8">
-        <table className="w-full border-collapse text-left text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300">
+        <table className="w-full border-collapse text-left text-xs text-slate-900 dark:text-gray-100">
+          <thead className="bg-slate-50 dark:bg-slate-800/90 text-slate-700 dark:text-gray-300">
             <tr>
-              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Product Name</th>
-              <th className="p-3 border-b border-slate-200 dark:border-slate-800 text-right">Times Added</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-700">Product Name</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-700 text-right">Times Added</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {products.map((p) => (
-              <tr key={p.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 text-slate-900 dark:text-slate-100">
-                <td className="p-3">{p.name || p.title}</td>
+              <tr key={p.id} className="bg-white dark:bg-slate-900 odd:bg-white even:bg-slate-50/40 dark:odd:bg-slate-900 dark:even:bg-slate-800/60 hover:bg-slate-50/50 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors">
+                <td className="p-3 font-medium text-slate-900 dark:text-white">{p.name || p.title}</td>
                 <td className="p-3 text-right font-bold text-blue-600 dark:text-blue-400">
                   {stats.cartAdditions[String(p.id)] || 0}
                 </td>
@@ -427,11 +427,11 @@ export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products =
 
       {/* Reviews Moderation Section */}
       <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
-        <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">Moderate Customer Reviews</h3>
+        <h3 className="text-sm font-bold text-slate-900 dark:text-white">Moderate Customer Reviews</h3>
         <select
           value={selectedProduct}
           onChange={(e) => setSelectedProduct(e.target.value)}
-          className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-blue-500 cursor-pointer"
+          className="px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-xs focus:ring-2 focus:ring-blue-500 cursor-pointer"
         >
           <option value="ALL">All Products ({reviews.length})</option>
           {products.map((p) => (
@@ -443,26 +443,26 @@ export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products =
       </div>
 
       <div className="border border-slate-200 dark:border-slate-800 rounded-xl overflow-x-auto">
-        <table className="w-full border-collapse text-left text-xs">
-          <thead className="bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300">
+        <table className="w-full border-collapse text-left text-xs text-slate-900 dark:text-gray-100">
+          <thead className="bg-slate-50 dark:bg-slate-800/90 text-slate-700 dark:text-gray-300">
             <tr>
-              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Date</th>
-              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Product</th>
-              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Author</th>
-              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Rating</th>
-              <th className="p-3 border-b border-slate-200 dark:border-slate-800">Comment</th>
-              <th className="p-3 border-b border-slate-200 dark:border-slate-800 text-right">Action</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-700">Date</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-700">Product</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-700">Author</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-700">Rating</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-700">Comment</th>
+              <th className="p-3 border-b border-slate-200 dark:border-slate-700 text-right">Action</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
             {filteredReviews.length > 0 ? (
               filteredReviews.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-800/50 text-slate-900 dark:text-slate-100">
-                  <td className="p-3 text-slate-500 dark:text-slate-400 whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString()}</td>
-                  <td className="p-3 font-semibold">{r.productName}</td>
-                  <td className="p-3">{r.userName}</td>
-                  <td className="p-3 text-amber-500 whitespace-nowrap">{'★'.repeat(r.rating)}</td>
-                  <td className="p-3 text-slate-600 dark:text-slate-300 max-w-[300px]">{r.comment}</td>
+                <tr key={r.id} className="bg-white dark:bg-slate-900 odd:bg-white even:bg-slate-50/40 dark:odd:bg-slate-900 dark:even:bg-slate-800/60 hover:bg-slate-50/50 dark:hover:bg-slate-800 text-slate-900 dark:text-white transition-colors">
+                  <td className="p-3 text-slate-500 dark:text-gray-300 whitespace-nowrap">{new Date(r.createdAt).toLocaleDateString()}</td>
+                  <td className="p-3 font-semibold text-slate-900 dark:text-white">{r.productName}</td>
+                  <td className="p-3 text-slate-800 dark:text-gray-100">{r.userName}</td>
+                  <td className="p-3 text-amber-500 dark:text-amber-400 whitespace-nowrap">{'★'.repeat(r.rating)}</td>
+                  <td className="p-3 text-slate-600 dark:text-gray-300 max-w-[300px]">{r.comment}</td>
                   <td className="p-3 text-right">
                     <button
                       onClick={() => handleDeleteReview(r.id)}
@@ -475,7 +475,7 @@ export const UnifiedAdminPanel: React.FC<UnifiedAdminPanelProps> = ({ products =
               ))
             ) : (
               <tr>
-                <td colSpan={6} className="p-6 text-center text-slate-400 dark:text-slate-500">
+                <td colSpan={6} className="p-6 text-center text-slate-400 dark:text-gray-400">
                   No reviews to display.
                 </td>
               </tr>

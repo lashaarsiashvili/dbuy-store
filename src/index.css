@@ -13,6 +13,16 @@
   --border-radius: 8px;
   --glass-blur: 4px;
 }
+
+html.dark {
+  --bg-primary: #020617;
+  --bg-secondary: #0f172a;
+  --card-bg: #0f172a;
+  --card-border: #1e293b;
+  --text-primary: #f8fafc;
+  --text-muted: #cbd5e1;
+}
+
 @variant dark (&:where(.dark, .dark *));
 
 @layer base {
@@ -112,41 +122,6 @@
     color: #0f172a;
   }
 
-  .dark option {
-    background-color: #0f172a !important;
-    color: #f8fafc !important;
-  }
-
-  .dark input,
-  .dark textarea,
-  .dark select {
-    color: #f8fafc;
-    background-color: #0f172a;
-    border-color: #334155;
-  }
-
-  .dark input.bg-transparent,
-  .dark textarea.bg-transparent,
-  .dark select.bg-transparent {
-    background-color: transparent !important;
-    color: inherit;
-  }
-
-  /* Form controls with explicit white/light background in dark mode must use dark background with white text */
-  .dark input.bg-white,
-  .dark textarea.bg-white,
-  .dark select.bg-white,
-  .dark input.bg-slate-50,
-  .dark textarea.bg-slate-50,
-  .dark select.bg-slate-50,
-  .dark input.bg-slate-100,
-  .dark textarea.bg-slate-100,
-  .dark select.bg-slate-100 {
-    background-color: #0f172a !important;
-    border-color: #334155 !important;
-    color: #f8fafc !important;
-  }
-
   /* Universal browser autofill contrast guard (prevents invisible white-on-white text) */
   input:-webkit-autofill,
   input:-webkit-autofill:hover, 
@@ -167,7 +142,7 @@
   .dark input:-webkit-autofill,
   .dark input:-webkit-autofill:hover, 
   .dark input:-webkit-autofill:focus,
-  .dark textarea:-webkit-autofill,
+  textarea:-webkit-autofill,
   .dark textarea:-webkit-autofill:hover,
   .dark textarea:-webkit-autofill:focus,
   .dark select:-webkit-autofill,
@@ -179,38 +154,368 @@
     transition: background-color 5000s ease-in-out 0s !important;
     caret-color: #f8fafc !important;
   }
-
-  /* High contrast text rules for dark mode */
-  .dark .text-slate-900,
-  .dark .text-slate-800,
-  .dark .text-slate-700,
-  .dark .text-gray-900,
-  .dark .text-gray-800,
-  .dark .text-gray-700 {
-    color: #f8fafc;
-  }
-
-  .dark .text-slate-600,
-  .dark .text-slate-500,
-  .dark .text-gray-600,
-  .dark .text-gray-500 {
-    color: #cbd5e1;
-  }
-
-  .dark .bg-slate-50,
-  .dark .bg-slate-100 {
-    background-color: #0f172a;
-  }
-
-  .dark .bg-white {
-    background-color: #0f172a;
-  }
-
-  .dark .border-slate-100,
-  .dark .border-slate-200 {
-    border-color: #1e293b;
-  }
 }
+
+/* ==========================================================================
+   GLOBAL DARK MODE READABILITY & CONTRAST ENFORCEMENT
+   Placed outside @layer base so rules properly override un-prefixed light
+   utility classes across all tables, typography, badges, rows, and forms.
+   ========================================================================== */
+
+/* 1. Primary Text (Titles, Table Data, Main Headings) -> Crisp White / Gray-100 */
+.dark h1:not([class*="text-"]),
+.dark h2:not([class*="text-"]),
+.dark h3:not([class*="text-"]),
+.dark h4:not([class*="text-"]),
+.dark h5:not([class*="text-"]),
+.dark h6:not([class*="text-"]),
+.dark th,
+.dark td,
+.dark .text-black,
+.dark .text-slate-950:not(.bg-amber-400):not(.bg-amber-500):not(.bg-emerald-400):not(.bg-emerald-500):not(.bg-yellow-400),
+.dark .text-slate-900:not(.bg-amber-400):not(.bg-amber-500):not(.bg-emerald-400):not(.bg-emerald-500):not(.bg-yellow-400),
+.dark .text-slate-800,
+.dark .text-slate-700,
+.dark .text-gray-950,
+.dark .text-gray-900,
+.dark .text-gray-800,
+.dark .text-gray-700,
+.dark .text-zinc-900,
+.dark .text-zinc-800,
+.dark .text-zinc-700,
+.dark .text-neutral-900,
+.dark .text-neutral-800,
+.dark .text-neutral-700 {
+  color: #f8fafc !important;
+}
+
+/* 2. Secondary Text (Subtext, Descriptions, Metadata, IDs) -> Readable Light Gray (Gray-300 / Gray-400) */
+.dark .text-slate-600,
+.dark .text-slate-500,
+.dark .text-gray-600,
+.dark .text-gray-500,
+.dark .text-zinc-600,
+.dark .text-zinc-500,
+.dark .text-neutral-600,
+.dark .text-neutral-500 {
+  color: #cbd5e1 !important;
+}
+
+.dark .text-slate-400,
+.dark .text-gray-400,
+.dark .text-zinc-400,
+.dark .text-neutral-400 {
+  color: #94a3b8 !important;
+}
+
+.dark .text-slate-300,
+.dark .text-gray-300 {
+  color: #e2e8f0 !important;
+}
+
+/* Colored secondary text / IDs / links in dark mode */
+.dark .text-blue-950,
+.dark .text-blue-900,
+.dark .text-blue-800,
+.dark .text-blue-700 {
+  color: #93c5fd !important;
+}
+
+.dark .text-blue-600 {
+  color: #60a5fa !important;
+}
+
+.dark .text-indigo-950,
+.dark .text-indigo-900,
+.dark .text-indigo-800,
+.dark .text-indigo-700 {
+  color: #a5b4fc !important;
+}
+
+.dark .text-indigo-600 {
+  color: #818cf8 !important;
+}
+
+.dark .text-purple-900,
+.dark .text-purple-800,
+.dark .text-purple-700 {
+  color: #d8b4fe !important;
+}
+
+.dark .text-emerald-950,
+.dark .text-emerald-900,
+.dark .text-emerald-800,
+.dark .text-emerald-700 {
+  color: #6ee7b7 !important;
+}
+
+.dark .text-emerald-600 {
+  color: #34d399 !important;
+}
+
+.dark .text-amber-950,
+.dark .text-amber-900,
+.dark .text-amber-800,
+.dark .text-amber-700 {
+  color: #fcd34d !important;
+}
+
+.dark .text-red-900,
+.dark .text-red-800,
+.dark .text-red-700,
+.dark .text-rose-800,
+.dark .text-rose-700 {
+  color: #fca5a5 !important;
+}
+
+.dark .text-pink-800,
+.dark .text-pink-700 {
+  color: #f9a8d4 !important;
+}
+
+/* 3. Surfaces, Cards & Containers in Dark Mode */
+.dark .bg-white,
+.dark .bg-white\/95,
+.dark .bg-white\/90,
+.dark .bg-white\/80,
+.dark .bg-white\/60,
+.dark .bg-white\/50 {
+  background-color: #0f172a !important;
+}
+
+.dark .bg-slate-50,
+.dark .bg-slate-50\/80,
+.dark .bg-slate-50\/70,
+.dark .bg-slate-50\/60,
+.dark .bg-slate-50\/50,
+.dark .bg-gray-50,
+.dark .bg-gray-50\/80,
+.dark .bg-gray-50\/50 {
+  background-color: #111827 !important;
+}
+
+.dark .bg-slate-100,
+.dark .bg-slate-100\/80,
+.dark .bg-slate-100\/70,
+.dark .bg-slate-100\/60,
+.dark .bg-slate-200,
+.dark .bg-slate-200\/75,
+.dark .bg-gray-100,
+.dark .bg-gray-200 {
+  background-color: #1e293b !important;
+}
+
+/* Borders & Dividers in Dark Mode */
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-200\/80,
+.dark .border-slate-200\/60,
+.dark .border-slate-300,
+.dark .border-slate-300\/60,
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: #334155 !important;
+}
+
+.dark .divide-slate-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-200 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-slate-200\/70 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-100 > :not([hidden]) ~ :not([hidden]),
+.dark .divide-gray-200 > :not([hidden]) ~ :not([hidden]) {
+  border-color: #1e293b !important;
+}
+
+/* 4. Tables, Table Headers, Highlighted/Odd Rows, and Row Hover States */
+.dark table {
+  color: #f8fafc !important;
+}
+
+.dark thead,
+.dark thead tr,
+.dark thead th {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+.dark tbody {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+.dark tbody tr {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #1e293b !important;
+}
+
+/* Alternating / Odd-Even / Highlighted rows in dark mode */
+.dark tbody tr:nth-child(even) {
+  background-color: #131c31 !important;
+}
+
+.dark tr.bg-slate-50,
+.dark tr.bg-slate-50\/80,
+.dark tr.bg-slate-50\/60,
+.dark tr.bg-slate-50\/50,
+.dark tr.bg-slate-100,
+.dark tr.bg-gray-50,
+.dark tr.bg-gray-100,
+.dark tr[class*="bg-slate-50"],
+.dark tr[class*="bg-slate-100"],
+.dark tr[class*="bg-gray-50"],
+.dark tr[class*="bg-gray-100"] {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+}
+
+/* Unread / Highlighted blue-tinted rows in dark mode */
+.dark tr.bg-blue-50,
+.dark tr.bg-blue-50\/30,
+.dark tr.bg-blue-50\/50,
+.dark tr.bg-blue-50\/60,
+.dark tr[class*="bg-blue-50"] {
+  background-color: rgba(30, 58, 138, 0.35) !important;
+  color: #f8fafc !important;
+}
+
+/* Table row hover states in dark mode */
+.dark tbody tr:hover,
+.dark tr.hover\:bg-slate-50:hover,
+.dark tr.hover\:bg-slate-50\/80:hover,
+.dark tr.hover\:bg-slate-50\/60:hover,
+.dark tr.hover\:bg-slate-50\/50:hover,
+.dark tr.hover\:bg-gray-50:hover,
+.dark tr.hover\:bg-gray-100:hover {
+  background-color: #1e293b !important;
+  color: #ffffff !important;
+}
+
+/* Non-table highlighted rows & hover items */
+.dark .hover\:bg-slate-50:hover,
+.dark .hover\:bg-slate-50\/80:hover,
+.dark .hover\:bg-slate-50\/60:hover,
+.dark .hover\:bg-slate-50\/50:hover,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-200:hover,
+.dark .hover\:bg-gray-50:hover,
+.dark .hover\:bg-gray-100:hover,
+.dark .hover\:bg-gray-200:hover {
+  background-color: #334155 !important;
+  color: #f8fafc !important;
+}
+
+/* 5. Input Fields, Selects, Textareas & Disabled States in Dark Mode */
+.dark input:not([type="checkbox"]):not([type="radio"]):not([type="color"]):not([type="range"]):not(.bg-transparent),
+.dark textarea:not(.bg-transparent),
+.dark select:not(.bg-transparent) {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.dark input.bg-transparent,
+.dark textarea.bg-transparent,
+.dark select.bg-transparent {
+  background-color: transparent !important;
+  color: #f8fafc !important;
+}
+
+.dark input::placeholder,
+.dark textarea::placeholder {
+  color: #94a3b8 !important;
+}
+
+.dark input:focus:not(.bg-transparent),
+.dark textarea:focus:not(.bg-transparent),
+.dark select:focus:not(.bg-transparent) {
+  background-color: #0f172a !important;
+  color: #ffffff !important;
+  border-color: #3b82f6 !important;
+}
+
+.dark option {
+  background-color: #0f172a !important;
+  color: #f8fafc !important;
+}
+
+/* Disabled inputs, selects, textareas & buttons in dark mode */
+.dark input:disabled,
+.dark textarea:disabled,
+.dark select:disabled,
+.dark input[disabled],
+.dark textarea[disabled],
+.dark select[disabled],
+.dark .disabled\:bg-slate-100:disabled,
+.dark .disabled\:bg-gray-100:disabled {
+  background-color: #1e293b !important;
+  color: #cbd5e1 !important;
+  -webkit-text-fill-color: #cbd5e1 !important;
+  border-color: #475569 !important;
+  opacity: 0.75 !important;
+  cursor: not-allowed;
+}
+
+.dark button:disabled,
+.dark button[disabled] {
+  color: #cbd5e1 !important;
+}
+
+/* 6. Badges, Code Pills & Status Callouts in Dark Mode */
+.dark code {
+  background-color: #1e293b !important;
+  color: #e2e8f0 !important;
+  border-color: #334155 !important;
+}
+
+.dark .bg-blue-50,
+.dark .bg-blue-50\/70,
+.dark .bg-blue-50\/60,
+.dark .bg-blue-50\/50,
+.dark .bg-blue-50\/40,
+.dark .bg-blue-50\/30,
+.dark .bg-blue-100 {
+  background-color: rgba(30, 58, 138, 0.4) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
+}
+
+.dark .bg-indigo-50,
+.dark .bg-indigo-50\/70,
+.dark .bg-indigo-50\/60,
+.dark .bg-indigo-100 {
+  background-color: rgba(49, 46, 129, 0.4) !important;
+  border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+.dark .bg-emerald-50,
+.dark .bg-emerald-100 {
+  background-color: rgba(6, 78, 59, 0.45) !important;
+  border-color: rgba(16, 185, 129, 0.35) !important;
+}
+
+.dark .bg-amber-50,
+.dark .bg-amber-100 {
+  background-color: rgba(120, 53, 15, 0.45) !important;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+}
+
+.dark .bg-red-50,
+.dark .bg-red-100,
+.dark .bg-rose-50,
+.dark .bg-rose-100 {
+  background-color: rgba(127, 29, 29, 0.45) !important;
+  border-color: rgba(239, 68, 68, 0.35) !important;
+}
+
+.dark .bg-purple-50,
+.dark .bg-purple-100,
+.dark .bg-pink-50,
+.dark .bg-pink-100 {
+  background-color: rgba(88, 28, 135, 0.4) !important;
+  border-color: rgba(168, 85, 247, 0.35) !important;
+}
+
 
 /* Official Apple Pay Web Component & Native Button styling */
 apple-pay-button {
