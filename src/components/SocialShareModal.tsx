@@ -2,8 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { getProductShareUrl } from '../utils/socialAdGenerator';
-import { publishFacebookPublish } from '../utils/facebookApi';
-import { X, Megaphone, RefreshCw, Copy, Image as ImageIcon } from 'lucide-react';
+import { publishFacebookPublish, publishFacebookFeedPost } from '../utils/facebookApi';
+import { X, Megaphone, RefreshCw, Copy, Image as ImageIcon, Link as LinkIcon, Check, ExternalLink } from 'lucide-react';
 
 interface SocialShareModalProps {
   product: Product | null;
@@ -68,22 +68,30 @@ const FB_PAGE_URL = "https://www.facebook.com/Dbuystore";
 export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isOpen, onClose, isKa }) => {
   if (!isOpen || !product) return null;
 
+  const [postMode, setPostMode] = useState<'feed' | 'gallery'>('feed');
   const [caption, setCaption] = useState<string>('');
-  const [buttonText, setButtonText] = useState<string>('🚀 Publish Gallery & Ad to Facebook');
+  const [buttonText, setButtonText] = useState<string>(isKa ? '🚀 გამოაქვეყნე Facebook-ზე' : '🚀 Publish Feed Post to Facebook');
   const [buttonColor, setButtonColor] = useState<string>('#1877F2');
   const [variant, setVariant] = useState(0);
   const [pageId, setPageId] = useState<string>(localStorage.getItem('dbuy_fb_page_id') || '');
+  const [copied, setCopied] = useState(false);
+  const [statusAlert, setStatusAlert] = useState<{ type: 'success' | 'error'; message: string; postId?: string } | null>(null);
   
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [images, setImages] = useState<string[]>([]);
-  const [showTip, setShowTip] = useState<boolean>(false);
 
   useEffect(() => {
     // Resolve Page ID if missing
     if (!pageId) {
-        fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}`)
-            .then(r => r.json())
-            .then((data: any) => { if(data.id) { setPageId(data.id); localStorage.setItem('dbuy_fb_page_id', data.id); } });
+      fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}`)
+        .then(r => r.json())
+        .then((data: any) => {
+          if (data.id) {
+            setPageId(data.id);
+            localStorage.setItem('dbuy_fb_page_id', data.id);
+          }
+        })
+        .catch(() => {});
     }
 
     const urls = new Set<string>();
@@ -109,7 +117,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     addUrl(product.image);
     (product.images || []).forEach(addUrl);
     setImages(Array.from(urls));
-  }, [product]);
+  }, [product, pageId]);
 
   const toggleMainPhoto = (idx: number) => {
     const newImages = [...images];
@@ -122,17 +130,77 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     setCaption(buildHighConvertingAdCopy(product, variant + 1));
   };
 
-  useEffect(() => { if (isOpen && !caption) regenerate(); }, [isOpen, caption]);
+  useEffect(() => {
+    if (isOpen && !caption) {
+      regenerate();
+    }
+  }, [isOpen, caption]);
 
   const { addToast } = useStore();
-  
-  const publishToFacebook = async () => {
-    setButtonText('⏳ Processing...');
+
+  const handleCopyText = async () => {
+    const success = await copyTextSafely(caption, textareaRef.current);
+    if (success) {
+      setCopied(true);
+      addToast(isKa ? '✅ ტექსტი დაკოპირდა!' : '✅ Ad Copy copied to clipboard!', 'success');
+      setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // როდესაც მომხმარებელი აჭერს ღილაკს "Publish" (Feed Post):
+  const handlePublishToFacebook = async () => {
+    try {
+      setButtonText(isKa ? '⏳ მიმდინარეობს ატვირთვა...' : '⏳ Publishing to Facebook...');
+      setStatusAlert(null);
+
+      // 1. ვამზადებთ პროდუქტის ლინკს და ტექსტს
+      const productLink = `https://www.dbuystore.com/b/${product.id}`;
+      const adMessage = caption.includes(productLink)
+        ? caption
+        : `${caption}\n\n👉 Order yours today: ${productLink}`;
+
+      const activePageId = pageId || 'me';
+
+      // 2. ვუშვებთ ლინკის პოსტს ფეისბუქზე
+      const result = await publishFacebookFeedPost({
+        link: productLink,
+        message: adMessage,
+        accessToken: FB_PAGE_TOKEN,
+        pageId: activePageId,
+      });
+
+      if (result.success) {
+        const msg = isKa ? 'პოსტი წარმატებით აიტვირთა!' : 'Post published successfully!';
+        addToast(`✅ ${msg}`, 'success');
+        setStatusAlert({ type: 'success', message: msg, postId: result.postId });
+        setButtonText(isKa ? '✅ წარმატებით აიტვირთა!' : '🚀 Published Successfully!');
+        setButtonColor('#10B981');
+      } else {
+        const msg = isKa ? `შეცდომა: ${result.error || 'უცნობი შეცდომა'}` : `Error: ${result.error || 'Failed to publish post'}`;
+        addToast(`⚠️ ${msg}`, 'error');
+        setStatusAlert({ type: 'error', message: msg });
+        setButtonText(isKa ? 'გამეორება' : 'Retry Publishing');
+        setButtonColor('#EF4444');
+      }
+    } catch (err: any) {
+      console.error(err);
+      const msg = isKa ? `შეცდომა: ${err?.message || 'ქსელის შეცდომა'}` : `Error: ${err?.message || 'Network error'}`;
+      addToast(`⚠️ ${msg}`, 'error');
+      setStatusAlert({ type: 'error', message: msg });
+      setButtonText(isKa ? 'გამეორება' : 'Retry Publishing');
+      setButtonColor('#EF4444');
+    }
+  };
+
+  // როდესაც მომხმარებელი აჭერს ღილაკს "Publish" (Multi-Photo Gallery):
+  const publishGalleryToFacebook = async () => {
+    setButtonText(isKa ? '⏳ მიმდინარეობს გალერეის ატვირთვა...' : '⏳ Publishing Gallery...');
+    setStatusAlert(null);
 
     // 1. Copy Ad Copy
-    const copied = await copyTextSafely(caption, textareaRef.current);
-    if (copied) {
-        addToast('✅ Ad Text Copied! Press Ctrl+V in the Facebook window.', 'success');
+    const copiedText = await copyTextSafely(caption, textareaRef.current);
+    if (copiedText) {
+      addToast(isKa ? '✅ ტექსტი დაკოპირდა!' : '✅ Ad Text Copied!', 'success');
     }
 
     const productShareUrl = `https://www.dbuystore.com/b/${product.id}`;
@@ -141,93 +209,240 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     let publishedPostId = null;
     const activePageId = pageId || 'me';
     if (activePageId && FB_PAGE_TOKEN && images.length > 0) {
-        try {
-            setButtonText('🚀 Publishing Gallery to Facebook...');
-            const res = await publishFacebookPublish({
-                images: images,
-                message: caption,
-                link: productShareUrl,
-                accessToken: FB_PAGE_TOKEN,
-                pageId: activePageId
-            });
+      try {
+        const res = await publishFacebookPublish({
+          images: images,
+          message: caption,
+          link: productShareUrl,
+          accessToken: FB_PAGE_TOKEN,
+          pageId: activePageId,
+        });
 
-            if (res.success && res.postId) {
-                publishedPostId = res.postId;
-                addToast('✅ Successfully published multi-photo gallery post!', 'success');
-            } else {
-                addToast(`⚠️ Facebook publish error: ${res.error || 'Unknown error'}`, 'error');
-            }
-        } catch (e: any) {
-            console.error("API publish failed", e);
-            addToast(`⚠️ Facebook publish failed: ${e?.message || 'Network error'}`, 'error');
+        if (res.success && res.postId) {
+          publishedPostId = res.postId;
+          const msg = isKa ? 'გალერეა წარმატებით აიტვირთა!' : 'Successfully published multi-photo gallery post!';
+          addToast(`✅ ${msg}`, 'success');
+          setStatusAlert({ type: 'success', message: msg, postId: res.postId });
+          setButtonText(isKa ? '✅ წარმატებით აიტვირთა!' : '🚀 Published Successfully!');
+          setButtonColor('#10B981');
+        } else {
+          const msg = isKa ? `შეცდომა: ${res.error || 'შეცდომა'}` : `Error: ${res.error || 'Failed to publish gallery'}`;
+          addToast(`⚠️ ${msg}`, 'error');
+          setStatusAlert({ type: 'error', message: msg });
+          setButtonText(isKa ? 'გამეორება' : 'Retry Publishing');
+          setButtonColor('#EF4444');
         }
+      } catch (e: any) {
+        console.error("API publish failed", e);
+        const msg = isKa ? `შეცდომა: ${e?.message || 'ქსელის შეცდომა'}` : `Error: ${e?.message || 'Network error'}`;
+        addToast(`⚠️ ${msg}`, 'error');
+        setStatusAlert({ type: 'error', message: msg });
+        setButtonText(isKa ? 'გამეორება' : 'Retry Publishing');
+        setButtonColor('#EF4444');
+      }
     } else {
-        // Download images if not using API
-        for (let i = 0; i < images.length; i++) {
-            const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(images[i])}&output=jpg`;
-            const a = document.createElement('a');
-            a.href = proxyUrl;
-            a.download = `dbuy-photo-${i + 1}.jpg`;
-            a.style.display = 'none';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            await new Promise(r => setTimeout(r, 300));
-        }
+      // Download images if not using API
+      for (let i = 0; i < images.length; i++) {
+        const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(images[i])}&output=jpg`;
+        const a = document.createElement('a');
+        a.href = proxyUrl;
+        a.download = `dbuy-photo-${i + 1}.jpg`;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        await new Promise(r => setTimeout(r, 300));
+      }
+      setButtonText(isKa ? '✅ ფოტოები ჩამოტვირთულია' : '🚀 Photos Downloaded');
+      setButtonColor('#10B981');
     }
-
-    // 3. Open Centered Facebook Share Popup
-    const shareUrl = publishedPostId 
-      ? `https://www.facebook.com/${publishedPostId}`
-      : `https://www.facebook.com/`;
-    
-    const width = 680;
-    const height = 620;
-    const left = window.screen.width / 2 - width / 2;
-    const top = window.screen.height / 2 - height / 2;
-    
-    window.open(shareUrl, 'FacebookShare', `width=${width},height=${height},top=${top},left=${left},noopener,noreferrer`);
-
-    // 4. Web Share API Fallback (if supported and not already published)
-    if (!publishedPostId && typeof navigator !== 'undefined' && navigator.share) {
-        navigator.share({ title: product.title, text: caption, url: productShareUrl }).catch(() => {});
-    }
-
-    setButtonText('🚀 Finished Sharing!');
-    setButtonColor('#10B981');
   };
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl flex flex-col max-h-[92vh]">
-        <div className="p-5 border-b border-slate-100 flex justify-between">
-            <div>
-                <h3 className="text-lg font-black">Facebook Gallery Ad Publisher</h3>
-            </div>
-            <button onClick={onClose}><X className="w-5 h-5"/></button>
+      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-3xl shadow-2xl flex flex-col max-h-[92vh] border border-slate-200 dark:border-slate-800">
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex justify-between items-center">
+          <div>
+            <h3 className="text-lg font-black text-slate-900 dark:text-white">
+              {isKa ? 'Facebook პოსტის გამომქვეყნებელი' : 'Facebook Post Publisher'}
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              {isKa ? 'ავტომატური გამოქვეყნება @Dbuystore გვერდზე' : 'Direct one-click publishing to @Dbuystore page'}
+            </p>
+          </div>
+          <button 
+            onClick={onClose}
+            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+          >
+            <X className="w-5 h-5"/>
+          </button>
         </div>
-        <div className="p-5 overflow-y-auto flex-1 space-y-5">
-            <div className="flex items-center gap-2 p-3 bg-green-50 text-green-700 rounded-xl text-sm font-bold border border-green-200">
-                <span>✅ Connected to @Dbuystore (Auto-Gallery Posting Active)</span>
-            </div>
-            
-            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
-                <h4 className="text-sm font-bold mb-2">Select Main Photo</h4>
-                <div className="grid grid-cols-4 gap-2">
-                    {images.map((url, i) => <img key={i} src={url} onClick={(e) => { e.stopPropagation(); toggleMainPhoto(i); }} className={`w-full aspect-square object-cover rounded-lg border-2 ${i === 0 ? 'border-blue-500' : 'border-transparent'} cursor-pointer`}/>)}
-                </div>
-            </div>
-            
-            <textarea ref={textareaRef} value={caption} onChange={e => setCaption(e.target.value)} className="w-full p-3 h-32 rounded-xl bg-slate-50 border border-slate-200 text-sm"/>
-        </div>
-        <div className="p-5 border-t">
-            <button onClick={publishToFacebook} style={{ backgroundColor: buttonColor }} className="w-full py-4 text-white font-bold rounded-2xl flex items-center justify-center gap-2">
-                <Megaphone className="w-5 h-5"/>
-                {buttonText}
+
+        <div className="p-5 overflow-y-auto flex-1 space-y-4">
+          <div className="flex items-center gap-2 p-3 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 rounded-xl text-xs sm:text-sm font-bold border border-emerald-200 dark:border-emerald-800">
+            <span>✅ {isKa ? 'დაკავშირებულია @Dbuystore-თან (Facebook Graph API აქტიურია)' : 'Connected to @Dbuystore (Facebook Graph API Active)'}</span>
+          </div>
+
+          {/* Mode Switcher: Link Feed Post vs Multi-Photo Gallery */}
+          <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl gap-1">
+            <button
+              type="button"
+              onClick={() => {
+                setPostMode('feed');
+                setButtonText(isKa ? '🚀 გამოაქვეყნე Facebook-ზე' : '🚀 Publish Feed Post to Facebook');
+                setButtonColor('#1877F2');
+                setStatusAlert(null);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                postMode === 'feed'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <LinkIcon className="w-4 h-4" />
+              <span>{isKa ? '🔗 ლინკის პოსტი (Feed Card)' : '🔗 Link Post (Feed Card)'}</span>
             </button>
+            <button
+              type="button"
+              onClick={() => {
+                setPostMode('gallery');
+                setButtonText(isKa ? '🚀 გამოაქვეყნე გალერეა Facebook-ზე' : '🚀 Publish Multi-Photo Gallery');
+                setButtonColor('#1877F2');
+                setStatusAlert(null);
+              }}
+              className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                postMode === 'gallery'
+                  ? 'bg-white dark:bg-slate-700 text-blue-600 dark:text-blue-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <ImageIcon className="w-4 h-4" />
+              <span>{isKa ? '📸 ფოტო ალბომი (Gallery)' : '📸 Multi-Photo Gallery'}</span>
+            </button>
+          </div>
+
+          {/* Feed Post Preview Card */}
+          {postMode === 'feed' && (
+            <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+              {images[0] && (
+                <img 
+                  src={images[0]} 
+                  alt={product.title} 
+                  className="w-16 h-16 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0" 
+                />
+              )}
+              <div className="flex-1 min-w-0">
+                <div className="text-[11px] uppercase tracking-wider text-blue-600 dark:text-blue-400 font-black">dbuystore.com</div>
+                <div className="text-sm font-bold truncate text-slate-900 dark:text-white">{product.title}</div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 truncate">https://www.dbuystore.com/b/{product.id}</div>
+              </div>
+            </div>
+          )}
+
+          {/* Photo Gallery Selector */}
+          {postMode === 'gallery' && (
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                  {isKa ? 'აირჩიეთ მთავარი ფოტო' : 'Select Main Photo'}
+                </h4>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                  {images.length} {isKa ? 'ფოტო' : 'photos'}
+                </span>
+              </div>
+              <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                {images.map((url, i) => (
+                  <img
+                    key={i}
+                    src={url}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      toggleMainPhoto(i);
+                    }}
+                    className={`w-full aspect-square object-cover rounded-lg border-2 cursor-pointer transition-all ${
+                      i === 0 ? 'border-blue-500 scale-[1.03] shadow-xs' : 'border-transparent opacity-80 hover:opacity-100'
+                    }`}
+                    alt=""
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Ad Copy Textarea */}
+          <div className="space-y-1.5">
+            <div className="flex justify-between items-center">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                {isKa ? 'სარეკლამო ტექსტი (Ad Message)' : 'Ad Copy Message'}
+              </span>
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={regenerate}
+                  className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 hover:underline font-semibold cursor-pointer px-2 py-1 rounded-md hover:bg-blue-50 dark:hover:bg-blue-950/40"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  <span>{isKa ? 'ტექსტის განახლება' : 'Regenerate'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCopyText}
+                  className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 font-semibold cursor-pointer px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                >
+                  {copied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                  <span>{copied ? (isKa ? 'დაკოპირდა!' : 'Copied!') : (isKa ? 'კოპირება' : 'Copy')}</span>
+                </button>
+              </div>
+            </div>
+            <textarea
+              ref={textareaRef}
+              value={caption}
+              onChange={e => setCaption(e.target.value)}
+              className="w-full p-3 h-32 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-blue-500 focus:outline-hidden resize-none"
+            />
+          </div>
+
+          {/* Status Alert Banner */}
+          {statusAlert && (
+            <div
+              className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-semibold flex items-center justify-between gap-3 ${
+                statusAlert.type === 'success'
+                  ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                  : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+              }`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="shrink-0">{statusAlert.type === 'success' ? '✅' : '⚠️'}</span>
+                <span className="truncate">{statusAlert.message}</span>
+              </div>
+              {statusAlert.postId && (
+                <a
+                  href={`https://www.facebook.com/${statusAlert.postId}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg text-xs font-bold hover:bg-blue-700 transition shrink-0"
+                >
+                  <span>{isKa ? 'ნახვა FB-ზე' : 'View on Facebook'}</span>
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+          )}
+        </div>
+
+        <div className="p-5 border-t border-slate-100 dark:border-slate-800">
+          <button
+            onClick={postMode === 'feed' ? handlePublishToFacebook : publishGalleryToFacebook}
+            style={{ backgroundColor: buttonColor }}
+            className="w-full py-4 text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-lg hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer text-sm sm:text-base"
+          >
+            <Megaphone className="w-5 h-5"/>
+            {buttonText}
+          </button>
         </div>
       </div>
     </div>
   );
 };
+
 

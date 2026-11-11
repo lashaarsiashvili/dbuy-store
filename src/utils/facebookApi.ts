@@ -154,6 +154,28 @@ export async function publishFacebookFeedPost(
   }
 }
 
+/**
+ * High-level helper to prepare product order link, format ad copy, and publish a Facebook feed link post.
+ */
+export async function handlePublishFeedPost(params: {
+  link: string;
+  message: string;
+  accessToken?: string;
+  pageId?: string;
+}): Promise<PostFacebookFeedResult> {
+  const productLink = params.link;
+  const adMessage = params.message.includes(productLink)
+    ? params.message
+    : `${params.message}\n\n👉 Order yours today: ${productLink}`;
+
+  return publishFacebookFeedPost({
+    link: productLink,
+    message: adMessage,
+    accessToken: params.accessToken,
+    pageId: params.pageId,
+  });
+}
+
 export interface PostFacebookPublishParams {
   images: string[];
   message: string;
