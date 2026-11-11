@@ -145,3 +145,38 @@ export async function publishFacebookFeedPost(
   }
 }
 
+export interface PostFacebookPublishParams {
+  images: string[];
+  message: string;
+  link?: string;
+  accessToken?: string;
+  pageId?: string;
+}
+
+export async function publishFacebookPublish(
+  params: PostFacebookPublishParams
+): Promise<{ success: boolean; postId?: string; error?: string }> {
+  try {
+    const response = await fetch('/api/facebook/publish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        images: params.images,
+        message: params.message,
+        link: params.link,
+        accessToken: params.accessToken,
+        pageId: params.pageId,
+      }),
+    });
+
+    const json: any = await response.json().catch(() => ({}));
+    if (response.ok && json.success) {
+      return { success: true, postId: json.postId };
+    }
+    return { success: false, error: json.error || 'Failed to publish post' };
+  } catch (err: any) {
+    return { success: false, error: err?.message || 'Network error' };
+  }
+}
+
+

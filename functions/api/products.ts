@@ -71,6 +71,19 @@ export const onRequest: PagesFunction<any> = async (context) => {
         console.error('[D1 GET Error]:', err);
       }
 
+      // Fallback: If products relational table returned empty, check store_kv
+      if (results.length === 0) {
+        try {
+          const kvRes = await env.DB.prepare("SELECT value FROM store_kv WHERE key = 'products'").first();
+          if (kvRes && kvRes.value) {
+            const parsed = typeof kvRes.value === 'string' ? JSON.parse(kvRes.value) : kvRes.value;
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              results = parsed;
+            }
+          }
+        } catch (e) {}
+      }
+
       const products = results.map((p: any) => {
         let imagesArr: string[] = [];
         if (p.images_json || p.images) {
@@ -119,7 +132,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
         return tB - tA;
       });
 
-      return jsonResponse({ success: true, products, results: products });
+      return jsonResponse({ success: true, count: products.length, products, results: products });
     }
 
     // 2. POST / PUT: Add or Update a product safely without data destruction

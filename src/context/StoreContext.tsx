@@ -17,6 +17,7 @@ import {
   BillboardSlide
 } from '../types';
 import { initialProducts, DB_VERSION, isFakeStudioProduct } from '../data/initialProducts';
+import { ProductsManager } from '../services/productsService';
 import productsData from '../data/products.json';
 import {
   HomepageCategoryId,
@@ -954,16 +955,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   useEffect(() => {
-    fetch(`/api/products?_t=${Date.now()}`, { cache: 'no-store' })
-      .then(res => res.json())
-      .then((data: any) => {
-        if (data && data.success && Array.isArray(data.products) && data.products.length > 0) {
-          const merged = sanitizeProducts(data.products);
+    let isMounted = true;
+    const fetchAllProducts = async () => {
+      try {
+        const fetched = await ProductsManager.getProducts();
+        if (isMounted && Array.isArray(fetched) && fetched.length > 0) {
+          const merged = sanitizeProducts(fetched);
           setProducts(merged);
-          localStorage.setItem('dbuy_products', JSON.stringify(merged));
+          try {
+            localStorage.setItem('dbuy_products', JSON.stringify(merged));
+          } catch (e) {
+            console.warn('Could not cache all products in localStorage:', e);
+          }
         }
-      })
-      .catch(() => {});
+      } catch (err) {
+        console.warn('Failed to load all products from D1:', err);
+      }
+    };
+    fetchAllProducts();
+    return () => {
+      isMounted = false;
+    };
   }, []);
 
   useEffect(() => {

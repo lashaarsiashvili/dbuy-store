@@ -2,12 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { getProductShareUrl } from '../utils/socialAdGenerator';
+import { publishFacebookPublish } from '../utils/facebookApi';
 import { X, Megaphone, RefreshCw, Copy, Image as ImageIcon } from 'lucide-react';
 
 interface SocialShareModalProps {
   product: Product | null;
   isOpen: boolean;
   onClose: () => void;
+  isKa?: boolean;
 }
 
 const copyTextSafely = async (text: string, textareaRef?: HTMLTextAreaElement | null) => {
@@ -63,7 +65,7 @@ const FB_APP_ID = "1653741686157296";
 const FB_PAGE_TOKEN = "EAAXgEb3A7ZCABS1dkA4rhejoXgwWsDWLmZBIuv4UeVmEprMOuEM3o9YPdKKI0NnURobrXx89dsIj9qufVFZBdMW4htKGd8OeZCNZAsQvfVtxqMsGfzefwRURd7jdHd9byYipbYG6Bk1si192BLRl06lnXQ6XEaiSdZBaD7iy2eHgUd0JdxmDyLgsyX7C4LM8ZCAERPUxEn82S8aDK7HboNCZAA6IRhWIPis2n2FI2aC01KjlaLihZA8K5GkOCm3Io5BYuNlf8jC5JdKVZCLFnq";
 const FB_PAGE_URL = "https://www.facebook.com/Dbuystore";
 
-export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isOpen, onClose }) => {
+export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isOpen, onClose, isKa }) => {
   if (!isOpen || !product) return null;
 
   const [caption, setCaption] = useState<string>('');
@@ -86,8 +88,21 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
 
     const urls = new Set<string>();
     const addUrl = (u: any) => {
-      if (typeof u === 'string' && u.trim().startsWith('http')) urls.add(u.trim());
-      else if (typeof u === 'string' && u.trim().startsWith('/uploads/')) urls.add(window.location.origin + u.trim());
+      if (!u || typeof u !== 'string') return;
+      const clean = u.trim();
+      if (!clean) return;
+      if (clean.startsWith('http://') || clean.startsWith('https://')) {
+        if (clean.includes('/uploads/')) {
+          const uploadPath = clean.substring(clean.indexOf('/uploads/'));
+          urls.add(`https://www.dbuystore.com${uploadPath}`);
+        } else {
+          urls.add(clean);
+        }
+      } else if (clean.startsWith('/uploads/')) {
+        urls.add(`https://www.dbuystore.com${clean}`);
+      } else if (clean.startsWith('uploads/')) {
+        urls.add(`https://www.dbuystore.com/${clean}`);
+      }
     };
     addUrl(product.image);
     (product.images || []).forEach(addUrl);
@@ -120,31 +135,30 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
 
     const productShareUrl = `https://www.dbuystore.com/b/${product.id}`;
 
-    // 2. Automated API Upload (if possible)
+    // 2. Automated API Upload (multi-photo gallery via backend /api/facebook/publish)
     let publishedPostId = null;
-    if (pageId) {
+    const activePageId = pageId || 'me';
+    if (activePageId && FB_PAGE_TOKEN && images.length > 0) {
         try {
-            setButtonText('⏳ Uploading photos...');
-            const uploadedMediaIds: any[] = [];
-            for (let i = 0; i < images.length; i++) {
-                const fbRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ url: images[i], published: 'false', access_token: FB_PAGE_TOKEN }).toString()
-                });
-                const data = await fbRes.json() as any;
-                if (data.id) uploadedMediaIds.push({ media_fbid: data.id });
-            }
-
-            setButtonText('🚀 Publishing Gallery...');
-            const feedRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ message: caption, attached_media: uploadedMediaIds, access_token: FB_PAGE_TOKEN })
+            setButtonText('🚀 Publishing Gallery to Facebook...');
+            const res = await publishFacebookPublish({
+                images: images,
+                message: caption,
+                link: productShareUrl,
+                accessToken: FB_PAGE_TOKEN,
+                pageId: activePageId
             });
-            const feedData = await feedRes.json() as any;
-            if (feedData.id) publishedPostId = feedData.id;
-        } catch (e) { console.error("API upload failed", e); }
+
+            if (res.success && res.postId) {
+                publishedPostId = res.postId;
+                addToast('✅ Successfully published multi-photo gallery post!', 'success');
+            } else {
+                addToast(`⚠️ Facebook publish error: ${res.error || 'Unknown error'}`, 'error');
+            }
+        } catch (e: any) {
+            console.error("API publish failed", e);
+            addToast(`⚠️ Facebook publish failed: ${e?.message || 'Network error'}`, 'error');
+        }
     } else {
         // Download images if not using API
         for (let i = 0; i < images.length; i++) {

@@ -17,7 +17,8 @@ import { parseProductHtml } from './src/utils/productScraper';
 dotenv.config();
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3000;
+// Port 3000 is required for AI Studio development environment.
+const PORT = process.env.NODE_ENV === 'production' && process.env.PORT ? Number(process.env.PORT) : 3000;
 
 // High-Trust Security Headers to maximize ScamAdviser and SSL Labs trust ratings
 app.use((req, res, next) => {
@@ -1923,7 +1924,7 @@ app.post('/api/facebook/post-feed', async (req, res) => {
 });
 
 app.post('/api/facebook/publish', async (req, res) => {
-  const { accessToken, pageId, message, images } = req.body;
+  const { accessToken, pageId, message, images, link } = req.body;
 
   if (!accessToken || !pageId || !images || !Array.isArray(images)) {
     return res.status(400).json({ success: false, error: 'Missing required parameters' });
@@ -1932,11 +1933,16 @@ app.post('/api/facebook/publish', async (req, res) => {
   try {
     const media_fbids = [];
     for (const imageUrl of images) {
+      let fullImageUrl = imageUrl;
+      if (fullImageUrl && fullImageUrl.startsWith('/')) {
+        fullImageUrl = `https://dbuystore.com${fullImageUrl}`;
+      }
+
       const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          url: imageUrl,
+          url: fullImageUrl,
           published: false,
           access_token: accessToken
         })
@@ -1953,14 +1959,26 @@ app.post('/api/facebook/publish', async (req, res) => {
     }
 
     const attached_media = media_fbids.map(id => ({ media_fbid: id }));
+    let postMessage = message || '';
+    if (link && !postMessage.includes(link)) {
+      postMessage = postMessage ? `${postMessage}\n\n${link}` : link;
+    }
+
+    const feedPayload: any = {
+      message: postMessage,
+      access_token: accessToken
+    };
+
+    if (attached_media.length > 0) {
+      feedPayload.attached_media = attached_media;
+    } else if (link) {
+      feedPayload.link = link;
+    }
+
     const feedRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        message: message,
-        attached_media: attached_media,
-        access_token: accessToken
-      })
+      body: JSON.stringify(feedPayload)
     });
     const text = await feedRes.text();
     let feedData;
@@ -4129,7 +4147,10 @@ async function setupFrontend() {
   if (process.env.NODE_ENV !== 'production') {
     const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: process.env.DISABLE_HMR === 'true' ? false : undefined,
+      },
       appType: 'spa',
     });
     app.use(vite.middlewares);
@@ -4147,8 +4168,12 @@ async function setupFrontend() {
     });
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`DBUY Store server running at http://0.0.0.0:${PORT}`);
+  });
+
+  server.on('error', (err: any) => {
+    console.error(`[SERVER-ERROR] Express server error on port ${PORT}:`, err?.message || err);
   });
 }
 

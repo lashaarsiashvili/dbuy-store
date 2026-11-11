@@ -235,11 +235,18 @@ export const ProductGrid: React.FC = () => {
       }
     }
 
-    // 3. Apply exact tab-based filtering & sorting logic
+    // 3. Apply exact tab-based filtering & sorting logic (Display ALL products without artificial item limits or pagination)
     switch (activeTab) {
       case 'featured': {
-        const featuredOrDiscounted = baseList.filter((product) => isFeaturedOrDiscounted(product));
-        return featuredOrDiscounted.length > 0 ? featuredOrDiscounted : baseList;
+        // Return ALL products in baseList, prioritizing featured & discounted items first
+        return [...baseList].sort((a, b) => {
+          const aFeatured = isFeaturedOrDiscounted(a) ? 1 : 0;
+          const bFeatured = isFeaturedOrDiscounted(b) ? 1 : 0;
+          if (bFeatured !== aFeatured) {
+            return bFeatured - aFeatured;
+          }
+          return (b.views ?? 0) - (a.views ?? 0);
+        });
       }
 
       case 'bestsellers': {

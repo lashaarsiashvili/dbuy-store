@@ -6,21 +6,60 @@ const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AP
 const API_URL = `${API_BASE}/api/products`;
 
 export const ProductsManager = {
-  // პროდუქტების წამოღება
+  // Fetch all products without pagination or artificial item limits
   async getProducts(): Promise<Product[]> {
+    // 1. Primary: fetch complete product catalog from /api/products
     try {
       const response = await fetch(`${API_URL}?_t=${Date.now()}`, { 
         credentials: 'omit',
         cache: 'no-store'
       });
-      if (!response.ok) throw new Error('Failed to fetch products');
-      
-      const products: any = await response.json();
-      return Array.isArray(products) ? products : (products?.products || products?.results || []);
+      if (response.ok) {
+        const data: any = await response.json();
+        const list = Array.isArray(data) ? data : (data?.products || data?.results || []);
+        if (Array.isArray(list) && list.length > 0) {
+          return list;
+        }
+      }
     } catch (error) {
-      console.error('D1-დან პროდუქტების ჩატვირთვის შეცდომა:', error);
-      return [];
+      console.warn('Initial /api/products fetch warning:', error);
     }
+
+    // 2. Fallback: query /api/store/products
+    try {
+      const storeRes = await fetch(`${API_BASE}/api/store/products?_t=${Date.now()}`, {
+        credentials: 'omit',
+        cache: 'no-store'
+      });
+      if (storeRes.ok) {
+        const storeData: any = await storeRes.json();
+        const list = Array.isArray(storeData) ? storeData : (storeData?.products || storeData?.results || []);
+        if (Array.isArray(list) && list.length > 0) {
+          return list;
+        }
+      }
+    } catch (err) {
+      console.warn('Store endpoint products fetch warning:', err);
+    }
+
+    // 3. Fallback: query /api/store/sync
+    try {
+      const syncRes = await fetch(`${API_BASE}/api/store/sync?_t=${Date.now()}`, {
+        credentials: 'omit',
+        cache: 'no-store'
+      });
+      if (syncRes.ok) {
+        const syncData: any = await syncRes.json();
+        const list = syncData?.data?.products || syncData?.products || [];
+        if (Array.isArray(list) && list.length > 0) {
+          return list;
+        }
+      }
+    } catch (err) {
+      console.warn('Sync endpoint products fetch warning:', err);
+    }
+
+    return [];
   },
 
   // ახალი პროდუქტის დამატება D1 ბაზაში
