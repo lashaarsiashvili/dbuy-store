@@ -19,7 +19,9 @@ export async function onRequestPost(context: any) {
     for (const imgUrl of images) {
       let fullImageUrl = imgUrl;
       if (fullImageUrl && fullImageUrl.startsWith('/')) {
-        fullImageUrl = `https://dbuystore.com${fullImageUrl}`;
+        fullImageUrl = `https://www.dbuystore.com${fullImageUrl}`;
+      } else if (fullImageUrl && fullImageUrl.startsWith('https://dbuystore.com/')) {
+        fullImageUrl = fullImageUrl.replace('https://dbuystore.com/', 'https://www.dbuystore.com/');
       }
 
       const photoRes = await fetch(`https://graph.facebook.com/v19.0/${targetPageId}/photos`, {

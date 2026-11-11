@@ -98,9 +98,11 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         } else {
           urls.add(clean);
         }
-      } else if (clean.startsWith('/uploads/')) {
+      } else if (clean.startsWith('/')) {
         urls.add(`https://www.dbuystore.com${clean}`);
       } else if (clean.startsWith('uploads/')) {
+        urls.add(`https://www.dbuystore.com/${clean}`);
+      } else {
         urls.add(`https://www.dbuystore.com/${clean}`);
       }
     };

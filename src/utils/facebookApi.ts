@@ -23,11 +23,20 @@ export async function publishFacebookPhotoPost(
   params: PostFacebookPhotoParams
 ): Promise<PostFacebookPhotoResult> {
   try {
+    // Normalize all image paths to absolute public URLs so Facebook can crawl them
+    const normalizedImages = (params.imageUrls || []).map(img => {
+      if (!img) return '';
+      if (img.startsWith('/')) {
+        return `https://www.dbuystore.com${img}`;
+      }
+      return img;
+    }).filter(Boolean);
+
     const response = await fetch('/api/facebook/post-photo', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        images: params.imageUrls,
+        images: normalizedImages,
         message: params.message,
         accessToken: params.accessToken,
         pageId: params.pageId,
@@ -157,11 +166,20 @@ export async function publishFacebookPublish(
   params: PostFacebookPublishParams
 ): Promise<{ success: boolean; postId?: string; error?: string }> {
   try {
+    // Normalize all image paths to absolute public URLs so Facebook can crawl them
+    const normalizedImages = (params.images || []).map(img => {
+      if (!img) return '';
+      if (img.startsWith('/')) {
+        return `https://www.dbuystore.com${img}`;
+      }
+      return img;
+    }).filter(Boolean);
+
     const response = await fetch('/api/facebook/publish', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        images: params.images,
+        images: normalizedImages,
         message: params.message,
         link: params.link,
         accessToken: params.accessToken,
