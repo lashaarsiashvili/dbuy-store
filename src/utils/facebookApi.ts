@@ -77,52 +77,43 @@ export async function publishFacebookFeedPost(
 ): Promise<PostFacebookFeedResult> {
   try {
     // 1. Try server endpoint first
-    const response = await fetch('/api/facebook/post-feed', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        link: params.link,
-        message: params.message,
-        accessToken: params.accessToken,
-        pageId: params.pageId,
-      }),
-    });
+    try {
+      const response = await fetch('/api/facebook/post-feed', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          link: params.link,
+          message: params.message,
+          accessToken: params.accessToken,
+          pageId: params.pageId,
+        }),
+      });
 
-    if (response.ok) {
       const json: any = await response.json().catch(() => ({}));
-      if (json && json.success) {
+      if (response.ok && json?.success) {
         return {
           success: true,
           postId: json.postId || json.id,
         };
-      } else if (json && json.error) {
+      }
+      if (json && (json.error || json.success === false)) {
         return {
           success: false,
-          error: json.error,
+          error: json.error || 'Failed to publish post',
           details: json.details,
         };
       }
-    } else {
-      const json: any = await response.json().catch(() => ({}));
-      if (json && json.error) {
-        return {
-          success: false,
-          error: json.error,
-          details: json.details,
-        };
-      }
+    } catch {
+      // Server endpoint unavailable (e.g. static preview), fallback to client-side direct Graph API call
     }
 
-    // 2. Client-side direct call if accessToken supplied in frontend
+    // 2. Client-side direct call if accessToken supplied in frontend and server endpoint unavailable
     const token = params.accessToken?.trim();
     if (token) {
       // Ensure target is a valid Facebook Page ID, never defaulting to 'me' which triggers group error (#200)
       const pageId = (params.pageId && params.pageId.trim() !== 'me') ? params.pageId.trim() : '215073415343195';
       const graphUrl = `https://graph.facebook.com/v19.0/${pageId}/feed`;
 
-      // For Link Posts (Link Post (Feed Card)), send message, link, and access_token.
-      // Do not include object_attachment or attached_media parameters so that Facebook's crawler
-      // automatically generates the correct Open Graph link preview card.
       const bodyData = new URLSearchParams();
       if (params.message) bodyData.append('message', params.message);
       if (params.link) bodyData.append('link', params.link);
@@ -145,18 +136,6 @@ export async function publishFacebookFeedPost(
         };
       } else {
         const err = fbData?.error;
-        console.error('[Facebook Graph API Client Error]', {
-          message: err?.message,
-          code: err?.code,
-          error_subcode: err?.error_subcode,
-          type: err?.type,
-          error_user_title: err?.error_user_title,
-          error_user_msg: err?.error_user_msg,
-          fbtrace_id: err?.fbtrace_id,
-          targetPageId: pageId,
-          graphUrl,
-        });
-
         const errorMsg = err?.message || err?.error_user_msg || 'Facebook Graph API feed post failed';
         return {
           success: false,
@@ -171,7 +150,6 @@ export async function publishFacebookFeedPost(
       error: 'No Facebook Access Token configured.',
     };
   } catch (err: any) {
-    console.error('[Facebook Publish Network Error]', err);
     return {
       success: false,
       error: err?.message || 'Network error connecting to Facebook Graph API',

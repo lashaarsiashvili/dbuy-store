@@ -87,10 +87,7 @@ export async function onRequestPost(context: any) {
         url,
       });
 
-      let errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
-      if (err?.code === 200 && errorDetail.includes('pages_manage_posts')) {
-        errorDetail = "Missing Facebook permission: 'pages_manage_posts'. In Meta Graph API Explorer, select your App & Page, add 'pages_manage_posts' and 'pages_read_engagement' under Permissions, then generate the token.";
-      }
+      const errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
 
       return new Response(JSON.stringify({
         success: false,

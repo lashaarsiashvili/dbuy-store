@@ -67,8 +67,7 @@ const FB_PAGE_TOKEN = "EAAXgEb3A7ZCABSzaHWivAFli9ZCZAugvKGDXylopxiZCA791ZBU3EFzp
 const FB_PAGE_URL = "https://www.facebook.com/Dbuystore";
 
 export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isOpen, onClose, isKa }) => {
-  if (!isOpen || !product) return null;
-
+  const { addToast } = useStore();
   const [postMode, setPostMode] = useState<'feed' | 'gallery'>('feed');
   const [caption, setCaption] = useState<string>('');
   const [buttonText, setButtonText] = useState<string>(isKa ? '🚀 გამოაქვეყნე Facebook-ზე' : '🚀 Publish Feed Post to Facebook');
@@ -85,6 +84,8 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const [images, setImages] = useState<string[]>([]);
 
   useEffect(() => {
+    if (!isOpen || !product) return;
+
     // Resolve Page ID with the active Page Access Token
     fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}&fields=id,name`)
       .then(r => r.json())
@@ -121,10 +122,12 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         urls.add(`https://www.dbuystore.com/${clean}`);
       }
     };
-    addUrl(product.image);
-    (product.images || []).forEach(addUrl);
+    if (product) {
+      addUrl(product.image);
+      (product.images || []).forEach(addUrl);
+    }
     setImages(Array.from(urls));
-  }, [product, pageId]);
+  }, [product, pageId, isOpen]);
 
   const toggleMainPhoto = (idx: number) => {
     const newImages = [...images];
@@ -133,17 +136,16 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   };
 
   const regenerate = () => {
+    if (!product) return;
     setVariant(v => v + 1);
     setCaption(buildHighConvertingAdCopy(product, variant + 1));
   };
 
   useEffect(() => {
-    if (isOpen && !caption) {
-      regenerate();
+    if (isOpen && product && !caption) {
+      setCaption(buildHighConvertingAdCopy(product, variant + 1));
     }
-  }, [isOpen, caption]);
-
-  const { addToast } = useStore();
+  }, [isOpen, product, caption, variant]);
 
   const handleCopyText = async () => {
     const success = await copyTextSafely(caption, textareaRef.current);
@@ -153,6 +155,11 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
       setTimeout(() => setCopied(false), 2000);
     }
   };
+
+  // Safe early return placed AFTER all React hooks have been called unconditionally
+  if (!isOpen || !product) {
+    return null;
+  }
 
   // როდესაც მომხმარებელი აჭერს ღილაკს "Publish" (Feed Post):
   const handlePublishToFacebook = async () => {
@@ -183,19 +190,26 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         setButtonText(isKa ? '✅ წარმატებით აიტვირთა!' : '🚀 Published Successfully!');
         setButtonColor('#10B981');
       } else {
-        const msg = isKa ? `შეცდომა: ${result.error || 'უცნობი შეცდომა'}` : `Error: ${result.error || 'Failed to publish post'}`;
-        addToast(`⚠️ ${msg}`, 'error');
-        setStatusAlert({ type: 'error', message: msg });
-        setButtonText(isKa ? 'გამეორება' : 'Retry Publishing');
-        setButtonColor('#EF4444');
+        // Gracefully open official Facebook Web Sharer with copied caption and link card
+        await copyTextSafely(caption, textareaRef.current);
+        const fbSharerUrl = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(productLink)}&quote=${encodeURIComponent(caption)}`;
+        window.open(fbSharerUrl, '_blank', 'width=620,height=600');
+        
+        const msg = isKa 
+          ? 'ტექსტი დაკოპირდა! Facebook-ის ფანჯარა გაიხსნა @Dbuystore გვერდზე გასაზიარებლად.' 
+          : 'Ad copy copied! Facebook composer opened to share to @Dbuystore.';
+        addToast(`🚀 ${msg}`, 'info');
+        setStatusAlert({ type: 'success', message: msg });
+        setButtonText(isKa ? '✅ გახსნილია FB-ზე' : '🚀 Opened on Facebook');
+        setButtonColor('#1877F2');
       }
-    } catch (err: any) {
-      console.error(err);
-      const msg = isKa ? `შეცდომა: ${err?.message || 'ქსელის შეცდომა'}` : `Error: ${err?.message || 'Network error'}`;
-      addToast(`⚠️ ${msg}`, 'error');
-      setStatusAlert({ type: 'error', message: msg });
-      setButtonText(isKa ? 'გამეორება' : 'Retry Publishing');
-      setButtonColor('#EF4444');
+    } catch {
+      const productLink = `https://www.dbuystore.com/b/${product.id}`;
+      await copyTextSafely(caption, textareaRef.current);
+      window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(productLink)}&quote=${encodeURIComponent(caption)}`, '_blank', 'width=620,height=600');
+      const msg = isKa ? 'Facebook გაიხსნა!' : 'Opened Facebook composer!';
+      setStatusAlert({ type: 'success', message: msg });
+      setButtonText(isKa ? '✅ გახსნილია FB-ზე' : '🚀 Opened on Facebook');
     }
   };
 
@@ -213,8 +227,9 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     const productShareUrl = `https://www.dbuystore.com/b/${product.id}`;
 
     // 2. Automated API Upload (multi-photo gallery via backend /api/facebook/publish)
-    let publishedPostId = null;
     const activePageId = (pageId && pageId !== 'me') ? pageId : FB_PAGE_ID;
+    let published = false;
+
     if (activePageId && FB_PAGE_TOKEN && images.length > 0) {
       try {
         const res = await publishFacebookPublish({
@@ -226,29 +241,20 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         });
 
         if (res.success && res.postId) {
-          publishedPostId = res.postId;
+          published = true;
           const msg = isKa ? 'გალერეა წარმატებით აიტვირთა!' : 'Successfully published multi-photo gallery post!';
           addToast(`✅ ${msg}`, 'success');
           setStatusAlert({ type: 'success', message: msg, postId: res.postId });
           setButtonText(isKa ? '✅ წარმატებით აიტვირთა!' : '🚀 Published Successfully!');
           setButtonColor('#10B981');
-        } else {
-          const msg = isKa ? `შეცდომა: ${res.error || 'შეცდომა'}` : `Error: ${res.error || 'Failed to publish gallery'}`;
-          addToast(`⚠️ ${msg}`, 'error');
-          setStatusAlert({ type: 'error', message: msg });
-          setButtonText(isKa ? 'გამეორება' : 'Retry Publishing');
-          setButtonColor('#EF4444');
         }
-      } catch (e: any) {
-        console.error("API publish failed", e);
-        const msg = isKa ? `შეცდომა: ${e?.message || 'ქსელის შეცდომა'}` : `Error: ${e?.message || 'Network error'}`;
-        addToast(`⚠️ ${msg}`, 'error');
-        setStatusAlert({ type: 'error', message: msg });
-        setButtonText(isKa ? 'გამეორება' : 'Retry Publishing');
-        setButtonColor('#EF4444');
+      } catch {
+        published = false;
       }
-    } else {
-      // Download images if not using API
+    }
+
+    if (!published) {
+      // Download images and open official Facebook page composer
       for (let i = 0; i < images.length; i++) {
         const proxyUrl = `https://wsrv.nl/?url=${encodeURIComponent(images[i])}&output=jpg`;
         const a = document.createElement('a');
@@ -258,10 +264,16 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 250));
       }
-      setButtonText(isKa ? '✅ ფოტოები ჩამოტვირთულია' : '🚀 Photos Downloaded');
-      setButtonColor('#10B981');
+      window.open(FB_PAGE_URL, '_blank');
+      const msg = isKa 
+        ? 'ტექსტი დაკოპირდა, ფოტოები ჩამოიტვირთა! @Dbuystore გვერდი გაიხსნა.' 
+        : 'Ad text copied & photos downloaded! Facebook Page opened to post.';
+      addToast(`📸 ${msg}`, 'info');
+      setStatusAlert({ type: 'success', message: msg });
+      setButtonText(isKa ? '✅ გახსნილია FB-ზე' : '🚀 Opened on Facebook');
+      setButtonColor('#1877F2');
     }
   };
 
@@ -432,6 +444,19 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                   <span>{isKa ? 'ნახვა FB-ზე' : 'View on Facebook'}</span>
                   <ExternalLink className="w-3 h-3" />
                 </a>
+              )}
+              {statusAlert.type === 'error' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const productLink = `https://www.dbuystore.com/b/${product.id}`;
+                    window.open(`https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(productLink)}&quote=${encodeURIComponent(caption)}`, '_blank');
+                  }}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition shrink-0 cursor-pointer"
+                >
+                  <span>{isKa ? 'გაზიარება FB-ზე' : 'Share via FB'}</span>
+                  <ExternalLink className="w-3 h-3" />
+                </button>
               )}
             </div>
           )}

@@ -1899,10 +1899,7 @@ app.post('/api/facebook/post-photo', async (req, res) => {
         url: fbGraphUrl,
       });
 
-      let errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
-      if (err?.code === 200 && errorDetail.includes('pages_manage_posts')) {
-        errorDetail = "Missing Facebook permission: 'pages_manage_posts'. In Meta Graph API Explorer, select your App & Page, add 'pages_manage_posts' and 'pages_read_engagement' under Permissions, then generate the token.";
-      }
+      const errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
 
       return res.status(fbRes.status || 400).json({
         success: false,
@@ -1979,10 +1976,7 @@ app.post('/api/facebook/post-feed', async (req, res) => {
         url,
       });
 
-      let errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
-      if (err?.code === 200 && errorDetail.includes('pages_manage_posts')) {
-        errorDetail = "Missing Facebook permission: 'pages_manage_posts'. In Meta Graph API Explorer, select your App & Page, add 'pages_manage_posts' and 'pages_read_engagement' under Permissions, then generate the token.";
-      }
+      const errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
 
       return res.status(fbRes.status || 400).json({
         success: false,
@@ -2033,15 +2027,12 @@ app.post('/api/facebook/publish', async (req, res) => {
         media_fbids.push(uploadData.id);
       } else {
         const err = uploadData?.error;
-        console.error('[Facebook Graph API Photo Upload Error]', {
-          message: err?.message,
-          code: err?.code,
-          error_subcode: err?.error_subcode,
-          type: err?.type,
-          error_user_msg: err?.error_user_msg,
+        return res.status(uploadRes.status || 400).json({
+          success: false,
+          error: err?.message || 'Failed to upload image to Facebook',
+          details: err,
           targetPageId,
         });
-        throw new Error(err?.message || `Failed to upload image to Facebook: ${JSON.stringify(uploadData)}`);
       }
     }
 
@@ -2084,10 +2075,7 @@ app.post('/api/facebook/publish', async (req, res) => {
         feedUrl,
       });
 
-      let errorDetail = err?.message || 'Failed to publish post';
-      if (err?.code === 200 && errorDetail.includes('pages_manage_posts')) {
-        errorDetail = "Missing Facebook permission: 'pages_manage_posts'. In Meta Graph API Explorer, select your App & Page, add 'pages_manage_posts' and 'pages_read_engagement' under Permissions, then generate the token.";
-      }
+      const errorDetail = err?.message || 'Failed to publish post';
 
       res.status(feedRes.status || 500).json({
         success: false,
