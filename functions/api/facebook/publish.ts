@@ -1,3 +1,6 @@
+const DEFAULT_FB_PAGE_ID = '215073415343195';
+const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABSzaHWivAFli9ZCZAugvKGDXylopxiZCA791ZBU3EFzpOkJBeY4tGSrpMUbPxf2qrGlWVnkXHwgBdzytE4ZBjKQwJfmeTP4ZAXmJiwiH0yS9GIa3K2hjV87u3DkCg3kLJbcms9yq2HJ4ZCyW6vOEZBwGESu7LzNFzjFwbEr2Jtk25qhwZB8mIEJILg74y5LANijrRY19ZCUL8YNEwnZAOTpZBGGVmpimdewZDZD';
+
 export async function onRequestPost(context: any) {
   try {
     const req = context.request;
@@ -5,8 +8,8 @@ export async function onRequestPost(context: any) {
     const body = await req.json();
 
     const { accessToken, pageId, message, images, link, pageAccessToken } = body || {};
-    const token = accessToken || pageAccessToken || env.FACEBOOK_PAGE_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || 'EAAXgEb3A7ZCABS8doJvNLw1vzSsCfSOvmOeT1iZBDwvZCZBURKnjUiMEZCZBrkVMXJdGHVmqLmoayElU6qk6YZCWkVmjpNrBKTjOEILdl5dOoLVZC5ZBCRqG3T8VZCtWiSbRqBN706AM3azZCFi9xqZCUGnYKlUY2fzMlUDQEZCtD5oP7ru7nZBCtz17zau1geyQmqZAaU56ZAG547NHwjoDZC4wPVW1vmU6DCZAYfy56X1i8YMNGWkhqBHsZAioe6U2AC7HkGFZCzTPZA7UjdsR5uzXCbZBLKr3GxOqH0MAZDZD';
-    const targetPageId = pageId || env.FACEBOOK_PAGE_ID || 'me';
+    const token = pageAccessToken || accessToken || env.FACEBOOK_PAGE_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || DEFAULT_FB_PAGE_TOKEN;
+    const targetPageId = (pageId && pageId !== 'me') ? pageId : (env.FACEBOOK_PAGE_ID || DEFAULT_FB_PAGE_ID);
 
     if (!token || !targetPageId || !images || !Array.isArray(images) || images.length === 0) {
       return new Response(JSON.stringify({ success: false, error: 'Missing required parameters (accessToken, pageId, images)' }), {
@@ -24,7 +27,8 @@ export async function onRequestPost(context: any) {
         fullImageUrl = fullImageUrl.replace('https://dbuystore.com/', 'https://www.dbuystore.com/');
       }
 
-      const photoRes = await fetch(`https://graph.facebook.com/v19.0/${targetPageId}/photos`, {
+      const uploadUrl = `https://graph.facebook.com/v19.0/${targetPageId}/photos`;
+      const photoRes = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -33,11 +37,26 @@ export async function onRequestPost(context: any) {
           access_token: token
         })
       });
-      const uploadData: any = await photoRes.json();
+      const uploadData: any = await photoRes.json().catch(() => ({}));
       if (photoRes.ok && uploadData.id) {
         media_fbids.push(uploadData.id);
       } else {
-        return new Response(JSON.stringify({ success: false, error: uploadData?.error?.message || 'Failed to upload image to Facebook' }), {
+        const err = uploadData?.error;
+        console.error('[Facebook Graph API Photo Upload Error]', {
+          message: err?.message,
+          code: err?.code,
+          error_subcode: err?.error_subcode,
+          type: err?.type,
+          error_user_msg: err?.error_user_msg,
+          targetPageId,
+        });
+        return new Response(JSON.stringify({
+          success: false,
+          error: err?.message || 'Failed to upload image to Facebook',
+          error_subcode: err?.error_subcode,
+          error_code: err?.code,
+          details: err,
+        }), {
           status: 400,
           headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
         });
@@ -61,24 +80,43 @@ export async function onRequestPost(context: any) {
       feedPayload.link = link;
     }
 
-    const feedRes = await fetch(`https://graph.facebook.com/v19.0/${targetPageId}/feed`, {
+    const feedUrl = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
+    const feedRes = await fetch(feedUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(feedPayload)
     });
-    const feedData: any = await feedRes.json();
+    const feedData: any = await feedRes.json().catch(() => ({}));
 
     if (feedRes.ok && feedData.id) {
-      return new Response(JSON.stringify({ success: true, postId: feedData.id }), {
+      return new Response(JSON.stringify({ success: true, postId: feedData.id, targetPageId }), {
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     } else {
-      return new Response(JSON.stringify({ success: false, error: feedData?.error?.message || 'Failed to publish post to feed' }), {
+      const err = feedData?.error;
+      console.error('[Facebook Graph API Publish Error]', {
+        message: err?.message,
+        code: err?.code,
+        error_subcode: err?.error_subcode,
+        type: err?.type,
+        error_user_msg: err?.error_user_msg,
+        targetPageId,
+        feedUrl,
+      });
+      return new Response(JSON.stringify({
+        success: false,
+        error: err?.message || 'Failed to publish post to feed',
+        error_subcode: err?.error_subcode,
+        error_code: err?.code,
+        details: err,
+        targetPageId,
+      }), {
         status: feedRes.status || 400,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     }
   } catch (err: any) {
+    console.error('Error publishing Facebook Multi-Photo Post:', err);
     return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
       status: 500,
       headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }

@@ -62,7 +62,8 @@ const buildHighConvertingAdCopy = (product: Product, variantIndex = 0) => {
 };
 
 const FB_APP_ID = "1653741686157296";
-const FB_PAGE_TOKEN = "EAAXgEb3A7ZCABS8doJvNLw1vzSsCfSOvmOeT1iZBDwvZCZBURKnjUiMEZCZBrkVMXJdGHVmqLmoayElU6qk6YZCWkVmjpNrBKTjOEILdl5dOoLVZC5ZBCRqG3T8VZCtWiSbRqBN706AM3azZCFi9xqZCUGnYKlUY2fzMlUDQEZCtD5oP7ru7nZBCtz17zau1geyQmqZAaU56ZAG547NHwjoDZC4wPVW1vmU6DCZAYfy56X1i8YMNGWkhqBHsZAioe6U2AC7HkGFZCzTPZA7UjdsR5uzXCbZBLKr3GxOqH0MAZDZD";
+const FB_PAGE_ID = "215073415343195";
+const FB_PAGE_TOKEN = "EAAXgEb3A7ZCABSzaHWivAFli9ZCZAugvKGDXylopxiZCA791ZBU3EFzpOkJBeY4tGSrpMUbPxf2qrGlWVnkXHwgBdzytE4ZBjKQwJfmeTP4ZAXmJiwiH0yS9GIa3K2hjV87u3DkCg3kLJbcms9yq2HJ4ZCyW6vOEZBwGESu7LzNFzjFwbEr2Jtk25qhwZB8mIEJILg74y5LANijrRY19ZCUL8YNEwnZAOTpZBGGVmpimdewZDZD";
 const FB_PAGE_URL = "https://www.facebook.com/Dbuystore";
 
 export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isOpen, onClose, isKa }) => {
@@ -73,7 +74,10 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const [buttonText, setButtonText] = useState<string>(isKa ? '🚀 გამოაქვეყნე Facebook-ზე' : '🚀 Publish Feed Post to Facebook');
   const [buttonColor, setButtonColor] = useState<string>('#1877F2');
   const [variant, setVariant] = useState(0);
-  const [pageId, setPageId] = useState<string>(localStorage.getItem('dbuy_fb_page_id') || '');
+  const [pageId, setPageId] = useState<string>(() => {
+    const cached = typeof window !== 'undefined' ? localStorage.getItem('dbuy_fb_page_id') : null;
+    return (cached && cached !== 'me' && cached !== '3722589421239772') ? cached : FB_PAGE_ID;
+  });
   const [copied, setCopied] = useState(false);
   const [statusAlert, setStatusAlert] = useState<{ type: 'success' | 'error'; message: string; postId?: string } | null>(null);
   
@@ -82,15 +86,20 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
 
   useEffect(() => {
     // Resolve Page ID with the active Page Access Token
-    fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}`)
+    fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}&fields=id,name`)
       .then(r => r.json())
       .then((data: any) => {
-        if (data.id) {
+        if (data.id && data.id !== '3722589421239772' && data.id !== 'me') {
           setPageId(data.id);
           localStorage.setItem('dbuy_fb_page_id', data.id);
+        } else {
+          setPageId(FB_PAGE_ID);
+          localStorage.setItem('dbuy_fb_page_id', FB_PAGE_ID);
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setPageId(FB_PAGE_ID);
+      });
 
     const urls = new Set<string>();
     const addUrl = (u: any) => {
@@ -157,7 +166,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         ? caption
         : `${caption}\n\n👉 Order yours today: ${productLink}`;
 
-      const activePageId = pageId || 'me';
+      const activePageId = (pageId && pageId !== 'me') ? pageId : FB_PAGE_ID;
 
       // 2. ვუშვებთ ლინკის პოსტს ფეისბუქზე
       const result = await publishFacebookFeedPost({
@@ -205,7 +214,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
 
     // 2. Automated API Upload (multi-photo gallery via backend /api/facebook/publish)
     let publishedPostId = null;
-    const activePageId = pageId || 'me';
+    const activePageId = (pageId && pageId !== 'me') ? pageId : FB_PAGE_ID;
     if (activePageId && FB_PAGE_TOKEN && images.length > 0) {
       try {
         const res = await publishFacebookPublish({

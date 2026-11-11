@@ -83,14 +83,13 @@ export async function publishFacebookFeedPost(
       body: JSON.stringify({
         link: params.link,
         message: params.message,
-        caption: params.message,
         accessToken: params.accessToken,
         pageId: params.pageId,
       }),
     });
 
     if (response.ok) {
-      const json: any = await response.json();
+      const json: any = await response.json().catch(() => ({}));
       if (json && json.success) {
         return {
           success: true,
@@ -103,18 +102,30 @@ export async function publishFacebookFeedPost(
           details: json.details,
         };
       }
+    } else {
+      const json: any = await response.json().catch(() => ({}));
+      if (json && json.error) {
+        return {
+          success: false,
+          error: json.error,
+          details: json.details,
+        };
+      }
     }
 
     // 2. Client-side direct call if accessToken supplied in frontend
     const token = params.accessToken?.trim();
     if (token) {
-      const pageId = params.pageId?.trim() || 'me';
+      // Ensure target is a valid Facebook Page ID, never defaulting to 'me' which triggers group error (#200)
+      const pageId = (params.pageId && params.pageId.trim() !== 'me') ? params.pageId.trim() : '215073415343195';
       const graphUrl = `https://graph.facebook.com/v19.0/${pageId}/feed`;
 
+      // For Link Posts (Link Post (Feed Card)), send message, link, and access_token.
+      // Do not include object_attachment or attached_media parameters so that Facebook's crawler
+      // automatically generates the correct Open Graph link preview card.
       const bodyData = new URLSearchParams();
-      if (params.link) bodyData.append('link', params.link);
       if (params.message) bodyData.append('message', params.message);
-      if (params.message) bodyData.append('caption', params.message);
+      if (params.link) bodyData.append('link', params.link);
       bodyData.append('access_token', token);
 
       const fbRes = await fetch(graphUrl, {
@@ -125,7 +136,7 @@ export async function publishFacebookFeedPost(
         body: bodyData.toString(),
       });
 
-      const fbData: any = await fbRes.json();
+      const fbData: any = await fbRes.json().catch(() => ({}));
 
       if (fbRes.ok && fbData.id) {
         return {
@@ -133,11 +144,24 @@ export async function publishFacebookFeedPost(
           postId: fbData.id,
         };
       } else {
-        const errorMsg = fbData?.error?.message || fbData?.error?.user_msg || 'Facebook Graph API feed post failed';
+        const err = fbData?.error;
+        console.error('[Facebook Graph API Client Error]', {
+          message: err?.message,
+          code: err?.code,
+          error_subcode: err?.error_subcode,
+          type: err?.type,
+          error_user_title: err?.error_user_title,
+          error_user_msg: err?.error_user_msg,
+          fbtrace_id: err?.fbtrace_id,
+          targetPageId: pageId,
+          graphUrl,
+        });
+
+        const errorMsg = err?.message || err?.error_user_msg || 'Facebook Graph API feed post failed';
         return {
           success: false,
           error: errorMsg,
-          details: fbData?.error,
+          details: err,
         };
       }
     }
@@ -147,6 +171,7 @@ export async function publishFacebookFeedPost(
       error: 'No Facebook Access Token configured.',
     };
   } catch (err: any) {
+    console.error('[Facebook Publish Network Error]', err);
     return {
       success: false,
       error: err?.message || 'Network error connecting to Facebook Graph API',

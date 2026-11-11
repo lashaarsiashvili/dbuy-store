@@ -1807,12 +1807,40 @@ app.post('/api/chat', async (req, res) => {
   }
 });
 
+const DEFAULT_FB_PAGE_ID = '215073415343195';
+const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABSzaHWivAFli9ZCZAugvKGDXylopxiZCA791ZBU3EFzpOkJBeY4tGSrpMUbPxf2qrGlWVnkXHwgBdzytE4ZBjKQwJfmeTP4ZAXmJiwiH0yS9GIa3K2hjV87u3DkCg3kLJbcms9yq2HJ4ZCyW6vOEZBwGESu7LzNFzjFwbEr2Jtk25qhwZB8mIEJILg74y5LANijrRY19ZCUL8YNEwnZAOTpZBGGVmpimdewZDZD';
+const DEFAULT_FB_USER_TOKEN = 'EAAXgEb3A7ZCABSwZAARZCjoXY1O2BQEd1w2XFiuMxbqD6YiphFKZBeWSgcyvE5jSNEYCZB3S3ZBKfHOD9ZA1rzZBMpRgxJN3H8vP3tMQKrm405SGvjHjZAVJjaqxjC4VwMsKOsz83Mwro4LzcdLJfnjzpiup7Bk6r6v5S5jVChUQtcLHC7O7f9dByiZA3qxKZBhPtZBmSZB8aoejiJnIRDLGoXgpMv09nJgCmarnVxBTpT2zAGZBR21KsFZBgbZBzLdSNJ3fNaB6Vxe4OnZCSUxJiZB0QZD';
+
+async function resolveFacebookPageCredentials(passedToken?: string, passedPageId?: string) {
+  let token = passedToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || DEFAULT_FB_PAGE_TOKEN;
+  let targetPageId = (passedPageId && passedPageId !== 'me') ? passedPageId : (process.env.FACEBOOK_PAGE_ID || DEFAULT_FB_PAGE_ID);
+
+  if (token) {
+    try {
+      const accRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${token}`);
+      if (accRes.ok) {
+        const accData: any = await accRes.json();
+        const page = accData?.data?.find((p: any) => p.id === targetPageId) || accData?.data?.[0];
+        if (page?.access_token) {
+          token = page.access_token;
+          if (!passedPageId || passedPageId === 'me') {
+            targetPageId = page.id || DEFAULT_FB_PAGE_ID;
+          }
+        }
+      }
+    } catch {
+      // proceed with token and targetPageId
+    }
+  }
+
+  return { token, targetPageId };
+}
+
 app.post('/api/facebook/post-photo', async (req, res) => {
   try {
     const { imageUrl, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
     const finalMessage = message || caption || '';
-    const token = accessToken || pageAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
-    const targetPageId = pageId || process.env.FACEBOOK_PAGE_ID || 'me';
+    const { token, targetPageId } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
 
     if (!imageUrl) {
       return res.status(400).json({ success: false, error: 'imageUrl is required' });
@@ -1827,68 +1855,14 @@ app.post('/api/facebook/post-photo', async (req, res) => {
 
     let fullImageUrl = imageUrl;
     if (fullImageUrl.startsWith('/')) {
-      fullImageUrl = `https://dbuystore.com${fullImageUrl}`;
+      fullImageUrl = `https://www.dbuystore.com${fullImageUrl}`;
     }
 
     const fbGraphUrl = `https://graph.facebook.com/v19.0/${targetPageId}/photos`;
 
     const params = new URLSearchParams();
     params.append('url', fullImageUrl);
-    params.append('caption', finalMessage);
-    params.append('message', finalMessage);
-    params.append('access_token', token);
-
-    const fbRes = await fetch(fbGraphUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    });
-
-    const fbData: any = await fbRes.json();
-
-    if (fbRes.ok && (fbData.id || fbData.post_id)) {
-      return res.json({
-        success: true,
-        photoId: fbData.id,
-        postId: fbData.post_id || fbData.id,
-        message: 'Successfully published Photo Post to Facebook Page!',
-      });
-    } else {
-      const errorDetail = fbData?.error?.message || fbData?.error?.user_msg || 'Facebook Graph API returned error';
-      return res.status(fbRes.status || 400).json({
-        success: false,
-        error: errorDetail,
-        details: fbData?.error,
-      });
-    }
-  } catch (err: any) {
-    console.error('Error publishing Facebook Photo Post:', err);
-    res.status(500).json({ success: false, error: err?.message || 'Server error publishing Facebook Photo Post' });
-  }
-});
-
-app.post('/api/facebook/post-feed', async (req, res) => {
-  try {
-    const { link, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
-    const finalMessage = message || caption || '';
-    const token = accessToken || pageAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || 'EAAXgEb3A7ZCABS8doJvNLw1vzSsCfSOvmOeT1iZBDwvZCZBURKnjUiMEZCZBrkVMXJdGHVmqLmoayElU6qk6YZCWkVmjpNrBKTjOEILdl5dOoLVZC5ZBCRqG3T8VZCtWiSbRqBN706AM3azZCFi9xqZCUGnYKlUY2fzMlUDQEZCtD5oP7ru7nZBCtz17zau1geyQmqZAaU56ZAG547NHwjoDZC4wPVW1vmU6DCZAYfy56X1i8YMNGWkhqBHsZAioe6U2AC7HkGFZCzTPZA7UjdsR5uzXCbZBLKr3GxOqH0MAZDZD';
-    const targetPageId = pageId || process.env.FACEBOOK_PAGE_ID || 'me';
-
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        error: 'Facebook Access Token missing. Set FACEBOOK_PAGE_ACCESS_TOKEN in env or pass accessToken.',
-      });
-    }
-
-    const fbGraphUrl = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
-
-    const params = new URLSearchParams();
-    if (link) params.append('link', link);
     if (finalMessage) {
-      params.append('message', finalMessage);
       params.append('caption', finalMessage);
     }
     params.append('access_token', token);
@@ -1901,20 +1875,122 @@ app.post('/api/facebook/post-feed', async (req, res) => {
       body: params.toString(),
     });
 
-    const fbData: any = await fbRes.json();
+    const fbData: any = await fbRes.json().catch(() => ({}));
+
+    if (fbRes.ok && (fbData.id || fbData.post_id)) {
+      return res.json({
+        success: true,
+        photoId: fbData.id,
+        postId: fbData.post_id || fbData.id,
+        targetPageId,
+        message: 'Successfully published Photo Post to Facebook Page!',
+      });
+    } else {
+      const err = fbData?.error;
+      console.error('[Facebook Graph API Photo Error]', {
+        message: err?.message,
+        code: err?.code,
+        error_subcode: err?.error_subcode,
+        type: err?.type,
+        error_user_title: err?.error_user_title,
+        error_user_msg: err?.error_user_msg,
+        fbtrace_id: err?.fbtrace_id,
+        targetPageId,
+        url: fbGraphUrl,
+      });
+
+      let errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
+      if (err?.code === 200 && errorDetail.includes('pages_manage_posts')) {
+        errorDetail = "Missing Facebook permission: 'pages_manage_posts'. In Meta Graph API Explorer, select your App & Page, add 'pages_manage_posts' and 'pages_read_engagement' under Permissions, then generate the token.";
+      }
+
+      return res.status(fbRes.status || 400).json({
+        success: false,
+        error: errorDetail,
+        error_subcode: err?.error_subcode,
+        error_code: err?.code,
+        details: err,
+        targetPageId,
+      });
+    }
+  } catch (err: any) {
+    console.error('Error publishing Facebook Photo Post:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Server error publishing Facebook Photo Post' });
+  }
+});
+
+app.post('/api/facebook/post-feed', async (req, res) => {
+  try {
+    const { link, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
+    const finalMessage = message || caption || '';
+    const { token, targetPageId } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
+
+    if (!token) {
+      return res.status(400).json({
+        success: false,
+        error: 'Facebook Access Token missing. Set FACEBOOK_PAGE_ACCESS_TOKEN in env or pass accessToken.',
+      });
+    }
+
+    // Explicit Page Feed endpoint URL
+    const url = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
+
+    // For Link Posts (Link Post (Feed Card)), send message, link, and access_token.
+    // Do NOT include object_attachment or attached_media parameters so that Facebook's
+    // crawler automatically generates the correct Open Graph link preview card.
+    const params = new URLSearchParams();
+    if (finalMessage) {
+      params.append('message', finalMessage);
+    }
+    if (link) {
+      params.append('link', link);
+    }
+    params.append('access_token', token);
+
+    const fbRes = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+      },
+      body: params.toString(),
+    });
+
+    const fbData: any = await fbRes.json().catch(() => ({}));
 
     if (fbRes.ok && fbData.id) {
       return res.json({
         success: true,
         postId: fbData.id,
-        message: 'Successfully published Link Post to Facebook Page feed with message!',
+        targetPageId,
+        message: 'Successfully published Link Post to Facebook Page feed!',
       });
     } else {
-      const errorDetail = fbData?.error?.message || fbData?.error?.user_msg || 'Facebook Graph API returned error';
+      const err = fbData?.error;
+      // Log detailed Graph API error subcodes, codes, and messages to console for easy debugging
+      console.error('[Facebook Graph API Feed Error]', {
+        message: err?.message,
+        code: err?.code,
+        error_subcode: err?.error_subcode,
+        type: err?.type,
+        error_user_title: err?.error_user_title,
+        error_user_msg: err?.error_user_msg,
+        fbtrace_id: err?.fbtrace_id,
+        targetPageId,
+        url,
+      });
+
+      let errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
+      if (err?.code === 200 && errorDetail.includes('pages_manage_posts')) {
+        errorDetail = "Missing Facebook permission: 'pages_manage_posts'. In Meta Graph API Explorer, select your App & Page, add 'pages_manage_posts' and 'pages_read_engagement' under Permissions, then generate the token.";
+      }
+
       return res.status(fbRes.status || 400).json({
         success: false,
         error: errorDetail,
-        details: fbData?.error,
+        error_subcode: err?.error_subcode,
+        error_code: err?.code,
+        details: err,
+        targetPageId,
       });
     }
   } catch (err: any) {
@@ -1925,8 +2001,7 @@ app.post('/api/facebook/post-feed', async (req, res) => {
 
 app.post('/api/facebook/publish', async (req, res) => {
   const { accessToken, pageId, message, images, link, pageAccessToken } = req.body || {};
-  const token = accessToken || pageAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || 'EAAXgEb3A7ZCABS8doJvNLw1vzSsCfSOvmOeT1iZBDwvZCZBURKnjUiMEZCZBrkVMXJdGHVmqLmoayElU6qk6YZCWkVmjpNrBKTjOEILdl5dOoLVZC5ZBCRqG3T8VZCtWiSbRqBN706AM3azZCFi9xqZCUGnYKlUY2fzMlUDQEZCtD5oP7ru7nZBCtz17zau1geyQmqZAaU56ZAG547NHwjoDZC4wPVW1vmU6DCZAYfy56X1i8YMNGWkhqBHsZAioe6U2AC7HkGFZCzTPZA7UjdsR5uzXCbZBLKr3GxOqH0MAZDZD';
-  const targetPageId = pageId || process.env.FACEBOOK_PAGE_ID || 'me';
+  const { token, targetPageId } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
 
   if (!token || !targetPageId || !images || !Array.isArray(images)) {
     return res.status(400).json({ success: false, error: 'Missing required parameters' });
@@ -1942,23 +2017,31 @@ app.post('/api/facebook/publish', async (req, res) => {
         fullImageUrl = fullImageUrl.replace('https://dbuystore.com/', 'https://www.dbuystore.com/');
       }
 
-      const uploadRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/photos`, {
+      const uploadUrl = `https://graph.facebook.com/v19.0/${targetPageId}/photos`;
+      const uploadRes = await fetch(uploadUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           url: fullImageUrl,
           published: false,
-          access_token: accessToken
+          access_token: token
         })
       });
-      const text = await uploadRes.text();
-      let uploadData;
-      try { uploadData = JSON.parse(text); } catch { throw new Error('Facebook API returned invalid JSON'); }
+      const uploadData: any = await uploadRes.json().catch(() => ({}));
 
-      if (uploadData.id) {
+      if (uploadRes.ok && uploadData.id) {
         media_fbids.push(uploadData.id);
       } else {
-        throw new Error(`Failed to upload image: ${JSON.stringify(uploadData)}`);
+        const err = uploadData?.error;
+        console.error('[Facebook Graph API Photo Upload Error]', {
+          message: err?.message,
+          code: err?.code,
+          error_subcode: err?.error_subcode,
+          type: err?.type,
+          error_user_msg: err?.error_user_msg,
+          targetPageId,
+        });
+        throw new Error(err?.message || `Failed to upload image to Facebook: ${JSON.stringify(uploadData)}`);
       }
     }
 
@@ -1970,7 +2053,7 @@ app.post('/api/facebook/publish', async (req, res) => {
 
     const feedPayload: any = {
       message: postMessage,
-      access_token: accessToken
+      access_token: token
     };
 
     if (attached_media.length > 0) {
@@ -1979,21 +2062,44 @@ app.post('/api/facebook/publish', async (req, res) => {
       feedPayload.link = link;
     }
 
-    const feedRes = await fetch(`https://graph.facebook.com/v19.0/${pageId}/feed`, {
+    const feedUrl = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
+    const feedRes = await fetch(feedUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(feedPayload)
     });
-    const text = await feedRes.text();
-    let feedData;
-    try { feedData = JSON.parse(text); } catch { throw new Error('Facebook API returned invalid JSON'); }
+    const feedData: any = await feedRes.json().catch(() => ({}));
 
-    if (feedData.id) {
-      res.json({ success: true, postId: feedData.id });
+    if (feedRes.ok && feedData.id) {
+      res.json({ success: true, postId: feedData.id, targetPageId });
     } else {
-      res.status(500).json({ success: false, error: feedData.error?.message || 'Failed to publish post' });
+      const err = feedData?.error;
+      console.error('[Facebook Graph API Publish Feed Error]', {
+        message: err?.message,
+        code: err?.code,
+        error_subcode: err?.error_subcode,
+        type: err?.type,
+        error_user_msg: err?.error_user_msg,
+        targetPageId,
+        feedUrl,
+      });
+
+      let errorDetail = err?.message || 'Failed to publish post';
+      if (err?.code === 200 && errorDetail.includes('pages_manage_posts')) {
+        errorDetail = "Missing Facebook permission: 'pages_manage_posts'. In Meta Graph API Explorer, select your App & Page, add 'pages_manage_posts' and 'pages_read_engagement' under Permissions, then generate the token.";
+      }
+
+      res.status(feedRes.status || 500).json({
+        success: false,
+        error: errorDetail,
+        error_subcode: err?.error_subcode,
+        error_code: err?.code,
+        details: err,
+        targetPageId,
+      });
     }
   } catch (error: any) {
+    console.error('Error publishing Facebook Multi-Photo Post:', error);
     res.status(500).json({ success: false, error: error.message });
   }
 });

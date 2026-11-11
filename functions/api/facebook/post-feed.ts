@@ -1,72 +1,115 @@
+const DEFAULT_FB_PAGE_ID = '215073415343195';
+const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABSzaHWivAFli9ZCZAugvKGDXylopxiZCA791ZBU3EFzpOkJBeY4tGSrpMUbPxf2qrGlWVnkXHwgBdzytE4ZBjKQwJfmeTP4ZAXmJiwiH0yS9GIa3K2hjV87u3DkCg3kLJbcms9yq2HJ4ZCyW6vOEZBwGESu7LzNFzjFwbEr2Jtk25qhwZB8mIEJILg74y5LANijrRY19ZCUL8YNEwnZAOTpZBGGVmpimdewZDZD';
+
 export async function onRequestPost(context: any) {
   try {
     const req = context.request;
     const env = context.env || {};
     const body = await req.json();
 
-    const { link, message, caption, accessToken, pageAccessToken, pageId, images } = body || {};
+    const { link, message, caption, accessToken, pageAccessToken, pageId } = body || {};
     const finalMessage = message || caption || '';
-    const token = accessToken || pageAccessToken || env.FACEBOOK_PAGE_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || 'EAAXgEb3A7ZCABS8doJvNLw1vzSsCfSOvmOeT1iZBDwvZCZBURKnjUiMEZCZBrkVMXJdGHVmqLmoayElU6qk6YZCWkVmjpNrBKTjOEILdl5dOoLVZC5ZBCRqG3T8VZCtWiSbRqBN706AM3azZCFi9xqZCUGnYKlUY2fzMlUDQEZCtD5oP7ru7nZBCtz17zau1geyQmqZAaU56ZAG547NHwjoDZC4wPVW1vmU6DCZAYfy56X1i8YMNGWkhqBHsZAioe6U2AC7HkGFZCzTPZA7UjdsR5uzXCbZBLKr3GxOqH0MAZDZD';
-    const targetPageId = pageId || env.FACEBOOK_PAGE_ID || 'me';
+    let token = pageAccessToken || accessToken || env.FACEBOOK_PAGE_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || DEFAULT_FB_PAGE_TOKEN;
+    
+    // Explicitly target the Facebook Page endpoint, avoiding 'me' which Facebook treats as a group/user feed
+    let targetPageId = (pageId && pageId !== 'me') ? pageId : (env.FACEBOOK_PAGE_ID || DEFAULT_FB_PAGE_ID);
 
-    if (!token) {
-      return new Response(JSON.stringify({ success: false, error: 'Facebook Access Token missing.' }), { status: 400 });
-    }
-
-    // 1. Upload Images to get media IDs (if multi-image request)
-    const mediaArray: any[] = [];
-    if (Array.isArray(images) && images.length > 0) {
-      const validImages = images.filter((img: string) => img && typeof img === 'string' && img.startsWith('http'));
-      
-      for (const imageUrl of validImages) {
-        const photoRes = await fetch(`https://graph.facebook.com/v19.0/${targetPageId}/photos`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-          body: new URLSearchParams({
-            url: imageUrl,
-            published: 'false',
-            access_token: token
-          })
-        });
-        const photoData: any = await photoRes.json();
-        if (photoRes.ok && photoData.id) {
-          mediaArray.push({ media_fbid: photoData.id });
+    // Auto-resolve Page Token if user token was provided
+    if (token) {
+      try {
+        const accRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${token}`);
+        if (accRes.ok) {
+          const accData: any = await accRes.json();
+          const page = accData?.data?.find((p: any) => p.id === targetPageId) || accData?.data?.[0];
+          if (page?.access_token) {
+            token = page.access_token;
+            if (!pageId || pageId === 'me') {
+              targetPageId = page.id || DEFAULT_FB_PAGE_ID;
+            }
+          }
         }
+      } catch {
+        // proceed with token and targetPageId
       }
     }
 
-    // 2. Publish to Feed
-    const fbGraphUrl = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
-    const params = new URLSearchParams();
-    
-    // If we have attached media, we do NOT use the 'link' parameter, 
-    // as it triggers a single-image link preview card.
-    if (mediaArray.length > 0) {
-      params.append('attached_media', JSON.stringify(mediaArray));
-    } else if (link) {
-      params.append('link', link);
+    if (!token) {
+      return new Response(JSON.stringify({ success: false, error: 'Facebook Access Token missing.' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
     }
-    
+
+    // Target Facebook Page endpoint explicitly
+    const url = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
+
+    // For Link Posts (Link Post (Feed Card)), send message, link, and access_token.
+    // Do not include object_attachment or attached_media parameters so that Facebook's crawler
+    // automatically generates the correct Open Graph link preview card.
+    const params = new URLSearchParams();
     if (finalMessage) {
       params.append('message', finalMessage);
     }
+    if (link) {
+      params.append('link', link);
+    }
     params.append('access_token', token);
 
-    const fbRes = await fetch(fbGraphUrl, {
+    const fbRes = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: params.toString(),
     });
 
-    const fbData: any = await fbRes.json();
+    const fbData: any = await fbRes.json().catch(() => ({}));
 
     if (fbRes.ok && fbData.id) {
-      return new Response(JSON.stringify({ success: true, postId: fbData.id, message: 'Successfully published post' }), { headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+      return new Response(JSON.stringify({
+        success: true,
+        postId: fbData.id,
+        targetPageId,
+        message: 'Successfully published Link Post to Facebook Page feed!'
+      }), {
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
     } else {
-      return new Response(JSON.stringify({ success: false, error: fbData?.error?.message || 'Graph API error', details: fbData?.error }), { status: fbRes.status || 400, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+      const err = fbData?.error;
+      // Log detailed Graph API error subcodes, codes, and messages to console for easy debugging
+      console.error('[Facebook Graph API Feed Error]', {
+        message: err?.message,
+        code: err?.code,
+        error_subcode: err?.error_subcode,
+        type: err?.type,
+        error_user_title: err?.error_user_title,
+        error_user_msg: err?.error_user_msg,
+        fbtrace_id: err?.fbtrace_id,
+        targetPageId,
+        url,
+      });
+
+      let errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
+      if (err?.code === 200 && errorDetail.includes('pages_manage_posts')) {
+        errorDetail = "Missing Facebook permission: 'pages_manage_posts'. In Meta Graph API Explorer, select your App & Page, add 'pages_manage_posts' and 'pages_read_engagement' under Permissions, then generate the token.";
+      }
+
+      return new Response(JSON.stringify({
+        success: false,
+        error: errorDetail,
+        error_subcode: err?.error_subcode,
+        error_code: err?.code,
+        details: err,
+        targetPageId,
+      }), {
+        status: fbRes.status || 400,
+        headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+      });
     }
   } catch (err: any) {
-    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), { status: 500, headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' } });
+    console.error('Error publishing Facebook Feed Link Post:', err);
+    return new Response(JSON.stringify({ success: false, error: err?.message || 'Server error' }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+    });
   }
 }
 
