@@ -62,7 +62,7 @@ const buildHighConvertingAdCopy = (product: Product, variantIndex = 0) => {
 };
 
 const FB_APP_ID = "1653741686157296";
-const FB_PAGE_TOKEN = "EAAXgEb3A7ZCABS1dkA4rhejoXgwWsDWLmZBIuv4UeVmEprMOuEM3o9YPdKKI0NnURobrXx89dsIj9qufVFZBdMW4htKGd8OeZCNZAsQvfVtxqMsGfzefwRURd7jdHd9byYipbYG6Bk1si192BLRl06lnXQ6XEaiSdZBaD7iy2eHgUd0JdxmDyLgsyX7C4LM8ZCAERPUxEn82S8aDK7HboNCZAA6IRhWIPis2n2FI2aC01KjlaLihZA8K5GkOCm3Io5BYuNlf8jC5JdKVZCLFnq";
+const FB_PAGE_TOKEN = "EAAXgEb3A7ZCABS8doJvNLw1vzSsCfSOvmOeT1iZBDwvZCZBURKnjUiMEZCZBrkVMXJdGHVmqLmoayElU6qk6YZCWkVmjpNrBKTjOEILdl5dOoLVZC5ZBCRqG3T8VZCtWiSbRqBN706AM3azZCFi9xqZCUGnYKlUY2fzMlUDQEZCtD5oP7ru7nZBCtz17zau1geyQmqZAaU56ZAG547NHwjoDZC4wPVW1vmU6DCZAYfy56X1i8YMNGWkhqBHsZAioe6U2AC7HkGFZCzTPZA7UjdsR5uzXCbZBLKr3GxOqH0MAZDZD";
 const FB_PAGE_URL = "https://www.facebook.com/Dbuystore";
 
 export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isOpen, onClose, isKa }) => {
@@ -81,18 +81,16 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const [images, setImages] = useState<string[]>([]);
 
   useEffect(() => {
-    // Resolve Page ID if missing
-    if (!pageId) {
-      fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}`)
-        .then(r => r.json())
-        .then((data: any) => {
-          if (data.id) {
-            setPageId(data.id);
-            localStorage.setItem('dbuy_fb_page_id', data.id);
-          }
-        })
-        .catch(() => {});
-    }
+    // Resolve Page ID with the active Page Access Token
+    fetch(`https://graph.facebook.com/v19.0/me?access_token=${FB_PAGE_TOKEN}`)
+      .then(r => r.json())
+      .then((data: any) => {
+        if (data.id) {
+          setPageId(data.id);
+          localStorage.setItem('dbuy_fb_page_id', data.id);
+        }
+      })
+      .catch(() => {});
 
     const urls = new Set<string>();
     const addUrl = (u: any) => {

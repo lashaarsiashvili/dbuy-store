@@ -1873,7 +1873,7 @@ app.post('/api/facebook/post-feed', async (req, res) => {
   try {
     const { link, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
     const finalMessage = message || caption || '';
-    const token = accessToken || pageAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN;
+    const token = accessToken || pageAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || 'EAAXgEb3A7ZCABS8doJvNLw1vzSsCfSOvmOeT1iZBDwvZCZBURKnjUiMEZCZBrkVMXJdGHVmqLmoayElU6qk6YZCWkVmjpNrBKTjOEILdl5dOoLVZC5ZBCRqG3T8VZCtWiSbRqBN706AM3azZCFi9xqZCUGnYKlUY2fzMlUDQEZCtD5oP7ru7nZBCtz17zau1geyQmqZAaU56ZAG547NHwjoDZC4wPVW1vmU6DCZAYfy56X1i8YMNGWkhqBHsZAioe6U2AC7HkGFZCzTPZA7UjdsR5uzXCbZBLKr3GxOqH0MAZDZD';
     const targetPageId = pageId || process.env.FACEBOOK_PAGE_ID || 'me';
 
     if (!token) {
@@ -1924,9 +1924,11 @@ app.post('/api/facebook/post-feed', async (req, res) => {
 });
 
 app.post('/api/facebook/publish', async (req, res) => {
-  const { accessToken, pageId, message, images, link } = req.body;
+  const { accessToken, pageId, message, images, link, pageAccessToken } = req.body || {};
+  const token = accessToken || pageAccessToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || 'EAAXgEb3A7ZCABS8doJvNLw1vzSsCfSOvmOeT1iZBDwvZCZBURKnjUiMEZCZBrkVMXJdGHVmqLmoayElU6qk6YZCWkVmjpNrBKTjOEILdl5dOoLVZC5ZBCRqG3T8VZCtWiSbRqBN706AM3azZCFi9xqZCUGnYKlUY2fzMlUDQEZCtD5oP7ru7nZBCtz17zau1geyQmqZAaU56ZAG547NHwjoDZC4wPVW1vmU6DCZAYfy56X1i8YMNGWkhqBHsZAioe6U2AC7HkGFZCzTPZA7UjdsR5uzXCbZBLKr3GxOqH0MAZDZD';
+  const targetPageId = pageId || process.env.FACEBOOK_PAGE_ID || 'me';
 
-  if (!accessToken || !pageId || !images || !Array.isArray(images)) {
+  if (!token || !targetPageId || !images || !Array.isArray(images)) {
     return res.status(400).json({ success: false, error: 'Missing required parameters' });
   }
 
