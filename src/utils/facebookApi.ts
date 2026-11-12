@@ -403,7 +403,20 @@ export async function publishFacebookPublish(
     const uploadResults = await Promise.all(
       normalizedImages.map(async (imgUrl) => {
         const uploadUrl = `https://graph.facebook.com/v19.0/${pageId}/photos`;
-        let res: Response;
+
+        const tryUrlUpload = async (candidate: string) => {
+          const uploadParams = new URLSearchParams();
+          uploadParams.append('url', candidate);
+          uploadParams.append('published', 'false');
+          uploadParams.append('access_token', token);
+          const res = await fetch(uploadUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: uploadParams.toString(),
+          });
+          const data: any = await res.json().catch(() => ({}));
+          return { ok: res.ok && Boolean(data.id), id: data.id as string | undefined, error: data?.error };
+        };
 
         if (imgUrl.startsWith('data:')) {
           const blobRes = await fetch(imgUrl);
@@ -412,24 +425,27 @@ export async function publishFacebookPublish(
           formData.append('source', blob, 'photo.jpg');
           formData.append('published', 'false');
           formData.append('access_token', token);
-          res = await fetch(uploadUrl, { method: 'POST', body: formData });
-        } else {
-          const uploadParams = new URLSearchParams();
-          uploadParams.append('url', imgUrl);
-          uploadParams.append('published', 'false');
-          uploadParams.append('access_token', token);
-          res = await fetch(uploadUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-            body: uploadParams.toString(),
-          });
+          const res = await fetch(uploadUrl, { method: 'POST', body: formData });
+          const data: any = await res.json().catch(() => ({}));
+          if (res.ok && data.id) {
+            return { id: data.id as string };
+          }
+          return { error: data?.error || { message: 'Photo upload failed' } };
         }
 
-        const data: any = await res.json().catch(() => ({}));
-        if (res.ok && data.id) {
-          return { id: data.id as string };
+        const primary = await tryUrlUpload(imgUrl);
+        if (primary.ok && primary.id) {
+          return { id: primary.id };
         }
-        return { error: data?.error || { message: 'Photo upload failed' } };
+
+        const err = primary.error || { message: 'Photo upload failed' };
+        if (err.error_subcode === 2069019 || err.code === 324) {
+          const wsrvFallback = await tryUrlUpload(`https://wsrv.nl/?url=${encodeURIComponent(imgUrl)}&output=jpg&q=90`);
+          if (wsrvFallback.ok && wsrvFallback.id) {
+            return { id: wsrvFallback.id };
+          }
+        }
+        return { error: err };
       })
     );
 

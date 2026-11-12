@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import fs from 'fs';
+import dns from 'dns';
 import { execSync } from 'child_process';
 import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
@@ -15,6 +16,7 @@ import { generateSmartOfflineAdCopy } from './src/utils/adCopyGenerator';
 import { parseProductHtml } from './src/utils/productScraper';
 
 dotenv.config({ override: true });
+dns.setDefaultResultOrder('ipv4first');
 
 const app = express();
 // Port 3000 is required for AI Studio development environment.
@@ -334,10 +336,23 @@ function initStoreDatabase(): StoreDatabase {
     products = initialProducts;
   }
 
-  products.forEach((p: any) => {
-    if (!Array.isArray(p.images)) {
-      p.images = p.image ? [p.image] : [];
+  const initialById = new Map(initialProducts.map((item: any) => [item.id, item]));
+  products = products.map((p: any) => {
+    const imgStr = String(p?.image || '');
+    if (imgStr.includes('ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg')) {
+      const replacement = initialById.get(p.id);
+      if (replacement) {
+        return {
+          ...p,
+          image: replacement.image,
+          images: Array.isArray(replacement.images) ? replacement.images : [replacement.image],
+        };
+      }
     }
+    if (!Array.isArray(p.images)) {
+      return { ...p, images: p.image ? [p.image] : [] };
+    }
+    return p;
   });
 
   if (uploadsMap && uploadsMap['placeholder.jpg']) {
@@ -2019,23 +2034,88 @@ function normalizeFacebookImageUrl(imgUrl: string): string {
   const clean = (imgUrl || '').trim();
   if (!clean) return '';
   if (clean.startsWith('data:')) return clean;
+  if (clean.includes('ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg')) {
+    return 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746916886-ba9w7.jpg';
+  }
+  let resolved = clean;
   if (clean.startsWith('/')) {
-    return `https://www.dbuystore.com${clean}`;
+    resolved = `https://www.dbuystore.com${clean}`;
+  } else if (clean.startsWith('https://dbuystore.com/')) {
+    resolved = clean.replace('https://dbuystore.com/', 'https://www.dbuystore.com/');
+  } else if (clean.startsWith('http://dbuystore.com/')) {
+    resolved = clean.replace('http://dbuystore.com/', 'https://www.dbuystore.com/');
   }
-  if (clean.startsWith('https://dbuystore.com/')) {
-    return clean.replace('https://dbuystore.com/', 'https://www.dbuystore.com/');
+  return resolved.replace(/ /g, '%20');
+}
+
+function isInvalidFacebookImageError(err: any): boolean {
+  return Boolean(err && (err.error_subcode === 2069019 || err.code === 324));
+}
+
+function sniffBufferImageMime(bytes: Uint8Array, headerMime: string): { mime: string; needsTranscode: boolean } {
+  const h = headerMime.split(';')[0].trim().toLowerCase();
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { mime: 'image/jpeg', needsTranscode: false };
   }
-  if (clean.startsWith('http://dbuystore.com/')) {
-    return clean.replace('http://dbuystore.com/', 'https://www.dbuystore.com/');
+  if (bytes.length >= 4 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) {
+    return { mime: 'image/png', needsTranscode: false };
   }
-  return clean;
+  if (bytes.length >= 3 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+    return { mime: 'image/gif', needsTranscode: false };
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) {
+    return { mime: 'image/webp', needsTranscode: true };
+  }
+  const headerIsAvifOrWebp = h.includes('avif') || h.includes('webp') || h.includes('heic');
+  return { mime: h.startsWith('image/') ? h : 'application/octet-stream', needsTranscode: headerIsAvifOrWebp || !h.startsWith('image/') };
+}
+
+async function uploadBufferToFacebookPhotos(
+  uploadUrl: string,
+  buffer: Uint8Array | Buffer,
+  mimeType: string,
+  fileName: string,
+  token: string
+): Promise<{ ok: boolean; id?: string; error?: any }> {
+  const formData = new FormData();
+  formData.append('source', new Blob([new Uint8Array(buffer)], { type: mimeType }), fileName);
+  formData.append('published', 'false');
+  formData.append('access_token', token);
+  const res = await fetch(uploadUrl, { method: 'POST', body: formData });
+  const data: any = await res.json().catch(() => ({}));
+  if (res.ok && data.id) {
+    return { ok: true, id: data.id };
+  }
+  return { ok: false, error: data?.error || { message: 'Binary photo upload failed' } };
+}
+
+function buildFacebookImageCandidateUrls(normalized: string): string[] {
+  const candidates = [normalized];
+  try {
+    const u = new URL(normalized);
+    const base = u.pathname.split('/').pop();
+    if (base) {
+      if (u.hostname.endsWith('.r2.dev')) {
+        candidates.push(`https://www.dbuystore.com/uploads/${base}`);
+      } else if (u.hostname.includes('dbuystore.com') && u.pathname.includes('/uploads/')) {
+        candidates.push(`https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/${base}`);
+      }
+    }
+  } catch {
+    // Keep primary URL only
+  }
+  return Array.from(new Set(candidates));
 }
 
 async function uploadUnpublishedFacebookPhoto(
   imgUrl: string,
   targetPageId: string,
   token: string
-): Promise<{ id?: string; error?: any }> {
+): Promise<{ id?: string; error?: any; failedUrl?: string }> {
   const uploadUrl = `https://graph.facebook.com/v19.0/${targetPageId}/photos`;
   const normalized = normalizeFacebookImageUrl(imgUrl);
 
@@ -2043,39 +2123,47 @@ async function uploadUnpublishedFacebookPhoto(
     return { error: { message: 'Empty image URL provided' } };
   }
 
-  let photoRes: Response;
   if (normalized.startsWith('data:')) {
     const match = normalized.match(/^data:([^;]+);base64,(.+)$/);
     if (!match) {
-      return { error: { message: 'Invalid data URI image format' } };
+      return { error: { message: 'Invalid data URI image format' }, failedUrl: '[data-uri]' };
     }
     const mimeType = match[1];
     const buffer = Buffer.from(match[2], 'base64');
-    const formData = new FormData();
-    formData.append('source', new Blob([buffer], { type: mimeType }), 'photo.jpg');
-    formData.append('published', 'false');
-    formData.append('access_token', token);
-    photoRes = await fetch(uploadUrl, { method: 'POST', body: formData });
-  } else {
-    const params = new URLSearchParams();
-    params.append('url', normalized);
-    params.append('published', 'false');
-    params.append('access_token', token);
-    photoRes = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
+    const up = await uploadBufferToFacebookPhotos(uploadUrl, buffer, mimeType, 'photo.jpg', token);
+    if (up.ok && up.id) return { id: up.id };
+    return { error: up.error, failedUrl: '[data-uri]' };
   }
 
-  let uploadData: any = await photoRes.json().catch(() => ({}));
+  // Attempt 1: Standard Facebook URL ingestion with published=false
+  const params = new URLSearchParams();
+  params.append('url', normalized);
+  params.append('published', 'false');
+  params.append('access_token', token);
+  const photoRes = await fetch(uploadUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: params.toString(),
+  });
+
+  const uploadData: any = await photoRes.json().catch(() => ({}));
   if (photoRes.ok && uploadData.id) {
     return { id: uploadData.id };
   }
 
-  // Fallback for local dev images under /uploads/... that may not be deployed to www.dbuystore.com yet
-  if (normalized.includes('/uploads/')) {
-    const rawName = path.basename(normalized.split('?')[0]);
+  let lastError = uploadData?.error || { message: 'Failed to upload unpublished photo to Facebook' };
+  if (isFacebookTokenExpiredError(lastError)) {
+    return { error: lastError, failedUrl: normalized };
+  }
+
+  // Attempt 2: Local disk asset lookup (matches both /uploads/... and r2.dev/products/... files stored in data/uploads or public/uploads)
+  let rawName = '';
+  try {
+    rawName = decodeURIComponent(path.basename(normalized.split('?')[0]));
+  } catch {
+    rawName = path.basename(normalized.split('?')[0]);
+  }
+  if (rawName) {
     const localCandidates = [
       path.join(process.cwd(), 'data', 'uploads', rawName),
       path.join(process.cwd(), 'public', 'uploads', rawName),
@@ -2085,33 +2173,93 @@ async function uploadUnpublishedFacebookPhoto(
       try {
         const buffer = fs.readFileSync(localFile);
         const ext = path.extname(localFile).toLowerCase();
-        const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
-        const formData = new FormData();
-        formData.append('source', new Blob([buffer], { type: mime }), rawName);
-        formData.append('published', 'false');
-        formData.append('access_token', token);
-        const localRes = await fetch(uploadUrl, { method: 'POST', body: formData });
-        const localData: any = await localRes.json().catch(() => ({}));
-        if (localRes.ok && localData.id) {
-          return { id: localData.id };
+        const headerHint = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : ext === '.gif' ? 'image/gif' : 'image/jpeg';
+        const { mime } = sniffBufferImageMime(new Uint8Array(buffer), headerHint);
+        const binUp = await uploadBufferToFacebookPhotos(uploadUrl, buffer, mime, rawName, token);
+        if (binUp.ok && binUp.id) {
+          return { id: binUp.id };
         }
-        uploadData = localData;
+        if (binUp.error) {
+          lastError = binUp.error;
+          if (isFacebookTokenExpiredError(lastError)) {
+            return { error: lastError, failedUrl: normalized };
+          }
+        }
       } catch (localErr) {
         console.warn('[Facebook Local File Fallback Upload Failed]', localErr);
       }
     }
   }
 
-  const err = uploadData?.error || { message: 'Failed to upload unpublished photo to Facebook' };
-  console.warn('[Facebook Graph API Photo Upload Warning]', {
-    imageUrl: normalized.startsWith('data:') ? '[data-uri]' : normalized,
-    message: err?.message,
-    code: err?.code,
-    error_subcode: err?.error_subcode,
-    type: err?.type,
-    targetPageId,
-  });
-  return { error: err };
+  // Attempt 3: Fetch remote bytes directly (including R2 <-> dbuystore.com/uploads fallback) and upload via multipart source
+  const candidates = buildFacebookImageCandidateUrls(normalized);
+  let workingSourceUrl: string | null = null;
+
+  for (const candidateUrl of candidates) {
+    try {
+      const imgRes = await fetch(candidateUrl, {
+        signal: AbortSignal.timeout(8000),
+        headers: {
+          'Accept': 'image/jpeg,image/png,image/webp,*/*;q=0.8',
+          'User-Agent': 'Mozilla/5.0 (compatible; DBUYStore/1.0)',
+        },
+      });
+      if (!imgRes.ok) continue;
+
+      const headerCt = (imgRes.headers.get('content-type') || '').toLowerCase();
+      if (!headerCt.startsWith('image/') || headerCt.includes('svg')) continue;
+
+      const bytes = new Uint8Array(await imgRes.arrayBuffer());
+      if (bytes.length < 100) continue;
+
+      workingSourceUrl = candidateUrl;
+      const { mime, needsTranscode } = sniffBufferImageMime(bytes, headerCt);
+
+      if (!needsTranscode) {
+        const ext = mime === 'image/png' ? 'png' : mime === 'image/gif' ? 'gif' : 'jpg';
+        const binUp = await uploadBufferToFacebookPhotos(uploadUrl, bytes, mime, `photo.${ext}`, token);
+        if (binUp.ok && binUp.id) {
+          return { id: binUp.id };
+        }
+        if (binUp.error) {
+          lastError = binUp.error;
+          if (isFacebookTokenExpiredError(lastError)) {
+            return { error: lastError, failedUrl: normalized };
+          }
+        }
+      }
+      break;
+    } catch {
+      // Try next candidate
+    }
+  }
+
+  // Attempt 4: Transcode via wsrv.nl to clean sRGB JPEG and upload binary
+  const transcodeTarget = workingSourceUrl || normalized;
+  if (isInvalidFacebookImageError(lastError) || workingSourceUrl) {
+    try {
+      const wsrvUrl = `https://wsrv.nl/?url=${encodeURIComponent(transcodeTarget)}&output=jpg&q=90`;
+      const wsrvRes = await fetch(wsrvUrl, { signal: AbortSignal.timeout(8000) });
+      if (wsrvRes.ok) {
+        const wsrvCt = (wsrvRes.headers.get('content-type') || '').toLowerCase();
+        if (wsrvCt.startsWith('image/')) {
+          const jpgBytes = new Uint8Array(await wsrvRes.arrayBuffer());
+          if (jpgBytes.length >= 100) {
+            const jpgUp = await uploadBufferToFacebookPhotos(uploadUrl, jpgBytes, 'image/jpeg', 'photo.jpg', token);
+            if (jpgUp.ok && jpgUp.id) {
+              return { id: jpgUp.id };
+            }
+            if (jpgUp.error) lastError = jpgUp.error;
+          }
+        }
+      }
+    } catch {
+      // Ignore transcode error
+    }
+  }
+
+  console.warn(`[Facebook Photo Upload] Could not ingest ${normalized} for page ${targetPageId}: ${lastError?.message || 'Invalid or unreachable image'}`);
+  return { error: lastError, failedUrl: normalized };
 }
 
 async function handleFacebookMultiPhotoPublish(req: express.Request, res: express.Response) {
@@ -2153,15 +2301,19 @@ async function handleFacebookMultiPhotoPublish(req: express.Request, res: expres
 
     if (failedUpload) {
       const expired = isFacebookTokenExpiredError(failedUpload.error);
+      const invalidImg = isInvalidFacebookImageError(failedUpload.error);
       return res.status(expired ? 401 : 400).json({
         success: false,
         requiresReconnect: expired,
         expired,
         error: expired
           ? 'Facebook access token has expired. Please reconnect or paste a fresh Page Access Token.'
+          : invalidImg
+          ? `Facebook rejected image (${failedUpload.failedUrl || 'unknown URL'}): ${failedUpload.error?.message || 'Missing or invalid image file'}`
           : (failedUpload.error?.message || 'Failed to upload image to Facebook'),
         error_subcode: failedUpload.error?.error_subcode,
         error_code: failedUpload.error?.code,
+        failedUrl: failedUpload.failedUrl,
         details: failedUpload.error,
         targetPageId,
       });

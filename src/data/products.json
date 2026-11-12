@@ -16,8 +16,14 @@
     "category": "tech",
     "stock": 10,
     "badge": "New",
-    "image": "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg",
-    "images": ["https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg"],
+    "image": "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746916886-ba9w7.jpg",
+    "images": [
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746916886-ba9w7.jpg",
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746912716-limpi.jpg",
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746912691-qpm6e.jpg",
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746912711-r5mzx.jpg",
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746912710-kaqn9.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,
@@ -141,8 +147,14 @@
     "category": "tech",
     "stock": 8,
     "badge": "New",
-    "image": "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg",
-    "images": ["https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg"],
+    "image": "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746943739-389qv.jpg",
+    "images": [
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746943739-389qv.jpg",
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746948248-ah9kf.jpg",
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746943730-2qqhp.jpg",
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746943744-2wnkn.jpg",
+      "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746948272-qioc5.jpg"
+    ],
     "rating": 5,
     "reviewsCount": 0,
     "isDeal": true,

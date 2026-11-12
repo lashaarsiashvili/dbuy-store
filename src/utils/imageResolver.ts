@@ -11,12 +11,12 @@ const REPO_BASE = 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/
 // Explicit mapping for catalog products to actual uploaded files
 const PRODUCT_IMAGE_MAP: Record<string, string> = {
   'PRO X2 SUPERSTRIKE Wireless Gaming Headset': 'prod-prod-1788787675363-0-1788788713941-z2li5.jpg',
-  'Ember Temperature Control Smart Mug 2, 14 Oz - White': 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg',
+  'Ember Temperature Control Smart Mug 2, 14 Oz - White': 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746916886-ba9w7.jpg',
   'Swanson Triple Magnesium Complex Powder 400 mg 8 oz': 'prod-1788708520960-qldcrv.png',
   'Swanson High Concentrate Omega-3 Fish Oil - 680 mg (120 Softgels)': 'prod-1788708754230-4dk0vn.png',
   'Swanson Highest Potency Vitamin D3 Softgels, 250 mcg (250 Sgels)': 'prod-prod-1788777272471-0-1788783602771-bvf0k.jpg',
   'Avene Hyaluron Activ B3 Concentrated Plumping Serum 30ml': 'prod-prod-1788777425106-0-1788783603009-v0hay.jpg',
-  'Ember Temperature Control Smart Mug 2, 14 Oz - Matte Black': 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg',
+  'Ember Temperature Control Smart Mug 2, 14 Oz - Matte Black': 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746943739-389qv.jpg',
   'Owala 32oz FreeSip Stainless Steel Water Bottle – Pink Ribbon Toile-2026 Gift': 'prod-prod-1788877210563-0-1788877213900-80n0m.jpg',
   'Owala FreeSip 32 oz Weekender Color Drop Insulated Stainless Steel Water Bottle': 'prod-prod-1788877210563-1-1788877214207-cljm1.jpg',
   'Aquaminder Drink Reminder Smart Water Bottle 600ml': 'prod-prod-1788724519740-0-1788783604196-f2ye4.jpg',

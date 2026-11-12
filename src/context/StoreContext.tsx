@@ -745,6 +745,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const sanitizeImageUrl = (url: string | undefined): string => {
     if (!url || typeof url !== 'string') return '';
     const trimmed = url.trim();
+    if (trimmed.includes('ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg')) {
+      return 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/ember-temperature-control-smart-mug-2-14-1791746916886-ba9w7.jpg';
+    }
     if (trimmed.includes('/uploads/')) {
       return '/uploads/' + trimmed.split('/uploads/').pop();
     }
@@ -774,15 +777,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const sanitizeProducts = (rawProducts: Product[]): Product[] => {
     const deletedIds = getDeletedProductIds();
+    const initialById = new Map(initialProducts.map((item) => [item.id, item]));
     const filterGenuine = (list: Product[]) =>
-      list.filter(
-        (p) =>
-          p &&
-          typeof p.id === 'string' &&
-          p.id.trim().length > 0 &&
-          !isFakeStudioProduct(p) &&
-          !deletedIds.has(p.id)
-      );
+      list
+        .filter(
+          (p) =>
+            p &&
+            typeof p.id === 'string' &&
+            p.id.trim().length > 0 &&
+            !isFakeStudioProduct(p) &&
+            !deletedIds.has(p.id)
+        )
+        .map((p) => {
+          const img = String(p.image || '');
+          if (img.includes('ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg')) {
+            const fallback = initialById.get(p.id);
+            if (fallback?.image) {
+              return { ...p, image: fallback.image, images: fallback.images || [fallback.image] };
+            }
+          }
+          return p;
+        });
 
     if (!rawProducts || !Array.isArray(rawProducts)) {
       return filterGenuine(initialProducts);
