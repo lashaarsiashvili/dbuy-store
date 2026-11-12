@@ -227,6 +227,9 @@ interface StoreDatabase {
   adminPasswordSalt?: string;
   uploadsMap?: Record<string, string>;
   userCarts?: Record<string, { cart: any[]; wishlist: any[]; updatedAt: string }>;
+  users?: Record<string, any>;
+  userProfiles?: Record<string, any>;
+  userSessions?: Record<string, any>;
   lastUpdated: string;
 }
 
@@ -366,6 +369,9 @@ function initStoreDatabase(): StoreDatabase {
     adminPasswordSalt: loadedDb?.adminPasswordSalt || '',
     uploadsMap,
     userCarts: loadedDb?.userCarts || {},
+    users: loadedDb?.users || {},
+    userProfiles: loadedDb?.userProfiles || {},
+    userSessions: loadedDb?.userSessions || {},
     lastUpdated: loadedDb?.lastUpdated || new Date().toISOString(),
   };
   (initialDb as any).dbVersion = DB_VERSION;
@@ -2822,6 +2828,178 @@ app.post('/api/store/pull-remote', async (req, res) => {
       success: false,
       error: `Failed to sync from remote URL: ${err.message || String(err)}`,
     });
+  }
+});
+
+app.post('/api/auth/google', (req, res) => {
+  try {
+    const { email, name, googleId, picture } = req.body || {};
+
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      res.status(400).json({ success: false, error: 'Valid email is required' });
+      return;
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const cleanName = (name && typeof name === 'string' ? name.trim() : '') || 'Google User';
+    const cleanGoogleId = (googleId && typeof googleId === 'string' ? googleId.trim() : '') || '';
+    const cleanPicture = (picture && typeof picture === 'string' ? picture.trim() : '') || '';
+
+    // Initialize stores if missing
+    storeDb.users = storeDb.users || {};
+    storeDb.userProfiles = storeDb.userProfiles || {};
+    storeDb.userSessions = storeDb.userSessions || {};
+    storeDb.registeredUsers = storeDb.registeredUsers || {};
+
+    // 1. Check if user exists by googleId or email in main admin database
+    let existingUserId: string | null = null;
+    let existingUser: any = null;
+
+    for (const [uid, u] of Object.entries(storeDb.users)) {
+      if ((cleanGoogleId && u.googleId === cleanGoogleId) || (u.email && u.email.toLowerCase() === cleanEmail)) {
+        existingUserId = uid;
+        existingUser = u;
+        break;
+      }
+    }
+
+    // Check registeredUsers fallback
+    if (!existingUser && storeDb.registeredUsers[cleanEmail]) {
+      const reg = storeDb.registeredUsers[cleanEmail];
+      existingUserId = reg.id || `usr_${cleanEmail.replace(/[^a-z0-9]/gi, '_')}`;
+      existingUser = {
+        id: existingUserId,
+        userId: existingUserId,
+        googleId: cleanGoogleId || reg.googleId || '',
+        email: cleanEmail,
+        name: reg.name || cleanName,
+        picture: reg.picture || cleanPicture,
+        role: reg.role || (cleanEmail === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer'),
+        provider: 'google',
+        createdAt: reg.createdAt || new Date().toISOString(),
+      };
+      storeDb.users[existingUserId] = existingUser;
+    }
+
+    const sessionToken = `sess_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 10)}${Math.random().toString(36).substring(2, 10)}`;
+    let isNewUser = false;
+    let resolvedUser: any = null;
+
+    if (!existingUser) {
+      // --- NEW USER: Automatically insert into main admin database ---
+      isNewUser = true;
+      const newUserId = `usr_${Date.now().toString(36)}_${Math.random().toString(36).substring(2, 8)}`;
+      const role = cleanEmail === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer';
+
+      resolvedUser = {
+        id: newUserId,
+        userId: newUserId,
+        googleId: cleanGoogleId,
+        email: cleanEmail,
+        name: cleanName,
+        picture: cleanPicture,
+        role,
+        provider: 'google',
+        sessionToken,
+        country: 'Georgia',
+        city: 'Tbilisi',
+        zip: '',
+        address: '',
+        phone: '',
+        createdAt: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+      };
+
+      storeDb.users[newUserId] = resolvedUser;
+
+      // Create their personal data space / profile
+      storeDb.userProfiles[newUserId] = {
+        userId: newUserId,
+        email: cleanEmail,
+        cart: [],
+        wishlist: [],
+        preferences: {},
+        shippingAddress: {},
+        ordersHistory: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      // --- EXISTING USER: Authenticate and generate active session token ---
+      isNewUser = false;
+      const userId = existingUserId || existingUser.id;
+      const role = cleanEmail === 'lashaarsiashvili@gmail.com' || existingUser.role === 'admin' ? 'admin' : 'customer';
+
+      resolvedUser = {
+        ...existingUser,
+        id: userId,
+        userId,
+        googleId: cleanGoogleId || existingUser.googleId,
+        email: cleanEmail,
+        name: cleanName || existingUser.name,
+        picture: cleanPicture || existingUser.picture,
+        role,
+        provider: 'google',
+        sessionToken,
+        lastLoginAt: new Date().toISOString(),
+      };
+
+      storeDb.users[userId] = resolvedUser;
+
+      // Ensure their personal data space exists
+      if (!storeDb.userProfiles[userId]) {
+        storeDb.userProfiles[userId] = {
+          userId,
+          email: cleanEmail,
+          cart: [],
+          wishlist: [],
+          preferences: {},
+          shippingAddress: {},
+          ordersHistory: [],
+          createdAt: existingUser.createdAt || new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+      }
+    }
+
+    // Save active session token
+    storeDb.userSessions[sessionToken] = {
+      sessionToken,
+      userId: resolvedUser.id,
+      email: cleanEmail,
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+
+    // Keep registeredUsers in sync for backward compatibility
+    storeDb.registeredUsers[cleanEmail] = {
+      ...storeDb.registeredUsers[cleanEmail],
+      id: resolvedUser.id,
+      userId: resolvedUser.id,
+      googleId: resolvedUser.googleId,
+      name: resolvedUser.name,
+      email: cleanEmail,
+      role: resolvedUser.role,
+      provider: 'google',
+      authProvider: 'google',
+      picture: resolvedUser.picture,
+      sessionToken,
+      lastLoginAt: resolvedUser.lastLoginAt,
+      createdAt: resolvedUser.createdAt,
+    };
+
+    saveStoreDatabase();
+
+    res.json({
+      success: true,
+      isNewUser,
+      sessionToken,
+      user: resolvedUser,
+      profile: storeDb.userProfiles[resolvedUser.id] || { cart: [], wishlist: [] },
+    });
+  } catch (err: any) {
+    console.error('[/api/auth/google server error]:', err);
+    res.status(500).json({ success: false, error: err?.message || 'Authentication failed' });
   }
 });
 

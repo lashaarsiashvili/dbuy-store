@@ -14,7 +14,6 @@ import { WishlistDrawer } from './components/WishlistDrawer';
 import { CheckoutModal } from './components/CheckoutModal';
 import { CheckoutPage } from './components/CheckoutPage';
 import { AuthModal } from './components/AuthModal';
-import { FaceIdSetupModal } from './components/FaceIdSetupModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AboutPage } from './components/AboutPage';
 import { ContactPage } from './components/ContactPage';
@@ -24,6 +23,7 @@ import { ProductDetailPage } from './components/ProductDetailPage';
 import { CategoryPage } from './components/CategoryPage';
 import { VerifiedDeliveriesPage } from './components/VerifiedDeliveriesPage';
 import { AdsGallery } from './components/AdsGallery';
+import { AuthCallbackPage } from './components/AuthCallbackPage';
 import { ToastContainer } from './components/ToastContainer';
 import { getPayPalV6Instance } from './utils/paypalV6';
 import { analytics, isUserAdmin } from './components/AdminAnalyticsDashboard';
@@ -274,6 +274,7 @@ const MainLayout: React.FC = () => {
         'my-orders': 'My Placed Orders',
         deliveries: 'Verified Live Customer Deliveries',
         campaigns: 'Tbilisi Ad Campaigns',
+        'auth-callback': 'Google Authentication',
       };
 
       const pageTitlesKa: Record<string, string> = {
@@ -285,6 +286,7 @@ const MainLayout: React.FC = () => {
         'my-orders': 'ჩემი შეკვეთები',
         deliveries: 'ვერიფიცირებული მიწოდებები',
         campaigns: 'თბილისის სარეკლამო კამპანიები',
+        'auth-callback': 'Google ავტორიზაცია',
       };
 
       const pageTitle = language === 'ka' 
@@ -345,6 +347,7 @@ const MainLayout: React.FC = () => {
         {currentPage === 'campaigns' && <AdsGallery />}
         {currentPage === 'admin' && <AdminDashboard />}
         {currentPage === 'checkout' && <CheckoutPage />}
+        {currentPage === 'auth-callback' && <AuthCallbackPage />}
       </main>
 
       {/* Universal Footer */}
@@ -356,7 +359,6 @@ const MainLayout: React.FC = () => {
       <WishlistDrawer />
       <CheckoutModal />
       <AuthModal />
-      <FaceIdSetupModal />
       <ToastContainer />
     </div>
   );

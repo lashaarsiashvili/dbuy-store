@@ -1113,7 +1113,10 @@
       "updatedAt": "2026-11-07T19:47:16.059Z"
     }
   },
-  "lastUpdated": "2026-11-07T19:47:16.059Z",
+  "users": {},
+  "userProfiles": {},
+  "userSessions": {},
+  "lastUpdated": "2026-11-12T19:22:14.869Z",
   "dbVersion": "2026_v7_clean_real_catalog",
   "smtpConfig": {
     "host": "smtp.zoho.eu",

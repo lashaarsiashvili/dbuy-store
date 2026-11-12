@@ -650,81 +650,29 @@
       "updated_at": "2026-10-09 16:47:19"
     }
   ],
-  "registeredUsers": {},
+  "registeredUsers": {
+    "test.customer@gmail.com": {
+      "id": "usr_mwdxpfet_pdwkur",
+      "userId": "usr_mwdxpfet_pdwkur",
+      "googleId": "12345678901234567890",
+      "name": "Test Google Customer",
+      "email": "test.customer@gmail.com",
+      "role": "customer",
+      "provider": "google",
+      "authProvider": "google",
+      "picture": "",
+      "sessionToken": "sess_mwdxprrp_02qetdhz0wa4bpzx",
+      "lastLoginAt": "2026-11-12T19:22:14.869Z",
+      "createdAt": "2026-11-12T19:21:58.853Z"
+    }
+  },
   "orders": [],
   "theme": {
     "primaryColor": "#2563eb",
     "storeName": "DBUY Store",
     "currency": "$"
   },
-  "billboards": [
-    {
-      "id": "billboard-hume-band",
-      "badge": "HUME BAND 2.0 • A DEEPER YOU",
-      "badgeKa": "HUME BAND 2.0 • შეიცანი საკუთარი თავი",
-      "title": "The Hume Band 2.0: Precision Biometric Tracking",
-      "titleKa": "The Hume Band 2.0: უმაღლესი ბიომეტრიული სიზუსტე",
-      "subtitle": "Screen-free continuous heart rate, medical-grade sleep staging, and metabolic insights designed to optimize human performance without distractions.",
-      "subtitleKa": "უწყვეტი 24/7 გულისცემის ანალიზი, ძილის ფაზების მონიტორინგი და აღდგენის ინდექსი ყოველგვარი ყურადღების გაფანტვისა და ეკრანის გარეშე.",
-      "image": "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/billboard-1791010497445-qvhio.jpg",
-      "bgImage": "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/prod-prod-1788722861679-0-1788783606625-h5wof.jpg",
-      "bgGradient": "from-[#081226] via-[#0f2347] to-[#1e1b4b]",
-      "accentColor": "cyan",
-      "productId": "prod-1788722861679",
-      "category": "wearables",
-      "priceTag": "$299.00",
-      "origPriceTag": "$359.00",
-      "discountTag": "-17% OFF",
-      "buttonText": "Shop Hume Band 2.0",
-      "buttonTextKa": "Hume Band 2.0-ის შეძენა",
-      "isActive": true,
-      "features": [
-        "24/7 Biometric Pulse",
-        "Sleep Staging",
-        "Recovery Score",
-        "Screenless Focus"
-      ],
-      "featuresKa": [
-        "24/7 გულისცემა",
-        "ძილის ფაზები",
-        "აღდგენის ინდექსი",
-        "ეკრანის გარეშე"
-      ]
-    },
-    {
-      "id": "billboard-whoop-sportflex",
-      "badge": "WATERPROOF • COLORFAST • ERGONOMIC",
-      "badgeKa": "წყალგაუმტარი • ულტრა-გამძლე • რბილი",
-      "title": "SportFlex Performance Band for Active Workouts",
-      "titleKa": "SportFlex სპორტული სამაჯური მაქსიმალური დატვირთვისთვის",
-      "subtitle": "Engineered with dual sweat-wicking channels, colorfast silicone, and 100% waterproof protection for intense training, running, and swimming.",
-      "subtitleKa": "შექმნილია სავენტილაციო არხებით, 100% წყალგაუმტარი და ულტრა-რბილი სილიკონით — იდეალურია სირბილის, ცურვისა და ინტენსიური ვარჯიშისთვის.",
-      "image": "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/billboard-1791010519164-2y7ty.jpg",
-      "bgImage": "https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/prod-prod-1788724361112-0-1788783604832-64q55.jpg",
-      "bgGradient": "from-[#1a1008] via-[#2c1a0e] to-[#451e11]",
-      "accentColor": "amber",
-      "productId": "prod-1788724361112",
-      "category": "wearables",
-      "priceTag": "$79.00",
-      "origPriceTag": "$99.00",
-      "discountTag": "-20% OFF",
-      "buttonText": "Explore SportFlex Band",
-      "buttonTextKa": "SportFlex-ის შეძენა",
-      "isActive": true,
-      "features": [
-        "100% Waterproof",
-        "Soft & Comfortable",
-        "Durable & Colorfast",
-        "Air Channels"
-      ],
-      "featuresKa": [
-        "100% წყალგაუმტარი",
-        "რბილი & კომფორტული",
-        "ულტრა-გამძლე",
-        "სავენტილაციო არხები"
-      ]
-    }
-  ],
+  "billboards": [],
   "billboardIntervalSeconds": 120,
   "adminSecretSlug": "lasha-admin-x98",
   "adminPasswordHash": "",
@@ -1180,8 +1128,57 @@
       "updatedAt": "2026-11-07T19:47:16.059Z"
     }
   },
-  "lastUpdated": "2026-11-07T19:47:16.059Z",
-  "dbVersion": "2026_v5_local_uploads",
+  "users": {
+    "usr_mwdxpfet_pdwkur": {
+      "id": "usr_mwdxpfet_pdwkur",
+      "userId": "usr_mwdxpfet_pdwkur",
+      "googleId": "12345678901234567890",
+      "email": "test.customer@gmail.com",
+      "name": "Test Google Customer",
+      "picture": "",
+      "role": "customer",
+      "provider": "google",
+      "sessionToken": "sess_mwdxprrp_02qetdhz0wa4bpzx",
+      "country": "Georgia",
+      "city": "Tbilisi",
+      "zip": "",
+      "address": "",
+      "phone": "",
+      "createdAt": "2026-11-12T19:21:58.853Z",
+      "lastLoginAt": "2026-11-12T19:22:14.869Z"
+    }
+  },
+  "userProfiles": {
+    "usr_mwdxpfet_pdwkur": {
+      "userId": "usr_mwdxpfet_pdwkur",
+      "email": "test.customer@gmail.com",
+      "cart": [],
+      "wishlist": [],
+      "preferences": {},
+      "shippingAddress": {},
+      "ordersHistory": [],
+      "createdAt": "2026-11-12T19:21:58.853Z",
+      "updatedAt": "2026-11-12T19:21:58.853Z"
+    }
+  },
+  "userSessions": {
+    "sess_mwdxpfet_rovoumhiofc4fx78": {
+      "sessionToken": "sess_mwdxpfet_rovoumhiofc4fx78",
+      "userId": "usr_mwdxpfet_pdwkur",
+      "email": "test.customer@gmail.com",
+      "createdAt": "2026-11-12T19:21:58.853Z",
+      "expiresAt": "2026-12-12T19:21:58.853Z"
+    },
+    "sess_mwdxprrp_02qetdhz0wa4bpzx": {
+      "sessionToken": "sess_mwdxprrp_02qetdhz0wa4bpzx",
+      "userId": "usr_mwdxpfet_pdwkur",
+      "email": "test.customer@gmail.com",
+      "createdAt": "2026-11-12T19:22:14.869Z",
+      "expiresAt": "2026-12-12T19:22:14.869Z"
+    }
+  },
+  "lastUpdated": "2026-11-12T19:22:14.869Z",
+  "dbVersion": "2026_v7_clean_real_catalog",
   "smtpConfig": {
     "host": "smtp.zoho.eu",
     "port": 465,

@@ -32,7 +32,7 @@ export type Currency = 'USD' | 'EUR' | 'GEL';
 
 export type Language = 'en' | 'ka' | 'es' | 'ru' | 'de' | 'fr' | 'zh' | 'it';
 
-export type PageView = 'home' | 'category' | 'product' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders' | 'deliveries' | 'campaigns' | 'checkout';
+export type PageView = 'home' | 'category' | 'product' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders' | 'deliveries' | 'campaigns' | 'checkout' | 'auth-callback';
 
 export interface ProductVideo {
   id?: string;
@@ -188,11 +188,16 @@ export interface BillboardSlide {
 }
 
 export interface User {
+  id?: string;
+  userId?: string;
+  googleId?: string;
   name: string;
   email: string;
   isLoggedIn: boolean;
   role: 'customer' | 'admin';
   provider?: 'email' | 'google';
+  authProvider?: 'email' | 'google';
+  sessionToken?: string;
   picture?: string;
   country?: string;
   city?: string;
@@ -200,14 +205,18 @@ export interface User {
   address?: string;
   phone?: string;
   createdAt?: string;
+  lastLoginAt?: string;
 }
 
 export interface RegisteredUser {
   id?: string;
+  userId?: string;
+  googleId?: string;
   name: string;
   email: string;
   provider?: 'email' | 'google';
   authProvider?: 'email' | 'google';
+  sessionToken?: string;
   picture?: string;
   country?: string;
   city?: string;
@@ -215,8 +224,8 @@ export interface RegisteredUser {
   address?: string;
   phone?: string;
   createdAt: string;
+  lastLoginAt?: string;
   role: 'customer' | 'admin';
-  faceSignature?: string;
 }
 
 export interface ToastMessage {

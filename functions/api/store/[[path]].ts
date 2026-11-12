@@ -207,9 +207,49 @@ async function getTableColumns(db: D1Database, tableName = 'products'): Promise<
  * Ensures required columns exist without throwing errors on every request.
  */
 async function ensureSchema(db: D1Database): Promise<void> {
-  try {
     await db.exec('CREATE TABLE IF NOT EXISTS store_kv (key TEXT PRIMARY KEY, value TEXT);');
     await db.exec('CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, title TEXT);');
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id TEXT PRIMARY KEY,
+        google_id TEXT,
+        email TEXT UNIQUE NOT NULL,
+        name TEXT,
+        picture TEXT,
+        role TEXT DEFAULT 'customer',
+        provider TEXT DEFAULT 'google',
+        session_token TEXT,
+        country TEXT DEFAULT 'Georgia',
+        city TEXT DEFAULT 'Tbilisi',
+        zip TEXT DEFAULT '',
+        address TEXT DEFAULT '',
+        phone TEXT DEFAULT '',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        last_login_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS user_profiles (
+        user_id TEXT PRIMARY KEY,
+        email TEXT NOT NULL,
+        cart TEXT DEFAULT '[]',
+        wishlist TEXT DEFAULT '[]',
+        preferences TEXT DEFAULT '{}',
+        shipping_address TEXT DEFAULT '{}',
+        orders_history TEXT DEFAULT '[]',
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+    await db.exec(`
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        session_token TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        email TEXT NOT NULL,
+        expires_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
   } catch (e) {
     console.warn('Table creation warning:', e);
   }
@@ -714,6 +754,50 @@ export const onRequest: PagesFunction<Env> = async (context) => {
         registeredUsers[cleanEmail] = updatedUser;
         await dbPut(db, 'registered_users', JSON.stringify(registeredUsers));
         await dbPut(db, 'last_updated', lastUpdatedNew);
+
+        // Also persist/update in relational users table if db exists
+        try {
+          const userId = reqBody.id || reqBody.userId || existing.id || ('usr_' + cleanEmail.replace(/[^a-z0-9]/gi, '_'));
+          const googleId = reqBody.googleId || existing.googleId || null;
+          const sessionToken = reqBody.sessionToken || existing.sessionToken || null;
+          await db.prepare(`
+            INSERT INTO users (id, google_id, email, name, picture, role, provider, session_token, country, city, zip, address, phone, created_at, last_login_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(id) DO UPDATE SET
+              name = excluded.name,
+              picture = COALESCE(excluded.picture, users.picture),
+              google_id = COALESCE(excluded.google_id, users.google_id),
+              session_token = COALESCE(excluded.session_token, users.session_token),
+              country = excluded.country,
+              city = excluded.city,
+              zip = excluded.zip,
+              address = excluded.address,
+              phone = excluded.phone,
+              last_login_at = CURRENT_TIMESTAMP
+          `).bind(
+            userId,
+            googleId,
+            cleanEmail,
+            updatedUser.name,
+            updatedUser.picture || null,
+            updatedUser.role,
+            finalProvider,
+            sessionToken,
+            updatedUser.country,
+            updatedUser.city,
+            updatedUser.zip,
+            updatedUser.address,
+            updatedUser.phone,
+            updatedUser.createdAt
+          ).run().catch(() => {});
+
+          await db.prepare(`
+            INSERT OR IGNORE INTO user_profiles (user_id, email, cart, wishlist, preferences, shipping_address, orders_history, created_at, updated_at)
+            VALUES (?, ?, '[]', '[]', '{}', '{}', '[]', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+          `).bind(userId, cleanEmail).run().catch(() => {});
+        } catch (uErr) {
+          console.warn('[D1 users table sync warning]:', uErr);
+        }
 
         const usersList = Object.values(sanitizeUsersDict(registeredUsers));
 

@@ -13,7 +13,6 @@ import {
   Heart,
   ShieldAlert,
   KeyRound,
-  ScanFace,
   Globe,
   Truck,
   CornerUpLeft,
@@ -45,7 +44,6 @@ export const Header: React.FC = () => {
     user,
     logoutUser,
     setIsAuthModalOpen,
-    setIsFaceSetupOpen,
     isAdmin,
     isDarkMode,
     toggleDarkMode,
@@ -510,17 +508,6 @@ export const Header: React.FC = () => {
                             <span>{t('nav.adminDash')}</span>
                           </button>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsFaceSetupOpen(true);
-                            setUserDropdownOpen(false);
-                          }}
-                          className="w-full text-left px-4 py-2 text-xs text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 flex items-center space-x-2"
-                        >
-                          <ScanFace className="w-4 h-4 text-purple-500" />
-                          <span>{localStorage.getItem('dbuy_enrolled_face_user') ? 'Face ID Active' : 'Setup Face ID'}</span>
-                        </button>
                       </div>
                       <div className="border-t border-slate-100 dark:border-slate-800 pt-1">
                         <button

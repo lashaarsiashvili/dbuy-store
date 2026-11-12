@@ -132,10 +132,8 @@ interface StoreContextType {
   setQuickViewProduct: (product: Product | null) => void;
   isAuthModalOpen: boolean;
   setIsAuthModalOpen: (open: boolean) => void;
-  isFaceSetupOpen: boolean;
-  setIsFaceSetupOpen: (open: boolean) => void;
-  activeAuthTab: 'login' | 'register' | 'face';
-  setActiveAuthTab: (tab: 'login' | 'register' | 'face') => void;
+  activeAuthTab: 'login' | 'register';
+  setActiveAuthTab: (tab: 'login' | 'register') => void;
   isCheckoutOpen: boolean;
   setIsCheckoutOpen: (open: boolean) => void;
 
@@ -196,16 +194,7 @@ interface StoreContextType {
   getAdminUrl: () => string;
   copyAdminUrl: () => void;
   loginUser: (email: string, name?: string, password?: string) => boolean;
-  loginWithGoogleProfile: (profile: {
-    email: string;
-    name: string;
-    picture?: string;
-    country?: string;
-    city?: string;
-    zip?: string;
-    address?: string;
-    phone?: string;
-  }) => { isComplete: boolean; user?: User };
+  loginWithGoogleProfile: (profile: any) => Promise<{ isComplete: boolean; user?: User | null }> | { isComplete: boolean; user?: User | null };
   demoLogin: () => void;
   logoutUser: () => void;
   registerUser: (userData: {
@@ -226,7 +215,6 @@ interface StoreContextType {
   isAdmin: boolean;
   registeredUsers: RegisteredUser[];
   deleteRegisteredUser: (email: string) => void;
-  updateUserFaceSignature: (email: string, signature: string) => void;
   refreshServerStore: (force?: boolean) => Promise<void>;
   syncWithRemoteStore: (remoteUrl: string) => Promise<{ success: boolean; message: string; count?: number }>;
   exportFullDatabase: () => void;
@@ -366,6 +354,9 @@ const parseRouteFromLocation = (
     return { page: 'home', productId: null, isCloaked: true };
   }
 
+  if (lower === 'auth/callback' || lower.startsWith('auth/callback') || lower === 'callback' || lower.startsWith('callback')) {
+    return { page: 'auth-callback', productId: null };
+  }
   if (lower === 'about') return { page: 'about', productId: null };
   if (lower === 'contact') return { page: 'contact', productId: null };
   if (lower === 'privacy') return { page: 'privacy', productId: null };
@@ -1113,8 +1104,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [isCartOpen, setIsCartOpen] = useState(false);
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
-  const [isFaceSetupOpen, setIsFaceSetupOpen] = useState(false);
-  const [activeAuthTab, setActiveAuthTab] = useState<'login' | 'register' | 'face'>('login');
+  const [activeAuthTab, setActiveAuthTab] = useState<'login' | 'register'>('login');
   const [isCheckoutOpen, setIsCheckoutOpen] = useState(false);
   const [promoCode, setPromoCode] = useState('');
   const [promoDiscountPercent, setPromoDiscountPercent] = useState(0);
@@ -1275,27 +1265,72 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
-  const handleSuccessfulAuth = (email: string, name: string, authProvider = 'email') => {
+  const handleSuccessfulAuth = (
+    email: string,
+    name: string,
+    authProvider = 'email',
+    extraData?: {
+      sessionToken?: string;
+      googleId?: string;
+      id?: string;
+      userId?: string;
+      picture?: string;
+      user?: any;
+      profile?: any;
+      isNewUser?: boolean;
+    }
+  ) => {
     const cleanEmail = email.toLowerCase().trim();
-    upsertRegisteredUser({ email: cleanEmail, name, authProvider });
+    const resolvedUserId = extraData?.user?.id || extraData?.userId || extraData?.id || ('usr_' + cleanEmail.replace(/[^a-z0-9]/gi, '_'));
+    const resolvedSessionToken = extraData?.sessionToken || extraData?.user?.sessionToken || ('sess_' + Date.now().toString(36) + '_' + Math.random().toString(36).substring(2, 8));
+
+    if (resolvedSessionToken && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('dbuy_session_token', resolvedSessionToken);
+      } catch (e) {}
+    }
+
+    upsertRegisteredUser({
+      id: resolvedUserId,
+      userId: resolvedUserId,
+      googleId: extraData?.googleId || extraData?.user?.googleId,
+      email: cleanEmail,
+      name,
+      authProvider,
+      picture: extraData?.picture || extraData?.user?.picture,
+      sessionToken: resolvedSessionToken,
+      lastLoginAt: new Date().toISOString(),
+    });
 
     // Sync registered user to backend D1 database
     fetch('/api/store/register-user', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
+        id: resolvedUserId,
+        userId: resolvedUserId,
+        googleId: extraData?.googleId || extraData?.user?.googleId,
         email: cleanEmail,
         name,
         provider: authProvider,
-        authProvider
+        authProvider,
+        picture: extraData?.picture || extraData?.user?.picture,
+        sessionToken: resolvedSessionToken,
       })
     }).catch(() => {});
 
     const newUser: User = { 
+      id: resolvedUserId,
+      userId: resolvedUserId,
+      googleId: extraData?.googleId || extraData?.user?.googleId,
       name, 
       email: cleanEmail, 
       isLoggedIn: true, 
-      role: cleanEmail === 'lashaarsiashvili@gmail.com' ? 'admin' : 'customer' 
+      role: (cleanEmail === 'lashaarsiashvili@gmail.com' || extraData?.user?.role === 'admin') ? 'admin' : 'customer',
+      provider: authProvider as 'email' | 'google',
+      authProvider: authProvider as 'email' | 'google',
+      sessionToken: resolvedSessionToken,
+      picture: extraData?.picture || extraData?.user?.picture,
     };
     setUser(newUser);
     saveSession(newUser);
@@ -1416,8 +1451,63 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return true;
   };
 
-  const loginWithGoogleProfile = (profile: any) => {
-    handleSuccessfulAuth(profile.email, profile.name || 'Google Customer', 'google');
+  const loginWithGoogleProfile = async (profile: any) => {
+    const cleanEmail = String(profile.email || '').toLowerCase().trim();
+    const cleanName = profile.name || 'Google Customer';
+
+    if (profile.sessionToken) {
+      handleSuccessfulAuth(cleanEmail, cleanName, 'google', {
+        sessionToken: profile.sessionToken,
+        googleId: profile.googleId,
+        id: profile.user?.id || profile.id,
+        userId: profile.user?.id || profile.userId,
+        picture: profile.picture,
+        user: profile.user,
+        profile: profile.profile,
+        isNewUser: profile.isNewUser,
+      });
+      return { isComplete: true, user: loadSession() };
+    }
+
+    // Call /api/auth/google to verify in main database and generate session
+    try {
+      const res = await fetch('/api/auth/google', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: cleanEmail,
+          name: cleanName,
+          googleId: profile.googleId,
+          picture: profile.picture,
+          idToken: profile.idToken,
+          accessToken: profile.accessToken,
+        }),
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success && data.user) {
+          handleSuccessfulAuth(cleanEmail, cleanName, 'google', {
+            sessionToken: data.sessionToken,
+            googleId: data.user.googleId || profile.googleId,
+            id: data.user.id,
+            userId: data.user.id,
+            picture: data.user.picture || profile.picture,
+            user: data.user,
+            profile: data.profile,
+            isNewUser: data.isNewUser,
+          });
+          return { isComplete: true, user: loadSession() };
+        }
+      }
+    } catch (err) {
+      console.warn('Direct /api/auth/google sync failed, using fallback:', err);
+    }
+
+    handleSuccessfulAuth(cleanEmail, cleanName, 'google', {
+      googleId: profile.googleId,
+      picture: profile.picture,
+    });
     return { isComplete: true, user: loadSession() };
   };
 
@@ -1673,14 +1763,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const deleteRegisteredUser = (email: string) => {
     setRegisteredUsers(prev => prev.filter(u => u.email.toLowerCase() !== email.toLowerCase()));
-  };
-
-  const updateUserFaceSignature = (email: string, signature: string) => {
-    setRegisteredUsers(prev => prev.map(u => u.email.toLowerCase() === email.toLowerCase() ? { ...u, faceSignature: signature } : u));
-    if (user.email.toLowerCase() === email.toLowerCase()) {
-      setUser(prev => ({...prev, faceSignature: signature}));
-    }
-    addToast(language === 'ka' ? '✅ Face ID წარმატებით დაუკავშირდა!' : '✅ Face ID successfully linked!', 'success');
   };
 
   const [visitorLogs, setVisitorLogs] = useState<VisitorLog[]>([]);
@@ -2126,7 +2208,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cartTotalCount, cartSubtotalUSD, promoCode, promoDiscountPercent,
         applyPromoCode, clearPromoCode, isCartOpen, setIsCartOpen,
         quickViewProduct, setQuickViewProduct, isAuthModalOpen, setIsAuthModalOpen,
-        isFaceSetupOpen, setIsFaceSetupOpen,
         activeAuthTab, setActiveAuthTab,
         isCheckoutOpen, setIsCheckoutOpen,
         orders, placeOrder, updateOrderStatus, updateOrderTracking,
@@ -2138,7 +2219,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         generateRandomAdminSlug, getAdminUrl, copyAdminUrl,
         loginUser, loginWithGoogleProfile, demoLogin, logoutUser,
         registerUser, changeAdminPassword, changeUserPassword, resetUserPassword,
-        isAdmin, registeredUsers, deleteRegisteredUser, updateUserFaceSignature,
+        isAdmin, registeredUsers, deleteRegisteredUser,
         refreshServerStore, syncWithRemoteStore, exportFullDatabase,
         importFullDatabase, persistCatalogToCode,
         toasts, addToast, removeToast,
