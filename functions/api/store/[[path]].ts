@@ -207,6 +207,7 @@ async function getTableColumns(db: D1Database, tableName = 'products'): Promise<
  * Ensures required columns exist without throwing errors on every request.
  */
 async function ensureSchema(db: D1Database): Promise<void> {
+  try {
     await db.exec('CREATE TABLE IF NOT EXISTS store_kv (key TEXT PRIMARY KEY, value TEXT);');
     await db.exec('CREATE TABLE IF NOT EXISTS products (id TEXT PRIMARY KEY, title TEXT);');
     await db.exec(`
