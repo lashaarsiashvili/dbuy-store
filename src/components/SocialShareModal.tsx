@@ -68,13 +68,16 @@ const buildHighConvertingAdCopy = (product: Product, variantIndex = 0) => {
 
 const FB_APP_ID = "1653741686157296";
 const FB_PAGE_ID = "215073415343195";
-const LEGACY_EXPIRED_FB_TOKEN_PREFIX = "EAAXgEb3A7ZCABSzaHWiv";
+const LEGACY_FB_TOKEN_PREFIXES = [
+  "EAAXgEb3A7ZCABSzaHWiv",
+  "EAAXgEb3A7ZCABS9GaZCahs",
+];
 const FB_PAGE_URL = "https://www.facebook.com/Dbuystore";
 
 function loadSavedFbToken(): string {
   if (typeof window === 'undefined') return '';
   const stored = (localStorage.getItem('dbuy_fb_page_token') || '').trim();
-  if (!stored || stored.startsWith(LEGACY_EXPIRED_FB_TOKEN_PREFIX)) {
+  if (!stored || LEGACY_FB_TOKEN_PREFIXES.some((prefix) => stored.startsWith(prefix))) {
     localStorage.removeItem('dbuy_fb_page_token');
     return '';
   }
