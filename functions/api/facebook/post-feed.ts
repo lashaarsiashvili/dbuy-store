@@ -1,5 +1,5 @@
 const DEFAULT_FB_PAGE_ID = '215073415343195';
-const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABSzaHWivAFli9ZCZAugvKGDXylopxiZCA791ZBU3EFzpOkJBeY4tGSrpMUbPxf2qrGlWVnkXHwgBdzytE4ZBjKQwJfmeTP4ZAXmJiwiH0yS9GIa3K2hjV87u3DkCg3kLJbcms9yq2HJ4ZCyW6vOEZBwGESu7LzNFzjFwbEr2Jtk25qhwZB8mIEJILg74y5LANijrRY19ZCUL8YNEwnZAOTpZBGGVmpimdewZDZD';
+const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABS9GaZCahsSsWigSnW8ZClt2OCnva6CUAtcGcMhnRQZA9r55xSZCyywHegkvZAsNWB68hZA1PAlwot8qChWcGpkXuTdwYwSZBlvxd7e6HagpMuop7z5csuwzWbHP0VeWZA1TJPRxex1jmkgCZBQufms1bMcBIpn2rVoOi53bPepfMdJ02Iw8JyxAMt0foMe8aohTN7nBprNUZBjZASPmv0AyOLQl3e9RMlMF0R0ZD';
 
 export async function onRequestPost(context: any) {
   try {
@@ -9,7 +9,10 @@ export async function onRequestPost(context: any) {
 
     const { link, message, caption, accessToken, pageAccessToken, pageId } = body || {};
     const finalMessage = message || caption || '';
-    let token = pageAccessToken || accessToken || env.FACEBOOK_PAGE_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || DEFAULT_FB_PAGE_TOKEN;
+    const customToken = (pageAccessToken || accessToken || '').trim();
+    const rawEnvToken = (env.FACEBOOK_PAGE_ACCESS_TOKEN || env.FACEBOOK_ACCESS_TOKEN || '').trim();
+    const envToken = rawEnvToken || DEFAULT_FB_PAGE_TOKEN;
+    let token = customToken || envToken;
     
     // Explicitly target the Facebook Page endpoint, avoiding 'me' which Facebook treats as a group/user feed
     let targetPageId = (pageId && pageId !== 'me') ? pageId : (env.FACEBOOK_PAGE_ID || DEFAULT_FB_PAGE_ID);
@@ -17,7 +20,7 @@ export async function onRequestPost(context: any) {
     // Auto-resolve Page Token if user token was provided
     if (token) {
       try {
-        const accRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${token}`);
+        const accRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${encodeURIComponent(token)}`);
         if (accRes.ok) {
           const accData: any = await accRes.json();
           const page = accData?.data?.find((p: any) => p.id === targetPageId) || accData?.data?.[0];
@@ -27,6 +30,15 @@ export async function onRequestPost(context: any) {
               targetPageId = page.id || DEFAULT_FB_PAGE_ID;
             }
           }
+        } else {
+          const errData: any = await accRes.json().catch(() => ({}));
+          if (errData?.error?.code === 190) {
+            if (customToken && envToken && customToken !== envToken) {
+              token = envToken;
+            } else if (DEFAULT_FB_PAGE_TOKEN && token !== DEFAULT_FB_PAGE_TOKEN) {
+              token = DEFAULT_FB_PAGE_TOKEN;
+            }
+          }
         }
       } catch {
         // proceed with token and targetPageId
@@ -34,8 +46,13 @@ export async function onRequestPost(context: any) {
     }
 
     if (!token) {
-      return new Response(JSON.stringify({ success: false, error: 'Facebook Access Token missing.' }), {
-        status: 400,
+      return new Response(JSON.stringify({
+        success: false,
+        requiresReconnect: true,
+        expired: true,
+        error: 'Facebook Page Access Token is missing or expired. Please reconnect Facebook in the Share modal.',
+      }), {
+        status: 401,
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     }
@@ -43,25 +60,31 @@ export async function onRequestPost(context: any) {
     // Target Facebook Page endpoint explicitly
     const url = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
 
-    // For Link Posts (Link Post (Feed Card)), send message, link, and access_token.
-    // Do not include object_attachment or attached_media parameters so that Facebook's crawler
-    // automatically generates the correct Open Graph link preview card.
-    const params = new URLSearchParams();
-    if (finalMessage) {
-      params.append('message', finalMessage);
-    }
-    if (link) {
-      params.append('link', link);
-    }
-    params.append('access_token', token);
+    const postToFeed = async (activeToken: string) => {
+      const params = new URLSearchParams();
+      if (finalMessage) {
+        params.append('message', finalMessage);
+      }
+      if (link) {
+        params.append('link', link);
+      }
+      params.append('access_token', activeToken);
 
-    const fbRes = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: params.toString(),
-    });
+      const fbRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const fbData: any = await fbRes.json().catch(() => ({}));
+      return { fbRes, fbData };
+    };
 
-    const fbData: any = await fbRes.json().catch(() => ({}));
+    let { fbRes, fbData } = await postToFeed(token);
+
+    if (!fbRes.ok && fbData?.error?.code === 190 && DEFAULT_FB_PAGE_TOKEN && token !== DEFAULT_FB_PAGE_TOKEN) {
+      token = DEFAULT_FB_PAGE_TOKEN;
+      ({ fbRes, fbData } = await postToFeed(token));
+    }
 
     if (fbRes.ok && fbData.id) {
       return new Response(JSON.stringify({
@@ -74,30 +97,22 @@ export async function onRequestPost(context: any) {
       });
     } else {
       const err = fbData?.error;
-      // Log detailed Graph API error subcodes, codes, and messages to console for easy debugging
-      console.error('[Facebook Graph API Feed Error]', {
-        message: err?.message,
-        code: err?.code,
-        error_subcode: err?.error_subcode,
-        type: err?.type,
-        error_user_title: err?.error_user_title,
-        error_user_msg: err?.error_user_msg,
-        fbtrace_id: err?.fbtrace_id,
-        targetPageId,
-        url,
-      });
-
-      const errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
+      const isExpired = Boolean(err && (err.code === 190 || err.error_subcode === 463 || err.error_subcode === 467));
+      const errorDetail = isExpired
+        ? 'Facebook access token has expired. Please reconnect or paste a fresh Page Access Token.'
+        : (err?.message || err?.error_user_msg || 'Facebook Graph API returned error');
 
       return new Response(JSON.stringify({
         success: false,
+        requiresReconnect: isExpired,
+        expired: isExpired,
         error: errorDetail,
         error_subcode: err?.error_subcode,
         error_code: err?.code,
         details: err,
         targetPageId,
       }), {
-        status: fbRes.status || 400,
+        status: isExpired ? 401 : (fbRes.status || 400),
         headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
       });
     }

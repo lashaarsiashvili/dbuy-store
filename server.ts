@@ -14,7 +14,7 @@ import { buildCustomerOrderEmail, buildAdminOrderAlertEmail } from './src/utils/
 import { generateSmartOfflineAdCopy } from './src/utils/adCopyGenerator';
 import { parseProductHtml } from './src/utils/productScraper';
 
-dotenv.config();
+dotenv.config({ override: true });
 
 const app = express();
 // Port 3000 is required for AI Studio development environment.
@@ -1814,16 +1814,23 @@ app.post('/api/chat', async (req, res) => {
 });
 
 const DEFAULT_FB_PAGE_ID = '215073415343195';
-const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABSzaHWivAFli9ZCZAugvKGDXylopxiZCA791ZBU3EFzpOkJBeY4tGSrpMUbPxf2qrGlWVnkXHwgBdzytE4ZBjKQwJfmeTP4ZAXmJiwiH0yS9GIa3K2hjV87u3DkCg3kLJbcms9yq2HJ4ZCyW6vOEZBwGESu7LzNFzjFwbEr2Jtk25qhwZB8mIEJILg74y5LANijrRY19ZCUL8YNEwnZAOTpZBGGVmpimdewZDZD';
-const DEFAULT_FB_USER_TOKEN = 'EAAXgEb3A7ZCABSwZAARZCjoXY1O2BQEd1w2XFiuMxbqD6YiphFKZBeWSgcyvE5jSNEYCZB3S3ZBKfHOD9ZA1rzZBMpRgxJN3H8vP3tMQKrm405SGvjHjZAVJjaqxjC4VwMsKOsz83Mwro4LzcdLJfnjzpiup7Bk6r6v5S5jVChUQtcLHC7O7f9dByiZA3qxKZBhPtZBmSZB8aoejiJnIRDLGoXgpMv09nJgCmarnVxBTpT2zAGZBR21KsFZBgbZBzLdSNJ3fNaB6Vxe4OnZCSUxJiZB0QZD';
+const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABS9GaZCahsSsWigSnW8ZClt2OCnva6CUAtcGcMhnRQZA9r55xSZCyywHegkvZAsNWB68hZA1PAlwot8qChWcGpkXuTdwYwSZBlvxd7e6HagpMuop7z5csuwzWbHP0VeWZA1TJPRxex1jmkgCZBQufms1bMcBIpn2rVoOi53bPepfMdJ02Iw8JyxAMt0foMe8aohTN7nBprNUZBjZASPmv0AyOLQl3e9RMlMF0R0ZD';
+let runtimeFbPageToken = '';
+
+function isFacebookTokenExpiredError(err: any): boolean {
+  return Boolean(err && (err.code === 190 || err.error_subcode === 463 || err.error_subcode === 467));
+}
 
 async function resolveFacebookPageCredentials(passedToken?: string, passedPageId?: string) {
-  let token = passedToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || DEFAULT_FB_PAGE_TOKEN;
+  const customToken = (passedToken || '').trim();
+  const rawEnvToken = (runtimeFbPageToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || '').trim();
+  const envToken = rawEnvToken || DEFAULT_FB_PAGE_TOKEN;
+  let token = customToken || envToken;
   let targetPageId = (passedPageId && passedPageId !== 'me') ? passedPageId : (process.env.FACEBOOK_PAGE_ID || DEFAULT_FB_PAGE_ID);
 
   if (token) {
     try {
-      const accRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${token}`);
+      const accRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${encodeURIComponent(token)}`);
       if (accRes.ok) {
         const accData: any = await accRes.json();
         const page = accData?.data?.find((p: any) => p.id === targetPageId) || accData?.data?.[0];
@@ -1833,82 +1840,377 @@ async function resolveFacebookPageCredentials(passedToken?: string, passedPageId
             targetPageId = page.id || DEFAULT_FB_PAGE_ID;
           }
         }
+      } else {
+        const errData: any = await accRes.json().catch(() => ({}));
+        if (errData?.error?.code === 190) {
+          if (customToken && envToken && customToken !== envToken) {
+            token = envToken;
+          } else if (DEFAULT_FB_PAGE_TOKEN && token !== DEFAULT_FB_PAGE_TOKEN) {
+            token = DEFAULT_FB_PAGE_TOKEN;
+          }
+        }
       }
     } catch {
       // proceed with token and targetPageId
     }
   }
 
-  return { token, targetPageId };
+  return { token, targetPageId, envToken: DEFAULT_FB_PAGE_TOKEN || envToken };
 }
 
-app.post('/api/facebook/post-photo', async (req, res) => {
+async function verifyAndResolveFacebookToken(rawToken: string, requestedPageId?: string) {
+  let token = (rawToken || '').trim();
+  let targetPageId = (requestedPageId && requestedPageId !== 'me')
+    ? requestedPageId.trim()
+    : (process.env.FACEBOOK_PAGE_ID || DEFAULT_FB_PAGE_ID);
+
+  if (!token) {
+    return {
+      connected: false,
+      expired: false,
+      requiresReconnect: true,
+      error: 'Facebook Page Access Token is not configured. Please connect or paste a valid Page Access Token.',
+    };
+  }
+
+  let resolvedFromAccounts = false;
   try {
-    const { imageUrl, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
-    const finalMessage = message || caption || '';
-    const { token, targetPageId } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
+    const accRes = await fetch(`https://graph.facebook.com/v19.0/me/accounts?access_token=${encodeURIComponent(token)}`);
+    if (accRes.ok) {
+      const accData: any = await accRes.json();
+      const page = accData?.data?.find((p: any) => p.id === targetPageId) || accData?.data?.[0];
+      if (page?.access_token) {
+        token = page.access_token;
+        if (!requestedPageId || requestedPageId === 'me') {
+          targetPageId = page.id || DEFAULT_FB_PAGE_ID;
+        }
+        resolvedFromAccounts = true;
+      }
+    }
+  } catch {
+    // Token may already be a Page Access Token
+  }
 
-    if (!imageUrl) {
-      return res.status(400).json({ success: false, error: 'imageUrl is required' });
+  try {
+    const verifyRes = await fetch(
+      `https://graph.facebook.com/v19.0/${encodeURIComponent(targetPageId)}?fields=id,name&access_token=${encodeURIComponent(token)}`
+    );
+    const verifyData: any = await verifyRes.json().catch(() => ({}));
+
+    if (verifyRes.ok && verifyData.id) {
+      return {
+        connected: true,
+        expired: false,
+        requiresReconnect: false,
+        pageId: verifyData.id,
+        pageName: verifyData.name || 'Facebook Page',
+        resolvedFromAccounts,
+        resolvedPageToken: token,
+      };
     }
 
-    if (!token) {
-      return res.status(400).json({
-        success: false,
-        error: 'Facebook Access Token missing. Set FACEBOOK_PAGE_ACCESS_TOKEN in env or pass accessToken.',
-      });
+    const err = verifyData?.error || {};
+    const isExpired = isFacebookTokenExpiredError(err);
+    return {
+      connected: false,
+      expired: isExpired,
+      requiresReconnect: true,
+      errorCode: err.code,
+      errorSubcode: err.error_subcode,
+      error: isExpired
+        ? 'Facebook session has expired. Please generate a new Page Access Token and reconnect.'
+        : (err.message || 'Invalid Facebook Access Token.'),
+    };
+  } catch (err: any) {
+    return {
+      connected: false,
+      expired: false,
+      requiresReconnect: false,
+      error: err?.message || 'Network error validating Facebook token',
+    };
+  }
+}
+
+app.get('/api/facebook/status', async (req, res) => {
+  const pageId = typeof req.query.pageId === 'string' ? req.query.pageId : undefined;
+  const rawEnvToken = (runtimeFbPageToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || '').trim();
+  let result = await verifyAndResolveFacebookToken(rawEnvToken || DEFAULT_FB_PAGE_TOKEN, pageId);
+  let source = rawEnvToken ? 'env' : 'default';
+
+  if (!result.connected && result.expired && rawEnvToken && DEFAULT_FB_PAGE_TOKEN && rawEnvToken !== DEFAULT_FB_PAGE_TOKEN) {
+    const fallbackResult = await verifyAndResolveFacebookToken(DEFAULT_FB_PAGE_TOKEN, pageId);
+    if (fallbackResult.connected) {
+      result = fallbackResult;
+      source = 'default';
     }
+  }
 
-    let fullImageUrl = imageUrl;
-    if (fullImageUrl.startsWith('/')) {
-      fullImageUrl = `https://www.dbuystore.com${fullImageUrl}`;
-    }
+  const { resolvedPageToken: _omit, ...safeResult } = result as any;
+  res.json({
+    success: true,
+    source,
+    ...safeResult,
+  });
+});
 
-    const fbGraphUrl = `https://graph.facebook.com/v19.0/${targetPageId}/photos`;
+app.post('/api/facebook/status', async (req, res) => {
+  try {
+    const { accessToken, pageAccessToken, pageId } = req.body || {};
+    const passedToken = (pageAccessToken || accessToken || '').trim();
+    const rawEnvToken = (runtimeFbPageToken || process.env.FACEBOOK_PAGE_ACCESS_TOKEN || process.env.FACEBOOK_ACCESS_TOKEN || '').trim();
+    const envToken = rawEnvToken || DEFAULT_FB_PAGE_TOKEN;
 
-    const params = new URLSearchParams();
-    params.append('url', fullImageUrl);
-    if (finalMessage) {
-      params.append('caption', finalMessage);
-    }
-    params.append('access_token', token);
-
-    const fbRes = await fetch(fbGraphUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    });
-
-    const fbData: any = await fbRes.json().catch(() => ({}));
-
-    if (fbRes.ok && (fbData.id || fbData.post_id)) {
+    if (passedToken) {
+      const result = await verifyAndResolveFacebookToken(passedToken, pageId);
+      if (result.connected && result.resolvedPageToken) {
+        runtimeFbPageToken = result.resolvedPageToken;
+        return res.json({
+          success: true,
+          source: 'custom',
+          ...result,
+        });
+      }
+      for (const candidate of [envToken, DEFAULT_FB_PAGE_TOKEN]) {
+        if (candidate && candidate !== passedToken) {
+          const envResult = await verifyAndResolveFacebookToken(candidate, pageId);
+          if (envResult.connected) {
+            const { resolvedPageToken: _omit, ...safeEnvResult } = envResult as any;
+            return res.json({
+              success: true,
+              source: candidate === DEFAULT_FB_PAGE_TOKEN ? 'default' : 'env',
+              ...safeEnvResult,
+            });
+          }
+        }
+      }
+      const { resolvedPageToken: _omit, ...safeErr } = result as any;
       return res.json({
         success: true,
-        photoId: fbData.id,
-        postId: fbData.post_id || fbData.id,
+        source: 'custom',
+        ...safeErr,
+      });
+    }
+
+    let result = await verifyAndResolveFacebookToken(envToken, pageId);
+    let source = rawEnvToken ? 'env' : 'default';
+    if (!result.connected && result.expired && rawEnvToken && DEFAULT_FB_PAGE_TOKEN && rawEnvToken !== DEFAULT_FB_PAGE_TOKEN) {
+      const fallbackResult = await verifyAndResolveFacebookToken(DEFAULT_FB_PAGE_TOKEN, pageId);
+      if (fallbackResult.connected) {
+        result = fallbackResult;
+        source = 'default';
+      }
+    }
+    const { resolvedPageToken: _omit, ...safeResult } = result as any;
+    return res.json({
+      success: true,
+      source,
+      ...safeResult,
+    });
+  } catch (err: any) {
+    return res.status(500).json({
+      success: false,
+      connected: false,
+      error: err?.message || 'Failed to verify Facebook status',
+    });
+  }
+});
+
+function normalizeFacebookImageUrl(imgUrl: string): string {
+  const clean = (imgUrl || '').trim();
+  if (!clean) return '';
+  if (clean.startsWith('data:')) return clean;
+  if (clean.startsWith('/')) {
+    return `https://www.dbuystore.com${clean}`;
+  }
+  if (clean.startsWith('https://dbuystore.com/')) {
+    return clean.replace('https://dbuystore.com/', 'https://www.dbuystore.com/');
+  }
+  if (clean.startsWith('http://dbuystore.com/')) {
+    return clean.replace('http://dbuystore.com/', 'https://www.dbuystore.com/');
+  }
+  return clean;
+}
+
+async function uploadUnpublishedFacebookPhoto(
+  imgUrl: string,
+  targetPageId: string,
+  token: string
+): Promise<{ id?: string; error?: any }> {
+  const uploadUrl = `https://graph.facebook.com/v19.0/${targetPageId}/photos`;
+  const normalized = normalizeFacebookImageUrl(imgUrl);
+
+  if (!normalized) {
+    return { error: { message: 'Empty image URL provided' } };
+  }
+
+  let photoRes: Response;
+  if (normalized.startsWith('data:')) {
+    const match = normalized.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) {
+      return { error: { message: 'Invalid data URI image format' } };
+    }
+    const mimeType = match[1];
+    const buffer = Buffer.from(match[2], 'base64');
+    const formData = new FormData();
+    formData.append('source', new Blob([buffer], { type: mimeType }), 'photo.jpg');
+    formData.append('published', 'false');
+    formData.append('access_token', token);
+    photoRes = await fetch(uploadUrl, { method: 'POST', body: formData });
+  } else {
+    const params = new URLSearchParams();
+    params.append('url', normalized);
+    params.append('published', 'false');
+    params.append('access_token', token);
+    photoRes = await fetch(uploadUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+  }
+
+  let uploadData: any = await photoRes.json().catch(() => ({}));
+  if (photoRes.ok && uploadData.id) {
+    return { id: uploadData.id };
+  }
+
+  // Fallback for local dev images under /uploads/... that may not be deployed to www.dbuystore.com yet
+  if (normalized.includes('/uploads/')) {
+    const rawName = path.basename(normalized.split('?')[0]);
+    const localCandidates = [
+      path.join(process.cwd(), 'data', 'uploads', rawName),
+      path.join(process.cwd(), 'public', 'uploads', rawName),
+    ];
+    const localFile = localCandidates.find((p) => fs.existsSync(p));
+    if (localFile) {
+      try {
+        const buffer = fs.readFileSync(localFile);
+        const ext = path.extname(localFile).toLowerCase();
+        const mime = ext === '.png' ? 'image/png' : ext === '.webp' ? 'image/webp' : 'image/jpeg';
+        const formData = new FormData();
+        formData.append('source', new Blob([buffer], { type: mime }), rawName);
+        formData.append('published', 'false');
+        formData.append('access_token', token);
+        const localRes = await fetch(uploadUrl, { method: 'POST', body: formData });
+        const localData: any = await localRes.json().catch(() => ({}));
+        if (localRes.ok && localData.id) {
+          return { id: localData.id };
+        }
+        uploadData = localData;
+      } catch (localErr) {
+        console.warn('[Facebook Local File Fallback Upload Failed]', localErr);
+      }
+    }
+  }
+
+  const err = uploadData?.error || { message: 'Failed to upload unpublished photo to Facebook' };
+  console.warn('[Facebook Graph API Photo Upload Warning]', {
+    imageUrl: normalized.startsWith('data:') ? '[data-uri]' : normalized,
+    message: err?.message,
+    code: err?.code,
+    error_subcode: err?.error_subcode,
+    type: err?.type,
+    targetPageId,
+  });
+  return { error: err };
+}
+
+async function handleFacebookMultiPhotoPublish(req: express.Request, res: express.Response) {
+  const { accessToken, pageId, message, caption, images, imageUrl, link, pageAccessToken } = req.body || {};
+  let { token, targetPageId, envToken } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
+
+  const imageList: string[] = Array.isArray(images)
+    ? images.filter((u: any) => typeof u === 'string' && u.trim().length > 0)
+    : (typeof imageUrl === 'string' && imageUrl.trim().length > 0 ? [imageUrl.trim()] : []);
+
+  if (!token) {
+    return res.status(401).json({
+      success: false,
+      requiresReconnect: true,
+      expired: true,
+      error: 'Facebook Page Access Token is missing or expired. Please reconnect Facebook in the Share modal.',
+    });
+  }
+
+  if (!targetPageId || imageList.length === 0) {
+    return res.status(400).json({ success: false, error: 'Missing required parameters (pageId, images)' });
+  }
+
+  try {
+    // Step 1: Upload each photo to /{page_id}/photos with published=false in parallel (preserving exact order)
+    let uploadResults = await Promise.all(
+      imageList.map((img) => uploadUnpublishedFacebookPhoto(img, targetPageId, token))
+    );
+
+    let failedUpload = uploadResults.find((r) => !r.id);
+
+    if (failedUpload && isFacebookTokenExpiredError(failedUpload.error) && envToken && envToken !== token) {
+      token = envToken;
+      uploadResults = await Promise.all(
+        imageList.map((img) => uploadUnpublishedFacebookPhoto(img, targetPageId, token))
+      );
+      failedUpload = uploadResults.find((r) => !r.id);
+    }
+
+    if (failedUpload) {
+      const expired = isFacebookTokenExpiredError(failedUpload.error);
+      return res.status(expired ? 401 : 400).json({
+        success: false,
+        requiresReconnect: expired,
+        expired,
+        error: expired
+          ? 'Facebook access token has expired. Please reconnect or paste a fresh Page Access Token.'
+          : (failedUpload.error?.message || 'Failed to upload image to Facebook'),
+        error_subcode: failedUpload.error?.error_subcode,
+        error_code: failedUpload.error?.code,
+        details: failedUpload.error,
         targetPageId,
-        message: 'Successfully published Photo Post to Facebook Page!',
+      });
+    }
+
+    const media_fbids = uploadResults.map((r) => r.id as string);
+
+    // Step 2: Create a single feed post using POST /{page_id}/feed with attached_media[i]={"media_fbid":"..."}
+    let postMessage = message || caption || '';
+    if (link && !postMessage.includes(link)) {
+      postMessage = postMessage ? `${postMessage}\n\n${link}` : link;
+    }
+
+    const feedParams = new URLSearchParams();
+    if (postMessage) {
+      feedParams.append('message', postMessage);
+    }
+    media_fbids.forEach((fbid, idx) => {
+      feedParams.append(`attached_media[${idx}]`, JSON.stringify({ media_fbid: fbid }));
+    });
+    feedParams.append('access_token', token);
+
+    const feedUrl = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
+    const feedRes = await fetch(feedUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: feedParams.toString(),
+    });
+    const feedData: any = await feedRes.json().catch(() => ({}));
+
+    if (feedRes.ok && feedData.id) {
+      return res.json({
+        success: true,
+        postId: feedData.id,
+        mediaIds: media_fbids,
+        attachedCount: media_fbids.length,
+        targetPageId,
       });
     } else {
-      const err = fbData?.error;
-      console.error('[Facebook Graph API Photo Error]', {
-        message: err?.message,
-        code: err?.code,
-        error_subcode: err?.error_subcode,
-        type: err?.type,
-        error_user_title: err?.error_user_title,
-        error_user_msg: err?.error_user_msg,
-        fbtrace_id: err?.fbtrace_id,
-        targetPageId,
-        url: fbGraphUrl,
-      });
+      const err = feedData?.error;
+      const expired = isFacebookTokenExpiredError(err);
+      const errorDetail = expired
+        ? 'Facebook access token has expired. Please reconnect or paste a fresh Page Access Token.'
+        : (err?.message || err?.error_user_msg || 'Failed to publish post');
 
-      const errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
-
-      return res.status(fbRes.status || 400).json({
+      return res.status(expired ? 401 : (feedRes.status || 400)).json({
         success: false,
+        requiresReconnect: expired,
+        expired,
         error: errorDetail,
         error_subcode: err?.error_subcode,
         error_code: err?.code,
@@ -1916,49 +2218,56 @@ app.post('/api/facebook/post-photo', async (req, res) => {
         targetPageId,
       });
     }
-  } catch (err: any) {
-    console.error('Error publishing Facebook Photo Post:', err);
-    res.status(500).json({ success: false, error: err?.message || 'Server error publishing Facebook Photo Post' });
+  } catch (error: any) {
+    console.error('Error publishing Facebook Multi-Photo Post:', error);
+    return res.status(500).json({ success: false, error: error.message });
   }
-});
+}
+
+app.post('/api/facebook/post-photo', handleFacebookMultiPhotoPublish);
 
 app.post('/api/facebook/post-feed', async (req, res) => {
   try {
     const { link, message, caption, accessToken, pageAccessToken, pageId } = req.body || {};
     const finalMessage = message || caption || '';
-    const { token, targetPageId } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
+    let { token, targetPageId, envToken } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
 
     if (!token) {
-      return res.status(400).json({
+      return res.status(401).json({
         success: false,
-        error: 'Facebook Access Token missing. Set FACEBOOK_PAGE_ACCESS_TOKEN in env or pass accessToken.',
+        requiresReconnect: true,
+        expired: true,
+        error: 'Facebook Page Access Token is missing or expired. Please reconnect Facebook in the Share modal.',
       });
     }
 
-    // Explicit Page Feed endpoint URL
     const url = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
 
-    // For Link Posts (Link Post (Feed Card)), send message, link, and access_token.
-    // Do NOT include object_attachment or attached_media parameters so that Facebook's
-    // crawler automatically generates the correct Open Graph link preview card.
-    const params = new URLSearchParams();
-    if (finalMessage) {
-      params.append('message', finalMessage);
-    }
-    if (link) {
-      params.append('link', link);
-    }
-    params.append('access_token', token);
+    const postToFeed = async (activeToken: string) => {
+      const params = new URLSearchParams();
+      if (finalMessage) {
+        params.append('message', finalMessage);
+      }
+      if (link) {
+        params.append('link', link);
+      }
+      params.append('access_token', activeToken);
 
-    const fbRes = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: params.toString(),
-    });
+      const fbRes = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const fbData: any = await fbRes.json().catch(() => ({}));
+      return { fbRes, fbData };
+    };
 
-    const fbData: any = await fbRes.json().catch(() => ({}));
+    let { fbRes, fbData } = await postToFeed(token);
+
+    if (!fbRes.ok && isFacebookTokenExpiredError(fbData?.error) && envToken && envToken !== token) {
+      token = envToken;
+      ({ fbRes, fbData } = await postToFeed(token));
+    }
 
     if (fbRes.ok && fbData.id) {
       return res.json({
@@ -1969,23 +2278,15 @@ app.post('/api/facebook/post-feed', async (req, res) => {
       });
     } else {
       const err = fbData?.error;
-      // Log detailed Graph API error subcodes, codes, and messages to console for easy debugging
-      console.error('[Facebook Graph API Feed Error]', {
-        message: err?.message,
-        code: err?.code,
-        error_subcode: err?.error_subcode,
-        type: err?.type,
-        error_user_title: err?.error_user_title,
-        error_user_msg: err?.error_user_msg,
-        fbtrace_id: err?.fbtrace_id,
-        targetPageId,
-        url,
-      });
+      const expired = isFacebookTokenExpiredError(err);
+      const errorDetail = expired
+        ? 'Facebook access token has expired. Please reconnect or paste a fresh Page Access Token.'
+        : (err?.message || err?.error_user_msg || 'Facebook Graph API returned error');
 
-      const errorDetail = err?.message || err?.error_user_msg || 'Facebook Graph API returned error';
-
-      return res.status(fbRes.status || 400).json({
+      return res.status(expired ? 401 : (fbRes.status || 400)).json({
         success: false,
+        requiresReconnect: expired,
+        expired,
         error: errorDetail,
         error_subcode: err?.error_subcode,
         error_code: err?.code,
@@ -1999,104 +2300,7 @@ app.post('/api/facebook/post-feed', async (req, res) => {
   }
 });
 
-app.post('/api/facebook/publish', async (req, res) => {
-  const { accessToken, pageId, message, images, link, pageAccessToken } = req.body || {};
-  const { token, targetPageId } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
-
-  if (!token || !targetPageId || !images || !Array.isArray(images)) {
-    return res.status(400).json({ success: false, error: 'Missing required parameters' });
-  }
-
-  try {
-    const media_fbids = [];
-    for (const imageUrl of images) {
-      let fullImageUrl = imageUrl;
-      if (fullImageUrl && fullImageUrl.startsWith('/')) {
-        fullImageUrl = `https://www.dbuystore.com${fullImageUrl}`;
-      } else if (fullImageUrl && fullImageUrl.startsWith('https://dbuystore.com/')) {
-        fullImageUrl = fullImageUrl.replace('https://dbuystore.com/', 'https://www.dbuystore.com/');
-      }
-
-      const uploadUrl = `https://graph.facebook.com/v19.0/${targetPageId}/photos`;
-      const uploadRes = await fetch(uploadUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          url: fullImageUrl,
-          published: false,
-          access_token: token
-        })
-      });
-      const uploadData: any = await uploadRes.json().catch(() => ({}));
-
-      if (uploadRes.ok && uploadData.id) {
-        media_fbids.push(uploadData.id);
-      } else {
-        const err = uploadData?.error;
-        return res.status(uploadRes.status || 400).json({
-          success: false,
-          error: err?.message || 'Failed to upload image to Facebook',
-          details: err,
-          targetPageId,
-        });
-      }
-    }
-
-    const attached_media = media_fbids.map(id => ({ media_fbid: id }));
-    let postMessage = message || '';
-    if (link && !postMessage.includes(link)) {
-      postMessage = postMessage ? `${postMessage}\n\n${link}` : link;
-    }
-
-    const feedPayload: any = {
-      message: postMessage,
-      access_token: token
-    };
-
-    if (attached_media.length > 0) {
-      feedPayload.attached_media = attached_media;
-    } else if (link) {
-      feedPayload.link = link;
-    }
-
-    const feedUrl = `https://graph.facebook.com/v19.0/${targetPageId}/feed`;
-    const feedRes = await fetch(feedUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(feedPayload)
-    });
-    const feedData: any = await feedRes.json().catch(() => ({}));
-
-    if (feedRes.ok && feedData.id) {
-      res.json({ success: true, postId: feedData.id, targetPageId });
-    } else {
-      const err = feedData?.error;
-      console.error('[Facebook Graph API Publish Feed Error]', {
-        message: err?.message,
-        code: err?.code,
-        error_subcode: err?.error_subcode,
-        type: err?.type,
-        error_user_msg: err?.error_user_msg,
-        targetPageId,
-        feedUrl,
-      });
-
-      const errorDetail = err?.message || 'Failed to publish post';
-
-      res.status(feedRes.status || 500).json({
-        success: false,
-        error: errorDetail,
-        error_subcode: err?.error_subcode,
-        error_code: err?.code,
-        details: err,
-        targetPageId,
-      });
-    }
-  } catch (error: any) {
-    console.error('Error publishing Facebook Multi-Photo Post:', error);
-    res.status(500).json({ success: false, error: error.message });
-  }
-});
+app.post('/api/facebook/publish', handleFacebookMultiPhotoPublish);
 
 // ==========================================
 // UPLOAD PRODUCT IMAGE API
