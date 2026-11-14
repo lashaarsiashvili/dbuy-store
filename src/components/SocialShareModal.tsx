@@ -71,6 +71,10 @@ const FB_PAGE_ID = "215073415343195";
 const LEGACY_FB_TOKEN_PREFIXES = [
   "EAAXgEb3A7ZCABSzaHWiv",
   "EAAXgEb3A7ZCABS9GaZCahs",
+  "EAAXgEb3A7ZCABSZCD2vob3",
+  "EAAXgEb3A7ZCABSZCLaexua",
+  "EAAXgEb3A7ZCABS7rvntxeTp",
+  "EAAXgEb3A7ZCABS2h0fORg",
 ];
 const FB_PAGE_URL = "https://www.facebook.com/Dbuystore";
 
