@@ -1,4 +1,5 @@
 import { Product } from '../types';
+import { parseImages } from './productParsing';
 
 export const shareProductToSocial = async (
   product: Product,
@@ -22,8 +23,9 @@ export const shareProductToSocial = async (
     }
 
     // 3. Sequentially trigger downloads for images
-    const imagesArray = product.images && product.images.length > 0 
-      ? product.images 
+    const parsedImages = parseImages(product.images);
+    const imagesArray = parsedImages.length > 0
+      ? parsedImages
       : product.image ? [product.image] : [];
 
     for (let i = 0; i < imagesArray.length; i++) {

@@ -9,6 +9,7 @@ import { analytics } from './AdminAnalyticsDashboard';
 import { ProductReviewsSection, reviewService } from './ProductReviewsSection';
 import { ProductSEO, ProductSEOData } from '../hooks/useDynamicMetaTags';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
+import { parseVariants, parseVideos, parseImages, parseArrayField } from '../utils/productParsing';
 import { 
   Star, 
   ShoppingCart, 
@@ -39,18 +40,7 @@ import {
 } from 'lucide-react';
 
 // Safe JSON Parsing utility for D1 data strings or native arrays
-const safeParse = (data: any): any[] => {
-  if (!data) return [];
-  if (typeof data === 'string') {
-    try {
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (e) {
-      return [];
-    }
-  }
-  return Array.isArray(data) ? data : [];
-};
+const safeParse = (data: any): any[] => parseArrayField(data);
 
 function getYouTubeEmbedUrl(url: string): string | null {
   if (!url) return null;
@@ -148,7 +138,7 @@ export const ProductDetailPage: React.FC = () => {
     setSelectedVariantIndex(0);
     setQuantity(1);
     if (product) {
-      const parsedVars = safeParse(product.variants);
+      const parsedVars = parseVariants(product.variants);
       setActiveVariant(parsedVars[0] || null);
       const activeTitle = getProductTitle(product, language);
       recordVisit(`Product: ${activeTitle}`);
@@ -221,23 +211,7 @@ export const ProductDetailPage: React.FC = () => {
 
   // Helper to parse any raw image data (string, JSON array, or array of strings)
   const parseImageArray = (raw: any): string[] => {
-    if (!raw) return [];
-    if (Array.isArray(raw)) {
-      return raw.map(img => getProductImage(img)).filter(Boolean);
-    }
-    if (typeof raw === 'string' && raw.trim().length > 0) {
-      try {
-        const parsed = JSON.parse(raw);
-        if (Array.isArray(parsed)) {
-          return parsed.map(img => getProductImage(img)).filter(Boolean);
-        }
-      } catch (e) {
-        if (raw.startsWith('http') || raw.startsWith('/') || raw.startsWith('data:')) {
-          return [getProductImage(raw)];
-        }
-      }
-    }
-    return [];
+    return parseImages(raw).map(img => getProductImage(img)).filter(Boolean);
   };
 
   // Helper to extract all valid image URLs from a variant object
@@ -273,11 +247,11 @@ export const ProductDetailPage: React.FC = () => {
     defaultProductImages.push(cleanMainImg);
   }
 
-  // 2. Parse Color Variants safely using safeParse
-  const variants = safeParse(product.variants);
+  // 2. Parse Color Variants safely using parseVariants
+  const variants = parseVariants(product.variants);
 
-  // 3. Parse Global Videos safely using safeParse
-  const videos = safeParse(product.videos);
+  // 3. Parse Global Videos safely using parseVideos
+  const videos = parseVideos(product.videos);
 
   // 4. Selected Variant
   const selectedVariant = activeVariant || variants[selectedVariantIndex] || variants[0] || null;

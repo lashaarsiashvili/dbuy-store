@@ -1,4 +1,5 @@
 import { Product } from '../types';
+import { parseImages } from './productParsing';
 import { generateProductSlug } from '../context/StoreContext';
 import { generateProductFeatures } from './productFeatures';
 
@@ -229,7 +230,7 @@ export function exportProductsToCSV(products: Product[]): string {
     escapeCell(p.origPrice ?? ''),
     escapeCell(p.stock),
     escapeCell(p.image),
-    escapeCell(p.images?.join('|') ?? p.image),
+    escapeCell(parseImages(p.images).join('|') || p.image),
     escapeCell(p.customSlug ?? ''),
     escapeCell(p.description),
     escapeCell(p.rating),

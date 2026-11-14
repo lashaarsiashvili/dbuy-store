@@ -53,6 +53,7 @@ import {
 import { analytics } from '../components/AdminAnalyticsDashboard';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
 import { ensurePersistentAbsoluteUrl } from '../utils/imageUtils';
+import { normalizeProductArrays, parseImages } from '../utils/productParsing';
 
 // Firebase decoupled - pure offline-first mode mocks
 const db = {};
@@ -789,14 +790,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             !deletedIds.has(p.id)
         )
         .map((p) => {
-          const img = String(p.image || '');
+          const normalized = normalizeProductArrays(p);
+          const img = String(normalized.image || '');
           if (img.includes('ember-temperature-control-smart-mug-2-14-1791736359184-8j2co.jpg')) {
-            const fallback = initialById.get(p.id);
+            const fallback = initialById.get(normalized.id);
             if (fallback?.image) {
-              return { ...p, image: fallback.image, images: fallback.images || [fallback.image] };
+              return normalizeProductArrays({
+                ...normalized,
+                image: fallback.image,
+                images: fallback.images || [fallback.image],
+              });
             }
           }
-          return p;
+          return normalized;
         });
 
     if (!rawProducts || !Array.isArray(rawProducts)) {
@@ -994,12 +1000,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const saveProducts = async (newProducts: Product[]): Promise<boolean> => {
     const sanitizedProducts: Product[] = newProducts.map(p => {
-      const mainImg = ensurePersistentAbsoluteUrl(p.image, p.image || '');
-      const extraImgs = Array.isArray(p.images)
-        ? p.images.map(img => ensurePersistentAbsoluteUrl(img, img))
+      const normalized = normalizeProductArrays(p);
+      const mainImg = ensurePersistentAbsoluteUrl(normalized.image, normalized.image || '');
+      const parsedExtra = parseImages(normalized.images);
+      const extraImgs = parsedExtra.length > 0
+        ? parsedExtra.map(img => ensurePersistentAbsoluteUrl(img, img))
         : (mainImg ? [mainImg] : []);
       return {
-        ...p,
+        ...normalized,
         image: mainImg,
         images: extraImgs,
       };

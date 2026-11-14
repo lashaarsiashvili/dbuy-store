@@ -2,6 +2,7 @@ import React from 'react';
 import { useStore } from '../context/StoreContext';
 import { CachedImage } from './CachedImage';
 import { getProductImage } from '../utils/imageResolver';
+import { parseImages } from '../utils/productParsing';
 import { 
   X, 
   Trash2, 
@@ -107,17 +108,8 @@ export const WishlistDrawer: React.FC = () => {
               wishlistProducts.map(product => {
                 const title = language === 'ka' && product.titleKa ? product.titleKa : product.title;
 
-                let parsedImages: string[] = [];
-                if (Array.isArray(product.images)) {
-                  parsedImages = product.images;
-                } else if (typeof product.images === 'string' && product.images.trim().length > 0) {
-                  try {
-                    parsedImages = JSON.parse(product.images);
-                  } catch (e) {
-                    parsedImages = [];
-                  }
-                }
-                const imageSrc = getProductImage(product);
+                const parsedImages = parseImages(product.images);
+                const imageSrc = getProductImage(product) || parsedImages[0] || '';
 
                 return (
                   <div

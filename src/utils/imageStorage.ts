@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { parseImages } from './productParsing';
 
 // ============================================================================
 // INDEXEDDB DATABASE SETUP
@@ -327,17 +328,7 @@ export const preloadProductImages = async (
         // Give mobile CPU thread breathing room between product records
         await new Promise((resolve) => setTimeout(resolve, 50));
 
-        let parsedImages: string[] = [];
-        const rawImages: any = product.images;
-        if (Array.isArray(rawImages)) {
-          parsedImages = rawImages;
-        } else if (typeof rawImages === 'string' && rawImages.trim().length > 0) {
-          try {
-            parsedImages = JSON.parse(rawImages);
-          } catch (e) {
-            parsedImages = [];
-          }
-        }
+        const parsedImages: string[] = parseImages(product.images);
 
         if (parsedImages.length > 0) {
           for (let idx = 0; idx < parsedImages.length; idx++) {

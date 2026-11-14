@@ -1,26 +1,37 @@
 import React, { useState } from 'react';
-import { 
-  Link as LinkIcon, 
-  Sparkles, 
-  Loader2, 
-  CheckCircle2, 
-  AlertCircle, 
-  Trash2, 
-  ExternalLink, 
-  ArrowRight, 
-  Check, 
-  Save, 
-  Edit3, 
-  ImageIcon, 
-  ShoppingBag,
+import {
+  Link as LinkIcon,
+  Sparkles,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  Trash2,
+  ExternalLink,
+  Check,
+  Save,
+  Edit3,
+  ImageIcon,
   FileText,
   ChevronDown,
   ChevronUp,
-  RefreshCw,
   Star,
-  Globe
+  Globe,
+  Code2,
+  Package,
+  Tag,
+  Factory,
+  ShoppingBag,
+  Flame,
+  Info,
 } from 'lucide-react';
-import { ScrapedProductData, parseProductHtml } from '../utils/productScraper';
+import {
+  ScrapedProductData,
+  ImporterPlatform,
+  parseProductHtml,
+  parsePlatformHtml,
+  sanitizeMarketplaceHtml,
+} from '../utils/productScraper';
+import { normalizeProductCategory } from '../data/categoryNavigationData';
 import { smartApiFetch } from '../lib/api';
 
 interface ProductUrlImporterProps {
@@ -31,29 +42,154 @@ interface ProductUrlImporterProps {
   addToast: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
 
+interface PlatformCardMeta {
+  id: ImporterPlatform;
+  name: string;
+  emoji: string;
+  tagline: string;
+  urlPlaceholder: string;
+  htmlPlaceholder: string;
+  instructions: string;
+  parserSummary: string;
+  activeCardClass: string;
+  inactiveCardClass: string;
+  badgeClass: string;
+  buttonClass: string;
+  Icon: React.ComponentType<{ className?: string }>;
+}
+
+const PLATFORM_CONFIGS: PlatformCardMeta[] = [
+  {
+    id: 'amazon',
+    name: 'Amazon',
+    emoji: '📦',
+    tagline: 'URL + Ctrl+U Bypass',
+    urlPlaceholder: 'https://www.amazon.com/dp/... or https://www.ebay.com/itm/...',
+    htmlPlaceholder: 'Paste raw Amazon HTML content here...',
+    instructions: 'Paste any Amazon link to extract high-res gallery images, USD pricing, and full English specs.',
+    parserSummary: 'Amazon URL & HTML Extractor',
+    activeCardClass: 'bg-amber-500/15 border-amber-400 text-amber-200 ring-1 ring-amber-400/40 shadow-lg shadow-amber-500/10',
+    inactiveCardClass: 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:border-amber-500/40 hover:text-amber-200',
+    badgeClass: 'bg-amber-500/20 text-amber-300 border-amber-500/40',
+    buttonClass: 'from-amber-500 via-orange-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-slate-950',
+    Icon: Package,
+  },
+  {
+    id: 'ebay',
+    name: 'eBay',
+    emoji: '🏷️',
+    tagline: 'Ctrl+U Source Extractor',
+    urlPlaceholder: 'https://www.ebay.com/itm/... (optional reference link)',
+    htmlPlaceholder: 'Paste full eBay Ctrl+U page source HTML here (supports 2MB–5MB pastes)...',
+    instructions: 'Open the eBay listing in your browser, press Ctrl+U (or Cmd+Option+U on Mac), press Ctrl+A then Ctrl+C, and paste the full page HTML below.',
+    parserSummary: 'Extracts JSON-LD Product schema, MSKU/zoom gallery (s-l1600/s-l1200), ux-labels-values specifics & USD pricing.',
+    activeCardClass: 'bg-blue-500/15 border-blue-400 text-blue-200 ring-1 ring-blue-400/40 shadow-lg shadow-blue-500/10',
+    inactiveCardClass: 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:border-blue-500/40 hover:text-blue-200',
+    badgeClass: 'bg-blue-500/20 text-blue-300 border-blue-500/40',
+    buttonClass: 'from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white',
+    Icon: Tag,
+  },
+  {
+    id: 'alibaba',
+    name: 'Alibaba',
+    emoji: '🏭',
+    tagline: 'Ctrl+U Source Extractor',
+    urlPlaceholder: 'https://www.alibaba.com/product-detail/... (optional reference link)',
+    htmlPlaceholder: 'Paste full Alibaba Ctrl+U page source HTML here (supports 2MB–5MB pastes)...',
+    instructions: 'Open the Alibaba product page (USD view), press Ctrl+U (or Cmd+Option+U), select all (Ctrl+A) and copy (Ctrl+C), then paste the full HTML source below.',
+    parserSummary: 'Extracts window.detailData / globalData / JSON-LD, full-res imageList (strips _50x50 / .webp thumbnails), productBasicProperties & USD pricing.',
+    activeCardClass: 'bg-orange-500/15 border-orange-400 text-orange-200 ring-1 ring-orange-400/40 shadow-lg shadow-orange-500/10',
+    inactiveCardClass: 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:border-orange-500/40 hover:text-orange-200',
+    badgeClass: 'bg-orange-500/20 text-orange-300 border-orange-500/40',
+    buttonClass: 'from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 text-slate-950',
+    Icon: Factory,
+  },
+  {
+    id: 'aliexpress',
+    name: 'AliExpress',
+    emoji: '🛍️',
+    tagline: 'Ctrl+U Source Extractor',
+    urlPlaceholder: 'https://www.aliexpress.com/item/... (optional reference link)',
+    htmlPlaceholder: 'Paste full AliExpress Ctrl+U page source HTML here (supports 2MB–5MB pastes)...',
+    instructions: 'Open the AliExpress item page in your browser, press Ctrl+U (or Cmd+Option+U), press Ctrl+A then Ctrl+C, and paste the full source HTML below.',
+    parserSummary: 'Extracts runParams / window._dida_config_, imageComponent.imagePathList (full-res), priceComponent & specsComponent.',
+    activeCardClass: 'bg-rose-500/15 border-rose-400 text-rose-200 ring-1 ring-rose-400/40 shadow-lg shadow-rose-500/10',
+    inactiveCardClass: 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:border-rose-500/40 hover:text-rose-200',
+    badgeClass: 'bg-rose-500/20 text-rose-300 border-rose-500/40',
+    buttonClass: 'from-rose-500 to-orange-500 hover:from-rose-400 hover:to-orange-400 text-white',
+    Icon: ShoppingBag,
+  },
+  {
+    id: 'temu',
+    name: 'Temu',
+    emoji: '🧡',
+    tagline: 'Ctrl+U / outerHTML Extractor',
+    urlPlaceholder: 'https://www.temu.com/... (optional reference link)',
+    htmlPlaceholder: 'Paste Temu Ctrl+U page source or F12 outerHTML here (supports 2MB–5MB pastes)...',
+    instructions: 'Open the Temu product page, press Ctrl+U (or Cmd+Option+U), copy all (Ctrl+A, Ctrl+C), and paste the HTML below.',
+    parserSummary: 'Extracts window.rawData / __NEXT_DATA__ / goods high-res gallery arrays, sku USD prices & product attributes.',
+    activeCardClass: 'bg-amber-600/20 border-orange-400 text-orange-100 ring-1 ring-orange-400/50 shadow-lg shadow-orange-500/15',
+    inactiveCardClass: 'bg-slate-800/80 border-slate-700/80 text-slate-300 hover:border-orange-400/40 hover:text-orange-200',
+    badgeClass: 'bg-orange-500/20 text-orange-200 border-orange-400/40',
+    buttonClass: 'from-orange-500 to-rose-500 hover:from-orange-400 hover:to-rose-400 text-white',
+    Icon: Flame,
+  },
+];
+
 export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
   onPopulateForm,
   onDirectSave,
   isKa = false,
-  formatPrice,
   addToast,
 }) => {
+  // Active platform selector (Amazon default active)
+  const [selectedPlatform, setSelectedPlatform] = useState<ImporterPlatform>('amazon');
+
+  // Amazon state (100% isolated and untouched)
   const [url, setUrl] = useState('');
+  const [rawHtml, setRawHtml] = useState('');
+  const [showHtmlPaste, setShowHtmlPaste] = useState(false);
+
+  // Dedicated Ctrl+U HTML Extractor state for eBay, Alibaba, AliExpress, Temu
+  const [platformUrl, setPlatformUrl] = useState('');
+  const [platformHtml, setPlatformHtml] = useState('');
+
+  // Shared extraction & preview state
   const [isLoading, setIsLoading] = useState(false);
   const [isSavingDirectly, setIsSavingDirectly] = useState(false);
   const [extractedData, setExtractedData] = useState<ScrapedProductData | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isBotBlocked, setIsBotBlocked] = useState(false);
-  const [showHtmlPaste, setShowHtmlPaste] = useState(false);
-  const [rawHtml, setRawHtml] = useState('');
 
   // Editable fields in preview card
   const [editTitle, setEditTitle] = useState('');
   const [editPrice, setEditPrice] = useState<number>(0);
   const [editOrigPrice, setEditOrigPrice] = useState<number | undefined>(undefined);
-  const [editCategory, setEditCategory] = useState<string>('tech');
+  const [editCategory, setEditCategory] = useState<string>('Electronics');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
 
+  const activePlatformMeta = PLATFORM_CONFIGS.find((p) => p.id === selectedPlatform) || PLATFORM_CONFIGS[0];
+
+  const applyExtractedItem = (item: ScrapedProductData) => {
+    const cleanImgs = Array.from(
+      new Set(
+        (item.images || [])
+          .map((u: string) => (typeof u === 'string' ? u.trim() : ''))
+          .filter((u: string) => u.startsWith('http'))
+      )
+    );
+    item.images = cleanImgs;
+    setExtractedData(item);
+    setEditTitle(item.title);
+    setEditPrice(item.price || 49.99);
+    setEditOrigPrice(item.origPrice);
+    setEditCategory(normalizeProductCategory(item.category, item.title));
+    setGalleryImages(cleanImgs);
+  };
+
+  // =========================================================================
+  // AMAZON EXTRACTION FLOW (100% UNTOUCHED BEHAVIOR)
+  // =========================================================================
   const handleExtract = async (overrideHtml?: string) => {
     const trimmedUrl = url.trim();
     const htmlToUse = (overrideHtml !== undefined ? overrideHtml : rawHtml).trim();
@@ -97,8 +233,8 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
         setEditCategory(item.category || 'tech');
         setGalleryImages(cleanImgs);
         addToast(
-          isKa 
-            ? `პროდუქტი "${item.title.substring(0, 30)}..." წარმატებით ამოღებულია!` 
+          isKa
+            ? `პროდუქტი "${item.title.substring(0, 30)}..." წარმატებით ამოღებულია!`
             : `Extracted "${item.title.substring(0, 35)}..." with ${cleanImgs.length} high-res images!`,
           'success'
         );
@@ -163,9 +299,97 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
     }
   };
 
+  // =========================================================================
+  // DEDICATED CTRL+U EXTRACTION FLOW FOR EBAY, ALIBABA, ALIEXPRESS, TEMU
+  // Strips <style>, <svg>, base64 & unrelated scripts and runs platform-specific
+  // pre-parser before compact payload submission so 2MB-5MB HTML never overflows.
+  // =========================================================================
+  const handlePlatformHtmlExtract = async () => {
+    const rawPaste = platformHtml.trim();
+    const refUrl = platformUrl.trim();
+
+    if (!rawPaste) {
+      addToast(`Please paste the ${activePlatformMeta.name} Ctrl+U page HTML first.`, 'warning');
+      return;
+    }
+
+    setIsLoading(true);
+    setErrorMsg(null);
+    setIsBotBlocked(false);
+
+    // Step 1: Strip <style>, <svg>, base64 strings, and unrelated scripts locally
+    const sanitizedHtml = sanitizeMarketplaceHtml(rawPaste, selectedPlatform);
+
+    // Step 2: Run dedicated platform pre-parser locally in browser
+    const preParsed = parsePlatformHtml(selectedPlatform, sanitizedHtml, refUrl);
+
+    try {
+      // Step 3: Send ONLY compact pre-parsed structured payload + compact context to backend (never 5MB HTML!)
+      const response = await smartApiFetch('/api/import-product', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: refUrl || undefined,
+          marketplace: selectedPlatform,
+          preParsed: {
+            ...preParsed,
+            compactContext: undefined,
+          },
+          compactContext: preParsed.compactContext,
+        }),
+      });
+
+      const resData: any = await response.json().catch(() => ({}));
+
+      if (response.ok && resData.success && resData.data) {
+        const finalItem: ScrapedProductData = {
+          ...resData.data,
+          // Guarantee Original Images Only from verified pre-parser
+          images: Array.isArray(resData.data.images) && resData.data.images.length > 0
+            ? resData.data.images
+            : preParsed.images,
+          marketplace: selectedPlatform,
+          sourceUrl: refUrl || resData.data.sourceUrl,
+        };
+        applyExtractedItem(finalItem);
+        addToast(
+          `Extracted "${finalItem.title.substring(0, 35)}..." from ${activePlatformMeta.name} with ${finalItem.images.length} original high-res photos!`,
+          'success'
+        );
+      } else if (preParsed.title && (preParsed.title !== 'Imported Product' || preParsed.images.length > 0)) {
+        applyExtractedItem(preParsed);
+        addToast(`Extracted ${activePlatformMeta.name} product directly via client pre-parser!`, 'success');
+      } else {
+        const msg =
+          resData.error ||
+          `Could not extract ${activePlatformMeta.name} product details. Ensure you copied the complete Ctrl+U page source.`;
+        setErrorMsg(msg);
+        addToast(msg, 'error');
+      }
+    } catch (err: any) {
+      console.warn(`[${selectedPlatform.toUpperCase()} IMPORTER] API fallback to pre-parser:`, err);
+      if (preParsed.title && (preParsed.title !== 'Imported Product' || preParsed.images.length > 0)) {
+        applyExtractedItem(preParsed);
+        addToast(`Extracted ${activePlatformMeta.name} product directly via browser pre-parser!`, 'success');
+      } else {
+        const msg = err?.message || `Failed to parse ${activePlatformMeta.name} HTML.`;
+        setErrorMsg(msg);
+        addToast(msg, 'error');
+      }
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSelectPlatform = (platform: ImporterPlatform) => {
+    setSelectedPlatform(platform);
+    setErrorMsg(null);
+    setIsBotBlocked(false);
+  };
+
   const handleMakeCover = (index: number) => {
     if (index === 0) return;
-    setGalleryImages(prev => {
+    setGalleryImages((prev) => {
       const copy = [...prev];
       const [selected] = copy.splice(index, 1);
       return [selected, ...copy];
@@ -174,13 +398,13 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
   };
 
   const handleRemoveImage = (index: number) => {
-    setGalleryImages(prev => prev.filter((_, i) => i !== index));
+    setGalleryImages((prev) => prev.filter((_, i) => i !== index));
     addToast('Removed image from gallery', 'info');
   };
 
   const handleMoveImage = (fromIndex: number, toIndex: number) => {
     if (toIndex < 0 || toIndex >= galleryImages.length) return;
-    setGalleryImages(prev => {
+    setGalleryImages((prev) => {
       const copy = [...prev];
       const [item] = copy.splice(fromIndex, 1);
       copy.splice(toIndex, 0, item);
@@ -193,8 +417,8 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
       ...(extractedData || {
         description: '',
         features: [],
-        sourceUrl: url,
-        marketplace: 'unknown',
+        sourceUrl: selectedPlatform === 'amazon' ? url : platformUrl,
+        marketplace: selectedPlatform,
       }),
       title: editTitle.trim() || extractedData?.title || 'Imported Product',
       price: editPrice || 49.99,
@@ -219,10 +443,15 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
     try {
       const success = await onDirectSave(finalData);
       if (success) {
-        setUrl('');
-        setRawHtml('');
+        if (selectedPlatform === 'amazon') {
+          setUrl('');
+          setRawHtml('');
+          setShowHtmlPaste(false);
+        } else {
+          setPlatformUrl('');
+          setPlatformHtml('');
+        }
         setExtractedData(null);
-        setShowHtmlPaste(false);
       }
     } finally {
       setIsSavingDirectly(false);
@@ -231,6 +460,11 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
 
   const isAmazonUrl = /amazon\.|amzn\.to/i.test(url);
   const isEbayUrl = /ebay\./i.test(url);
+  const pastedSizeLabel = platformHtml.length > 0
+    ? platformHtml.length >= 1024 * 1024
+      ? `${(platformHtml.length / (1024 * 1024)).toFixed(2)} MB`
+      : `${Math.max(1, Math.round(platformHtml.length / 1024))} KB`
+    : '';
 
   return (
     <div className="bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 sm:p-6 border border-indigo-900/60 shadow-xl relative overflow-hidden mb-5">
@@ -247,28 +481,28 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
           <div>
             <div className="flex items-center space-x-2">
               <h3 className="text-base sm:text-lg font-black tracking-tight text-white flex items-center gap-2">
-                <span>1-Click Amazon & eBay Product Importer</span>
+                <span>
+                  {selectedPlatform === 'amazon'
+                    ? '1-Click Amazon & Multi-Platform Importer'
+                    : `${activePlatformMeta.name} Ctrl+U Product Importer`}
+                </span>
               </h3>
               <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-950">
                 PRO SCRAPER
               </span>
             </div>
             <p className="text-xs text-indigo-200/80">
-              {isKa 
-                ? 'ჩასვით Amazon (amazon.com, amzn.to) ან eBay (ebay.com/itm) ბმული სრული გალერეის, ფასისა და სპეციფიკაციების ავტომატური ექსტრაქციისთვის'
-                : 'Paste any Amazon or eBay link to extract high-res gallery images, USD pricing, and full English specs'}
+              {selectedPlatform === 'amazon'
+                ? isKa
+                  ? 'ჩასვით Amazon (amazon.com, amzn.to) ბმული სრული გალერეის, ფასისა და სპეციფიკაციების ავტომატური ექსტრაქციისთვის'
+                  : 'Paste any Amazon link to extract high-res gallery images, USD pricing, and full English specs'
+                : activePlatformMeta.parserSummary}
             </p>
           </div>
         </div>
 
-        {/* Badges indicating supported marketplaces */}
-        <div className="flex items-center space-x-2">
-          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-slate-800/80 border border-amber-500/30 text-amber-300 text-[11px] font-bold">
-            <span>📦 Amazon</span>
-          </span>
-          <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-slate-800/80 border border-blue-500/30 text-blue-300 text-[11px] font-bold">
-            <span>🏷️ eBay</span>
-          </span>
+        {/* Global Delivery Badge */}
+        <div className="flex items-center space-x-2 self-start sm:self-center">
           <span className="inline-flex items-center space-x-1 px-2.5 py-1 rounded-xl bg-slate-800/80 border border-emerald-500/30 text-emerald-300 text-[11px] font-bold">
             <Globe className="w-3 h-3 mr-0.5" />
             <span>Global Delivery</span>
@@ -276,118 +510,282 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
         </div>
       </div>
 
-      {/* URL Input Bar */}
+      {/* 1. Platform Selector Cards Row (5 clickable dark rounded cards side-by-side) */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5 mb-4 relative z-10">
+        {PLATFORM_CONFIGS.map((platform) => {
+          const isActive = selectedPlatform === platform.id;
+          const IconComponent = platform.Icon;
+          return (
+            <button
+              key={platform.id}
+              type="button"
+              onClick={() => handleSelectPlatform(platform.id)}
+              aria-pressed={isActive}
+              className={`group flex items-center gap-2.5 px-3 py-2.5 rounded-2xl border text-left transition-all cursor-pointer ${
+                isActive ? platform.activeCardClass : platform.inactiveCardClass
+              }`}
+            >
+              <div
+                className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 border transition-colors ${
+                  isActive
+                    ? 'bg-slate-950/60 border-white/20'
+                    : 'bg-slate-900/70 border-slate-700/70 group-hover:border-slate-500/70'
+                }`}
+              >
+                <IconComponent className="w-4 h-4" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-1">
+                  <span className="text-xs font-black tracking-tight truncate">
+                    {platform.emoji} {platform.name}
+                  </span>
+                  {isActive && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-400 shrink-0 shadow-xs shadow-emerald-400/60" />
+                  )}
+                </div>
+                <p className="text-[10px] opacity-75 truncate">{platform.tagline}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      {/* 2. Platform-Specific Panel */}
       <div className="relative z-10">
-        <form
-          onSubmit={(e) => {
-            e.preventDefault();
-            handleExtract();
-          }}
-          className="flex flex-col sm:flex-row items-stretch gap-2"
-        >
-          <div className="relative flex-1">
-            <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none text-slate-400">
-              <LinkIcon className="w-4 h-4 text-indigo-300" />
-            </div>
-            <input
-              type="url"
-              value={url}
-              onChange={(e) => {
-                setUrl(e.target.value);
-                if (errorMsg) setErrorMsg(null);
+        {selectedPlatform === 'amazon' ? (
+          /* ================================================================
+             AMAZON PANEL — 100% UNTOUCHED WORKING COMPONENT & LOGIC
+             ================================================================ */
+          <>
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                handleExtract();
               }}
-              placeholder="https://www.amazon.com/dp/... or https://www.ebay.com/itm/..."
-              className="w-full pl-10 pr-24 py-3 bg-slate-950/70 border border-indigo-500/40 rounded-2xl text-xs sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all font-mono"
-            />
-            {url && (
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
-                {isAmazonUrl && (
-                  <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
-                    Amazon
-                  </span>
-                )}
-                {isEbayUrl && (
-                  <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold">
-                    eBay
-                  </span>
+              className="flex flex-col sm:flex-row items-stretch gap-2"
+            >
+              <div className="relative flex-1">
+                <div className="absolute left-3.5 top-1/2 -translate-y-1/2 flex items-center pointer-events-none text-slate-400">
+                  <LinkIcon className="w-4 h-4 text-indigo-300" />
+                </div>
+                <input
+                  type="url"
+                  value={url}
+                  onChange={(e) => {
+                    setUrl(e.target.value);
+                    if (errorMsg) setErrorMsg(null);
+                  }}
+                  placeholder="https://www.amazon.com/dp/... or https://www.ebay.com/itm/..."
+                  className="w-full pl-10 pr-24 py-3 bg-slate-950/70 border border-indigo-500/40 rounded-2xl text-xs sm:text-sm text-white placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-indigo-400 focus:border-indigo-400 transition-all font-mono"
+                />
+                {url && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+                    {isAmazonUrl && (
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/40 text-[10px] font-bold">
+                        Amazon
+                      </span>
+                    )}
+                    {isEbayUrl && (
+                      <span className="px-2 py-0.5 rounded-md bg-blue-500/20 text-blue-300 border border-blue-500/40 text-[10px] font-bold">
+                        eBay
+                      </span>
+                    )}
+                  </div>
                 )}
               </div>
-            )}
-          </div>
 
-          <button
-            type="submit"
-            disabled={isLoading || (!url.trim() && !rawHtml.trim())}
-            className={`px-5 py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center space-x-2 shadow-lg transition-all cursor-pointer whitespace-nowrap ${
-              isLoading || (!url.trim() && !rawHtml.trim())
-                ? 'bg-indigo-900/60 text-indigo-300/60 cursor-not-allowed border border-indigo-800/40'
-                : 'bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-slate-950 font-bold shadow-amber-500/20 active:scale-95'
-            }`}
-          >
-            {isLoading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin text-slate-900" />
-                <span className="text-slate-900">Extracting gallery, specs & English description...</span>
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-4 h-4 text-slate-950" />
-                <span>Import Product Data</span>
-              </>
-            )}
-          </button>
-        </form>
+              <button
+                type="submit"
+                disabled={isLoading || (!url.trim() && !rawHtml.trim())}
+                className={`px-5 py-3 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center space-x-2 shadow-lg transition-all cursor-pointer whitespace-nowrap ${
+                  isLoading || (!url.trim() && !rawHtml.trim())
+                    ? 'bg-indigo-900/60 text-indigo-300/60 cursor-not-allowed border border-indigo-800/40'
+                    : 'bg-gradient-to-r from-amber-500 via-orange-500 to-indigo-600 hover:from-amber-400 hover:to-indigo-500 text-slate-950 font-bold shadow-amber-500/20 active:scale-95'
+                }`}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-slate-900" />
+                    <span className="text-slate-900">Extracting gallery, specs & English description...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4 text-slate-950" />
+                    <span>Import Product Data</span>
+                  </>
+                )}
+              </button>
+            </form>
 
-        {/* Toggle for Direct HTML Extraction Fallback */}
-        <div className="mt-2.5 flex items-center justify-between text-[11px] text-indigo-300">
-          <button
-            type="button"
-            onClick={() => setShowHtmlPaste(prev => !prev)}
-            className="inline-flex items-center space-x-1.5 text-indigo-300 hover:text-white transition-colors cursor-pointer underline-offset-4 hover:underline"
-          >
-            <FileText className="w-3.5 h-3.5 text-indigo-400" />
-            <span>
-              {showHtmlPaste 
-                ? 'Hide Direct HTML Extractor' 
-                : 'Having trouble? Click here to paste Page HTML directly (100% bypass)'}
-            </span>
-            {showHtmlPaste ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          </button>
-
-          <span className="text-slate-400 text-[11px]">
-            Strict Rule: English descriptions & original photos only (no placeholders)
-          </span>
-        </div>
-
-        {/* Collapsible Direct HTML Paste Box */}
-        {showHtmlPaste && (
-          <div className="mt-3 p-4 bg-slate-950/80 rounded-2xl border border-indigo-500/30 transition-all">
-            <div className="flex items-center justify-between mb-2">
-              <label className="text-xs font-bold text-indigo-200 flex items-center gap-1.5">
-                <FileText className="w-3.5 h-3.5 text-amber-400" />
-                <span>Direct Page HTML Paste (Guaranteed 100% Bypass for Captchas & Bot Checks)</span>
-              </label>
-              <span className="text-[10px] text-slate-400">
-                Press Ctrl+U on the product page, copy all (Ctrl+A), and paste here
-              </span>
-            </div>
-            <textarea
-              value={rawHtml}
-              onChange={(e) => setRawHtml(e.target.value)}
-              placeholder="Paste raw Amazon or eBay HTML content here..."
-              rows={4}
-              className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-200 font-mono placeholder:text-slate-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-400"
-            />
-            <div className="mt-2.5 flex justify-end">
+            {/* Toggle for Direct HTML Extraction Fallback */}
+            <div className="mt-2.5 flex items-center justify-between text-[11px] text-indigo-300">
               <button
                 type="button"
-                onClick={() => handleExtract(rawHtml)}
-                disabled={isLoading || !rawHtml.trim()}
-                className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center space-x-1.5 shadow-md cursor-pointer disabled:opacity-50"
+                onClick={() => setShowHtmlPaste((prev) => !prev)}
+                className="inline-flex items-center space-x-1.5 text-indigo-300 hover:text-white transition-colors cursor-pointer underline-offset-4 hover:underline"
               >
-                <Sparkles className="w-3.5 h-3.5" />
-                <span>Extract From Pasted HTML</span>
+                <FileText className="w-3.5 h-3.5 text-indigo-400" />
+                <span>
+                  {showHtmlPaste
+                    ? 'Hide Direct HTML Extractor'
+                    : 'Having trouble? Click here to paste Page HTML directly (100% bypass)'}
+                </span>
+                {showHtmlPaste ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
               </button>
+
+              <span className="text-slate-400 text-[11px]">
+                Strict Rule: English descriptions & original photos only (no placeholders)
+              </span>
+            </div>
+
+            {/* Collapsible Direct HTML Paste Box */}
+            {showHtmlPaste && (
+              <div className="mt-3 p-4 bg-slate-950/80 rounded-2xl border border-indigo-500/30 transition-all">
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-bold text-indigo-200 flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-amber-400" />
+                    <span>Direct Page HTML Paste (Guaranteed 100% Bypass for Captchas & Bot Checks)</span>
+                  </label>
+                  <span className="text-[10px] text-slate-400">
+                    Press Ctrl+U on the product page, copy all (Ctrl+A), and paste here
+                  </span>
+                </div>
+                <textarea
+                  value={rawHtml}
+                  onChange={(e) => setRawHtml(e.target.value)}
+                  placeholder="Paste raw Amazon or eBay HTML content here..."
+                  rows={4}
+                  className="w-full p-2.5 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-200 font-mono placeholder:text-slate-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-400"
+                />
+                <div className="mt-2.5 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => handleExtract(rawHtml)}
+                    disabled={isLoading || !rawHtml.trim()}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center space-x-1.5 shadow-md cursor-pointer disabled:opacity-50"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Extract From Pasted HTML</span>
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
+        ) : (
+          /* ================================================================
+             DEDICATED CTRL+U HTML EXTRACTOR PANEL (eBay, Alibaba, AliExpress, Temu)
+             ================================================================ */
+          <div className="p-4 bg-slate-950/75 rounded-2xl border border-indigo-500/30 space-y-3">
+            {/* Platform Instructions Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-800/80">
+              <div className="flex items-start gap-2.5">
+                <div className={`px-2.5 py-1 rounded-xl border text-[11px] font-black shrink-0 ${activePlatformMeta.badgeClass}`}>
+                  {activePlatformMeta.emoji} {activePlatformMeta.name}
+                </div>
+                <p className="text-xs text-slate-200 leading-relaxed">
+                  {activePlatformMeta.instructions}
+                </p>
+              </div>
+              <span className="text-[10px] text-emerald-300/90 font-semibold whitespace-nowrap">
+                Auto-strips &lt;style&gt;, &lt;svg&gt; &amp; base64
+              </span>
+            </div>
+
+            {/* Temu F12 Copy outerHTML Helper Tip */}
+            {selectedPlatform === 'temu' && (
+              <div className="px-3 py-2 rounded-xl bg-orange-500/10 border border-orange-400/30 text-[11px] text-orange-200 flex items-start gap-2">
+                <Info className="w-3.5 h-3.5 text-orange-300 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Temu Tip:</strong> If <code className="px-1 py-0.5 rounded bg-slate-900 text-orange-200">Ctrl+U</code> shows an empty shell, press <code className="px-1 py-0.5 rounded bg-slate-900 text-orange-200">F12</code> &rarr; right-click <code className="px-1 py-0.5 rounded bg-slate-900 text-orange-200">&lt;html&gt;</code> &rarr; <strong>Copy</strong> &rarr; <strong>Copy outerHTML</strong> and paste it into the box below.
+                </span>
+              </div>
+            )}
+
+            {/* Optional Reference / Canonical Product URL */}
+            <div>
+              <label className="block text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-1">
+                Optional Product URL (Reference / Canonical Link)
+              </label>
+              <div className="relative">
+                <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                  <LinkIcon className="w-3.5 h-3.5 text-indigo-300" />
+                </div>
+                <input
+                  type="url"
+                  value={platformUrl}
+                  onChange={(e) => setPlatformUrl(e.target.value)}
+                  placeholder={activePlatformMeta.urlPlaceholder}
+                  className="w-full pl-9 pr-3 py-2.5 bg-slate-900/90 border border-slate-700 rounded-xl text-xs text-white placeholder:text-slate-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-400 font-mono"
+                />
+              </div>
+            </div>
+
+            {/* Dedicated Ctrl+U Page Source HTML Paste Textarea */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-bold text-indigo-200 flex items-center gap-1.5">
+                  <Code2 className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{activePlatformMeta.name} Ctrl+U Page Source HTML</span>
+                </label>
+                <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                  {pastedSizeLabel && (
+                    <span className="px-2 py-0.5 rounded-md bg-slate-800 text-emerald-300 border border-emerald-500/30 font-mono">
+                      {pastedSizeLabel} pasted (pre-parser ready)
+                    </span>
+                  )}
+                  <span>Original images &amp; English/USD normalized</span>
+                </div>
+              </div>
+              <textarea
+                value={platformHtml}
+                onChange={(e) => {
+                  setPlatformHtml(e.target.value);
+                  if (errorMsg) setErrorMsg(null);
+                }}
+                placeholder={activePlatformMeta.htmlPlaceholder}
+                rows={5}
+                className="w-full p-3 bg-slate-900 border border-slate-700 rounded-xl text-xs text-slate-200 font-mono placeholder:text-slate-500 focus:outline-hidden focus:ring-1 focus:ring-indigo-400"
+              />
+            </div>
+
+            {/* Footer Actions */}
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 pt-1">
+              <span className="text-[11px] text-slate-400">
+                Strict Rule: Verified original gallery images, clean English &amp; USD ($) pricing only
+              </span>
+
+              <div className="flex items-center gap-2">
+                {platformHtml && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPlatformHtml('');
+                      setErrorMsg(null);
+                    }}
+                    className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
+                  >
+                    Clear
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={handlePlatformHtmlExtract}
+                  disabled={isLoading || !platformHtml.trim()}
+                  className={`px-5 py-2.5 rounded-xl font-black text-xs sm:text-sm flex items-center justify-center space-x-2 shadow-lg transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed bg-gradient-to-r ${activePlatformMeta.buttonClass}`}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      <span>Extracting &amp; Normalizing {activePlatformMeta.name}...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-4 h-4" />
+                      <span>Extract {activePlatformMeta.name} Product</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -398,7 +796,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
             <AlertCircle className="w-4 h-4 text-rose-400 shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="font-semibold">{errorMsg}</p>
-              {isBotBlocked && (
+              {isBotBlocked && selectedPlatform === 'amazon' && (
                 <p className="mt-1 text-slate-300 text-[11px]">
                   💡 <strong>Tip:</strong> Right-click the Amazon or eBay product page in your browser, select <em>"View Page Source"</em> (or press Ctrl+U), copy the HTML, and paste it into the Direct HTML box above!
                 </p>
@@ -498,7 +896,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
                 <span>Extracted High-Res Gallery ({galleryImages.length} Images)</span>
               </label>
               <span className="text-[11px] text-amber-300">
-                ⭐ Click "Set as Cover" or drag/reorder • First image is store cover photo
+                ⭐ Click "Set Cover" or reorder • First image is store cover photo
               </span>
             </div>
 
@@ -527,13 +925,11 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
                         crossOrigin="anonymous"
                         onError={(e) => {
                           const target = e.currentTarget;
-                          // If loaded with query parameters and failed, retry once with clean URL
                           if (!target.dataset.triedClean && target.src.includes('?')) {
                             target.dataset.triedClean = 'true';
                             target.src = target.src.split('?')[0];
                             return;
                           }
-                          // Gracefully show visual placeholder rather than leaving empty black box
                           target.style.display = 'none';
                           const fallbackEl = target.nextElementSibling as HTMLElement | null;
                           if (fallbackEl) {
@@ -541,7 +937,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
                           }
                         }}
                       />
-                      <div 
+                      <div
                         style={{ display: 'none' }}
                         className="flex-col items-center justify-center p-2 text-center text-slate-400 select-none"
                       >
@@ -646,7 +1042,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-800">
             <div className="text-xs text-indigo-200 flex items-center space-x-2">
               <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              <span>Ready to publish with Global Shipping & Worldwide Delivery</span>
+              <span>Ready to publish with Global Shipping &amp; Worldwide Delivery</span>
             </div>
 
             <div className="flex items-center gap-2.5">
@@ -656,7 +1052,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
                 className="flex-1 sm:flex-none px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-bold text-xs flex items-center justify-center space-x-1.5 shadow-xs transition-colors cursor-pointer"
               >
                 <Edit3 className="w-3.5 h-3.5 text-indigo-300" />
-                <span>Review & Edit in Form</span>
+                <span>Review &amp; Edit in Form</span>
               </button>
 
               <button
@@ -673,7 +1069,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
                 ) : (
                   <>
                     <Save className="w-3.5 h-3.5 text-slate-950" />
-                    <span>Import & Save Directly</span>
+                    <span>Import &amp; Save Directly</span>
                   </>
                 )}
               </button>

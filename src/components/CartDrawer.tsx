@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { CachedImage } from './CachedImage';
+import { parseImages } from '../utils/productParsing';
 import { 
   X, 
   Trash2, 
@@ -155,16 +156,7 @@ export const CartDrawer: React.FC = () => {
                   ? item.product.titleKa
                   : item.product.title;
 
-                let parsedImages: string[] = [];
-                if (Array.isArray(item.product.images)) {
-                  parsedImages = item.product.images;
-                } else if (typeof item.product.images === 'string' && item.product.images.trim().length > 0) {
-                  try {
-                    parsedImages = JSON.parse(item.product.images);
-                  } catch (e) {
-                    parsedImages = [];
-                  }
-                }
+                const parsedImages = parseImages(item.product.images);
                 const imageSrc = item.product.image || parsedImages[0] || '';
 
                 return (

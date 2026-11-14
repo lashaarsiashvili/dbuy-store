@@ -7,13 +7,19 @@ import nodemailer from 'nodemailer';
 import dotenv from 'dotenv';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import { Redis } from '@upstash/redis';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import { initialProducts, DB_VERSION } from './src/data/initialProducts';
 import { initialBillboards } from './src/data/initialBillboards';
 import { INITIAL_HOMEPAGE_DATABASE_TABLES } from './src/data/initialHomepageConfig';
 import { buildCustomerOrderEmail, buildAdminOrderAlertEmail } from './src/utils/orderEmailTemplates';
 import { generateSmartOfflineAdCopy } from './src/utils/adCopyGenerator';
-import { parseProductHtml } from './src/utils/productScraper';
+import {
+  parseProductHtml,
+  parsePlatformHtml,
+  convertToUsd,
+  ScrapedProductData,
+  ImporterPlatform,
+} from './src/utils/productScraper';
 
 dotenv.config({ override: true });
 dns.setDefaultResultOrder('ipv4first');
@@ -452,6 +458,45 @@ app.use((req, res, next) => {
   next();
 });
 
+const BOT_USER_AGENT_RE = /bot|crawler|spider|headless|curl|wget|python|scrapy|uptime|pingdom|lighthouse/i;
+
+function isTestOrInternalEvent(ev: any, userAgent = ''): boolean {
+  if (!ev) return true;
+  if (ev.is_test === true || ev.is_test === 'true' || ev.is_test === 1) return true;
+  if (String(ev.environment || '').toLowerCase() === 'test') return true;
+  if (String(ev.referrer || '').trim().toLowerCase() === 'test') return true;
+  const pathLower = String(ev.page_path || ev.path || '').toLowerCase();
+  if (
+    pathLower.includes('/admin') ||
+    pathLower.includes('/portal-sec') ||
+    pathLower.includes('/lasha-admin')
+  ) {
+    return true;
+  }
+  if (userAgent && BOT_USER_AGENT_RE.test(userAgent)) return true;
+  return false;
+}
+
+function normalizeServerSource(raw: string | undefined | null): string {
+  const lower = String(raw || '').toLowerCase();
+  if (lower.includes('google') || lower.includes('gclid')) return 'Google';
+  if (lower.includes('facebook') || lower.includes('fbclid') || lower === 'fb' || lower.includes('fb.com')) {
+    return 'Facebook';
+  }
+  if (lower.includes('instagram') || lower === 'ig' || lower.includes('l.instagram.com')) {
+    return 'Instagram';
+  }
+  return 'Direct';
+}
+
+function extractServerProductKey(itemId: string | null | undefined, pagePath?: string | null): string {
+  const direct = String(itemId || '').trim();
+  if (direct) return direct;
+  const p = String(pagePath || '').split('?')[0].split('#')[0].trim();
+  const match = p.match(/^\/product\/([^/]+)\/?$/i);
+  return match && match[1] ? decodeURIComponent(match[1]) : '';
+}
+
 const liveStoreEvents: Array<{
   event_type: string;
   session_id: string;
@@ -460,21 +505,33 @@ const liveStoreEvents: Array<{
   referrer: string;
   country: string;
   amount: number;
+  is_test?: boolean;
+  environment?: string;
   created_at: string;
 }> = Array.isArray((storeDb as any).storeEvents) ? (storeDb as any).storeEvents : [];
 
 app.post('/api/event', (req, res) => {
   try {
     const body = req.body || {};
-    const headerCountry = (req.headers['cf-ipcountry'] as string) || body.countryCode || body.country || 'GE';
+    const ua = String(req.headers['user-agent'] || '');
+    const eventType = String(body.event_type || 'page_view').trim();
+
+    if (eventType === 'heartbeat' || body.type === 'heartbeat' || isTestOrInternalEvent(body, ua)) {
+      res.json({ success: true, filtered: true });
+      return;
+    }
+
+    const headerCountry = (req.headers['cf-ipcountry'] as string) || body.countryCode || body.country || 'Unknown';
+    const cleanCountry = String(headerCountry).trim().toUpperCase();
     const ev = {
-      event_type: String(body.event_type || 'page_view'),
+      event_type: eventType,
       session_id: String(body.session_id || 'anonymous'),
       page_path: String(body.page_path || body.path || '/'),
       item_id: body.item_id || body.productId ? String(body.item_id || body.productId) : null,
-      referrer: String(body.referrer || 'Direct'),
-      country: String(headerCountry).toUpperCase().slice(0, 2) || 'GE',
+      referrer: normalizeServerSource(body.referrer),
+      country: !cleanCountry || cleanCountry === 'XX' || cleanCountry === 'UNKNOWN' ? 'Unknown' : cleanCountry.slice(0, 2),
       amount: Number(body.amount || body.revenue || 0) || 0,
+      is_test: false,
       created_at: new Date().toISOString(),
     };
     liveStoreEvents.unshift(ev);
@@ -492,65 +549,137 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
     const startDate = req.query.startDate as string | undefined;
     const endDate = req.query.endDate as string | undefined;
     const now = new Date();
-    const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
     const dayMs = 86400000;
+    const startOfTodayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0);
 
-    let minTime = new Date(startOfToday.getTime() - 7 * dayMs).getTime();
-    let maxTime = Infinity;
+    let minTime = startOfTodayMs - 6 * dayMs;
+    let maxTime = startOfTodayMs + dayMs;
     let isSingleDay = false;
+
+    const parseUtcDay = (val?: string) => {
+      if (!val) return null;
+      const clean = String(val).trim().slice(0, 10);
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(clean)) return null;
+      const ms = Date.parse(`${clean}T00:00:00.000Z`);
+      return Number.isFinite(ms) ? ms : null;
+    };
 
     switch (range) {
       case 'today':
-        minTime = startOfToday.getTime();
+        minTime = startOfTodayMs;
+        maxTime = startOfTodayMs + dayMs;
         isSingleDay = true;
         break;
       case '1d_ago':
-        minTime = startOfToday.getTime() - 1 * dayMs;
-        maxTime = startOfToday.getTime();
+        minTime = startOfTodayMs - 1 * dayMs;
+        maxTime = startOfTodayMs;
         isSingleDay = true;
         break;
       case '2d_ago':
-        minTime = startOfToday.getTime() - 2 * dayMs;
-        maxTime = startOfToday.getTime() - 1 * dayMs;
+        minTime = startOfTodayMs - 2 * dayMs;
+        maxTime = startOfTodayMs - 1 * dayMs;
         isSingleDay = true;
         break;
       case '7d_ago':
-        minTime = startOfToday.getTime() - 7 * dayMs;
-        maxTime = startOfToday.getTime() - 6 * dayMs;
+        minTime = startOfTodayMs - 7 * dayMs;
+        maxTime = startOfTodayMs - 6 * dayMs;
         isSingleDay = true;
         break;
       case 'last7d':
-        minTime = startOfToday.getTime() - 7 * dayMs;
+        minTime = startOfTodayMs - 6 * dayMs;
+        maxTime = startOfTodayMs + dayMs;
         break;
       case 'last30d':
-        minTime = startOfToday.getTime() - 30 * dayMs;
+        minTime = startOfTodayMs - 29 * dayMs;
+        maxTime = startOfTodayMs + dayMs;
         break;
       case 'last60d':
-        minTime = startOfToday.getTime() - 60 * dayMs;
+        minTime = startOfTodayMs - 59 * dayMs;
+        maxTime = startOfTodayMs + dayMs;
         break;
       case 'last90d':
-        minTime = startOfToday.getTime() - 90 * dayMs;
+        minTime = startOfTodayMs - 89 * dayMs;
+        maxTime = startOfTodayMs + dayMs;
         break;
-      case 'custom':
-        if (startDate) minTime = new Date(startDate).getTime() || minTime;
-        if (endDate) maxTime = (new Date(endDate).getTime() || Date.now()) + dayMs;
+      case 'custom': {
+        const sMs = parseUtcDay(startDate);
+        const eMs = parseUtcDay(endDate);
+        if (sMs !== null && eMs !== null) {
+          minTime = Math.min(sMs, eMs);
+          const endBoundary = Math.max(sMs, eMs);
+          maxTime = endBoundary + dayMs;
+          isSingleDay = endBoundary - minTime === 0;
+        }
         break;
+      }
       default:
-        minTime = startOfToday.getTime() - 7 * dayMs;
+        minTime = startOfTodayMs - 6 * dayMs;
+        maxTime = startOfTodayMs + dayMs;
     }
+
+    const paidStatuses = new Set(['paid', 'completed', 'processing', 'shipped', 'delivered']);
+    const abandonedStatuses = new Set(['abandoned', 'cancelled', 'canceled', 'failed']);
+
+    const catalogProducts = Array.isArray(storeDb.products) ? storeDb.products : [];
+    const productLookup = new Map<string, { id: string; name: string }>();
+    for (const p of catalogProducts as any[]) {
+      const id = String(p.id || '').trim();
+      if (!id) continue;
+      const name = String(p.title || p.name || p.titleKa || id).trim();
+      const entry = { id, name };
+      for (const alias of [id, p.customSlug, p.slug, p.sku, p.title, p.name]) {
+        const key = String(alias || '').trim().toLowerCase();
+        if (key && !productLookup.has(key)) productLookup.set(key, entry);
+      }
+    }
+
+    const resolveProd = (rawKey: string, fallbackName?: string) => {
+      const clean = String(rawKey || '').trim();
+      const match = productLookup.get(clean.toLowerCase());
+      return match || { id: clean, name: fallbackName || clean };
+    };
+
+    const groupedByBucket: Record<string, { time: string; views: number; carts: number; purchases: number }> = {};
+    if (isSingleDay) {
+      for (let h = 0; h < 24; h++) {
+        const k = `${String(h).padStart(2, '0')}:00`;
+        groupedByBucket[k] = { time: k, views: 0, carts: 0, purchases: 0 };
+      }
+    } else {
+      let cur = minTime;
+      let guard = 0;
+      while (cur < maxTime && guard < 120) {
+        const k = new Date(cur).toISOString().slice(0, 10);
+        groupedByBucket[k] = { time: k, views: 0, carts: 0, purchases: 0 };
+        cur += dayMs;
+        guard += 1;
+      }
+    }
+
+    const getBucketKey = (isoStr: string): string | null => {
+      const d = new Date(isoStr);
+      if (isNaN(d.getTime())) return null;
+      if (isSingleDay) return `${String(d.getUTCHours()).padStart(2, '0')}:00`;
+      return d.toISOString().slice(0, 10);
+    };
 
     const orders = Array.isArray(storeDb.orders) ? storeDb.orders : [];
     const filteredOrders = orders.filter((o: any) => {
+      if (!o || o.is_test === true || o.is_test === 1) return false;
+      const idUpper = String(o.id || '').toUpperCase();
+      if (idUpper.startsWith('TEST-') || idUpper.startsWith('TEST_')) return false;
       const rawDate = o.created_at || o.createdAt || o.date;
-      if (!rawDate) return true;
+      if (!rawDate) return false;
       const t = new Date(rawDate).getTime();
-      if (isNaN(t)) return true;
+      if (isNaN(t)) return false;
       return t >= minTime && t < maxTime;
     });
 
     const filteredEvents = liveStoreEvents.filter((ev) => {
+      if (isTestOrInternalEvent(ev)) return false;
+      if (ev.event_type === 'heartbeat') return false;
       const t = new Date(ev.created_at).getTime();
-      if (isNaN(t)) return true;
+      if (isNaN(t)) return false;
       return t >= minTime && t < maxTime;
     });
 
@@ -559,120 +688,135 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
     let total_abandoned = 0;
     let total_sales = 0;
 
-    const groupedByBucket: Record<string, { time: string; views: number; carts: number; purchases: number }> = {};
+    const productStatsMap: Record<
+      string,
+      { item_id: string; name: string; views: number; carts: number; purchases: number }
+    > = {};
 
-    const getBucketKey = (isoStr: string) => {
-      const d = new Date(isoStr);
-      if (isNaN(d.getTime())) return isSingleDay ? '12:00' : new Date().toISOString().split('T')[0];
-      if (isSingleDay) {
-        const hh = String(d.getUTCHours()).padStart(2, '0');
-        return `${hh}:00`;
+    const ensureProdStat = (rawKey: string, fallbackName?: string) => {
+      const resolved = resolveProd(rawKey, fallbackName);
+      if (!productStatsMap[resolved.id]) {
+        productStatsMap[resolved.id] = {
+          item_id: resolved.id,
+          name: resolved.name,
+          views: 0,
+          carts: 0,
+          purchases: 0,
+        };
       }
-      return d.toISOString().split('T')[0];
+      return productStatsMap[resolved.id];
     };
 
     for (const o of filteredOrders) {
-      const status = String(o.status || '').toLowerCase();
-      const isPaid = status === 'paid' || status === 'completed' || status === 'processing' || status === 'delivered' || status === 'shipped';
-      const isAbandoned = status === 'abandoned' || status === 'cancelled';
+      const status = String(o.status || '').trim().toLowerCase();
       const amount = Number(o.total_amount ?? o.total ?? o.subtotal ?? 0) || 0;
+      const isPaid = paidStatuses.has(status) && amount > 0;
 
       if (isPaid) {
         total_sales += 1;
         total_revenue += amount;
-      } else if (isAbandoned) {
+        const rawDate = o.created_at || o.createdAt || o.date;
+        const bucketKey = getBucketKey(rawDate);
+        if (bucketKey && groupedByBucket[bucketKey]) {
+          groupedByBucket[bucketKey].purchases += 1;
+        }
+        if (Array.isArray(o.items)) {
+          for (const item of o.items) {
+            const rawKey = String(item.productId || item.product_id || item.id || item.sku || item.title || '').trim();
+            if (!rawKey) continue;
+            ensureProdStat(rawKey, item.title).purchases += Math.max(1, Number(item.quantity) || 1);
+          }
+        }
+      } else if (abandonedStatuses.has(status)) {
         total_abandoned += 1;
-      }
-
-      const rawDate = o.created_at || o.createdAt || o.date || new Date().toISOString();
-      const bucketKey = getBucketKey(rawDate);
-      if (!groupedByBucket[bucketKey]) {
-        groupedByBucket[bucketKey] = { time: bucketKey, views: 0, carts: 0, purchases: 0 };
-      }
-      groupedByBucket[bucketKey].carts += 1;
-      if (isPaid) {
-        groupedByBucket[bucketKey].purchases += 1;
       }
     }
 
     let total_views = 0;
     let total_add_to_cart = 0;
-    let total_event_purchases = 0;
-    const distinctSessions = new Set<string>();
-    const countrySessionMap: Record<string, Set<string>> = {};
-    const sourceSessionMap: Record<string, Set<string>> = {};
-    const productStatsMap: Record<string, { item_id: string; views: number; carts: number; purchases: number }> = {};
+    const sessionCountry = new Map<string, string>();
+    const sessionSource = new Map<string, string>();
+    let seq = 0;
 
     for (const ev of filteredEvents) {
-      distinctSessions.add(ev.session_id);
-      const bucketKey = getBucketKey(ev.created_at);
-      if (!groupedByBucket[bucketKey]) {
-        groupedByBucket[bucketKey] = { time: bucketKey, views: 0, carts: 0, purchases: 0 };
+      seq += 1;
+      const sid = ev.session_id && ev.session_id !== 'anonymous' ? ev.session_id : `anon_${seq}`;
+      if (!sessionCountry.has(sid)) {
+        const c = String(ev.country || '').trim().toUpperCase();
+        sessionCountry.set(sid, !c || c === 'XX' || c === 'UNKNOWN' ? 'Unknown' : c);
       }
+      if (!sessionSource.has(sid)) {
+        sessionSource.set(sid, normalizeServerSource(ev.referrer));
+      }
+
+      const bucketKey = getBucketKey(ev.created_at);
+      const itemKey = extractServerProductKey(ev.item_id, ev.page_path);
 
       if (ev.event_type === 'page_view' || ev.event_type === '$pageview') {
         total_views += 1;
-        groupedByBucket[bucketKey].views += 1;
+        if (bucketKey && groupedByBucket[bucketKey]) groupedByBucket[bucketKey].views += 1;
+        if (itemKey) ensureProdStat(itemKey).views += 1;
       } else if (ev.event_type === 'add_to_cart') {
         total_add_to_cart += 1;
-        groupedByBucket[bucketKey].carts += 1;
-      } else if (ev.event_type === 'purchase') {
-        total_event_purchases += 1;
-        groupedByBucket[bucketKey].purchases += 1;
-        if (ev.amount > 0) total_revenue += ev.amount;
-      }
-
-      const cCode = (ev.country || 'GE').toUpperCase();
-      if (!countrySessionMap[cCode]) countrySessionMap[cCode] = new Set();
-      countrySessionMap[cCode].add(ev.session_id);
-
-      const src = ev.referrer || 'Direct';
-      if (!sourceSessionMap[src]) sourceSessionMap[src] = new Set();
-      sourceSessionMap[src].add(ev.session_id);
-
-      if (ev.item_id) {
-        if (!productStatsMap[ev.item_id]) {
-          productStatsMap[ev.item_id] = { item_id: ev.item_id, views: 0, carts: 0, purchases: 0 };
-        }
-        if (ev.event_type === 'page_view' || ev.event_type === '$pageview') {
-          productStatsMap[ev.item_id].views += 1;
-        } else if (ev.event_type === 'add_to_cart') {
-          productStatsMap[ev.item_id].carts += 1;
-        } else if (ev.event_type === 'purchase') {
-          productStatsMap[ev.item_id].purchases += 1;
-        }
+        if (bucketKey && groupedByBucket[bucketKey]) groupedByBucket[bucketKey].carts += 1;
+        if (itemKey) ensureProdStat(itemKey).carts += 1;
       }
     }
 
-    const total_visitors = Math.max(distinctSessions.size, serverAnalytics.visits || 0);
-    const final_sales = Math.max(total_sales, total_event_purchases);
-    const conversion_rate = total_initiated_checkouts > 0
-      ? Number(((final_sales / total_initiated_checkouts) * 100).toFixed(2))
-      : 0;
+    const total_visitors = sessionCountry.size;
+    const countryTotals: Record<string, number> = {};
+    for (const code of sessionCountry.values()) {
+      countryTotals[code] = (countryTotals[code] || 0) + 1;
+    }
+    const sourceTotals: Record<string, number> = {};
+    for (const src of sessionSource.values()) {
+      sourceTotals[src] = (sourceTotals[src] || 0) + 1;
+    }
+
+    const conversion_rate =
+      total_initiated_checkouts > 0
+        ? Number(((total_sales / total_initiated_checkouts) * 100).toFixed(2))
+        : 0;
 
     const chartData = Object.values(groupedByBucket).sort((a, b) => a.time.localeCompare(b.time));
-    const topCountries = Object.entries(countrySessionMap)
-      .map(([code, set]) => ({ code, users: set.size }))
+    const topCountries = Object.entries(countryTotals)
+      .map(([code, users]) => ({ code, users }))
       .sort((a, b) => b.users - a.users);
-    const topSources = Object.entries(sourceSessionMap)
-      .map(([name, set]) => ({ name, visits: set.size }))
+    const topSources = Object.entries(sourceTotals)
+      .map(([name, visits]) => ({ name, visits }))
       .sort((a, b) => b.visits - a.visits);
-    const topProducts = Object.values(productStatsMap).sort((a, b) => b.views - a.views);
+    const topProducts = Object.values(productStatsMap)
+      .filter((p) => p.views > 0 || p.carts > 0 || p.purchases > 0)
+      .sort(
+        (a, b) =>
+          b.purchases * 5 +
+          b.carts * 2 +
+          b.views -
+          (a.purchases * 5 + a.carts * 2 + a.views)
+      )
+      .slice(0, 50);
 
     res.json({
       success: true,
       timestamp: new Date().toISOString(),
+      telemetrySource: 'd1',
+      dateRange: {
+        range,
+        start: new Date(minTime).toISOString(),
+        end: new Date(maxTime).toISOString(),
+        isSingleDay,
+      },
       posthog: {
         projectId: '661027',
         projectToken: 'phc_xBZDpwYNkS5gaEPe5EAT3wcBSyeSryw9wYY3qnEsMErJ',
         region: 'US Cloud',
-        connected: true,
+        connected: false,
       },
       stats: {
         total_initiated_checkouts,
         total_revenue: Number(total_revenue.toFixed(2)),
         total_abandoned,
-        total_sales: final_sales,
+        total_sales,
         total_views,
         total_visitors,
         total_add_to_cart,
@@ -1115,15 +1259,24 @@ const CF_CODE_TO_COUNTRY_NAME: Record<string, string> = {
 
 app.post('/api/track', (req, res) => {
   try {
-    const { type, productId, country: bodyCountry, countryCode: bodyCode, path: bodyPath, device: bodyDevice } = req.body || {};
+    const body = req.body || {};
+    const { type, event_type, productId, item_id, session_id, referrer, country: bodyCountry, countryCode: bodyCode, path: bodyPath, page_path, device: bodyDevice } = body;
+    const ua = String(req.headers['user-agent'] || '');
+
+    if (isTestOrInternalEvent(body, ua)) {
+      res.json({ success: true, filtered: true, liveNow: liveActiveSessions.size });
+      return;
+    }
+
     const today = new Date().toISOString().split('T')[0];
 
     const clientKey = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.socket.remoteAddress || 'client-' + req.ip;
-    const headerCountry = (req.headers['cf-ipcountry'] as string) || bodyCode || 'GE';
+    const headerCountry = (req.headers['cf-ipcountry'] as string) || bodyCode || 'Unknown';
     const country = bodyCountry || (headerCountry === 'GE' ? 'Georgia' : headerCountry);
-    const countryCode = bodyCode || (headerCountry === 'Georgia' ? 'GE' : headerCountry);
-    const visitPath = bodyPath || '/';
-    const device = bodyDevice || (/Mobi|Android/i.test(req.headers['user-agent'] || '') ? 'mobile' : 'desktop');
+    const countryCodeRaw = String(bodyCode || (headerCountry === 'Georgia' ? 'GE' : headerCountry)).trim().toUpperCase();
+    const countryCode = !countryCodeRaw || countryCodeRaw === 'XX' || countryCodeRaw === 'UNKNOWN' ? 'Unknown' : countryCodeRaw.slice(0, 2);
+    const visitPath = page_path || bodyPath || '/';
+    const device = bodyDevice || (/Mobi|Android/i.test(ua) ? 'mobile' : 'desktop');
 
     liveActiveSessions.set(clientKey, {
       lastSeen: Date.now(),
@@ -1155,6 +1308,28 @@ app.post('/api/track', (req, res) => {
       serverAnalytics.cart_data[id] = (serverAnalytics.cart_data[id] || 0) + 1;
     }
 
+    // Record non-heartbeat storefront event into local dev storeEvents ledger
+    const resolvedEventType = String(
+      event_type ||
+      (type === 'visit' || type === 'product_view' ? 'page_view' : type === 'cart' ? 'add_to_cart' : type === 'heartbeat' ? 'heartbeat' : 'page_view')
+    ).trim();
+
+    if (resolvedEventType !== 'heartbeat' && type !== 'heartbeat') {
+      liveStoreEvents.unshift({
+        event_type: resolvedEventType,
+        session_id: String(session_id || clientKey || 'anonymous'),
+        page_path: String(visitPath),
+        item_id: item_id || productId ? String(item_id || productId) : null,
+        referrer: normalizeServerSource(referrer),
+        country: countryCode,
+        amount: Number(body.amount || body.revenue || 0) || 0,
+        is_test: false,
+        created_at: new Date().toISOString(),
+      });
+      if (liveStoreEvents.length > 5000) liveStoreEvents.length = 5000;
+      (storeDb as any).storeEvents = liveStoreEvents;
+    }
+
     const ninetySecsAgo = Date.now() - 90 * 1000;
     for (const [key, val] of liveActiveSessions.entries()) {
       if (val.lastSeen < ninetySecsAgo) {
@@ -1162,7 +1337,7 @@ app.post('/api/track', (req, res) => {
       }
     }
 
-    res.json({ success: true, liveNow: Math.max(liveActiveSessions.size, 1) });
+    res.json({ success: true, liveNow: liveActiveSessions.size });
   } catch {
     res.status(500).json({ success: false, error: 'Tracking failed' });
   }
@@ -1179,7 +1354,7 @@ app.get('/api/analytics', (req, res) => {
         liveActiveSessions.delete(key);
       }
     }
-    const liveNow = Math.max(liveActiveSessions.size, 1);
+    const liveNow = liveActiveSessions.size;
 
     const mostViewedProducts = (storeDb.products || [])
       .map(p => ({
@@ -2751,9 +2926,132 @@ app.get('/api/store/products', (req, res) => {
 
 app.post('/api/import-product', async (req, res) => {
   try {
-    const { url, html: directHtml } = req.body || {};
+    const { url, html: directHtml, marketplace, preParsed, compactContext } = req.body || {};
     const targetUrl = (url || '').trim();
     let htmlContent = (directHtml || '').trim();
+
+    // Dedicated pre-parsed / Ctrl+U flow for eBay, Alibaba, AliExpress, and Temu
+    // (Amazon remains 100% untouched in the legacy branch below)
+    const isDedicatedPlatform =
+      marketplace === 'ebay' ||
+      marketplace === 'alibaba' ||
+      marketplace === 'aliexpress' ||
+      marketplace === 'temu';
+
+    if (isDedicatedPlatform && (preParsed || htmlContent)) {
+      const platform = marketplace as ImporterPlatform;
+      let baseData: ScrapedProductData = preParsed && typeof preParsed === 'object'
+        ? {
+            title: String(preParsed.title || 'Imported Product'),
+            category: String(preParsed.category || 'Electronics'),
+            price: Number(preParsed.price) || 0,
+            origPrice: preParsed.origPrice ? Number(preParsed.origPrice) : undefined,
+            currency: String(preParsed.currency || 'USD'),
+            description: String(preParsed.description || ''),
+            features: Array.isArray(preParsed.features) ? preParsed.features.map(String) : [],
+            // Strict Rule: ONLY real verified high-res gallery images from pre-parser
+            images: Array.isArray(preParsed.images)
+              ? Array.from(new Set(preParsed.images.filter((u: any) => typeof u === 'string' && u.startsWith('http'))))
+              : [],
+            specs: Array.isArray(preParsed.specs) ? preParsed.specs.map(String) : [],
+            rawAttributes: preParsed.rawAttributes && typeof preParsed.rawAttributes === 'object' ? preParsed.rawAttributes : {},
+            sourceUrl: targetUrl || preParsed.sourceUrl || '',
+            marketplace: platform,
+          }
+        : parsePlatformHtml(platform, htmlContent, targetUrl);
+
+      if (baseData.currency && baseData.currency.toUpperCase() !== 'USD' && baseData.price > 0) {
+        baseData.price = convertToUsd(baseData.price, baseData.currency);
+        if (baseData.origPrice && baseData.origPrice > 0) {
+          baseData.origPrice = convertToUsd(baseData.origPrice, baseData.currency);
+        }
+        baseData.currency = 'USD';
+      }
+
+      const contextText = String(compactContext || baseData.compactContext || '').slice(0, 8000);
+      const ai = getGeminiClient();
+
+      if (ai && (baseData.title !== 'Imported Product' || contextText.length > 40)) {
+        try {
+          const prompt = `You are an e-commerce product data normalizer for DBUY Store.
+Normalize the following pre-parsed ${platform.toUpperCase()} product into clean, accurate English and USD ($).
+
+STRICT RULES:
+1. Translate ANY Chinese or non-English product title, specs, or attributes into crisp, natural English.
+2. NEVER invent fake specs or features not supported by the extracted data.
+3. Choose the exact best matching category from: Electronics, Gaming, Smart Home, Audio, Wearables, Smart Bottles, Office, Beauty & Health, Pets.
+4. Normalize pricing to USD ($). Extracted price is ${baseData.price} (${baseData.currency || 'USD'}). If extracted price is 0 or clearly non-USD in the raw text, compute the USD price; otherwise preserve the exact USD price.
+5. Format description cleanly in English (2-3 crisp benefit sentences followed by Key Specifications if specs exist). No Georgian text.
+6. Provide exactly 4 concise English bullet points in "features".
+
+Extracted Summary:
+Title: ${baseData.title}
+Price: ${baseData.price} ${baseData.currency || 'USD'}
+OrigPrice: ${baseData.origPrice || ''}
+Specs: ${JSON.stringify(baseData.specs || [])}
+RawAttributes: ${JSON.stringify(baseData.rawAttributes || {})}
+Description: ${baseData.description.slice(0, 1500)}
+Context: ${contextText.slice(0, 4000)}`;
+
+          const aiRes = await ai.models.generateContent({
+            model: 'gemini-4-hydrogen',
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  category: { type: Type.STRING },
+                  priceUsd: { type: Type.NUMBER },
+                  origPriceUsd: { type: Type.NUMBER },
+                  description: { type: Type.STRING },
+                  features: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                  },
+                },
+                required: ['title', 'category', 'priceUsd', 'description', 'features'],
+              },
+            },
+          });
+
+          const parsedAi = JSON.parse((aiRes.text || '{}').trim());
+          if (parsedAi.title && typeof parsedAi.title === 'string') {
+            baseData.title = parsedAi.title.trim();
+          }
+          if (parsedAi.category && typeof parsedAi.category === 'string') {
+            baseData.category = parsedAi.category.trim();
+          }
+          if (baseData.price <= 0 && typeof parsedAi.priceUsd === 'number' && parsedAi.priceUsd > 0) {
+            baseData.price = Math.round(parsedAi.priceUsd * 100) / 100;
+          }
+          if (!baseData.origPrice && typeof parsedAi.origPriceUsd === 'number' && parsedAi.origPriceUsd > baseData.price) {
+            baseData.origPrice = Math.round(parsedAi.origPriceUsd * 100) / 100;
+          }
+          if (parsedAi.description && typeof parsedAi.description === 'string') {
+            baseData.description = parsedAi.description.trim();
+          }
+          if (Array.isArray(parsedAi.features) && parsedAi.features.length > 0) {
+            baseData.features = parsedAi.features.slice(0, 4).map((f: any) => String(f).trim()).filter(Boolean);
+          }
+        } catch (aiErr: any) {
+          console.warn(`[IMPORT-${platform.toUpperCase()}] Gemini normalization fallback:`, aiErr?.message || aiErr);
+        }
+      }
+
+      if (!baseData.title || (baseData.title === 'Imported Product' && baseData.images.length === 0)) {
+        return res.status(422).json({
+          success: false,
+          error: `Could not extract ${platform} product details from pasted HTML. Make sure you copied the full Ctrl+U page source.`,
+        });
+      }
+
+      return res.json({
+        success: true,
+        data: baseData,
+      });
+    }
 
     if (!targetUrl && !htmlContent) {
       return res.status(400).json({

@@ -1,4 +1,4 @@
-import posthog from 'posthog-js';
+import posthog from 'posthog-js/no-external';
 import { detectLocalCountry } from '../utils/analytics';
 
 export const POSTHOG_CONFIG = {
@@ -26,9 +26,30 @@ export interface PostHogLedgerEvent {
   price?: number;
   amount?: number;
   path?: string;
+  isTest?: boolean;
+  is_test?: boolean;
+  environment?: string;
 }
 
 let isInitialized = false;
+
+export function isTestOrInternalPath(path?: string): boolean {
+  const lower = String(path || '').toLowerCase();
+  return (
+    lower.includes('/admin') ||
+    lower.includes('/portal-sec') ||
+    lower.includes('/lasha-admin')
+  );
+}
+
+export function isTestLedgerEvent(ev: Partial<PostHogLedgerEvent> | null | undefined): boolean {
+  if (!ev) return true;
+  if (ev.isTest === true || ev.is_test === true) return true;
+  if (String(ev.environment || '').toLowerCase() === 'test') return true;
+  if (String(ev.source || '').trim().toLowerCase() === 'test') return true;
+  if (isTestOrInternalPath(ev.path)) return true;
+  return false;
+}
 
 export function getPostHogSessionId(): string {
   if (typeof window === 'undefined') return 'server';
@@ -87,14 +108,15 @@ export function loadLocalPostHogEvents(): PostHogLedgerEvent[] {
     const raw = localStorage.getItem(LOCAL_POSTHOG_LEDGER_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((ev) => !isTestLedgerEvent(ev));
   } catch {
     return [];
   }
 }
 
 function appendLocalPostHogEvent(ev: PostHogLedgerEvent) {
-  if (typeof window === 'undefined') return;
+  if (typeof window === 'undefined' || isTestLedgerEvent(ev)) return;
   try {
     const current = loadLocalPostHogEvents();
     const updated = [ev, ...current].slice(0, 1500);
@@ -114,6 +136,15 @@ export const initPostHog = () => {
         capture_pageview: true,
         capture_pageleave: true,
         autocapture: true,
+        capture_dead_clicks: false,
+        capture_heatmaps: false,
+        capture_exceptions: false,
+        capture_performance: false,
+        disable_external_dependency_loading: true,
+        disable_surveys: true,
+        disable_session_recording: true,
+        disable_product_tours: true,
+        disable_conversations: true,
         persistence: 'localStorage+cookie',
         loaded: (ph) => {
           ph.register({
@@ -137,13 +168,23 @@ export const safeCapture = (event: string, properties?: Record<string, any>) => 
       initPostHog();
     }
 
+    const isTest =
+      properties?.is_test === true ||
+      properties?.isTest === true ||
+      String(properties?.environment || '').toLowerCase() === 'test';
+    const path = properties?.path || window.location.pathname || '/';
+    const isAdminRoute = isTestOrInternalPath(path);
+
+    if (isAdminRoute && !isTest) return;
+
     const geo = detectLocalCountry();
     const source = properties?.referrer || properties?.source || detectPostHogTrafficSource();
     const sessionId = getPostHogSessionId();
-    const path = properties?.path || window.location.pathname || '/';
 
     const enrichedProps = {
       ...properties,
+      is_test: isTest,
+      environment: isTest ? 'test' : 'production',
       project_id: POSTHOG_CONFIG.projectId,
       region: POSTHOG_CONFIG.region,
       traffic_source: source,
@@ -156,8 +197,8 @@ export const safeCapture = (event: string, properties?: Record<string, any>) => 
 
     posthog.capture(event, enrichedProps);
 
-    // Record to local PostHog ledger so Admin Dashboard aggregates live
-    if (!properties?.dashboard_view) {
+    // Record only production storefront events to the local ledger
+    if (!properties?.dashboard_view && !isTest && !isAdminRoute) {
       appendLocalPostHogEvent({
         id: 'phev_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7),
         event,
@@ -174,6 +215,8 @@ export const safeCapture = (event: string, properties?: Record<string, any>) => 
         price: Number(properties?.price) || 0,
         amount: Number(properties?.amount || properties?.revenue || properties?.total) || 0,
         path,
+        isTest: false,
+        environment: 'production',
       });
     }
   } catch (err) {

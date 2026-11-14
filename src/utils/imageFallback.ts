@@ -1,6 +1,7 @@
 import React from 'react';
 import { getImageUrl as getGithubImageUrl, resolveAssetUrl } from './githubAssets';
 import { Product } from '../types';
+import { parseImages } from './productParsing';
 
 export { resolveAssetUrl };
 
@@ -15,7 +16,7 @@ export const resolveUploadUrl = (url: string | null | undefined): string => {
 export const getCleanProductImage = (product: Product | any): string => {
   if (!product) return '';
 
-  const rawImg = product.image || product.imageUrl || product.image_path || (Array.isArray(product.images) && product.images[0]);
+  const rawImg = product.image || product.imageUrl || product.image_path || parseImages(product.images)[0];
   if (rawImg && typeof rawImg === 'string' && rawImg.trim() !== '') {
     return resolveUploadUrl(rawImg);
   }

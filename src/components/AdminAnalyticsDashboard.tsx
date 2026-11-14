@@ -35,7 +35,7 @@ export const isUserAdmin = (): boolean => {
 };
 
 export const trackStoreEvent = (
-  eventName: 'page_view' | 'add_to_cart' | 'purchase' | string,
+  eventName: 'page_view' | 'add_to_cart' | 'begin_checkout' | string,
   data?: { itemId?: string; itemName?: string; price?: number; revenue?: number; [key: string]: any }
 ) => {
   if (typeof window === 'undefined' || isUserAdmin()) return;
@@ -54,15 +54,7 @@ export const trackStoreEvent = (
       path: currentPath,
     });
 
-    if (eventName === 'page_view') {
-      safeCapture('$pageview', {
-        itemId: data?.itemId ? String(data.itemId) : undefined,
-        referrer,
-        path: currentPath,
-      });
-    }
-
-    // 2. Mirror to backend D1 / Express analytics endpoints
+    // 2. Mirror once to backend /api/track (D1 / Express analytics)
     const payload = {
       event_type: eventName,
       type:
@@ -86,12 +78,6 @@ export const trackStoreEvent = (
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     }).catch(() => {});
-
-    fetch('/api/event', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-    }).catch(() => {});
   } catch {}
 };
 
@@ -107,6 +93,7 @@ export const analytics = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         type: 'heartbeat',
+        event_type: 'heartbeat',
         path: path || (typeof window !== 'undefined' ? window.location.pathname : '/'),
       }),
     }).catch(() => {});
@@ -119,9 +106,10 @@ export const analytics = {
     if (isAdmin || isUserAdmin()) return;
     trackStoreEvent('add_to_cart', productId ? { itemId: String(productId) } : undefined);
   },
-  trackCheckoutAttempt: async (isAdmin: boolean = false) => {
+  trackCheckoutAttempt: async (isAdmin: boolean = false, productId?: string | number) => {
     if (isAdmin || isUserAdmin()) return;
-    trackStoreEvent('purchase');
+    // Checkout initiation is a funnel step, never a confirmed purchase
+    trackStoreEvent('begin_checkout', productId ? { itemId: String(productId) } : undefined);
   },
   getStats: async () => {
     try {

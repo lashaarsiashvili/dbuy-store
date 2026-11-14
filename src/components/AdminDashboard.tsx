@@ -20,6 +20,7 @@ import { ADMIN_PRODUCT_CATEGORIES, normalizeProductCategory, matchesCategory } f
 
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
 import { compressImageForUpload, uploadImageToR2 } from '../utils/imageUpload';
+import { parseVariants, parseVideos, parseImages, parseStringArray } from '../utils/productParsing';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -513,7 +514,7 @@ export const AdminDashboard: React.FC = () => {
     };
     setProdForm(prev => ({
       ...prev,
-      videos: [...(prev.videos || []), newVideo],
+      videos: [...parseVideos(prev.videos), newVideo],
     }));
     setNewVideoUrl('');
     setNewVideoTitle('');
@@ -534,7 +535,7 @@ export const AdminDashboard: React.FC = () => {
       };
       setProdForm(prev => ({
         ...prev,
-        videos: [...(prev.videos || []), newVideo],
+        videos: [...parseVideos(prev.videos), newVideo],
       }));
       addToast(isKa ? 'ვიდეო ფაილი წარმატებით აიტვირთა R2-ში!' : 'Video file uploaded to R2 successfully!', 'success');
     } catch (err) {
@@ -548,7 +549,7 @@ export const AdminDashboard: React.FC = () => {
   const handleRemoveVideo = (index: number) => {
     setProdForm(prev => ({
       ...prev,
-      videos: (prev.videos || []).filter((_, i) => i !== index),
+      videos: parseVideos(prev.videos).filter((_, i) => i !== index),
     }));
   };
 
@@ -565,14 +566,14 @@ export const AdminDashboard: React.FC = () => {
     };
     setProdForm(prev => ({
       ...prev,
-      variants: [...(prev.variants || []), newVar],
+      variants: [...parseVariants(prev.variants), newVar],
     }));
     addToast(isKa ? 'ახალი ფერის ვარიანტი დაემატა' : 'Added new color variant', 'info');
   };
 
   const handleUpdateVariant = (index: number, fields: Partial<ProductVariant>) => {
     setProdForm(prev => {
-      const list = [...(prev.variants || [])];
+      const list = [...parseVariants(prev.variants)];
       if (list[index]) {
         list[index] = { ...list[index], ...fields };
       }
@@ -583,7 +584,7 @@ export const AdminDashboard: React.FC = () => {
   const handleRemoveVariant = (index: number) => {
     setProdForm(prev => ({
       ...prev,
-      variants: (prev.variants || []).filter((_, i) => i !== index),
+      variants: parseVariants(prev.variants).filter((_, i) => i !== index),
     }));
   };
 
@@ -593,9 +594,9 @@ export const AdminDashboard: React.FC = () => {
     try {
       const r2Url = await uploadImageToR2(file, `variant-${variantIndex}`);
       setProdForm(prev => {
-        const list = [...(prev.variants || [])];
+        const list = [...parseVariants(prev.variants)];
         if (list[variantIndex]) {
-          const currentImgs = list[variantIndex].images || [];
+          const currentImgs = parseImages(list[variantIndex].images);
           list[variantIndex] = {
             ...list[variantIndex],
             images: [...currentImgs, r2Url],
@@ -612,11 +613,11 @@ export const AdminDashboard: React.FC = () => {
 
   const handleRemoveVariantImage = (variantIndex: number, imageIndex: number) => {
     setProdForm(prev => {
-      const list = [...(prev.variants || [])];
+      const list = [...parseVariants(prev.variants)];
       if (list[variantIndex]) {
         list[variantIndex] = {
           ...list[variantIndex],
-          images: (list[variantIndex].images || []).filter((_, i) => i !== imageIndex),
+          images: parseImages(list[variantIndex].images).filter((_, i) => i !== imageIndex),
         };
       }
       return { ...prev, variants: list };
@@ -1381,7 +1382,18 @@ export const AdminDashboard: React.FC = () => {
       price: data.price || 49.99,
       origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
       stock: 25,
-      badge: data.marketplace === 'amazon' ? 'Amazon Top Pick' : (data.marketplace === 'ebay' ? 'Official eBay Find' : 'Featured'),
+      badge:
+        data.marketplace === 'amazon'
+          ? 'Amazon Top Pick'
+          : data.marketplace === 'ebay'
+          ? 'Official eBay Find'
+          : data.marketplace === 'alibaba'
+          ? 'Direct Factory Pick'
+          : data.marketplace === 'aliexpress'
+          ? 'Global Choice'
+          : data.marketplace === 'temu'
+          ? 'Trending Pick'
+          : 'Featured',
       image: coverImg,
       images: normImages,
       videos: [],
@@ -1415,7 +1427,18 @@ export const AdminDashboard: React.FC = () => {
       price: data.price || 49.99,
       origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
       stock: 50, // Increased default stock for imported items
-      badge: data.marketplace === 'amazon' ? 'Amazon Top Pick' : (data.marketplace === 'ebay' ? 'Official eBay Find' : 'Featured'),
+      badge:
+        data.marketplace === 'amazon'
+          ? 'Amazon Top Pick'
+          : data.marketplace === 'ebay'
+          ? 'Official eBay Find'
+          : data.marketplace === 'alibaba'
+          ? 'Direct Factory Pick'
+          : data.marketplace === 'aliexpress'
+          ? 'Global Choice'
+          : data.marketplace === 'temu'
+          ? 'Trending Pick'
+          : 'Featured',
       image: coverImg,
       images: normImages,
       videos: [],
@@ -1458,28 +1481,26 @@ export const AdminDashboard: React.FC = () => {
     setImageInputMode(prod.image?.startsWith('data:') ? 'upload' : 'url');
     setNewImageUrl('');
 
-    const prodImages = (prod.images && prod.images.length > 0)
-      ? prod.images
-      : [prod.image];
+    const rawProdImages = parseImages(prod.images);
+    const prodImages = rawProdImages.length > 0
+      ? rawProdImages
+      : (prod.image ? [prod.image] : []);
 
-    let parsedVideos: ProductVideo[] = [];
-    if (Array.isArray(prod.videos)) {
-      parsedVideos = prod.videos;
-    } else if (typeof (prod as any).videos === 'string' && (prod as any).videos.trim()) {
-      try { parsedVideos = JSON.parse((prod as any).videos); } catch(e) {}
-    }
+    const parsedVideos: ProductVideo[] = parseVideos(prod.videos);
 
-    let parsedVariants: ProductVariant[] = [];
-    if (Array.isArray(prod.variants)) {
-      parsedVariants = prod.variants;
-    } else if (typeof (prod as any).variants === 'string' && (prod as any).variants.trim()) {
-      try { parsedVariants = JSON.parse((prod as any).variants); } catch(e) {}
-    }
+    const parsedVariants: ProductVariant[] = parseVariants(prod.variants).map((v) => ({
+      ...v,
+      images: parseImages((v as any)?.images),
+    }));
 
-    const prodFeaturesEn = (prod.features_en && prod.features_en.length >= 3)
-      ? [...prod.features_en.slice(0, 4)]
-      : (prod.features && prod.features.length >= 3 && !isGeorgianText(prod.features.join(' ')))
-      ? [...prod.features.slice(0, 4)]
+    const rawFeaturesEn = parseStringArray(prod.features_en);
+    const rawFeaturesKa = parseStringArray(prod.features_ka);
+    const rawFeatures = parseStringArray(prod.features);
+
+    const prodFeaturesEn = rawFeaturesEn.length >= 3
+      ? [...rawFeaturesEn.slice(0, 4)]
+      : (rawFeatures.length >= 3 && !isGeorgianText(rawFeatures.join(' ')))
+      ? [...rawFeatures.slice(0, 4)]
       : generateProductFeatures({
           title: prod.title_en || prod.title,
           description: prod.description_en || prod.description,
@@ -1491,10 +1512,10 @@ export const AdminDashboard: React.FC = () => {
       prodFeaturesEn.push('');
     }
 
-    const prodFeaturesKa = (prod.features_ka && prod.features_ka.length >= 3)
-      ? [...prod.features_ka.slice(0, 4)]
-      : (prod.features && prod.features.length >= 3 && isGeorgianText(prod.features.join(' ')))
-      ? [...prod.features.slice(0, 4)]
+    const prodFeaturesKa = rawFeaturesKa.length >= 3
+      ? [...rawFeaturesKa.slice(0, 4)]
+      : (rawFeatures.length >= 3 && isGeorgianText(rawFeatures.join(' ')))
+      ? [...rawFeatures.slice(0, 4)]
       : generateProductFeatures({
           title: prod.title_ka || prod.titleKa || prod.title,
           description: prod.description_ka || prod.descriptionKa || prod.description,
@@ -1637,8 +1658,8 @@ export const AdminDashboard: React.FC = () => {
         badge: prodForm.badge || undefined,
         image: imagesToSave[0] || '',
         images: imagesToSave,
-        videos: prodForm.videos || [],
-        variants: prodForm.variants || [],
+        videos: parseVideos(prodForm.videos),
+        variants: parseVariants(prodForm.variants),
         description: prodForm.description || prodForm.descriptionKa,
         descriptionKa: prodForm.descriptionKa,
         description_en: prodForm.description,
@@ -5880,9 +5901,9 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 {/* Video items list */}
-                {(prodForm.videos || []).length > 0 && (
+                {parseVideos(prodForm.videos).length > 0 && (
                   <div className="space-y-2 pt-2 border-t border-slate-800">
-                    {prodForm.videos.map((vid, idx) => (
+                    {parseVideos(prodForm.videos).map((vid, idx) => (
                       <div key={vid.id || idx} className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs">
                         <div className="flex items-center space-x-2.5 min-w-0">
                           <div className={`p-1.5 rounded-lg ${vid.type === 'youtube' ? 'bg-red-500/20 text-red-400' : 'bg-blue-500/20 text-blue-400'}`}>
@@ -5932,13 +5953,13 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 {/* Variants List */}
-                {(prodForm.variants || []).length === 0 ? (
+                {parseVariants(prodForm.variants).length === 0 ? (
                   <div className="text-center py-4 text-xs text-slate-400 border-2 border-dashed border-indigo-100 dark:border-slate-800 rounded-2xl bg-white/50 dark:bg-slate-950/50">
                     {isKa ? 'ფერის ვარიანტები არ არის დამატებული. (გამოყენებული იქნება მთავარი გალერეა)' : 'No color variants created yet. (Standard main gallery will be used)'}
                   </div>
                 ) : (
                   <div className="space-y-4">
-                    {prodForm.variants.map((variant, vIdx) => (
+                    {parseVariants(prodForm.variants).map((variant, vIdx) => (
                       <div key={variant.id || vIdx} className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-indigo-100 dark:border-slate-800 shadow-xs space-y-3">
                         {/* Variant details row */}
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
@@ -6000,7 +6021,7 @@ export const AdminDashboard: React.FC = () => {
                         <div className="pt-2 border-t border-slate-100 dark:border-slate-900 space-y-2">
                           <div className="flex items-center justify-between">
                             <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                              📸 {isKa ? `„${variant.name}“ ფერის სურათები (${(variant.images || []).length}):` : `Images for "${variant.name}" (${(variant.images || []).length}):`}
+                              📸 {isKa ? `„${variant.name}“ ფერის სურათები (${parseImages(variant.images).length}):` : `Images for "${variant.name}" (${parseImages(variant.images).length}):`}
                             </span>
 
                             <label className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] rounded-lg border border-indigo-200 dark:border-indigo-900 transition-colors cursor-pointer inline-flex items-center space-x-1">
@@ -6020,9 +6041,9 @@ export const AdminDashboard: React.FC = () => {
                           </div>
 
                           {/* Thumbnails grid */}
-                          {(variant.images || []).length > 0 && (
+                          {parseImages(variant.images).length > 0 && (
                             <div className="flex items-center space-x-2 overflow-x-auto pb-1 pt-1">
-                              {variant.images.map((imgUrl, imgIdx) => (
+                              {parseImages(variant.images).map((imgUrl, imgIdx) => (
                                 <div key={imgIdx} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0 group">
                                   <CachedImage src={imgUrl} alt="Variant photo" className="w-full h-full object-cover" />
                                   <button

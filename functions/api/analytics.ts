@@ -42,7 +42,7 @@ export async function onRequestGet(context: any) {
       // 3. Active Visitors (visits in last 5 minutes)
       const activeVisitorsRes = await db.prepare("SELECT COUNT(DISTINCT ip_address) as count FROM analytics_visits WHERE timestamp >= datetime('now', '-5 minutes')").first();
       const rawActive = Number(activeVisitorsRes?.count) || 0;
-      const activeVisitors = totalPageViews > 0 ? Math.max(rawActive, 1) : 0;
+      const activeVisitors = rawActive;
 
       // 4. Most Viewed Products (ORDER BY views DESC)
       const productsRes = await db.prepare('SELECT id, name, name_ka, category, price, COALESCE(views, 0) as views, image, images FROM products ORDER BY COALESCE(views, 0) DESC LIMIT 50').all();

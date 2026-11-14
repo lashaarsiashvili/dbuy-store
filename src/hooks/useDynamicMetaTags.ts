@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { Product } from '../types';
+import { parseImages } from '../utils/productParsing';
 
 export interface UseDynamicMetaTagsOptions {
   product?: Product | null;
@@ -101,7 +102,7 @@ export function useDynamicMetaTags(
       }
 
       // Handle Image: Strictly NO automated placeholders if product image is missing
-      const rawImage = product.image || (product.images && product.images[0]);
+      const rawImage = product.image || parseImages(product.images)[0];
       if (rawImage && typeof rawImage === 'string' && rawImage.trim().length > 0) {
         const origin = window.location.origin || 'https://dbuystore.com';
         let imageUrl = rawImage.trim();

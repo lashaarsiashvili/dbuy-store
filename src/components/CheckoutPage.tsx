@@ -20,6 +20,7 @@ import { OfficialApplePayButton } from './OfficialApplePayButton';
 import { OfficialGooglePayButton } from './OfficialGooglePayButton';
 import { PayPalV6CardFields } from './PayPalV6CardFields';
 import { startPayPalV6ApplePayCheckout, startPayPalV6GooglePayCheckout } from '../utils/paypalV6';
+import { parseImages } from '../utils/productParsing';
 import {
   AppleLogoIcon,
   GooglePayMark,
@@ -571,7 +572,7 @@ export const CheckoutPage: React.FC = () => {
                   {cart.map((item, idx) => (
                     <div key={idx} className="flex items-center space-x-3 text-xs">
                       <img
-                        src={item.product.image || item.product.images?.[0]}
+                        src={item.product.image || parseImages(item.product.images)[0] || ''}
                         alt={item.product.title}
                         className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
                       />

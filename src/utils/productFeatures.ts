@@ -1,4 +1,5 @@
 import { Product } from '../types';
+import { parseStringArray } from './productParsing';
 
 export function isGeorgianText(text: string): boolean {
   return /[\u10A0-\u10FF]/.test(text);
@@ -274,16 +275,14 @@ export function getProductFeatures(product: Product, lang: string = 'en'): strin
 
   if (isKa) {
     // 1. Explicit Georgian features array
-    if (product.features_ka && Array.isArray(product.features_ka) && product.features_ka.length > 0) {
-      const valid = product.features_ka.filter(f => typeof f === 'string' && f.trim().length > 0);
-      if (valid.length > 0) return valid.slice(0, 4);
+    const validKa = parseStringArray(product.features_ka);
+    if (validKa.length > 0) {
+      return validKa.slice(0, 4);
     }
     // 2. Generic features array if it contains Georgian text
-    if (product.features && Array.isArray(product.features) && product.features.length > 0) {
-      const valid = product.features.filter(f => typeof f === 'string' && f.trim().length > 0);
-      if (valid.length > 0 && valid.some(f => isGeorgianText(f))) {
-        return valid.slice(0, 4);
-      }
+    const validGeneric = parseStringArray(product.features);
+    if (validGeneric.length > 0 && validGeneric.some(f => isGeorgianText(f))) {
+      return validGeneric.slice(0, 4);
     }
     // 3. Fallback: auto-generate Georgian features
     return generateProductFeatures({
@@ -296,16 +295,14 @@ export function getProductFeatures(product: Product, lang: string = 'en'): strin
 
   // English (or other international languages)
   // 1. Explicit English features array
-  if (product.features_en && Array.isArray(product.features_en) && product.features_en.length > 0) {
-    const valid = product.features_en.filter(f => typeof f === 'string' && f.trim().length > 0);
-    if (valid.length > 0) return valid.slice(0, 4);
+  const validEn = parseStringArray(product.features_en);
+  if (validEn.length > 0) {
+    return validEn.slice(0, 4);
   }
   // 2. Generic features array if it contains English text (no Georgian characters)
-  if (product.features && Array.isArray(product.features) && product.features.length > 0) {
-    const valid = product.features.filter(f => typeof f === 'string' && f.trim().length > 0);
-    if (valid.length > 0 && !valid.some(f => isGeorgianText(f))) {
-      return valid.slice(0, 4);
-    }
+  const validGeneric = parseStringArray(product.features);
+  if (validGeneric.length > 0 && !validGeneric.some(f => isGeorgianText(f))) {
+    return validGeneric.slice(0, 4);
   }
   // 3. Fallback: auto-generate English features
   return generateProductFeatures({

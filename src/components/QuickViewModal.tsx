@@ -5,6 +5,7 @@ import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
 import { analytics } from './AdminAnalyticsDashboard';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
+import { parseImages } from '../utils/productParsing';
 import { 
   X, 
   Star, 
@@ -71,8 +72,9 @@ export const QuickViewModal: React.FC = () => {
   const displayDesc = getProductDescription(quickViewProduct, language);
 
   const cleanMainImg = getProductImage(quickViewProduct);
-  const galleryImages: string[] = (quickViewProduct.images && Array.isArray(quickViewProduct.images) && quickViewProduct.images.length > 0 && !quickViewProduct.images[0].includes('/uploads/'))
-    ? quickViewProduct.images
+  const parsedQuickImages = parseImages(quickViewProduct.images);
+  const galleryImages: string[] = (parsedQuickImages.length > 0 && !parsedQuickImages[0].includes('/uploads/'))
+    ? parsedQuickImages
     : [cleanMainImg];
 
   const currentImage = galleryImages[activeImageIndex] || cleanMainImg;

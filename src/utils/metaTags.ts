@@ -2,6 +2,7 @@ import { Product } from '../types';
 import { generateProductSlug } from '../context/StoreContext';
 import { getProductShareUrl } from './socialAdGenerator';
 import { getCachedGelRate } from './exchangeRate';
+import { parseImages } from './productParsing';
 
 export interface OpenGraphMetaPayload {
   title: string;
@@ -63,7 +64,7 @@ export function getProductOpenGraphPayload(
   const shareUrl = getProductShareUrl(product, customBaseUrl, language);
   const baseUrl = customBaseUrl || (typeof window !== 'undefined' ? window.location.origin : 'https://dbuystore.com');
 
-  let imageUrl = product.image || (product.images && product.images[0]) || '/icon.png';
+  let imageUrl = product.image || parseImages(product.images)[0] || '/icon.png';
   if (imageUrl && !imageUrl.startsWith('http://') && !imageUrl.startsWith('https://')) {
     const cleanBase = baseUrl.replace(/\/$/, '');
     const cleanPath = imageUrl.startsWith('/') ? imageUrl : `/${imageUrl}`;

@@ -9,6 +9,8 @@ interface Env {
   DB: D1Database;
 }
 
+const BOT_UA_REGEX = /bot|crawler|spider|headless|curl|wget|python|scrapy|uptime|pingdom|lighthouse/i;
+
 export async function onRequestOptions() {
   return new Response(null, { headers: CORS_HEADERS });
 }
@@ -16,24 +18,53 @@ export async function onRequestOptions() {
 export const onRequestPost: PagesFunction<Env> = async (context) => {
   try {
     const db = context.env?.DB;
-    const data = await context.request.json<{
-      event_type?: string;
-      page_path?: string;
-      item_id?: string;
-      referrer?: string;
-      session_id?: string;
-      path?: string;
-      productId?: string;
-    }>().catch(() => ({} as any));
+    const data = await context.request
+      .json<{
+        event_type?: string;
+        type?: string;
+        page_path?: string;
+        item_id?: string;
+        referrer?: string;
+        session_id?: string;
+        path?: string;
+        productId?: string;
+        is_test?: boolean | string | number;
+        environment?: string;
+      }>()
+      .catch(() => ({} as any));
 
     const userAgent = context.request.headers.get('user-agent') || '';
+    const pagePath = data.page_path || data.path || '/';
+    const pathLower = String(pagePath).toLowerCase();
+
+    const isTest =
+      data?.is_test === true ||
+      data?.is_test === 'true' ||
+      data?.is_test === 1 ||
+      String(data?.environment || '').toLowerCase() === 'test';
+    const isAdminPath =
+      pathLower.includes('/admin') ||
+      pathLower.includes('/portal-sec') ||
+      pathLower.includes('/lasha-admin');
+    const isBot = BOT_UA_REGEX.test(userAgent);
+    const isHeartbeat = data?.type === 'heartbeat' || data?.event_type === 'heartbeat';
+
+    if (isTest || isAdminPath || isBot || isHeartbeat) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          filtered: isTest ? 'test_event' : isHeartbeat ? 'heartbeat' : 'internal_or_bot',
+        }),
+        { headers: CORS_HEADERS }
+      );
+    }
+
     const isMobile = /mobile/i.test(userAgent) ? 'mobile' : 'desktop';
-    
-    // Cloudflare-ის ავტომატური ქვეყნის კოდი
     const country = context.request.headers.get('cf-ipcountry') || 'Unknown';
+    const eventType = String(data.event_type || 'page_view').trim();
+    const targetItem = data.item_id || data.productId || null;
 
     if (db) {
-      // Ensure table and columns exist safely
       try {
         await db.exec(`
           CREATE TABLE IF NOT EXISTS store_events (
@@ -48,46 +79,32 @@ export const onRequestPost: PagesFunction<Env> = async (context) => {
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP
           );
         `);
-      } catch (e) {}
+      } catch {}
 
-      try { await db.exec('ALTER TABLE store_events ADD COLUMN item_id TEXT;'); } catch (e) {}
-      try { await db.exec('ALTER TABLE store_events ADD COLUMN referrer TEXT;'); } catch (e) {}
-      try { await db.exec('ALTER TABLE store_events ADD COLUMN country TEXT;'); } catch (e) {}
-
-      await db.prepare(
-        `INSERT INTO store_events (event_type, session_id, page_path, item_id, referrer, country, device_type)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).bind(
-        data.event_type || 'page_view',
-        data.session_id || 'anonymous',
-        data.page_path || data.path || '/',
-        data.item_id || data.productId || null,
-        data.referrer || 'Direct',
-        country,
-        isMobile
-      ).run();
-
-      // Product views counter update if item_id/productId is present
-      const targetItem = data.item_id || data.productId;
-      if (targetItem) {
-        try {
-          await db.exec('ALTER TABLE products ADD COLUMN views INTEGER DEFAULT 0;');
-        } catch (e) {}
-        try {
-          await db.prepare('UPDATE products SET views = COALESCE(views, 0) + 1 WHERE id = ? OR slug = ?')
-            .bind(String(targetItem), String(targetItem))
-            .run();
-        } catch (e) {}
-      }
+      await db
+        .prepare(
+          `INSERT INTO store_events (event_type, session_id, page_path, item_id, referrer, country, device_type)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .bind(
+          eventType,
+          data.session_id || 'anonymous',
+          pagePath,
+          targetItem,
+          data.referrer || 'Direct',
+          country,
+          isMobile
+        )
+        .run();
     }
 
     return new Response(JSON.stringify({ success: true }), {
-      headers: CORS_HEADERS
+      headers: CORS_HEADERS,
     });
   } catch (err: any) {
-    return new Response(JSON.stringify({ error: err.message }), { 
+    return new Response(JSON.stringify({ error: err.message }), {
       status: 500,
-      headers: CORS_HEADERS
+      headers: CORS_HEADERS,
     });
   }
 };

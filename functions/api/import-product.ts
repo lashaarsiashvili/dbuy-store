@@ -1,4 +1,11 @@
-import { parseProductHtml } from '../../src/utils/productScraper';
+import { GoogleGenAI, Type } from '@google/genai';
+import {
+  parseProductHtml,
+  parsePlatformHtml,
+  convertToUsd,
+  ScrapedProductData,
+  ImporterPlatform,
+} from '../../src/utils/productScraper';
 
 const DESKTOP_HEADERS: Record<string, string> = {
   'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
@@ -97,11 +104,155 @@ export async function onRequestOptions() {
 export async function onRequestPost(context: any) {
   try {
     const req = context.request;
+    const env = context.env || {};
     const body = await req.json().catch(() => ({}));
-    const { url, html: directHtml } = body || {};
+    const { url, html: directHtml, marketplace, preParsed, compactContext } = body || {};
 
     let targetUrl = (url || '').trim();
     let htmlContent = (directHtml || '').trim();
+
+    // Dedicated pre-parsed / Ctrl+U flow for eBay, Alibaba, AliExpress, and Temu
+    // (Amazon remains 100% untouched in the legacy branch below)
+    const isDedicatedPlatform =
+      marketplace === 'ebay' ||
+      marketplace === 'alibaba' ||
+      marketplace === 'aliexpress' ||
+      marketplace === 'temu';
+
+    if (isDedicatedPlatform && (preParsed || htmlContent)) {
+      const platform = marketplace as ImporterPlatform;
+      const baseData: ScrapedProductData = preParsed && typeof preParsed === 'object'
+        ? {
+            title: String(preParsed.title || 'Imported Product'),
+            category: String(preParsed.category || 'Electronics'),
+            price: Number(preParsed.price) || 0,
+            origPrice: preParsed.origPrice ? Number(preParsed.origPrice) : undefined,
+            currency: String(preParsed.currency || 'USD'),
+            description: String(preParsed.description || ''),
+            features: Array.isArray(preParsed.features) ? preParsed.features.map(String) : [],
+            images: Array.isArray(preParsed.images)
+              ? Array.from(new Set(preParsed.images.filter((u: any) => typeof u === 'string' && u.startsWith('http'))))
+              : [],
+            specs: Array.isArray(preParsed.specs) ? preParsed.specs.map(String) : [],
+            rawAttributes: preParsed.rawAttributes && typeof preParsed.rawAttributes === 'object' ? preParsed.rawAttributes : {},
+            sourceUrl: targetUrl || preParsed.sourceUrl || '',
+            marketplace: platform,
+          }
+        : parsePlatformHtml(platform, htmlContent, targetUrl);
+
+      if (baseData.currency && baseData.currency.toUpperCase() !== 'USD' && baseData.price > 0) {
+        baseData.price = convertToUsd(baseData.price, baseData.currency);
+        if (baseData.origPrice && baseData.origPrice > 0) {
+          baseData.origPrice = convertToUsd(baseData.origPrice, baseData.currency);
+        }
+        baseData.currency = 'USD';
+      }
+
+      const contextText = String(compactContext || baseData.compactContext || '').slice(0, 8000);
+      const apiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY;
+
+      if (apiKey && (baseData.title !== 'Imported Product' || contextText.length > 40)) {
+        try {
+          const ai = new GoogleGenAI({
+            apiKey,
+            httpOptions: {
+              headers: {
+                'User-Agent': 'aistudio-build',
+              },
+            },
+          });
+
+          const prompt = `You are an e-commerce product data normalizer for DBUY Store.
+Normalize the following pre-parsed ${platform.toUpperCase()} product into clean, accurate English and USD ($).
+
+STRICT RULES:
+1. Translate ANY Chinese or non-English product title, specs, or attributes into crisp, natural English.
+2. NEVER invent fake specs or features not supported by the extracted data.
+3. Choose the exact best matching category from: Electronics, Gaming, Smart Home, Audio, Wearables, Smart Bottles, Office, Beauty & Health, Pets.
+4. Normalize pricing to USD ($). Extracted price is ${baseData.price} (${baseData.currency || 'USD'}). If extracted price is 0 or clearly non-USD in the raw text, compute the USD price; otherwise preserve the exact USD price.
+5. Format description cleanly in English (2-3 crisp benefit sentences followed by Key Specifications if specs exist). No Georgian text.
+6. Provide exactly 4 concise English bullet points in "features".
+
+Extracted Summary:
+Title: ${baseData.title}
+Price: ${baseData.price} ${baseData.currency || 'USD'}
+OrigPrice: ${baseData.origPrice || ''}
+Specs: ${JSON.stringify(baseData.specs || [])}
+RawAttributes: ${JSON.stringify(baseData.rawAttributes || {})}
+Description: ${baseData.description.slice(0, 1500)}
+Context: ${contextText.slice(0, 4000)}`;
+
+          const aiRes = await ai.models.generateContent({
+            model: 'gemini-4-hydrogen',
+            contents: prompt,
+            config: {
+              responseMimeType: 'application/json',
+              responseSchema: {
+                type: Type.OBJECT,
+                properties: {
+                  title: { type: Type.STRING },
+                  category: { type: Type.STRING },
+                  priceUsd: { type: Type.NUMBER },
+                  origPriceUsd: { type: Type.NUMBER },
+                  description: { type: Type.STRING },
+                  features: {
+                    type: Type.ARRAY,
+                    items: { type: Type.STRING },
+                  },
+                },
+                required: ['title', 'category', 'priceUsd', 'description', 'features'],
+              },
+            },
+          });
+
+          const parsedAi = JSON.parse((aiRes.text || '{}').trim());
+          if (parsedAi.title && typeof parsedAi.title === 'string') {
+            baseData.title = parsedAi.title.trim();
+          }
+          if (parsedAi.category && typeof parsedAi.category === 'string') {
+            baseData.category = parsedAi.category.trim();
+          }
+          if (baseData.price <= 0 && typeof parsedAi.priceUsd === 'number' && parsedAi.priceUsd > 0) {
+            baseData.price = Math.round(parsedAi.priceUsd * 100) / 100;
+          }
+          if (!baseData.origPrice && typeof parsedAi.origPriceUsd === 'number' && parsedAi.origPriceUsd > baseData.price) {
+            baseData.origPrice = Math.round(parsedAi.origPriceUsd * 100) / 100;
+          }
+          if (parsedAi.description && typeof parsedAi.description === 'string') {
+            baseData.description = parsedAi.description.trim();
+          }
+          if (Array.isArray(parsedAi.features) && parsedAi.features.length > 0) {
+            baseData.features = parsedAi.features.slice(0, 4).map((f: any) => String(f).trim()).filter(Boolean);
+          }
+        } catch (aiErr: any) {
+          console.warn(`[CF-IMPORT-${platform.toUpperCase()}] Gemini normalization fallback:`, aiErr?.message || aiErr);
+        }
+      }
+
+      if (!baseData.title || (baseData.title === 'Imported Product' && baseData.images.length === 0)) {
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Could not extract ${platform} product details from pasted HTML. Make sure you copied the full Ctrl+U page source.`,
+          }),
+          {
+            status: 422,
+            headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+          }
+        );
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: baseData,
+        }),
+        {
+          status: 200,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
+        }
+      );
+    }
 
     if (!targetUrl && !htmlContent) {
       return new Response(

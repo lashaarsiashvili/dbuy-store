@@ -1,6 +1,7 @@
 import { Product } from '../types';
 import { generateProductSlug } from '../context/StoreContext';
 import { getCachedGelRate } from './exchangeRate';
+import { parseStringArray } from './productParsing';
 
 export type AdPostStyle = 'sales' | 'story' | 'promo';
 export type AdLanguage = 'ka' | 'en';
@@ -59,12 +60,12 @@ export function generateSocialAdPost(options: SocialAdOptions): {
       : (product.title_en || product.title || product.titleKa)) || 'Premium Product';
 
     // Features selection with safe fallback
-    let features: string[] = [];
-    if (isKa) {
-      features = (product.features_ka || product.features || []).filter(Boolean);
-    } else {
-      features = (product.features_en || product.features || []).filter(Boolean);
-    }
+    const featuresKa = parseStringArray(product.features_ka);
+    const featuresEn = parseStringArray(product.features_en);
+    const genericFeatures = parseStringArray(product.features);
+    const features: string[] = isKa
+      ? (featuresKa.length > 0 ? featuresKa : genericFeatures)
+      : (featuresEn.length > 0 ? featuresEn : genericFeatures);
 
     const rawUsdPrice = typeof product.price === 'number' ? product.price : 0;
     const rawUsdOrigPrice = (typeof product.origPrice === 'number' && product.origPrice > rawUsdPrice) ? product.origPrice : null;

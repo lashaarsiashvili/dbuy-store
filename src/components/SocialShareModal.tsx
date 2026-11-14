@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
 import { getProductShareUrl } from '../utils/socialAdGenerator';
+import { parseVariants, parseImages } from '../utils/productParsing';
 import {
   publishFacebookPublish,
   publishFacebookFeedPost,
@@ -175,9 +176,14 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     };
 
     addUrl(product.image);
-    (product.images || []).forEach(addUrl);
-    (product.variants || []).forEach(v => {
-      (v.images || []).forEach(addUrl);
+    parseImages(product.images).forEach(addUrl);
+    parseImages((product as any).gallery).forEach(addUrl);
+    parseVariants(product.variants).forEach((v) => {
+      if (!v || typeof v !== 'object') return;
+      parseImages((v as any).images).forEach(addUrl);
+      addUrl((v as any).image);
+      addUrl((v as any).imageUrl);
+      addUrl((v as any).img);
     });
 
     const allUrls = Array.from(urls);

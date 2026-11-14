@@ -1,4 +1,5 @@
 import type { Product } from '../types';
+import { normalizeProductArrays } from '../utils/productParsing';
 
 const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_API_URL)
   ? String(import.meta.env.VITE_API_URL).replace(/\/+$/, '')
@@ -18,7 +19,7 @@ export const ProductsManager = {
         const data: any = await response.json();
         const list = Array.isArray(data) ? data : (data?.products || data?.results || []);
         if (Array.isArray(list) && list.length > 0) {
-          return list;
+          return list.map(normalizeProductArrays);
         }
       }
     } catch (error) {
@@ -35,7 +36,7 @@ export const ProductsManager = {
         const storeData: any = await storeRes.json();
         const list = Array.isArray(storeData) ? storeData : (storeData?.products || storeData?.results || []);
         if (Array.isArray(list) && list.length > 0) {
-          return list;
+          return list.map(normalizeProductArrays);
         }
       }
     } catch (err) {
@@ -52,7 +53,7 @@ export const ProductsManager = {
         const syncData: any = await syncRes.json();
         const list = syncData?.data?.products || syncData?.products || [];
         if (Array.isArray(list) && list.length > 0) {
-          return list;
+          return list.map(normalizeProductArrays);
         }
       }
     } catch (err) {
