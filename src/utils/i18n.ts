@@ -1,7 +1,7 @@
 import { Language } from '../types';
 import { translations } from '../data/translations';
 
-export const SUPPORTED_LANGUAGES: Language[] = ['en', 'ka', 'es', 'fr', 'de'];
+export const SUPPORTED_LANGUAGES: Language[] = ['en', 'ka', 'ru', 'es', 'it', 'fr', 'de', 'zh'];
 export type SupportedTranslateLang = typeof SUPPORTED_LANGUAGES[number];
 
 /**

@@ -10,6 +10,12 @@ import { ProductReviewsSection, reviewService } from './ProductReviewsSection';
 import { ProductSEO, ProductSEOData } from '../hooks/useDynamicMetaTags';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { parseVariants, parseVideos, parseImages, parseArrayField } from '../utils/productParsing';
+import {
+  calculateDeliveryEstimate,
+  getEstimateForProduct,
+  getEstimatedArrivalDateRange,
+  getLocalizedCountryName,
+} from '../utils/deliveryEstimate';
 import { 
   Star, 
   ShoppingCart, 
@@ -73,6 +79,8 @@ export const ProductDetailPage: React.FC = () => {
     incrementProductViews,
     user,
     isAdmin,
+    visitorCountryCode,
+    visitorCountryFlag,
   } = useStore();
 
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -82,35 +90,30 @@ export const ProductDetailPage: React.FC = () => {
   const [justAdded, setJustAdded] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
 
-  // Dynamic estimated delivery date (Current Date + 5 to 7 business days)
+  // Find product by activeProductId (supports ID, customSlug, or title slug)
+  const foundProductForDelivery: Product | undefined = products.find(p =>
+    p.id === activeProductId ||
+    p.customSlug === activeProductId ||
+    (p.customSlug && activeProductId && p.customSlug.toLowerCase() === activeProductId.toLowerCase()) ||
+    generateProductSlug(p.title) === activeProductId ||
+    (activeProductId && generateProductSlug(p.title).toLowerCase() === activeProductId.toLowerCase())
+  );
+
+  const deliveryEstimate = React.useMemo(() => {
+    return foundProductForDelivery
+      ? getEstimateForProduct(foundProductForDelivery, visitorCountryCode)
+      : calculateDeliveryEstimate({ visitorCountry: visitorCountryCode });
+  }, [foundProductForDelivery, visitorCountryCode]);
+
+  const localizedVisitorCountry = React.useMemo(
+    () => getLocalizedCountryName(visitorCountryCode, language),
+    [visitorCountryCode, language]
+  );
+
+  // Dynamic estimated delivery date range based on visitor country x product origin
   const estimatedDeliveryDate = React.useMemo(() => {
-    const addBusinessDays = (startDate: Date, days: number) => {
-      const cur = new Date(startDate);
-      let count = 0;
-      while (count < days) {
-        cur.setDate(cur.getDate() + 1);
-        const day = cur.getDay();
-        if (day !== 0 && day !== 6) { // Skip weekends
-          count++;
-        }
-      }
-      return cur;
-    };
-
-    const now = new Date();
-    const minDate = addBusinessDays(now, 5);
-    const maxDate = addBusinessDays(now, 7);
-
-    const isKa = language === 'ka';
-    const loc = isKa ? 'ka-GE' : 'en-US';
-
-    const minWeekday = minDate.toLocaleDateString(loc, { weekday: 'short' });
-    const minMonthDay = minDate.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
-    const maxWeekday = maxDate.toLocaleDateString(loc, { weekday: 'short' });
-    const maxMonthDay = maxDate.toLocaleDateString(loc, { month: 'short', day: 'numeric' });
-
-    return `${minWeekday}, ${minMonthDay} - ${maxWeekday}, ${maxMonthDay}`;
-  }, [language]);
+    return getEstimatedArrivalDateRange(deliveryEstimate.minDays, deliveryEstimate.maxDays, language);
+  }, [deliveryEstimate.minDays, deliveryEstimate.maxDays, language]);
 
   // Synchronized reviews state matching the Customer Reviews section below
   const [reviewsState, setReviewsState] = useState<{ count: number; avgRating: number }>({ count: 1, avgRating: 5.0 });
@@ -762,14 +765,25 @@ export const ProductDetailPage: React.FC = () => {
             </div>
           </div>
 
-          {/* Estimated Delivery Text */}
-          <div className="flex items-center space-x-2 text-sm font-semibold text-[#007663] dark:text-[#00A882]">
-            <Truck className="w-4 h-4 shrink-0 text-[#007663] dark:text-[#00A882]" />
-            <span>
-              {language === 'ka' 
-                ? `შეუკვეთეთ ახლა და მიიღეთ დაახლოებით ${estimatedDeliveryDate}`
-                : `Order now and get it around ${estimatedDeliveryDate}`}
-            </span>
+          {/* Dynamic Geo-Aware Delivery Panel */}
+          <div className="p-3.5 rounded-2xl bg-emerald-50/70 dark:bg-emerald-950/30 border border-emerald-200/80 dark:border-emerald-900/60 space-y-1.5">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="flex items-center space-x-2 text-sm font-bold text-[#007663] dark:text-[#00C49A]">
+                <Truck className="w-4 h-4 shrink-0 text-[#007663] dark:text-[#00C49A]" />
+                <span>
+                  {t('delivery.estimatedToCountry', {
+                    country: `${visitorCountryFlag} ${localizedVisitorCountry}`,
+                    range: deliveryEstimate.rangeLabel,
+                  })}
+                </span>
+              </div>
+              <span className="text-[10px] font-extrabold uppercase tracking-wider px-2 py-0.5 rounded-md bg-white/90 dark:bg-slate-900 text-slate-700 dark:text-slate-200 border border-emerald-200/80 dark:border-emerald-800/60">
+                {deliveryEstimate.productOrigin === 'US' ? t('delivery.originUS') : t('delivery.originCN')}
+              </span>
+            </div>
+            <p className="text-xs text-slate-600 dark:text-slate-300 font-medium pl-6">
+              {t(deliveryEstimate.methodKey)} • {t('delivery.arrivesBy', { dates: estimatedDeliveryDate })} • {t('delivery.worldwideShipping')}
+            </p>
           </div>
 
           {/* Single Functional Amazon-Style Color Variant Selector */}
@@ -964,10 +978,10 @@ export const ProductDetailPage: React.FC = () => {
               </div>
               <div className="text-xs">
                 <p className="font-bold text-slate-900 dark:text-slate-100">
-                  {language === 'ka' ? (t('trust.shipping') || 'სწრაფი გლობალური მიწოდება') : 'Worldwide Express Shipping'}
+                  {t('trust.shipping')}
                 </p>
                 <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  {language === 'ka' ? (t('trust.shippingSub') || 'გლობალური მიკვლევადი მიწოდება') : 'Global tracked delivery'}
+                  {t('trust.shippingSub')}
                 </p>
               </div>
             </div>

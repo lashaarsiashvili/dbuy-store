@@ -6,6 +6,7 @@ import { CachedImage } from './CachedImage';
 import { analytics } from './AdminAnalyticsDashboard';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { parseImages } from '../utils/productParsing';
+import { getEstimateForProduct, getLocalizedCountryName } from '../utils/deliveryEstimate';
 import { 
   X, 
   Star, 
@@ -39,6 +40,8 @@ export const QuickViewModal: React.FC = () => {
     incrementProductViews,
     user,
     isAdmin,
+    visitorCountryCode,
+    visitorCountryFlag,
   } = useStore();
 
   const [quantity, setQuantity] = useState(1);
@@ -70,6 +73,8 @@ export const QuickViewModal: React.FC = () => {
 
   const displayTitle = getProductTitle(quickViewProduct, language);
   const displayDesc = getProductDescription(quickViewProduct, language);
+  const deliveryEstimate = getEstimateForProduct(quickViewProduct, visitorCountryCode);
+  const localizedVisitorCountry = getLocalizedCountryName(visitorCountryCode, language);
 
   const cleanMainImg = getProductImage(quickViewProduct);
   const parsedQuickImages = parseImages(quickViewProduct.images);
@@ -415,7 +420,7 @@ export const QuickViewModal: React.FC = () => {
             <div className="mt-4 pt-3 border-t border-slate-200/80 dark:border-slate-800 grid grid-cols-2 gap-2 text-[11px] text-slate-600 dark:text-slate-300 font-medium">
               <div className="flex items-center space-x-1.5 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
                 <Truck className="w-4 h-4 text-blue-600 dark:text-blue-400 shrink-0" />
-                <span>{t('quickView.freeShipping')}</span>
+                <span>{t('delivery.worldwideShipping')} ({t('delivery.compactDays', { range: deliveryEstimate.rangeLabel })})</span>
               </div>
               <div className="flex items-center space-x-1.5 bg-white dark:bg-slate-900 p-2 rounded-xl border border-slate-200/60 dark:border-slate-800">
                 <ShieldCheck className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
@@ -465,6 +470,22 @@ export const QuickViewModal: React.FC = () => {
                   {quickViewProduct.stock > 0
                     ? t('quickView.inStockCount', { count: quickViewProduct.stock })
                     : t('products.outOfStock')}
+                </span>
+              </div>
+
+              {/* Geo-Aware Delivery Estimate */}
+              <div className="flex items-center justify-between gap-2 px-3 py-2 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200/70 dark:border-emerald-900/60 text-xs">
+                <div className="flex items-center gap-1.5 font-semibold text-emerald-700 dark:text-emerald-300">
+                  <Truck className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    {t('delivery.estimatedToCountry', {
+                      country: `${visitorCountryFlag} ${localizedVisitorCountry}`,
+                      range: deliveryEstimate.rangeLabel,
+                    })}
+                  </span>
+                </div>
+                <span className="text-[10px] font-bold uppercase text-slate-600 dark:text-slate-300 shrink-0">
+                  {deliveryEstimate.productOrigin === 'US' ? t('delivery.originUS') : t('delivery.originCN')}
                 </span>
               </div>
 

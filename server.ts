@@ -1215,6 +1215,46 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Lightweight Visitor Geo-Detection Endpoint (Cloudflare header + client fallback signal)
+app.get('/api/geo', (req, res) => {
+  const cfCountryHeader = String(req.headers['cf-ipcountry'] || '').trim().toUpperCase();
+  const isValid =
+    /^[A-Z]{2}$/.test(cfCountryHeader) &&
+    cfCountryHeader !== 'XX' &&
+    cfCountryHeader !== 'T1' &&
+    cfCountryHeader !== 'A1' &&
+    cfCountryHeader !== 'A2';
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+  if (!isValid) {
+    res.json({
+      success: true,
+      detected: false,
+      countryCode: null,
+      countryName: null,
+      flag: null,
+      source: 'none',
+    });
+    return;
+  }
+
+  let countryName = cfCountryHeader;
+  try {
+    if (typeof Intl !== 'undefined' && typeof (Intl as any).DisplayNames === 'function') {
+      countryName = new (Intl as any).DisplayNames(['en'], { type: 'region' }).of(cfCountryHeader) || cfCountryHeader;
+    }
+  } catch {}
+
+  res.json({
+    success: true,
+    detected: true,
+    countryCode: cfCountryHeader,
+    countryName,
+    flag: CF_COUNTRY_FLAG_MAP[cfCountryHeader] || '🌐',
+    source: 'cf-ipcountry-header',
+  });
+});
+
 // Analytics tracking endpoints for store performance
 const serverAnalytics = {
   visits: 0,

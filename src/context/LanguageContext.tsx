@@ -14,7 +14,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [language, setLanguageState] = useState<Language>(() => {
     if (typeof localStorage !== 'undefined') {
       const saved = localStorage.getItem('dbuy_lang');
-      if (saved && (['en', 'ka', 'es', 'fr', 'de'] as string[]).includes(saved)) {
+      if (saved && (['en', 'ka', 'ru', 'es', 'it', 'fr', 'de', 'zh'] as string[]).includes(saved)) {
         return saved as Language;
       }
     }

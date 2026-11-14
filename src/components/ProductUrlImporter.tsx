@@ -33,6 +33,13 @@ import {
 } from '../utils/productScraper';
 import { normalizeProductCategory } from '../data/categoryNavigationData';
 import { smartApiFetch } from '../lib/api';
+import { useStore } from '../context/StoreContext';
+import {
+  calculateDeliveryEstimate,
+  detectProductOrigin,
+  getLocalizedCountryName,
+} from '../utils/deliveryEstimate';
+import { Truck } from 'lucide-react';
 
 interface ProductUrlImporterProps {
   onPopulateForm: (data: ScrapedProductData) => void;
@@ -142,6 +149,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
   isKa = false,
   addToast,
 }) => {
+  const { visitorCountryCode, visitorCountryFlag, language, t } = useStore();
   // Active platform selector (Amazon default active)
   const [selectedPlatform, setSelectedPlatform] = useState<ImporterPlatform>('amazon');
 
@@ -413,13 +421,20 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
   };
 
   const getUpdatedProductData = (): ScrapedProductData => {
+    const activeUrl = (selectedPlatform === 'amazon' ? url : platformUrl).trim();
+    const resolvedMarketplace =
+      extractedData?.marketplace && extractedData.marketplace !== 'unknown'
+        ? extractedData.marketplace
+        : selectedPlatform;
     return {
       ...(extractedData || {
         description: '',
         features: [],
-        sourceUrl: selectedPlatform === 'amazon' ? url : platformUrl,
-        marketplace: selectedPlatform,
+        sourceUrl: activeUrl,
+        marketplace: resolvedMarketplace,
       }),
+      marketplace: resolvedMarketplace,
+      sourceUrl: extractedData?.sourceUrl || activeUrl || undefined,
       title: editTitle.trim() || extractedData?.title || 'Imported Product',
       price: editPrice || 49.99,
       origPrice: editOrigPrice,
@@ -824,6 +839,49 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
               Found <strong>{galleryImages.length}</strong> full-res photos
             </div>
           </div>
+
+          {/* Geo-Aware Delivery Preview Banner */}
+          {(() => {
+            const resolvedPlatform =
+              extractedData.marketplace && extractedData.marketplace !== 'unknown'
+                ? extractedData.marketplace
+                : selectedPlatform;
+            const origin = detectProductOrigin({
+              sourcePlatform: resolvedPlatform,
+              sourceUrl: extractedData.sourceUrl || (selectedPlatform === 'amazon' ? url : platformUrl),
+            });
+            const est = calculateDeliveryEstimate({
+              visitorCountry: visitorCountryCode,
+              productOrigin: origin,
+              sourcePlatform: resolvedPlatform,
+            });
+            const countryLabel = getLocalizedCountryName(visitorCountryCode, language);
+            return (
+              <div className="mb-4 p-3 rounded-xl bg-indigo-950/70 border border-indigo-500/35 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2 text-indigo-100">
+                  <Truck className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span className="font-bold">
+                    {t('delivery.estimatedToCountry', {
+                      country: `${visitorCountryFlag} ${countryLabel}`,
+                      range: est.rangeLabel,
+                    })}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-[11px]">
+                  <span className={`px-2 py-0.5 rounded-full font-bold border ${
+                    origin === 'US'
+                      ? 'bg-blue-500/20 text-blue-200 border-blue-400/40'
+                      : 'bg-amber-500/20 text-amber-200 border-amber-400/40'
+                  }`}>
+                    {t('delivery.originLabel')}: {origin === 'US' ? t('delivery.originUS') : t('delivery.originCN')} ({origin})
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-400/30 font-semibold">
+                    {t('delivery.worldwideShipping')}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Quick Edit Fields */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-3 mb-4">

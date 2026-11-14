@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
 import { useStore } from '../context/StoreContext';
-import { Star, ShoppingCart, Check, Heart } from 'lucide-react';
+import { Star, ShoppingCart, Check, Heart, Truck } from 'lucide-react';
 import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
 import { getProductTitle } from '../utils/productLanguage';
+import { getEstimateForProduct } from '../utils/deliveryEstimate';
 
 interface ProductCardProps {
   product: Product;
@@ -28,6 +29,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     navigateToProduct,
     isInWishlist,
     toggleWishlist,
+    visitorCountryCode,
+    visitorCountryFlag,
   } = useStore();
 
   const [justAdded, setJustAdded] = useState(false);
@@ -35,6 +38,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
   const isFavorite = isInWishlist(product.id);
   const displayTitle = getProductTitle(product, language);
   const imgSrc = getProductImage(product);
+  const deliveryEstimate = getEstimateForProduct(product, visitorCountryCode);
 
   const handleAddToCart = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -166,7 +170,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           </h3>
 
           {/* Star Rating & Review Count */}
-          <div className="product-card-rating flex items-center gap-1.5 mt-2">
+          <div className="product-card-rating flex items-center gap-1.5 mt-1.5">
             <div className="flex items-center gap-0.5">
               {[1, 2, 3, 4, 5].map((starIdx) => (
                 <Star
@@ -184,16 +188,29 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </span>
           </div>
 
-          {/* Price & Previous Price */}
-          <div className="product-card-price-row flex items-baseline gap-2 mt-2 mb-3">
-            <span className="product-card-price text-[17px] sm:text-[18px] font-extrabold text-[#0F172A] dark:text-white tracking-tight tabular-nums">
-              {formatPrice(product.price)}
-            </span>
-            {product.origPrice && product.origPrice > product.price && (
-              <span className="product-card-orig-price text-[12.5px] font-medium text-[#94A3B8] line-through tabular-nums">
-                {formatPrice(product.origPrice)}
+          {/* Price & Compact Geo Delivery Badge Row */}
+          <div className="product-card-price-row flex items-center justify-between gap-1.5 mt-1.5 mb-2">
+            <div className="flex items-baseline gap-1.5 min-w-0">
+              <span className="product-card-price text-[17px] sm:text-[18px] font-extrabold text-[#0F172A] dark:text-white tracking-tight tabular-nums">
+                {formatPrice(product.price)}
               </span>
-            )}
+              {product.origPrice && product.origPrice > product.price && (
+                <span className="product-card-orig-price text-[12px] font-medium text-[#94A3B8] line-through tabular-nums">
+                  {formatPrice(product.origPrice)}
+                </span>
+              )}
+            </div>
+            <span
+              title={t('delivery.estimatedToCountry', {
+                country: deliveryEstimate.visitorCountryName,
+                range: deliveryEstimate.rangeLabel,
+              })}
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 shrink-0 whitespace-nowrap"
+            >
+              <Truck className="w-3 h-3 shrink-0" />
+              <span>{t('delivery.compactDays', { range: deliveryEstimate.rangeLabel })}</span>
+              <span className="text-[10px] leading-none">{visitorCountryFlag}</span>
+            </span>
           </div>
         </div>
 
@@ -213,12 +230,12 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
           {justAdded ? (
             <>
               <Check className="w-4 h-4 stroke-[2.5]" />
-              <span>Added</span>
+              <span>{t('products.added')}</span>
             </>
           ) : (
             <>
               <ShoppingCart className="w-3.5 h-3.5 stroke-[2.2]" />
-              <span>Add to Cart</span>
+              <span>{t('products.addToCart')}</span>
             </>
           )}
         </button>

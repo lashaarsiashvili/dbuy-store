@@ -304,6 +304,11 @@ export const onRequest: PagesFunction<any> = async (context) => {
           imageUrl: primaryImg,
           image: primaryImg,
           images: imagesArr,
+          ...(product.sourcePlatform ? { sourcePlatform: product.sourcePlatform } : {}),
+          ...(product.productOrigin ? { productOrigin: product.productOrigin } : {}),
+          ...(product.sourceUrl ? { sourceUrl: product.sourceUrl } : {}),
+          ...(Array.isArray(product.specs) ? { specs: product.specs } : {}),
+          ...(product.metadata ? { metadata: product.metadata } : {}),
           createdAt: nowIso,
         });
       }

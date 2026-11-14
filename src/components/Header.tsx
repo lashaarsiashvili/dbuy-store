@@ -19,7 +19,11 @@ import {
   Flame,
   Sun,
   Moon,
+  MapPin,
 } from 'lucide-react';
+import { ALL_COUNTRIES } from '../data/countries';
+import { languagesList } from './LanguageSelector';
+import { getCountryFlagEmoji, getLocalizedCountryName } from '../utils/deliveryEstimate';
 
 export const Header: React.FC = () => {
   const {
@@ -47,15 +51,23 @@ export const Header: React.FC = () => {
     isAdmin,
     isDarkMode,
     toggleDarkMode,
+    visitorCountryCode,
+    visitorCountryFlag,
+    setVisitorCountry,
   } = useStore();
 
   const [userDropdownOpen, setUserDropdownOpen] = useState(false);
   const [langDropdownOpen, setLangDropdownOpen] = useState(false);
+  const [geoDropdownOpen, setGeoDropdownOpen] = useState(false);
+  const [geoSearch, setGeoSearch] = useState('');
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
 
   const dropdownRef = useRef<HTMLDivElement>(null);
   const langDropdownRef = useRef<HTMLDivElement>(null);
+  const geoDropdownRef = useRef<HTMLDivElement>(null);
+
+  const localizedVisitorCountry = getLocalizedCountryName(visitorCountryCode, language);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -65,6 +77,9 @@ export const Header: React.FC = () => {
       }
       if (langDropdownRef.current && !langDropdownRef.current.contains(target)) {
         setLangDropdownOpen(false);
+      }
+      if (geoDropdownRef.current && !geoDropdownRef.current.contains(target)) {
+        setGeoDropdownOpen(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -325,7 +340,78 @@ export const Header: React.FC = () => {
                   <Search className="w-4 h-4" />
                 </button>
 
-                {/* Language Selector (Globe + EN v) */}
+                {/* Subtle Delivery Destination Selector */}
+                <div className="relative" ref={geoDropdownRef}>
+                  <button
+                    type="button"
+                    onClick={() => setGeoDropdownOpen((prev) => !prev)}
+                    title={t('delivery.changeDestination')}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-[12px] font-medium text-[#334155] dark:text-slate-200 transition-colors cursor-pointer"
+                  >
+                    <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 hidden sm:inline" />
+                    <span className="text-sm leading-none">{visitorCountryFlag}</span>
+                    <span className="hidden lg:inline text-[#64748B] dark:text-slate-400">
+                      {t('delivery.deliveringTo')}
+                    </span>
+                    <span className="font-semibold text-[#0F172A] dark:text-white max-w-[90px] sm:max-w-[120px] truncate">
+                      {localizedVisitorCountry}
+                    </span>
+                    <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
+                  </button>
+
+                  {geoDropdownOpen && (
+                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 p-2 z-50">
+                      <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-800 mb-1.5">
+                        <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
+                          <Globe className="w-3.5 h-3.5 text-blue-600" />
+                          <span>{t('delivery.worldwideShipping')}</span>
+                        </p>
+                        <p className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5">
+                          {t('delivery.allCountriesWorldwide')}
+                        </p>
+                      </div>
+                      <input
+                        type="text"
+                        value={geoSearch}
+                        onChange={(e) => setGeoSearch(e.target.value)}
+                        placeholder={t('checkout.country')}
+                        className="w-full px-2.5 py-1.5 mb-1.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-900 dark:text-slate-100 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                      />
+                      <div className="max-h-56 overflow-y-auto divide-y divide-slate-50 dark:divide-slate-800/50">
+                        {ALL_COUNTRIES.filter((c) => {
+                          if (!geoSearch.trim()) return true;
+                          const q = geoSearch.trim().toLowerCase();
+                          const localName = getLocalizedCountryName(c.code, language).toLowerCase();
+                          return c.name.toLowerCase().includes(q) || c.code.toLowerCase().includes(q) || localName.includes(q);
+                        }).map((c) => {
+                          const isSelected = c.code.toUpperCase() === visitorCountryCode.toUpperCase();
+                          return (
+                            <button
+                              key={c.code}
+                              type="button"
+                              onClick={() => {
+                                setVisitorCountry(c.code);
+                                setGeoDropdownOpen(false);
+                                setGeoSearch('');
+                              }}
+                              className={`w-full text-left px-2.5 py-1.5 text-xs rounded-lg flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer ${
+                                isSelected ? 'font-bold text-blue-600 dark:text-blue-400 bg-blue-50/60 dark:bg-blue-950/40' : 'text-slate-700 dark:text-slate-300'
+                              }`}
+                            >
+                              <span className="flex items-center gap-2 truncate">
+                                <span>{getCountryFlagEmoji(c.code)}</span>
+                                <span className="truncate">{getLocalizedCountryName(c.code, language)}</span>
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-400 ml-2">{c.code}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Language Selector (Globe + LANG v) */}
                 <div className="relative hidden sm:block" ref={langDropdownRef}>
                   <button
                     type="button"
@@ -338,20 +424,21 @@ export const Header: React.FC = () => {
                   </button>
 
                   {langDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-40 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-100 dark:border-slate-800 py-1.5 z-50">
-                      {(['en', 'ka'] as Language[]).map((lang) => (
+                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-100 dark:border-slate-800 py-1.5 z-50">
+                      {languagesList.map((langItem) => (
                         <button
-                          key={lang}
+                          key={langItem.code}
                           type="button"
                           onClick={() => {
-                            setLanguage(lang);
+                            setLanguage(langItem.code);
                             setLangDropdownOpen(false);
                           }}
-                          className={`w-full text-left px-3.5 py-2 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 ${
-                            language === lang ? 'font-bold text-blue-600' : 'text-slate-700 dark:text-slate-300'
+                          className={`w-full text-left px-3.5 py-1.5 text-xs flex items-center justify-between hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer ${
+                            language === langItem.code ? 'font-bold text-blue-600' : 'text-slate-700 dark:text-slate-300'
                           }`}
                         >
-                          <span>{lang === 'en' ? 'English (EN)' : 'ქართული (KA)'}</span>
+                          <span>{langItem.fullLabel}</span>
+                          <span className="text-[10px] font-mono uppercase text-slate-400">{langItem.code}</span>
                         </button>
                       ))}
                       <div className="border-t border-slate-100 dark:border-slate-800 mt-1 pt-1 px-3 py-1 flex items-center justify-between">

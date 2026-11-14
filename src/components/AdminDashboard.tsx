@@ -21,6 +21,7 @@ import { ADMIN_PRODUCT_CATEGORIES, normalizeProductCategory, matchesCategory } f
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
 import { compressImageForUpload, uploadImageToR2 } from '../utils/imageUpload';
 import { parseVariants, parseVideos, parseImages, parseStringArray } from '../utils/productParsing';
+import { detectProductOrigin, detectSourcePlatform } from '../utils/deliveryEstimate';
 import { 
   ShieldCheck, 
   DollarSign, 
@@ -500,6 +501,10 @@ export const AdminDashboard: React.FC = () => {
     features: ['', '', '', ''] as string[],
     featuresEn: ['', '', '', ''] as string[],
     featuresKa: ['', '', '', ''] as string[],
+    sourcePlatform: '' as string,
+    productOrigin: '' as '' | 'US' | 'CN',
+    sourceUrl: '' as string,
+    specs: [] as string[],
   });
 
   // Global Product Videos Handlers
@@ -1354,6 +1359,10 @@ export const AdminDashboard: React.FC = () => {
       features: ['', '', '', ''],
       featuresEn: ['', '', '', ''],
       featuresKa: ['', '', '', ''],
+      sourcePlatform: '',
+      productOrigin: '',
+      sourceUrl: '',
+      specs: [],
     });
     setFeaturesTab(isKa ? 'ka' : 'en');
     setIsProductModalOpen(true);
@@ -1373,6 +1382,15 @@ export const AdminDashboard: React.FC = () => {
     }
 
     setFeaturesTab('en'); // Strict English only! Never translate to Georgian
+
+    const detectedOrigin = detectProductOrigin({
+      sourcePlatform: data.marketplace,
+      sourceUrl: data.sourceUrl,
+    });
+    const detectedPlatform =
+      data.marketplace && data.marketplace !== 'unknown'
+        ? data.marketplace
+        : detectSourcePlatform({ sourceUrl: data.sourceUrl });
 
     setProdForm({
       title: data.title,
@@ -1403,6 +1421,10 @@ export const AdminDashboard: React.FC = () => {
       features: featuresList.slice(0, 4),
       featuresEn: featuresList.slice(0, 4),
       featuresKa: featuresList.slice(0, 4),
+      sourcePlatform: detectedPlatform,
+      productOrigin: detectedOrigin,
+      sourceUrl: data.sourceUrl || '',
+      specs: Array.isArray(data.specs) ? data.specs : [],
     });
 
     setIsProductModalOpen(true);
@@ -1415,6 +1437,21 @@ export const AdminDashboard: React.FC = () => {
 
     const generatedId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
     const finalSlug = generateProductSlug(data.title);
+    const detectedPlatform =
+      data.marketplace && data.marketplace !== 'unknown'
+        ? data.marketplace
+        : detectSourcePlatform({ sourceUrl: data.sourceUrl });
+    const detectedOrigin = detectProductOrigin({
+      sourcePlatform: detectedPlatform,
+      sourceUrl: data.sourceUrl,
+    });
+    const specsWithOrigin = Array.from(
+      new Set([
+        ...(Array.isArray(data.specs) ? data.specs : []),
+        `source:${detectedPlatform}`,
+        `origin:${detectedOrigin}`,
+      ])
+    );
 
     const productPayload: Product = {
       id: generatedId,
@@ -1450,6 +1487,15 @@ export const AdminDashboard: React.FC = () => {
       features: featuresList,
       features_en: featuresList,
       features_ka: featuresList,
+      sourcePlatform: detectedPlatform,
+      productOrigin: detectedOrigin,
+      sourceUrl: data.sourceUrl,
+      specs: specsWithOrigin,
+      metadata: {
+        sourcePlatform: detectedPlatform,
+        productOrigin: detectedOrigin,
+        ...(data.sourceUrl ? { sourceUrl: data.sourceUrl } : {}),
+      },
       isPublishedGlobally: true,
       publishedAt: new Date().toISOString(),
       rating: 5.0,
@@ -1547,6 +1593,10 @@ export const AdminDashboard: React.FC = () => {
       features: isKa ? prodFeaturesKa : prodFeaturesEn,
       featuresEn: prodFeaturesEn,
       featuresKa: prodFeaturesKa,
+      sourcePlatform: prod.sourcePlatform || detectSourcePlatform(prod),
+      productOrigin: prod.productOrigin || detectProductOrigin(prod),
+      sourceUrl: prod.sourceUrl || '',
+      specs: Array.isArray(prod.specs) ? prod.specs : [],
     });
     setIsProductModalOpen(true);
   };
@@ -1667,6 +1717,19 @@ export const AdminDashboard: React.FC = () => {
         features: finalFeatures.slice(0, 4),
         features_en: finalFeaturesEn.slice(0, 4),
         features_ka: finalFeaturesKa.slice(0, 4),
+        ...(prodForm.sourcePlatform ? { sourcePlatform: prodForm.sourcePlatform } : {}),
+        ...(prodForm.productOrigin ? { productOrigin: prodForm.productOrigin } : {}),
+        ...(prodForm.sourceUrl ? { sourceUrl: prodForm.sourceUrl } : {}),
+        ...(Array.isArray(prodForm.specs) && prodForm.specs.length > 0 ? { specs: prodForm.specs } : {}),
+        ...(prodForm.sourcePlatform || prodForm.productOrigin
+          ? {
+              metadata: {
+                sourcePlatform: prodForm.sourcePlatform || detectSourcePlatform({ badge: prodForm.badge, sourceUrl: prodForm.sourceUrl }),
+                productOrigin: prodForm.productOrigin || detectProductOrigin({ sourcePlatform: prodForm.sourcePlatform, badge: prodForm.badge, sourceUrl: prodForm.sourceUrl }),
+                ...(prodForm.sourceUrl ? { sourceUrl: prodForm.sourceUrl } : {}),
+              },
+            }
+          : {}),
         isPublishedGlobally: true,
         publishedAt: new Date().toISOString(),
         rating: editingProduct ? (editingProduct.rating || 5.0) : 5.0,
@@ -1720,6 +1783,10 @@ export const AdminDashboard: React.FC = () => {
         features: ['', '', '', ''],
         featuresEn: ['', '', '', ''],
         featuresKa: ['', '', '', ''],
+        sourcePlatform: '',
+        productOrigin: '',
+        sourceUrl: '',
+        specs: [],
       });
     }
   };

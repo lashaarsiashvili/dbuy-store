@@ -92,6 +92,11 @@ export interface Product {
   views?: number;
   youtubeId?: string;
   youtubeVideoId?: string;
+  productOrigin?: 'US' | 'CN';
+  sourcePlatform?: string;
+  sourceUrl?: string;
+  specs?: string[];
+  metadata?: Record<string, any>;
   created_at?: string;
   createdAt?: string;
   updated_at?: string;

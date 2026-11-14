@@ -54,6 +54,13 @@ import { analytics } from '../components/AdminAnalyticsDashboard';
 import { verifyPassword, hashPasswordSync } from '../utils/security';
 import { ensurePersistentAbsoluteUrl } from '../utils/imageUtils';
 import { normalizeProductArrays, parseImages } from '../utils/productParsing';
+import {
+  VisitorGeoInfo,
+  detectVisitorCountryFromClient,
+  getCountryEnglishName,
+  getCountryFlagEmoji,
+  resolveCountryCode,
+} from '../utils/deliveryEstimate';
 
 // Firebase decoupled - pure offline-first mode mocks
 const db = {};
@@ -80,6 +87,13 @@ interface StoreContextType {
   language: Language;
   setLanguage: (lang: Language) => void;
   t: (key: string, params?: Record<string, string | number>) => string;
+
+  // Visitor Geo-Detection & Delivery Destination
+  visitorCountryCode: string;
+  visitorCountryName: string;
+  visitorCountryFlag: string;
+  visitorGeoSource: VisitorGeoInfo['source'];
+  setVisitorCountry: (countryCodeOrName: string) => void;
 
   // Currency
   currency: Currency;
@@ -416,6 +430,68 @@ const StoreContext = createContext<StoreContextType | undefined>(undefined);
 
 export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { language, setLanguage, t } = useLanguage();
+
+  // Automatic Visitor Country Detection (Cloudflare /api/geo + Timezone/Locale Fallback)
+  const [visitorGeo, setVisitorGeo] = useState<VisitorGeoInfo>(() => {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const manualCode = localStorage.getItem('dbuy_visitor_country_override');
+        if (manualCode) {
+          const code = resolveCountryCode(manualCode);
+          return {
+            countryCode: code,
+            countryName: getCountryEnglishName(code),
+            flag: getCountryFlagEmoji(code),
+            source: 'manual',
+          };
+        }
+      }
+    } catch {}
+    return detectVisitorCountryFromClient();
+  });
+
+  useEffect(() => {
+    let isMounted = true;
+    try {
+      if (typeof localStorage !== 'undefined' && localStorage.getItem('dbuy_visitor_country_override')) {
+        return;
+      }
+    } catch {}
+
+    fetch('/api/geo', { cache: 'no-store' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data: any) => {
+        if (!isMounted || !data || !data.detected || !data.countryCode) return;
+        const code = resolveCountryCode(data.countryCode);
+        setVisitorGeo({
+          countryCode: code,
+          countryName: data.countryName || getCountryEnglishName(code),
+          flag: data.flag || getCountryFlagEmoji(code),
+          source: data.source === 'cf-ipcountry-header' ? 'cf-ipcountry-header' : 'cloudflare-cf',
+        });
+      })
+      .catch(() => {
+        // Already initialized via detectVisitorCountryFromClient()
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const setVisitorCountry = (countryCodeOrName: string) => {
+    const code = resolveCountryCode(countryCodeOrName);
+    const nextGeo: VisitorGeoInfo = {
+      countryCode: code,
+      countryName: getCountryEnglishName(code),
+      flag: getCountryFlagEmoji(code),
+      source: 'manual',
+    };
+    setVisitorGeo(nextGeo);
+    try {
+      localStorage.setItem('dbuy_visitor_country_override', code);
+    } catch {}
+  };
 
   // Toast Notifications
   const [toasts, setToasts] = useState<ToastMessage[]>([]);
@@ -2220,6 +2296,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         activeProductId, navigateToProduct, navigateToCategory,
         getProductUrl, copyProductUrl, shareProduct,
         language, setLanguage, t,
+        visitorCountryCode: visitorGeo.countryCode,
+        visitorCountryName: visitorGeo.countryName,
+        visitorCountryFlag: visitorGeo.flag,
+        visitorGeoSource: visitorGeo.source,
+        setVisitorCountry,
         currency, setCurrency, formatPrice, convertPrice,
         products, selectedCategory, setSelectedCategory,
         searchQuery, setSearchQuery, sortOption, setSortOption,

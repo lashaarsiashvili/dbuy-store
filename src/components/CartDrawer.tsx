@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useStore } from '../context/StoreContext';
 import { CachedImage } from './CachedImage';
 import { parseImages } from '../utils/productParsing';
+import { getEstimateForProduct, getLocalizedCountryName } from '../utils/deliveryEstimate';
 import { 
   X, 
   Trash2, 
@@ -35,11 +36,15 @@ export const CartDrawer: React.FC = () => {
     setCurrentPage,
     user,
     isAdmin,
+    visitorCountryCode,
+    visitorCountryFlag,
   } = useStore();
 
   const [inputCode, setInputCode] = useState('');
 
   if (!isCartOpen) return null;
+
+  const localizedVisitorCountry = getLocalizedCountryName(visitorCountryCode, language);
 
   const discountAmountUSD = (cartSubtotalUSD * promoDiscountPercent) / 100;
   const isFreeShipping = cartSubtotalUSD >= 50 || promoCode === 'FREESHIP';
@@ -125,6 +130,12 @@ export const CartDrawer: React.FC = () => {
                   style={{ width: `${freeShippingProgress}%` }}
                 />
               </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] font-medium text-slate-600 dark:text-slate-300">
+                <span>
+                  {t('delivery.deliveringTo')}: <strong className="text-slate-900 dark:text-white">{visitorCountryFlag} {localizedVisitorCountry}</strong>
+                </span>
+                <span className="text-emerald-700 dark:text-emerald-400 font-semibold">{t('delivery.worldwideShipping')}</span>
+              </div>
             </div>
           )}
 
@@ -158,6 +169,7 @@ export const CartDrawer: React.FC = () => {
 
                 const parsedImages = parseImages(item.product.images);
                 const imageSrc = item.product.image || parsedImages[0] || '';
+                const itemEstimate = getEstimateForProduct(item.product, visitorCountryCode);
 
                 return (
                   <div key={item.product.id} className="py-4 flex space-x-3 items-center">
@@ -177,6 +189,15 @@ export const CartDrawer: React.FC = () => {
                       </h4>
                       <div className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5">
                         {formatPrice(item.product.price)}
+                      </div>
+                      <div className="flex items-center gap-1 text-[11px] font-medium text-emerald-700 dark:text-emerald-400 mt-1">
+                        <Truck className="w-3 h-3 shrink-0" />
+                        <span className="truncate">
+                          {t('delivery.estimatedToCountry', {
+                            country: `${visitorCountryFlag} ${localizedVisitorCountry}`,
+                            range: itemEstimate.rangeLabel,
+                          })}
+                        </span>
                       </div>
 
                       {/* Quantity Controls */}

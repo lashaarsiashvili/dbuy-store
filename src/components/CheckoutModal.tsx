@@ -13,8 +13,16 @@ import {
   Smartphone,
   Fingerprint,
   Check,
+  Truck,
 } from "lucide-react";
 import { PayPalButtons, FUNDING } from "@paypal/react-paypal-js";
+import {
+  getEstimateForProduct,
+  getLocalizedCountryName,
+  getCountryFlagEmoji,
+  resolveCountryCode,
+  summarizeCartDeliveryRange,
+} from "../utils/deliveryEstimate";
 
 const OfficialGooglePayMark = ({ height = 36 }: { height?: number }) => (
   <div
@@ -82,9 +90,15 @@ export const CheckoutModal: React.FC = () => {
     addToast,
     currency,
     convertPrice,
+    visitorCountryCode,
+    visitorCountryName,
   } = useStore();
 
   const isGPayAvailable = isGooglePayAvailable();
+  const [confirmedDeliveryRange, setConfirmedDeliveryRange] = useState<{ minDays: number; maxDays: number }>({
+    minDays: 5,
+    maxDays: 10,
+  });
 
   const [step, setStep] = useState<1 | 2 | 3>(1);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -122,7 +136,7 @@ export const CheckoutModal: React.FC = () => {
     address: "",
     city: "",
     zip: "",
-    country: "Georgia",
+    country: visitorCountryName || "United States",
   });
 
   // Re-initialize clean form state every time checkout modal opens
@@ -139,10 +153,14 @@ export const CheckoutModal: React.FC = () => {
         address: user.isLoggedIn && user.address ? user.address : "",
         city: user.isLoggedIn && user.city ? user.city : "",
         zip: user.isLoggedIn && user.zip ? user.zip : "",
-        country: user.isLoggedIn && user.country ? user.country : "Georgia",
+        country: user.isLoggedIn && user.country ? user.country : (visitorCountryName || "United States"),
       });
     }
-  }, [isCheckoutOpen, user]);
+  }, [isCheckoutOpen, user, visitorCountryName]);
+
+  const activeCountryCode = resolveCountryCode(formData.country || visitorCountryCode);
+  const activeCountryFlag = getCountryFlagEmoji(activeCountryCode);
+  const localizedActiveCountry = getLocalizedCountryName(activeCountryCode, language);
 
   if (!isCheckoutOpen) return null;
 
@@ -187,7 +205,7 @@ export const CheckoutModal: React.FC = () => {
       address: "",
       city: "",
       zip: "",
-      country: "Georgia",
+      country: visitorCountryName || "United States",
     });
   };
 
@@ -322,6 +340,11 @@ export const CheckoutModal: React.FC = () => {
         payerName ||
         formData.name;
 
+      const finalCountry = (verifiedCountry || formData.country).trim();
+      setConfirmedDeliveryRange(
+        summarizeCartDeliveryRange(cart.map((c) => c.product), finalCountry)
+      );
+
       placeOrder({
         customerName:
           verifiedRecipient.trim() || formData.name.trim(),
@@ -330,7 +353,7 @@ export const CheckoutModal: React.FC = () => {
           verifiedAddress.trim() || formData.address.trim(),
         city: (verifiedCity || formData.city).trim(),
         zip: (verifiedZip || formData.zip).trim(),
-        country: (verifiedCountry || formData.country).trim(),
+        country: finalCountry,
         paymentMethod: "paypal",
         paypalTransactionId: txnId,
       });
@@ -353,13 +376,17 @@ export const CheckoutModal: React.FC = () => {
         label: "DBUY Store Checkout",
         customerInfo: formData,
         onSuccess: (details) => {
+          const finalCountry = (details.payer?.country || formData.country).trim();
+          setConfirmedDeliveryRange(
+            summarizeCartDeliveryRange(cart.map((c) => c.product), finalCountry)
+          );
           placeOrder({
             customerName: (details.payer?.name || formData.name).trim(),
             email: (details.payer?.email || formData.email).trim(),
             address: (details.payer?.address || formData.address).trim(),
             city: (details.payer?.city || formData.city).trim(),
             zip: (details.payer?.zip || formData.zip).trim(),
-            country: (details.payer?.country || formData.country).trim(),
+            country: finalCountry,
             paymentMethod: "applepay",
             applePayTransactionId: details.transactionId,
             paypalTransactionId: details.orderId || details.transactionId,
@@ -407,6 +434,10 @@ export const CheckoutModal: React.FC = () => {
         customerInfo: formData,
         onSuccess: (details) => {
           const orderID = details.orderId || details.transactionId;
+          const finalCountry = (details?.payer?.country || formData.country).trim();
+          setConfirmedDeliveryRange(
+            summarizeCartDeliveryRange(cart.map((c) => c.product), finalCountry)
+          );
           setIsProcessingPayment(false);
           placeOrder({
             customerName: (details?.payer?.name || formData.name).trim(),
@@ -414,7 +445,7 @@ export const CheckoutModal: React.FC = () => {
             address: (details?.payer?.address || formData.address).trim(),
             city: (details?.payer?.city || formData.city).trim(),
             zip: (details?.payer?.zip || formData.zip).trim(),
-            country: (details?.payer?.country || formData.country).trim(),
+            country: finalCountry,
             paymentMethod: "googlepay",
             googlePayTransactionId: orderID,
             paypalTransactionId: orderID,
@@ -494,6 +525,10 @@ export const CheckoutModal: React.FC = () => {
       } catch (errNote) {
         console.log("Card order backend note:", errNote);
       }
+
+      setConfirmedDeliveryRange(
+        summarizeCartDeliveryRange(cart.map((c) => c.product), formData.country.trim())
+      );
 
       placeOrder({
         customerName: (cardData.name || formData.name).trim(),
@@ -718,10 +753,40 @@ export const CheckoutModal: React.FC = () => {
               </div>
 
               {/* Order Summary */}
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2">
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/80 rounded-2xl border border-slate-200 dark:border-slate-700 space-y-2.5">
                 <h4 className="text-xs font-bold text-slate-800 dark:text-slate-100">
                   {t("checkout.orderSummary")} ({cart.length} items)
                 </h4>
+
+                {/* Per-item delivery estimates */}
+                {cart.length > 0 && (
+                  <div className="space-y-1.5 pb-2 border-b border-slate-200/80 dark:border-slate-700/80 max-h-36 overflow-y-auto">
+                    {cart.map((item) => {
+                      const itemEst = getEstimateForProduct(item.product, activeCountryCode);
+                      return (
+                        <div key={item.product.id} className="flex items-start justify-between gap-2 text-[11px]">
+                          <div className="min-w-0 flex-1">
+                            <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">
+                              {item.product.title} × {item.quantity}
+                            </p>
+                            <p className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
+                              <Truck className="w-3 h-3 shrink-0" />
+                              <span className="truncate">
+                                {t("delivery.estimatedToCountry", {
+                                  country: `${activeCountryFlag} ${localizedActiveCountry}`,
+                                  range: itemEst.rangeLabel,
+                                })}
+                              </span>
+                            </p>
+                          </div>
+                          <span className="font-bold text-slate-900 dark:text-white shrink-0">
+                            {formatPrice(item.product.price * item.quantity)}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
                 <div className="space-y-1 text-xs text-slate-600 dark:text-slate-300">
                   <div className="flex justify-between">
@@ -862,6 +927,10 @@ export const CheckoutModal: React.FC = () => {
                       currencyCode={currency}
                       onSuccess={(paymentData) => {
                         const orderID = "GPAY-" + Date.now();
+                        const finalCountry = paymentData?.shippingAddress?.countryCode || formData.country.trim() || visitorCountryCode;
+                        setConfirmedDeliveryRange(
+                          summarizeCartDeliveryRange(cart.map((c) => c.product), finalCountry)
+                        );
                         setIsProcessingPayment(false);
                         placeOrder({
                           customerName: paymentData?.shippingAddress?.name || formData.name.trim() || "Google Pay Customer",
@@ -869,7 +938,7 @@ export const CheckoutModal: React.FC = () => {
                           address: paymentData?.shippingAddress?.address1 || formData.address.trim() || "Shipping Address",
                           city: paymentData?.shippingAddress?.locality || formData.city.trim() || "Tbilisi",
                           zip: paymentData?.shippingAddress?.postalCode || formData.zip.trim() || "0108",
-                          country: paymentData?.shippingAddress?.countryCode || formData.country.trim() || "GE",
+                          country: finalCountry,
                           paymentMethod: "googlepay",
                           googlePayTransactionId: orderID,
                         });
@@ -936,6 +1005,9 @@ export const CheckoutModal: React.FC = () => {
                       cardholderName={formData.name}
                       isKa={language === "ka"}
                       onSuccess={({ orderId, capture }) => {
+                        setConfirmedDeliveryRange(
+                          summarizeCartDeliveryRange(cart.map((c) => c.product), formData.country.trim())
+                        );
                         placeOrder({
                           customerName: (cardData.name || formData.name).trim(),
                           email: formData.email.trim(),
@@ -1240,7 +1312,9 @@ export const CheckoutModal: React.FC = () => {
                     {t("checkout.estimatedDelivery")}
                   </span>
                   <span className="font-semibold text-slate-800 dark:text-slate-200">
-                    {t("checkout.days")}
+                    {t("delivery.businessDaysRange", {
+                      range: `${confirmedDeliveryRange.minDays}–${confirmedDeliveryRange.maxDays}`,
+                    })}
                   </span>
                 </div>
 

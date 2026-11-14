@@ -22,6 +22,13 @@ import { PayPalV6CardFields } from './PayPalV6CardFields';
 import { startPayPalV6ApplePayCheckout, startPayPalV6GooglePayCheckout } from '../utils/paypalV6';
 import { parseImages } from '../utils/productParsing';
 import {
+  getEstimateForProduct,
+  getLocalizedCountryName,
+  getCountryFlagEmoji,
+  resolveCountryCode,
+  summarizeCartDeliveryRange,
+} from '../utils/deliveryEstimate';
+import {
   AppleLogoIcon,
   GooglePayMark,
   GooglePayVector,
@@ -76,6 +83,8 @@ export const CheckoutPage: React.FC = () => {
     addToast,
     currency,
     convertPrice,
+    visitorCountryCode,
+    visitorCountryName,
   } = useStore();
 
   const isGPayAvailable = isGooglePayAvailable();
@@ -84,6 +93,11 @@ export const CheckoutPage: React.FC = () => {
   const [activePaymentMethod, setActivePaymentMethod] = useState<
     "paypal" | "applepay" | "googlepay" | "card"
   >("paypal");
+  const [confirmedDeliveryRange, setConfirmedDeliveryRange] = useState<{ minDays: number; maxDays: number }>({
+    minDays: 5,
+    maxDays: 10,
+  });
+  const hasUserEditedCountryRef = React.useRef(false);
 
   const [cardData, setCardData] = useState({
     number: "",
@@ -99,8 +113,18 @@ export const CheckoutPage: React.FC = () => {
     address: "",
     city: "",
     zip: "",
-    country: "United States",
+    country: (user.isLoggedIn && user.country) ? user.country : (visitorCountryName || "United States"),
   });
+
+  useEffect(() => {
+    if (!hasUserEditedCountryRef.current && !(user.isLoggedIn && user.country) && visitorCountryName) {
+      setFormData((prev) => ({ ...prev, country: visitorCountryName }));
+    }
+  }, [visitorCountryName, user.isLoggedIn, user.country]);
+
+  const activeCountryCode = resolveCountryCode(formData.country || visitorCountryCode);
+  const activeCountryFlag = getCountryFlagEmoji(activeCountryCode);
+  const localizedActiveCountry = getLocalizedCountryName(activeCountryCode, language);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -204,13 +228,18 @@ export const CheckoutPage: React.FC = () => {
         : formData.name;
       const payerEmail = details?.payer?.email_address || formData.email;
 
+      const shippingTargetCountry = (formData.country || visitorCountryName || "United States").trim();
+      setConfirmedDeliveryRange(
+        summarizeCartDeliveryRange(cart.map((c) => c.product), shippingTargetCountry)
+      );
+
       placeOrder({
         customerName: (payerName || formData.name).trim() || "PayPal Customer",
         email: (payerEmail || formData.email).trim() || "customer@dbuystore.com",
         address: formData.address.trim() || "Global Shipping Address",
         city: formData.city.trim() || "Tbilisi",
         zip: formData.zip.trim() || "0100",
-        country: formData.country.trim() || "United States",
+        country: shippingTargetCountry,
         paymentMethod: "paypal",
         paypalTransactionId: txnId,
       });
@@ -233,13 +262,17 @@ export const CheckoutPage: React.FC = () => {
         label: "DBUY Store Checkout",
         customerInfo: formData,
         onSuccess: (details) => {
+          const finalCountry = (details.payer?.country || formData.country).trim();
+          setConfirmedDeliveryRange(
+            summarizeCartDeliveryRange(cart.map((c) => c.product), finalCountry)
+          );
           placeOrder({
             customerName: (details.payer?.name || formData.name).trim(),
             email: (details.payer?.email || formData.email).trim(),
             address: (details.payer?.address || formData.address).trim(),
             city: (details.payer?.city || formData.city).trim(),
             zip: (details.payer?.zip || formData.zip).trim(),
-            country: (details.payer?.country || formData.country).trim(),
+            country: finalCountry,
             paymentMethod: "applepay",
             applePayTransactionId: details.transactionId,
             paypalTransactionId: details.orderId || details.transactionId,
@@ -270,6 +303,10 @@ export const CheckoutPage: React.FC = () => {
         customerInfo: formData,
         onSuccess: (details) => {
           const orderID = details.orderId || details.transactionId;
+          const finalCountry = (details?.payer?.country || formData.country).trim();
+          setConfirmedDeliveryRange(
+            summarizeCartDeliveryRange(cart.map((c) => c.product), finalCountry)
+          );
           setIsProcessingPayment(false);
           placeOrder({
             customerName: (details?.payer?.name || formData.name).trim(),
@@ -277,7 +314,7 @@ export const CheckoutPage: React.FC = () => {
             address: (details?.payer?.address || formData.address).trim(),
             city: (details?.payer?.city || formData.city).trim(),
             zip: (details?.payer?.zip || formData.zip).trim(),
-            country: (details?.payer?.country || formData.country).trim(),
+            country: finalCountry,
             paymentMethod: "googlepay",
             googlePayTransactionId: orderID,
             paypalTransactionId: orderID,
@@ -316,6 +353,9 @@ export const CheckoutPage: React.FC = () => {
     setIsProcessingPayment(true);
     try {
       const orderID = `CARD-TXN-${Date.now()}`;
+      setConfirmedDeliveryRange(
+        summarizeCartDeliveryRange(cart.map((c) => c.product), formData.country.trim())
+      );
       placeOrder({
         customerName: (cardData.name || formData.name).trim(),
         email: formData.email.trim(),
@@ -435,7 +475,7 @@ export const CheckoutPage: React.FC = () => {
                   </h3>
                   <div className="flex items-center space-x-1 text-xs text-blue-600 dark:text-blue-400 font-semibold">
                     <Globe className="w-3.5 h-3.5" />
-                    <span>Global Shipping Active</span>
+                    <span>{t("delivery.worldwideShipping")}</span>
                   </div>
                 </div>
 
@@ -514,7 +554,10 @@ export const CheckoutPage: React.FC = () => {
                     </label>
                     <select
                       value={formData.country}
-                      onChange={(e) => setFormData({ ...formData, country: e.target.value })}
+                      onChange={(e) => {
+                        hasUserEditedCountryRef.current = true;
+                        setFormData({ ...formData, country: e.target.value });
+                      }}
                       className="w-full px-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 focus:outline-hidden cursor-pointer"
                     >
                       {ALL_COUNTRIES.map((c) => (
@@ -569,24 +612,36 @@ export const CheckoutPage: React.FC = () => {
 
                 {/* Cart Items List */}
                 <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
-                  {cart.map((item, idx) => (
-                    <div key={idx} className="flex items-center space-x-3 text-xs">
-                      <img
-                        src={item.product.image || parseImages(item.product.images)[0] || ''}
-                        alt={item.product.title}
-                        className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-700"
-                      />
-                      <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-slate-900 dark:text-white truncate">
-                          {item.product.title}
-                        </h4>
-                        <p className="text-slate-500">Qty: {item.quantity}</p>
+                  {cart.map((item, idx) => {
+                    const itemEst = getEstimateForProduct(item.product, activeCountryCode);
+                    return (
+                      <div key={idx} className="flex items-center space-x-3 text-xs">
+                        <img
+                          src={item.product.image || parseImages(item.product.images)[0] || ''}
+                          alt={item.product.title}
+                          className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
+                        />
+                        <div className="flex-1 min-w-0">
+                          <h4 className="font-semibold text-slate-900 dark:text-white truncate">
+                            {item.product.title}
+                          </h4>
+                          <p className="text-slate-500">{t("orders.qty")}: {item.quantity}</p>
+                          <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1 mt-0.5 truncate">
+                            <Truck className="w-3 h-3 shrink-0" />
+                            <span className="truncate">
+                              {t("delivery.estimatedToCountry", {
+                                country: `${activeCountryFlag} ${localizedActiveCountry}`,
+                                range: itemEst.rangeLabel,
+                              })}
+                            </span>
+                          </p>
+                        </div>
+                        <span className="font-bold text-slate-900 dark:text-white shrink-0">
+                          {formatPrice(item.product.price * item.quantity)}
+                        </span>
                       </div>
-                      <span className="font-bold text-slate-900 dark:text-white">
-                        {formatPrice(item.product.price * item.quantity)}
-                      </span>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
 
                 {/* Totals Breakdown */}
@@ -695,8 +750,12 @@ export const CheckoutPage: React.FC = () => {
                 )}
 
                 <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
-                  <span className="text-slate-500 dark:text-slate-400">Estimated Delivery:</span>
-                  <span className="font-semibold text-slate-800 dark:text-slate-200">3-5 Business Days</span>
+                  <span className="text-slate-500 dark:text-slate-400">{t("checkout.estimatedDelivery")}</span>
+                  <span className="font-semibold text-slate-800 dark:text-slate-200">
+                    {t("delivery.businessDaysRange", {
+                      range: `${confirmedDeliveryRange.minDays}–${confirmedDeliveryRange.maxDays}`,
+                    })}
+                  </span>
                 </div>
 
                 <div className="flex justify-between items-center border-b border-slate-200 dark:border-slate-700 pb-2">
