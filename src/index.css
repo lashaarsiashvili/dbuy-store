@@ -922,10 +922,17 @@ apple-pay-button {
   }
 
   .product-card-price-row {
-    margin-bottom: 6px !important;
+    margin-bottom: 2px !important;
     display: flex !important;
-    align-items: baseline !important;
-    justify-content: space-between !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+    gap: 8px !important;
+    white-space: nowrap !important;
+  }
+
+  .product-card-delivery-row {
+    margin-top: 2px !important;
+    margin-bottom: 6px !important;
   }
 
   .product-card-price {

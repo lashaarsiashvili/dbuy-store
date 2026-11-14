@@ -14,7 +14,7 @@ import {
   X,
 } from 'lucide-react';
 
-type FeaturedTab = 'featured' | 'bestsellers' | 'new' | 'top-rated';
+type FeaturedTab = 'new' | 'featured' | 'bestsellers' | 'top-rated';
 
 export const ProductGrid: React.FC = () => {
   const {
@@ -32,7 +32,7 @@ export const ProductGrid: React.FC = () => {
     setActiveHomepageCategory,
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<FeaturedTab>('featured');
+  const [activeTab, setActiveTab] = useState<FeaturedTab>('new');
 
   // Collect IDs of products marked as featured/pinned by the admin in Homepage Manager
   const adminFeaturedProductIds = useMemo(() => {
@@ -132,6 +132,14 @@ export const ProductGrid: React.FC = () => {
     return hasDiscount || isFeatured;
   };
 
+  // Helper: Extract numeric timestamp embedded in product ID (e.g. prod-1789155706235-...)
+  const getIdTimestamp = (product: Product): number => {
+    const idTimestampMatch = String(product.id).match(/(\d{10,13})/);
+    if (!idTimestampMatch) return 0;
+    const num = Number(idTimestampMatch[1]);
+    return idTimestampMatch[1].length === 10 ? num * 1000 : num;
+  };
+
   // Helper: Parse creation timestamp for New Arrivals sorting
   const getCreatedTimestamp = (product: Product): number => {
     const dateRaw = product.createdAt || product.created_at || product.publishedAt;
@@ -141,8 +149,7 @@ export const ProductGrid: React.FC = () => {
         return parsed;
       }
     }
-    const idTimestampMatch = String(product.id).match(/(\d{10,13})/);
-    return idTimestampMatch ? Number(idTimestampMatch[1]) : 0;
+    return getIdTimestamp(product);
   };
 
   // Dynamically resolve, filter, and sort products based on the active tab and category
@@ -270,9 +277,13 @@ export const ProductGrid: React.FC = () => {
       }
 
       case 'new': {
-        return [...baseList].sort(
-          (a, b) => getCreatedTimestamp(b) - getCreatedTimestamp(a)
-        );
+        return [...baseList].sort((a, b) => {
+          const timeDiff = getCreatedTimestamp(b) - getCreatedTimestamp(a);
+          if (timeDiff !== 0) {
+            return timeDiff;
+          }
+          return getIdTimestamp(b) - getIdTimestamp(a);
+        });
       }
 
       case 'top-rated': {
@@ -375,9 +386,9 @@ export const ProductGrid: React.FC = () => {
               <div className="inline-flex items-center p-1 rounded-full bg-[#EBEFF5] dark:bg-slate-800/90 border border-slate-200/60 dark:border-slate-700">
                 {(
                   [
+                    { id: 'new', label: 'New Arrivals' },
                     { id: 'featured', label: 'Featured' },
                     { id: 'bestsellers', label: 'Bestsellers' },
-                    { id: 'new', label: 'New Arrivals' },
                     { id: 'top-rated', label: 'Top Rated' },
                   ] as { id: FeaturedTab; label: string }[]
                 ).map((tab) => {

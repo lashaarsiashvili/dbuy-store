@@ -188,28 +188,30 @@ export const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
             </span>
           </div>
 
-          {/* Price & Compact Geo Delivery Badge Row */}
-          <div className="product-card-price-row flex items-center justify-between gap-1.5 mt-1.5 mb-2">
-            <div className="flex items-baseline gap-1.5 min-w-0">
-              <span className="product-card-price text-[17px] sm:text-[18px] font-extrabold text-[#0F172A] dark:text-white tracking-tight tabular-nums">
-                {formatPrice(product.price)}
+          {/* Price Row */}
+          <div className="product-card-price-row flex items-center gap-2 whitespace-nowrap mt-1.5">
+            <span className="product-card-price text-[17px] sm:text-[18px] font-extrabold text-[#0F172A] dark:text-white tracking-tight tabular-nums">
+              {formatPrice(product.price)}
+            </span>
+            {product.origPrice && product.origPrice > product.price && (
+              <span className="product-card-orig-price text-[12px] font-medium text-[#94A3B8] line-through tabular-nums">
+                {formatPrice(product.origPrice)}
               </span>
-              {product.origPrice && product.origPrice > product.price && (
-                <span className="product-card-orig-price text-[12px] font-medium text-[#94A3B8] line-through tabular-nums">
-                  {formatPrice(product.origPrice)}
-                </span>
-              )}
-            </div>
+            )}
+          </div>
+
+          {/* Delivery Estimate Badge Row */}
+          <div className="product-card-delivery-row flex items-center mt-1 mb-2.5">
             <span
               title={t('delivery.estimatedToCountry', {
                 country: deliveryEstimate.visitorCountryName,
                 range: deliveryEstimate.rangeLabel,
               })}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 shrink-0 whitespace-nowrap"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10.5px] font-bold bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200/80 dark:border-emerald-800/70 max-w-full whitespace-nowrap"
             >
               <Truck className="w-3 h-3 shrink-0" />
               <span>{t('delivery.compactDays', { range: deliveryEstimate.rangeLabel })}</span>
-              <span className="text-[10px] leading-none">{visitorCountryFlag}</span>
+              <span className="text-[10px] leading-none shrink-0">{visitorCountryFlag}</span>
             </span>
           </div>
         </div>
