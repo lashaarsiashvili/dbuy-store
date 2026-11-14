@@ -731,12 +731,443 @@ function buildCompactContext(
   if (rawDesc) parts.push(`Raw Description:\n${rawDesc.slice(0, 2500)}`);
 
   // If sparse, extract compact visible text excerpt from sanitized HTML (never exceeding 6000 chars total)
-  if (parts.join('\n').length < 600 && sanitizedHtml) {
+  // For eBay, skip raw full-page dump to avoid leaking checkout/shipping/pricing UI fragments into features.
+  if (platform !== 'ebay' && parts.join('\n').length < 600 && sanitizedHtml) {
     const textOnly = cleanHtmlText(sanitizedHtml).slice(0, 3500);
     if (textOnly) parts.push(`Page Text Excerpt:\n${textOnly}`);
   }
 
   return parts.join('\n\n').slice(0, 8000);
+}
+
+/**
+ * ============================================================================
+ * EBAY NOISE FILTERING & PERSUASIVE FEATURE POLISHING HELPERS (eBay Only)
+ * ============================================================================
+ */
+const EBAY_NOISE_LABEL_EXACT = new Set([
+  'was',
+  'item price',
+  'price',
+  'list price',
+  'original price',
+  'retail price',
+  'unit price',
+  'estimated total',
+  'subtotal',
+  'total',
+  'discount',
+  'savings',
+  'you save',
+  'best offer',
+  'starting bid',
+  'current bid',
+  'winning bid',
+  'bid',
+  'bids',
+  'payment',
+  'payments',
+  'financing',
+  'credit',
+  'installment',
+  'installments',
+  'tax',
+  'taxes',
+  'vat',
+  'gst',
+  'import charges',
+  'customs',
+  'duties',
+  'shipping',
+  'shipping and handling',
+  'postage',
+  'freight',
+  'delivery',
+  'est. delivery',
+  'estimated delivery',
+  'dispatch',
+  'handling time',
+  'returns',
+  'return',
+  'return policy',
+  'refund',
+  'money back',
+  'condition',
+  'item condition',
+  'condition description',
+  'item number',
+  'ebay item number',
+  'listing id',
+  'seller',
+  'seller notes',
+  'seller information',
+  'feedback',
+  'quantity',
+  'available',
+  'sold',
+  'watchers',
+  'location',
+  'item location',
+  'located in',
+  'ships from',
+  'ships to',
+  'international shipping',
+  'pickup',
+  'local pickup',
+  'time left',
+  'ended',
+  'ebay money back guarantee',
+  'authenticity guarantee',
+  'upc',
+  'ean',
+  'isbn',
+  'gtin',
+  'mpn',
+  'sku',
+  'part number',
+  'manufacturer part number',
+  'custom bundle',
+  'modified item',
+  'non-domestic product',
+  'california prop 65',
+  'california prop 65 warning',
+  'restocking fee',
+]);
+
+const EBAY_NOISE_LABEL_RE =
+  /\b(?:was|item\s*price|estimated\s*total|subtotal|list\s*price|you\s*save|shipping|postage|delivery|returns?|refund|item\s*number|seller|condition|quantity|payments?|checkout|import\s*charges|customs|duties|watchers|located\s*in|ships\s*from|ships\s*to|pickup|handling\s*time|money\s*back|authenticity\s*guarantee|prop\s*65|feedback|bids?|time\s*left)\b/i;
+
+const EBAY_NOISE_TEXT_RE =
+  /(?:^|\b)(?:was\s*:|item\s*price\b|estimated\s*total\b|subtotal\b|you\s*save\b|list\s*price\b|buy\s*it\s*now\b|add\s*to\s*cart\b|place\s*bid\b|or\s*best\s*offer\b|shipping\s*:|free\s*shipping\b|free\s*delivery\b|shipping\s*(?:&|and)\s*handling\b|est\.?\s*delivery\b|estimated\s*delivery\b|ships\s*from\b|located\s*in\b|returns?\s*:|free\s*\d+\s*day\s*returns\b|does\s*not\s*accept\s*returns\b|delivery\s*:|condition\s*:|item\s*number\b|quantity\s*:|seller\s*:|payments?\s*:|import\s*charges\b|ebay\s*money\s*back|see\s*seller'?s\s*listing|opens\s*in\s*a\s*new\s*window|all\s*condition\s*definitions|read\s*more\s*about\s*the\s*condition|learn\s*more\s*about|per\s*month\b|interest[- ]free\b)/i;
+
+const EBAY_CURRENCY_AMOUNT_RE =
+  /(?:(?:US|CA|AU|HK|NZ|SG)\s*\$\s*\d|\$\s*\d+(?:[.,]\d+)?\s*\*?|\b(?:USD|EUR|GBP|CAD|AUD|GEL|RMB|CNY)\s*\d|\d+(?:[.,]\d{2})?\s*(?:USD|EUR|GBP|CAD|AUD)\b|[€£¥₾]\s*\d)/i;
+
+const EBAY_GENERIC_VALUE_RE =
+  /^(?:does\s*not\s*apply|n\/?a|not\s*applicable|unknown|none|unbranded|generic|see\s*(?:description|details|listing|photos)|varies|free|yes|no|check\s*description)$/i;
+
+export function isEbayNoiseText(text: string): boolean {
+  if (!text || typeof text !== 'string') return true;
+  const trimmed = text.replace(/\s+/g, ' ').trim();
+  if (trimmed.length < 3) return true;
+  if (/^https?:\/\//i.test(trimmed)) return true;
+  if (EBAY_NOISE_TEXT_RE.test(trimmed)) return true;
+  if (EBAY_CURRENCY_AMOUNT_RE.test(trimmed)) return true;
+  return false;
+}
+
+export function isEbayNoiseSpec(label: string, value: string): boolean {
+  const lbl = (label || '').replace(/[:\s]+$/g, '').trim();
+  const val = (value || '').trim();
+  if (!lbl || !val) return true;
+  if (lbl.length > 45 || val.length > 140) return true;
+
+  const lowerLbl = lbl.toLowerCase();
+  if (EBAY_NOISE_LABEL_EXACT.has(lowerLbl)) return true;
+  if (EBAY_NOISE_LABEL_RE.test(lowerLbl)) return true;
+  if (EBAY_GENERIC_VALUE_RE.test(val)) return true;
+  if (isEbayNoiseText(`${lbl}: ${val}`) || isEbayNoiseText(val)) return true;
+
+  return false;
+}
+
+function extractBalancedTagBlocks(html: string, openTagPattern: RegExp): string[] {
+  const blocks: string[] = [];
+  const flags = openTagPattern.flags.includes('g') ? openTagPattern.flags : openTagPattern.flags + 'g';
+  const re = new RegExp(openTagPattern.source, flags);
+  let m: RegExpExecArray | null;
+  let guard = 0;
+
+  while ((m = re.exec(html)) !== null && guard < 20) {
+    guard++;
+    const tagMatch = m[0].match(/^<([a-z0-9]+)/i);
+    const tagName = (tagMatch?.[1] || 'div').toLowerCase();
+    const contentStart = m.index + m[0].length;
+    const tagScanRe = new RegExp(`<(\\/)?${tagName}\\b[^>]*>`, 'gi');
+    tagScanRe.lastIndex = contentStart;
+
+    let depth = 1;
+    let tm: RegExpExecArray | null;
+    let endIdx = -1;
+
+    while ((tm = tagScanRe.exec(html)) !== null) {
+      if (tm[1]) {
+        depth--;
+        if (depth === 0) {
+          endIdx = tm.index;
+          break;
+        }
+      } else if (!tm[0].endsWith('/>')) {
+        depth++;
+      }
+      if (tm.index - contentStart > 450_000) break;
+    }
+
+    if (endIdx > contentStart) {
+      blocks.push(html.slice(contentStart, endIdx));
+    }
+  }
+
+  return blocks;
+}
+
+function decodeHtmlEntitiesOnce(str: string): string {
+  return str
+    .replace(/&lt;/gi, '<')
+    .replace(/&gt;/gi, '>')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;|&apos;/gi, "'")
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/&amp;/gi, '&');
+}
+
+function cleanEbayDescriptionText(raw: string): string {
+  if (!raw) return '';
+  let text = cleanHtmlText(raw);
+  // Strip common eBay SEO / seller policy boilerplate
+  text = text
+    .replace(/Find many great new & used options and get the best deals for [^.]*\.\s*/gi, '')
+    .replace(/Shop eBay for great deals on [^.]*\.\s*/gi, '')
+    .replace(/Free shipping for many products!?\s*/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (
+    /^(?:find many great|shop ebay|condition is|shipped with usps|see the seller'?s listing)/i.test(text) &&
+    text.length < 180
+  ) {
+    return '';
+  }
+  return text;
+}
+
+function formatAttributeAsSellingPoint(label: string, value: string): string {
+  const lbl = label.trim();
+  const val = value.replace(/\s+/g, ' ').trim();
+  const lower = lbl.toLowerCase();
+
+  if (lower === 'brand' || lower === 'manufacturer') {
+    return `Authentic ${val} craftsmanship engineered for dependable everyday performance`;
+  }
+  if (lower === 'model' || lower === 'series' || lower === 'product line') {
+    return `Precision-built ${val} design delivering consistent, reliable results`;
+  }
+  if (lower === 'features' || lower === 'special features' || lower === 'special feature') {
+    const cleanVal = val.replace(/;\s*/g, ', ');
+    return `Equipped with ${cleanVal} for versatile functionality and convenience`;
+  }
+  if (lower === 'material' || lower === 'shell material' || lower === 'frame material' || lower === 'case material') {
+    return `Constructed from durable ${val} for long-lasting strength and a refined feel`;
+  }
+  if (lower === 'connectivity' || lower === 'interface' || lower === 'wireless technology' || lower === 'connector type') {
+    return `Seamless ${val} connectivity for effortless setup and stable performance`;
+  }
+  if (lower.includes('compatib')) {
+    return `Designed for broad compatibility with ${val} for a precise, hassle-free fit`;
+  }
+  if (lower === 'color' || lower === 'colour' || lower === 'finish') {
+    return `Sleek ${val} finish that pairs modern aesthetics with practical daily utility`;
+  }
+  if (lower === 'type' || lower === 'form factor' || lower === 'style' || lower === 'mount type' || lower === 'mounting type') {
+    return `Purpose-built ${val} design tailored for ergonomic comfort and ease of use`;
+  }
+  if (lower.includes('power') || lower.includes('battery') || lower.includes('watt') || lower.includes('voltage')) {
+    return `Reliable ${val} power architecture built for steady, energy-efficient operation`;
+  }
+  if (lower.includes('capacity') || lower.includes('volume') || lower.includes('storage') || lower.includes('memory')) {
+    return `Generous ${val} capacity engineered to support demanding daily tasks`;
+  }
+  if (lower.includes('size') || lower.includes('dimension') || lower.includes('weight')) {
+    return `Thoughtfully proportioned ${val} build for comfortable handling and portability`;
+  }
+  if (lower.includes('water') || lower.includes('ip rating') || lower.includes('protection')) {
+    return `Enhanced ${val} protection built to withstand everyday wear and environments`;
+  }
+  return `Optimized ${val} ${lbl.toLowerCase()} engineered for reliable real-world performance`;
+}
+
+export function polishEbayFeatures(params: {
+  title: string;
+  rawAttributes: Record<string, string>;
+  itemSpecifics: string[];
+  description: string;
+  category: string;
+}): string[] {
+  const { title, rawAttributes, itemSpecifics, description, category } = params;
+  const bullets: string[] = [];
+  const usedLower = new Set<string>();
+
+  const pushBullet = (candidate: string) => {
+    const clean = (candidate || '')
+      .replace(/^[\s*•\-–—►✔✓⭐🚀🛡️✨💎⚡\d.)]+/, '')
+      .replace(/\.+$/, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!clean || clean.length < 10 || clean.length > 140) return;
+    if (isEbayNoiseText(clean)) return;
+    const key = clean.toLowerCase();
+    if (usedLower.has(key)) return;
+    usedLower.add(key);
+    bullets.push(clean.charAt(0).toUpperCase() + clean.slice(1));
+  };
+
+  // Combine Brand + Model if both exist so we produce one strong opener instead of two dry tags
+  const brandKey = Object.keys(rawAttributes).find((k) => k.toLowerCase() === 'brand');
+  const modelKey = Object.keys(rawAttributes).find((k) => k.toLowerCase() === 'model');
+  const brandVal = brandKey ? rawAttributes[brandKey] : '';
+  const modelVal = modelKey ? rawAttributes[modelKey] : '';
+
+  if (brandVal && modelVal && !isEbayNoiseSpec('Brand', brandVal) && !isEbayNoiseSpec('Model', modelVal)) {
+    const combinedName = modelVal.toLowerCase().includes(brandVal.toLowerCase())
+      ? modelVal
+      : `${brandVal} ${modelVal}`;
+    pushBullet(`Authentic ${combinedName} built with quality craftsmanship for dependable daily performance`);
+  }
+
+  // Prioritize high-value technical & benefit attributes first
+  const priorityOrder = [
+    'features',
+    'special features',
+    'connectivity',
+    'wireless technology',
+    'material',
+    'compatibility',
+    'compatible brand',
+    'compatible model',
+    'capacity',
+    'battery',
+    'power source',
+    'type',
+    'form factor',
+    'style',
+    'color',
+    'finish',
+    'size',
+  ];
+
+  const entries = Object.entries(rawAttributes).filter(([lbl, val]) => !isEbayNoiseSpec(lbl, val));
+  entries.sort(([a], [b]) => {
+    const ia = priorityOrder.findIndex((p) => a.toLowerCase().includes(p));
+    const ib = priorityOrder.findIndex((p) => b.toLowerCase().includes(p));
+    const ra = ia === -1 ? 999 : ia;
+    const rb = ib === -1 ? 999 : ib;
+    return ra - rb;
+  });
+
+  for (const [lbl, val] of entries) {
+    if (bullets.length >= 4) break;
+    const lower = lbl.toLowerCase();
+    if (brandVal && modelVal && (lower === 'brand' || lower === 'model')) continue;
+    pushBullet(formatAttributeAsSellingPoint(lbl, val));
+  }
+
+  // Fallback to clean itemSpecifics list if rawAttributes was empty
+  if (bullets.length < 4 && itemSpecifics.length > 0) {
+    for (const spec of itemSpecifics) {
+      if (bullets.length >= 4) break;
+      const idx = spec.indexOf(':');
+      if (idx > 0) {
+        const lbl = spec.slice(0, idx).trim();
+        const val = spec.slice(idx + 1).trim();
+        if (!isEbayNoiseSpec(lbl, val)) {
+          pushBullet(formatAttributeAsSellingPoint(lbl, val));
+        }
+      }
+    }
+  }
+
+  // Extract persuasive non-noise product benefit sentences from the actual description
+  if (bullets.length < 4 && description) {
+    const cleanDescBody = description.split(/Item Specifics & Details:/i)[0] || description;
+    const sentences = cleanDescBody
+      .split(/(?<=[.!?])\s+|\s*[•\n]\s*/)
+      .map((s) => s.trim())
+      .filter((s) => s.length >= 18 && s.length <= 125 && !isEbayNoiseText(s));
+    for (const sentence of sentences) {
+      if (bullets.length >= 4) break;
+      pushBullet(sentence);
+    }
+  }
+
+  // Final deterministic fill strictly from title, brand, category, and description
+  // (never inventing unverified technical numbers and never falling back to price/shipping)
+  if (bullets.length < 4) {
+    const cleanTitle = title
+      .replace(/\s*\|\s*eBay$/i, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    const subject =
+      cleanTitle && cleanTitle !== 'Imported Product'
+        ? cleanTitle.split(/[-|,]/)[0].trim().slice(0, 65)
+        : 'this product';
+    const brandLabel = brandVal && !isEbayNoiseSpec('Brand', brandVal) ? brandVal : '';
+
+    const categoryHighlights: Record<string, string[]> = {
+      audio: [
+        `Engineered for clear, balanced acoustic performance across music, calls, and media`,
+        `Ergonomic comfort-focused build suited for extended daily listening sessions`,
+        `Durable everyday construction designed for reliable portable use`,
+      ],
+      gaming: [
+        `Responsive, precision-oriented design built to elevate everyday gaming sessions`,
+        `Comfortable ergonomic form factor crafted for long hours of play`,
+        `Durable, reliable build engineered for consistent competitive performance`,
+      ],
+      drinkware: [
+        `Thoughtfully crafted for convenient daily hydration at home, work, or on the go`,
+        `Durable, easy-to-clean construction designed for dependable everyday use`,
+        `Practical spill-conscious design tailored for active modern lifestyles`,
+      ],
+      wearables: [
+        `Lightweight, comfortable design tailored for all-day everyday wear`,
+        `Built for reliable daily activity convenience and effortless usability`,
+        `Durable modern construction suited for workouts and daily routines`,
+      ],
+      fitness: [
+        `Designed to support active training routines with dependable durability`,
+        `Practical, ergonomic construction built for consistent everyday workouts`,
+        `Reliable performance-focused design suitable for home or gym use`,
+      ],
+      security: [
+        `Dependable monitoring-oriented design built for everyday peace of mind`,
+        `Practical, durable construction engineered for consistent daily operation`,
+        `Streamlined setup and user-friendly operation for home or office spaces`,
+      ],
+      everyday: [
+        `Versatile, practical design crafted for effortless everyday convenience`,
+        `Durable construction built to stand up to regular daily handling`,
+        `Clean, functional styling suited for home, travel, or daily carry`,
+      ],
+      accessories: [
+        `Precision-minded design tailored for reliable everyday device convenience`,
+        `Protective, durable build crafted to handle regular daily wear`,
+        `Compact, practical form factor for effortless travel and desk organization`,
+      ],
+      tech: [
+        `Engineered with dependable components for smooth everyday performance`,
+        `User-friendly, practical design built for seamless daily integration`,
+        `Durable modern construction crafted for long-lasting reliability`,
+      ],
+    };
+
+    const hasBrandBullet = bullets.some((b) =>
+      brandLabel ? b.toLowerCase().includes(brandLabel.toLowerCase()) : false
+    );
+
+    const safePool: string[] = [
+      brandLabel && !hasBrandBullet
+        ? `Authentic ${brandLabel} product crafted for reliable everyday quality and performance`
+        : `Thoughtfully crafted ${subject} designed for dependable everyday performance`,
+      ...(categoryHighlights[category] || categoryHighlights.tech),
+    ];
+
+    for (const item of safePool) {
+      if (bullets.length >= 4) break;
+      pushBullet(item);
+    }
+  }
+
+  return bullets.slice(0, 4);
 }
 
 /**
@@ -929,31 +1360,53 @@ export function parseEbayProductHtml(rawHtml: string, sourceUrl: string = ''): S
     if (parsedOrig.price > price) origPrice = parsedOrig.price;
   }
 
-  // Item specifics (.ux-labels-values both div and dt/dd variants + .itemAttr fallback)
+  // Item specifics: prioritize eBay Item Specifics containers
+  // (div[data-testid="ux-layout-section-evo__item--table-view"], .ux-labels-values-with-hints)
+  // while strictly excluding all pricing, shipping, checkout, and seller/UI metadata.
   const itemSpecifics: string[] = [];
   const rawAttributes: Record<string, string> = {};
   const addSpec = (lblRaw: string, valRaw: string) => {
-    const lbl = cleanHtmlText(lblRaw).replace(/:$/, '');
-    const val = cleanHtmlText(valRaw);
-    if (lbl && val && lbl.length < 40 && val.length < 120 && !rawAttributes[lbl]) {
+    const lbl = cleanHtmlText(lblRaw).replace(/:$/, '').trim();
+    const val = cleanHtmlText(valRaw).trim();
+    if (!lbl || !val) return;
+    if (isEbayNoiseSpec(lbl, val)) return;
+    if (!rawAttributes[lbl]) {
       rawAttributes[lbl] = val;
       itemSpecifics.push(`${lbl}: ${val}`);
-      if (
-        ['Brand', 'Model', 'Features', 'Condition', 'Connectivity', 'Color', 'Material', 'Type'].some((k) =>
-          lbl.toLowerCase().includes(k.toLowerCase())
-        ) &&
-        features.length < 4
-      ) {
-        features.push(`${lbl}: ${val}`);
-      }
     }
   };
 
-  for (const lm of html.matchAll(/<div class=["'][^"']*ux-labels-values__labels[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<div class=["'][^"']*ux-labels-values__values[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)) {
-    addSpec(lm[1], lm[2]);
+  const extractSpecsFromSection = (sectionHtml: string) => {
+    for (const lm of sectionHtml.matchAll(/<dt\b[^>]*>([\s\S]*?)<\/dt>\s*<dd\b[^>]*>([\s\S]*?)<\/dd>/gi)) {
+      addSpec(lm[1], lm[2]);
+    }
+    for (const lm of sectionHtml.matchAll(/<div class=["'][^"']*ux-labels-values__labels[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<div class=["'][^"']*ux-labels-values__values[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)) {
+      addSpec(lm[1], lm[2]);
+    }
+    for (const lm of sectionHtml.matchAll(/<th\b[^>]*>([\s\S]*?)<\/th>\s*<td\b[^>]*>([\s\S]*?)<\/td>/gi)) {
+      addSpec(lm[1], lm[2]);
+    }
+  };
+
+  // 1) Primary eBay Item Specifics containers
+  const itemSpecBlocks = [
+    ...extractBalancedTagBlocks(html, /<div[^>]*data-testid=["']ux-layout-section-evo__item--table-view["'][^>]*>/gi),
+    ...extractBalancedTagBlocks(html, /<(?:div|dl|section)[^>]*class=["'][^"']*ux-labels-values-with-hints[^"']*["'][^>]*>/gi),
+    ...extractBalancedTagBlocks(html, /<(?:div|section)[^>]*class=["'][^"']*(?:ux-layout-section--item-specifics|x-about-this-item)[^"']*["'][^>]*>/gi),
+  ];
+
+  for (const block of itemSpecBlocks) {
+    extractSpecsFromSection(block);
   }
-  for (const lm of html.matchAll(/<dt class=["'][^"']*ux-labels-values__labels[^"']*["'][^>]*>([\s\S]*?)<\/dt>\s*<dd class=["'][^"']*ux-labels-values__values[^"']*["'][^>]*>([\s\S]*?)<\/dd>/gi)) {
-    addSpec(lm[1], lm[2]);
+
+  // 2) Fallback for older eBay layouts or ungrouped .ux-labels-values blocks (still noise-filtered)
+  if (itemSpecifics.length === 0) {
+    for (const lm of html.matchAll(/<dt class=["'][^"']*ux-labels-values__labels[^"']*["'][^>]*>([\s\S]*?)<\/dt>\s*<dd class=["'][^"']*ux-labels-values__values[^"']*["'][^>]*>([\s\S]*?)<\/dd>/gi)) {
+      addSpec(lm[1], lm[2]);
+    }
+    for (const lm of html.matchAll(/<div class=["'][^"']*ux-labels-values__labels[^"']*["'][^>]*>([\s\S]*?)<\/div>\s*<div class=["'][^"']*ux-labels-values__values[^"']*["'][^>]*>([\s\S]*?)<\/div>/gi)) {
+      addSpec(lm[1], lm[2]);
+    }
   }
   if (itemSpecifics.length === 0) {
     for (const lm of html.matchAll(/<td class=["']attrLabels["'][^>]*>([\s\S]*?)<\/td>\s*<td[^>]*>([\s\S]*?)<\/td>/gi)) {
@@ -961,9 +1414,42 @@ export function parseEbayProductHtml(rawHtml: string, sourceUrl: string = ''): S
     }
   }
 
+  // Description extraction: #ds_div, description iframe srcdoc, x-item-description, JSON-LD, meta fallback
+  const descCandidates: string[] = [];
+  if (rawDesc) {
+    const cleanedJsonLdDesc = cleanEbayDescriptionText(rawDesc);
+    if (cleanedJsonLdDesc) descCandidates.push(cleanedJsonLdDesc);
+  }
+
+  for (const dsBlock of extractBalancedTagBlocks(html, /<div[^>]*id=["']ds_div["'][^>]*>/gi)) {
+    const cleaned = cleanEbayDescriptionText(dsBlock);
+    if (cleaned) descCandidates.push(cleaned);
+  }
+
+  const iframeSrcdocMatches = html.matchAll(
+    /<iframe[^>]*(?:id=["']desc_ifr["']|title=["'][^"']*description[^"']*["'])[^>]*srcdoc=["']([^"']+)["'][^>]*>/gi
+  );
+  for (const im of iframeSrcdocMatches) {
+    const decoded = decodeHtmlEntitiesOnce(im[1]);
+    const dsInFrame = extractBalancedTagBlocks(decoded, /<div[^>]*id=["']ds_div["'][^>]*>/gi);
+    const cleaned = cleanEbayDescriptionText(dsInFrame[0] || decoded);
+    if (cleaned) descCandidates.push(cleaned);
+  }
+
+  for (const descDiv of extractBalancedTagBlocks(
+    html,
+    /<div[^>]*(?:data-testid=["']x-item-description["']|class=["'][^"']*(?:d-item-description|x-item-description)[^"']*["'])[^>]*>/gi
+  )) {
+    const cleaned = cleanEbayDescriptionText(descDiv);
+    if (cleaned) descCandidates.push(cleaned);
+  }
+
+  // Pick the richest, clean product description
+  rawDesc = descCandidates.sort((a, b) => b.length - a.length)[0] || '';
+
   if (!rawDesc) {
     const ogDesc = html.match(/<meta\s+(?:property=["']og:description["']|name=["']description["'])\s+content=["']([^"']*)["']/i);
-    if (ogDesc?.[1]) rawDesc = cleanHtmlText(ogDesc[1]);
+    if (ogDesc?.[1]) rawDesc = cleanEbayDescriptionText(ogDesc[1]);
   }
 
   let finalDescription = rawDesc;
@@ -976,14 +1462,15 @@ export function parseEbayProductHtml(rawHtml: string, sourceUrl: string = ''): S
     finalDescription += '\n\nItem Specifics & Details:\n' + itemSpecifics.slice(0, 10).join(' • ');
   }
 
-  if (features.length < 4 && itemSpecifics.length > 0) {
-    for (const spec of itemSpecifics) {
-      if (features.length >= 4) break;
-      if (!features.includes(spec)) features.push(spec);
-    }
-  }
-
   const category = inferStoreCategory(title + ' ' + finalDescription);
+
+  const polishedFeatures = polishEbayFeatures({
+    title: title || 'Imported Product',
+    rawAttributes,
+    itemSpecifics,
+    description: rawDesc || finalDescription,
+    category,
+  });
 
   return {
     title: title || 'Imported Product',
@@ -992,7 +1479,7 @@ export function parseEbayProductHtml(rawHtml: string, sourceUrl: string = ''): S
     origPrice: origPrice && origPrice > price ? origPrice : (price > 0 ? Math.round(price * 1.25 * 100) / 100 : undefined),
     currency: 'USD',
     description: finalDescription,
-    features: features.slice(0, 4),
+    features: polishedFeatures,
     images: Array.from(imagesSet).slice(0, 12),
     specs: itemSpecifics.slice(0, 20),
     rawAttributes,

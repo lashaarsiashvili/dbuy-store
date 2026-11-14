@@ -17,6 +17,9 @@ import {
   parseProductHtml,
   parsePlatformHtml,
   convertToUsd,
+  isEbayNoiseSpec,
+  isEbayNoiseText,
+  polishEbayFeatures,
   ScrapedProductData,
   ImporterPlatform,
 } from './src/utils/productScraper';
@@ -3008,11 +3011,44 @@ app.post('/api/import-product', async (req, res) => {
         baseData.currency = 'USD';
       }
 
+      if (platform === 'ebay') {
+        const cleanAttrs: Record<string, string> = {};
+        for (const [k, v] of Object.entries(baseData.rawAttributes || {})) {
+          if (!isEbayNoiseSpec(k, String(v))) {
+            cleanAttrs[k] = String(v);
+          }
+        }
+        const cleanSpecs = (baseData.specs || []).filter((s) => {
+          const idx = s.indexOf(':');
+          if (idx > 0) {
+            return !isEbayNoiseSpec(s.slice(0, idx), s.slice(idx + 1));
+          }
+          return !isEbayNoiseText(s);
+        });
+        baseData.rawAttributes = cleanAttrs;
+        baseData.specs = cleanSpecs;
+        baseData.features = polishEbayFeatures({
+          title: baseData.title,
+          rawAttributes: cleanAttrs,
+          itemSpecifics: cleanSpecs,
+          description: baseData.description,
+          category: baseData.category,
+        });
+      }
+
       const contextText = String(compactContext || baseData.compactContext || '').slice(0, 8000);
       const ai = getGeminiClient();
 
       if (ai && (baseData.title !== 'Imported Product' || contextText.length > 40)) {
         try {
+          const ebayFeatureRules =
+            platform === 'ebay'
+              ? `\n7. EBAY FEATURE RULES (CRITICAL):
+   - NEVER include pricing, discounts, currency amounts, "Was:", "Item price:", "Estimated total:", "Shipping:", "Delivery:", "Returns:", "Condition:", "Item number", "Seller", "Quantity", or "Payments" in "features" or "description".
+   - Transform the extracted product specs and description into 4 compelling, customer-focused, benefit-driven English marketing bullet points (highlighting build quality, key functions, compatibility, materials, or performance benefits — similar to Amazon's persuasive bullet style, NOT dry "Key: Value" labels).
+   - If fewer than 4 real specs exist, generate the remaining persuasive highlights strictly from the product title, brand, category, and description without inventing unverified technical specs.`
+              : '';
+
           const prompt = `You are an e-commerce product data normalizer for DBUY Store.
 Normalize the following pre-parsed ${platform.toUpperCase()} product into clean, accurate English and USD ($).
 
@@ -3022,7 +3058,7 @@ STRICT RULES:
 3. Choose the exact best matching category from: Electronics, Gaming, Smart Home, Audio, Wearables, Smart Bottles, Office, Beauty & Health, Pets.
 4. Normalize pricing to USD ($). Extracted price is ${baseData.price} (${baseData.currency || 'USD'}). If extracted price is 0 or clearly non-USD in the raw text, compute the USD price; otherwise preserve the exact USD price.
 5. Format description cleanly in English (2-3 crisp benefit sentences followed by Key Specifications if specs exist). No Georgian text.
-6. Provide exactly 4 concise English bullet points in "features".
+6. Provide exactly 4 concise English bullet points in "features".${ebayFeatureRules}
 
 Extracted Summary:
 Title: ${baseData.title}
@@ -3073,7 +3109,28 @@ Context: ${contextText.slice(0, 4000)}`;
             baseData.description = parsedAi.description.trim();
           }
           if (Array.isArray(parsedAi.features) && parsedAi.features.length > 0) {
-            baseData.features = parsedAi.features.slice(0, 4).map((f: any) => String(f).trim()).filter(Boolean);
+            const rawAiFeatures = parsedAi.features.map((f: any) => String(f).trim()).filter(Boolean);
+            if (platform === 'ebay') {
+              const cleanAiFeatures = rawAiFeatures.filter((f: string) => !isEbayNoiseText(f));
+              if (cleanAiFeatures.length < 4) {
+                const fallbackPolished = polishEbayFeatures({
+                  title: baseData.title,
+                  rawAttributes: baseData.rawAttributes || {},
+                  itemSpecifics: baseData.specs || [],
+                  description: baseData.description,
+                  category: baseData.category,
+                });
+                for (const fb of fallbackPolished) {
+                  if (cleanAiFeatures.length >= 4) break;
+                  if (!cleanAiFeatures.some((existing: string) => existing.toLowerCase() === fb.toLowerCase())) {
+                    cleanAiFeatures.push(fb);
+                  }
+                }
+              }
+              baseData.features = cleanAiFeatures.slice(0, 4);
+            } else {
+              baseData.features = rawAiFeatures.slice(0, 4);
+            }
           }
         } catch (aiErr: any) {
           console.warn(`[IMPORT-${platform.toUpperCase()}] Gemini normalization fallback:`, aiErr?.message || aiErr);
