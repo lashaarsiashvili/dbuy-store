@@ -100,55 +100,205 @@ export function normalizeInstagramImageUrl(img: string): string {
   return resolved;
 }
 
+export const SOCIAL_SHIPPING_TRUST_LINE = '🌍 Tracked Worldwide Shipping · 100% Secure Checkout';
+
+function formatUsdAmount(value: number): string {
+  const rounded = Math.round((Number(value) || 0) * 100) / 100;
+  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
+}
+
+export function buildLuxurySocialPricingLine(product: Product, isKa = false): string {
+  const price = Math.max(0, Number(product.price) || 0);
+  const orig = Number(
+    product.origPrice ??
+      product.originalPrice ??
+      (product as any).original_price ??
+      0
+  );
+
+  const priceStr = formatUsdAmount(price);
+
+  if (orig > price && price > 0) {
+    const saveAmt = Math.round((orig - price) * 100) / 100;
+    const saveStr = formatUsdAmount(saveAmt);
+    const pct = Math.max(1, Math.round(((orig - price) / orig) * 100));
+    const origStr = formatUsdAmount(orig);
+
+    if (isKa) {
+      return `✨ ექსკლუზიური ფასი: $${priceStr} (დაზოგეთ $${saveStr} · ${pct}% ფასდაკლება | ძველი ფასი: $${origStr})`;
+    }
+    return `✨ Exclusive Deal: $${priceStr} (Save $${saveStr} · ${pct}% OFF | Reg. $${origStr})`;
+  }
+
+  if (isKa) {
+    return `✨ გამორჩეული ფასი: $${priceStr}`;
+  }
+  return `✨ Featured Price: $${priceStr}`;
+}
+
+function cleanFeatureText(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let cleaned = raw
+    .replace(/^[\s✓✔✦•\-*▪▸►◆◇★☆➤➢➣→]+/u, '')
+    .replace(/^[\p{Emoji_Presentation}\p{Extended_Pictographic}\uFE0F\u200D]+[\s:.\-]*/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (cleaned.length > 96) {
+    const truncated = cleaned.slice(0, 93);
+    const lastSpace = truncated.lastIndexOf(' ');
+    cleaned = `${(lastSpace > 50 ? truncated.slice(0, lastSpace) : truncated).trim()}…`;
+  }
+  return cleaned;
+}
+
+function parseRawFeaturesList(raw: unknown): string[] {
+  if (Array.isArray(raw)) {
+    return raw.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+  }
+  if (typeof raw === 'string') {
+    const trimmed = raw.trim();
+    if (!trimmed) return [];
+    if (trimmed.startsWith('[')) {
+      try {
+        const parsed = JSON.parse(trimmed);
+        if (Array.isArray(parsed)) {
+          return parsed.filter((item): item is string => typeof item === 'string' && item.trim().length > 0);
+        }
+      } catch {
+        // Fallback to newline split
+      }
+    }
+    return trimmed
+      .split(/\r?\n/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
+export function extractTopProductHighlights(
+  product: Product,
+  isKa = false,
+  overrideFeatures?: string[]
+): string[] {
+  const candidates =
+    overrideFeatures && overrideFeatures.length > 0
+      ? overrideFeatures
+      : isKa
+        ? [
+            ...parseRawFeaturesList(product.features_ka),
+            ...parseRawFeaturesList(product.features),
+            ...parseRawFeaturesList(product.features_en),
+          ]
+        : [
+            ...parseRawFeaturesList(product.features_en),
+            ...parseRawFeaturesList(product.features),
+            ...parseRawFeaturesList(product.features_ka),
+          ];
+
+  const deduped: string[] = [];
+  const seen = new Set<string>();
+  for (const item of candidates) {
+    const clean = cleanFeatureText(item);
+    if (!clean) continue;
+    const key = clean.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      deduped.push(clean);
+    }
+    if (deduped.length >= 3) break;
+  }
+
+  const fallbackHighlights = isKa
+    ? [
+        'დახვეწილი დიზაინი და პრემიუმ ხარისხის მასალები',
+        'შექმნილია ყოველდღიური კომფორტისა და გამძლეობისთვის',
+        'პირდაპირი ბრენდული ღირებულება ზედმეტი დანამატების გარეშე',
+      ]
+    : [
+        'Refined modern design crafted from durable, high-grade materials',
+        'Engineered for effortless comfort and reliable everyday performance',
+        'Curated direct-to-you value without traditional retail markups',
+      ];
+
+  for (const fb of fallbackHighlights) {
+    if (deduped.length >= 3) break;
+    deduped.push(fb);
+  }
+
+  return deduped.slice(0, 3);
+}
+
+function toInlineBenefitPhrase(feature: string): string {
+  if (!feature) return '';
+  const headline = feature.split(/\s+[—–]\s+|:\s+/)[0].trim();
+  const base = headline.length >= 6 && headline.length <= 64 ? headline : feature;
+  if (/^[A-Z][a-z]+(?:\s+[a-z]|$)/.test(base)) {
+    return base.charAt(0).toLowerCase() + base.slice(1);
+  }
+  return base;
+}
+
+export function buildLifestyleProductHook(
+  title: string,
+  highlights: string[],
+  variantIndex = 0,
+  isKa = false
+): string {
+  const cleanTitle = (title || 'Featured Essential').trim();
+  const hasRealFeature = highlights.length > 0;
+  const lead = hasRealFeature ? toInlineBenefitPhrase(highlights[0]) : '';
+  const secondary = highlights.length > 1 ? toInlineBenefitPhrase(highlights[1]) : '';
+
+  if (isKa) {
+    const hooksKa = [
+      `აამაღლეთ თქვენი ყოველდღიურობა ${cleanTitle}-ით. შექმნილი თანამედროვე ცხოვრების სტილისთვის${lead ? ` — ${lead}` : ''}, ის გთავაზობთ დახვეწილობასა და პრაქტიკულობას ერთ დეტალში.`,
+      `გაიცანით ${cleanTitle} — ბალანსი ესთეტიკასა და ყოველდღიურ კომფორტს შორის.${secondary ? ` გამორჩეული მახასიათებლით: ${secondary}.` : ''}`,
+      `დიზაინი, რომელიც პირველივე შეხებიდან იგრძნობა — ${cleanTitle}. საიმედო არჩევანი მათთვის, ვინც აფასებს ხარისხსა და სტილს.`,
+    ];
+    return hooksKa[variantIndex % hooksKa.length];
+  }
+
+  const hooks = [
+    `Elevate your everyday routine with the ${cleanTitle}. Thoughtfully crafted${lead ? ` with ${lead}` : ' for modern living'}, it pairs refined design with effortless daily performance.`,
+    `Meet the ${cleanTitle} — where clean luxury meets practical precision.${secondary ? ` Built around ${secondary}, it’s made to stand out every single day.` : ' Made to deliver standout value every single day.'}`,
+    `Upgrade your essentials with the ${cleanTitle}. Designed for effortless reliability and timeless style${lead ? `, highlighted by ${lead}` : ''}.`,
+  ];
+  return hooks[variantIndex % hooks.length];
+}
+
 export function buildInstagramLinkInBioCta(_productId?: string): string {
-  return '🛍️ Visit Shop: Tap the link in our bio (@dbuy.store) to order this product directly! 🌍 Fast Worldwide Shipping';
+  return '🛍️ Shop the collection — tap the link in our bio (@dbuy.store)!';
 }
 
 export function buildInstagramCarouselCaption(product: Product, variantIndex = 0, isKa = false): string {
   const title = (isKa ? (product.titleKa || product.title) : product.title) || 'Premium Store Essential';
-  const orig = Number(product.origPrice ?? (product as any).original_price ?? 0);
-  const price = Number(product.price || 0);
+  const highlights = extractTopProductHighlights(product, isKa);
+  const hook = buildLifestyleProductHook(title, highlights, variantIndex, isKa);
+  const bulletBlock = highlights.map((item) => `✓ ${item}`).join('\n');
+  const priceLine = buildLuxurySocialPricingLine(product, isKa);
   const ctaLine = buildInstagramLinkInBioCta();
 
   if (isKa) {
-    const hooksKa = [
-      `✨ გაიცანით ${title} — ხარისხი, რომელიც ყოველდღიურობას ცვლის!`,
-      `🔥 თანამედროვე სტილი და პრემიუმ შესრულება: ${title}`,
-      `💎 საუკეთესო არჩევანი DBUY Store-ში — ${title}`,
-    ];
-    const hook = hooksKa[variantIndex % hooksKa.length];
-    const priceLine = orig > price
-      ? `💰 სპეციალური ფასი: $${price} (ძველი ფასი: $${orig})`
-      : `💰 ფასი: $${price}`;
-
-    return `${hook}\n\n` +
-      `✦ პრემიუმ მასალები და ერგონომიული დიზაინი\n` +
-      `✦ მაღალი გამძლეობა ყოველდღიური მოხმარებისთვის\n` +
-      `✦ სწრაფი და საიმედო მიწოდება\n\n` +
+    return (
+      `${hook}\n\n` +
+      `${bulletBlock}\n\n` +
       `${priceLine}\n` +
-      `🌍 შეუკვეთეთ ონლაინ მსოფლიოს ნებისმიერ წერტილში\n\n` +
+      `${SOCIAL_SHIPPING_TRUST_LINE}\n\n` +
       `${ctaLine}\n\n` +
-      `#DBUYStore #InstagramShop #LuxuryTech #EverydayEssentials #Georgia #OnlineShopping`;
+      `#DBUYStore #InstagramShop #LuxuryEssentials #EverydayUpgrade #TrendingNow`
+    );
   }
 
-  const hooks = [
-    `✨ Meet the ${title} — crafted to elevate your everyday routine.`,
-    `🔥 Precision design meets effortless daily performance: ${title}.`,
-    `💎 Upgrade your essentials today with the ${title}!`,
-  ];
-  const hook = hooks[variantIndex % hooks.length];
-  const priceLine = orig > price
-    ? `💰 Special Offer: $${price} (Was $${orig})`
-    : `💰 Exclusive Price: $${price}`;
-
-  return `${hook}\n\n` +
-    `✦ Swipe through the carousel to inspect every detail\n` +
-    `✦ Engineered for durability, comfort, and modern style\n` +
-    `✦ Direct-to-you quality with fast worldwide shipping\n\n` +
+  return (
+    `${hook}\n\n` +
+    `${bulletBlock}\n\n` +
     `${priceLine}\n` +
-    `🌍 Fast & Trackable Worldwide Delivery\n\n` +
+    `${SOCIAL_SHIPPING_TRUST_LINE}\n\n` +
     `${ctaLine}\n\n` +
-    `#DBUYStore #InstagramShopping #SmartLiving #DailyEssentials #TrendingNow`;
+    `#DBUYStore #InstagramShop #LuxuryEssentials #CuratedLiving #TrendingNow`
+  );
 }
 
 export async function checkInstagramConnectionStatus(params?: {

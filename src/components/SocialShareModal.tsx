@@ -11,8 +11,12 @@ import {
 import {
   buildInstagramCarouselCaption,
   buildInstagramLinkInBioCta,
+  buildLifestyleProductHook,
+  buildLuxurySocialPricingLine,
   checkInstagramConnectionStatus,
+  extractTopProductHighlights,
   publishInstagramCarousel,
+  SOCIAL_SHIPPING_TRUST_LINE,
   InstagramConnectionStatus,
   InstagramPublishProgress,
 } from '../utils/instagramApi';
@@ -73,25 +77,21 @@ const copyTextSafely = async (text: string, textareaRef?: HTMLTextAreaElement | 
 };
 
 const buildHighConvertingAdCopy = (product: Product, variantIndex = 0) => {
-  const hooks = [
-    `🔥 Elevate Your Style with the ${product.title}!`,
-    `✨ Precision Craftsmanship Meets Bold Design — Meet the ${product.title}.`,
-    `💎 Stand Out Every Single Day with the ${product.title}!`
-  ];
-  const hook = hooks[variantIndex % hooks.length];
-  const priceLine = (product as any).origPrice && (product as any).origPrice > product.price
-    ? `🔥 Special Offer: $${product.price} (Was $${(product as any).origPrice})`
-    : `🔥 Exclusive Price: $${product.price}`;
+  const title = product.title || 'Featured Essential';
+  const highlights = extractTopProductHighlights(product, false);
+  const hook = buildLifestyleProductHook(title, highlights, variantIndex, false);
+  const bulletBlock = highlights.map((item) => `✓ ${item}`).join('\n');
+  const priceLine = buildLuxurySocialPricingLine(product, false);
   const productUrl = `https://www.dbuystore.com/b/${product.id}`;
 
-  return `${hook}\n\n` +
-    `✦ Premium build quality & eye-catching modern aesthetics\n` +
-    `✦ Designed for durability, comfort, and everyday performance\n` +
-    `✦ Stripped of middleman markups — direct luxury value\n\n` +
+  return (
+    `${hook}\n\n` +
+    `${bulletBlock}\n\n` +
     `${priceLine}\n` +
-    `🌍 Fast & Secure Worldwide Shipping\n\n` +
-    `👉 Order yours today: ${productUrl}\n\n` +
-    `#DBUY #WorldwideShipping #LuxuryStyle #DealOfTheDay #TrendingNow`;
+    `${SOCIAL_SHIPPING_TRUST_LINE}\n\n` +
+    `👉 Shop now: ${productUrl}\n\n` +
+    `#DBUYStore #LuxuryEssentials #CuratedLiving #TrackedShipping #TrendingNow`
+  );
 };
 
 const FB_APP_ID = "1653741686157296";
@@ -400,20 +400,32 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         const featuresList: string[] = isKa
           ? (Array.isArray(d.featuresKa) && d.featuresKa.length ? d.featuresKa : [])
           : (Array.isArray(d.featuresEn) && d.featuresEn.length ? d.featuresEn : []);
-        const summary = isKa ? (d.descriptionKa || product.descriptionKa || product.description) : (d.descriptionEn || product.description);
-        const orig = Number(product.origPrice ?? (product as any).original_price ?? 0);
-        const priceLine = orig > product.price
-          ? `💰 Special Offer: $${product.price} (Was $${orig})`
-          : `💰 Price: $${product.price}`;
-        const bullets = featuresList.slice(0, 3).map((f) => `✦ ${f.replace(/^[•\-\*\s]+/, '').trim()}`).join('\n');
+        const summary = (isKa ? (d.descriptionKa || product.descriptionKa || product.description) : (d.descriptionEn || product.description)) || '';
+        const aiTitle = (isKa ? (d.titleKa || product.titleKa || product.title) : (d.titleEn || product.title)) || product.title;
+        const highlights = extractTopProductHighlights(
+          product,
+          Boolean(isKa),
+          featuresList.length > 0 ? featuresList : undefined
+        );
+        const cleanSummaryHook = (() => {
+          const clean = summary.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+          if (!clean) return buildLifestyleProductHook(aiTitle, highlights, igVariant, Boolean(isKa));
+          const sentences = clean.match(/[^.!?]+[.!?]+/g);
+          if (sentences && sentences.length > 0) {
+            return sentences.slice(0, 2).join(' ').trim();
+          }
+          return clean.length > 180 ? `${clean.slice(0, 177).trim()}…` : clean;
+        })();
+        const bulletBlock = highlights.map((f) => `✓ ${f}`).join('\n');
+        const priceLine = buildLuxurySocialPricingLine(product, Boolean(isKa));
         const cta = buildInstagramLinkInBioCta();
         setIgCaption(
-          `✨ ${isKa ? (d.titleKa || product.titleKa || product.title) : (d.titleEn || product.title)}\n\n` +
-          `${(summary || '').slice(0, 180)}\n\n` +
-          (bullets ? `${bullets}\n\n` : '') +
-          `${priceLine}\n\n` +
+          `${cleanSummaryHook}\n\n` +
+          `${bulletBlock}\n\n` +
+          `${priceLine}\n` +
+          `${SOCIAL_SHIPPING_TRUST_LINE}\n\n` +
           `${cta}\n\n` +
-          `#DBUYStore #InstagramShop #SmartLiving #TrendingNow`
+          `#DBUYStore #InstagramShop #LuxuryEssentials #CuratedLiving #TrendingNow`
         );
         addToast(isKa ? '✨ AI ტექსტი განახლდა!' : '✨ AI Instagram caption generated!', 'success');
       } else {
@@ -533,7 +545,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
       const productLink = `https://www.dbuystore.com/b/${product.id}`;
       const adMessage = caption.includes(productLink)
         ? caption
-        : `${caption}\n\n👉 Order yours today: ${productLink}`;
+        : `${caption}\n\n👉 Shop now: ${productLink}`;
 
       const activePageId = (pageId && pageId !== 'me') ? pageId : FB_PAGE_ID;
 
