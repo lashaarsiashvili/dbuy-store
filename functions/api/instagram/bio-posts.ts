@@ -77,9 +77,9 @@ export async function onRequestGet(context: any) {
         const mediaData: any = await mediaRes.json().catch(() => ({}));
         if (mediaRes.ok && Array.isArray(mediaData?.data)) {
           for (const item of mediaData.data) {
-            const productId = extractProductIdFromCaption(item.caption || '');
-            if (!productId) continue;
             const existing = postsMap.get(item.id);
+            const productId = existing?.productId || extractProductIdFromCaption(item.caption || '');
+            if (!productId) continue;
             const childImages = Array.isArray(item.children?.data)
               ? item.children.data.map((c: any) => c.media_url).filter(Boolean)
               : [];

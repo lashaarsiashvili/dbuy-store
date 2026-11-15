@@ -186,7 +186,11 @@ async function recordBioPostInKv(env: any, post: any) {
         existing = [];
       }
     }
-    const filtered = existing.filter((p: any) => p.productId !== post.productId || p.igMediaId !== post.igMediaId);
+    const filtered = existing.filter((p: any) => {
+      if (post.igMediaId && p.igMediaId === post.igMediaId) return false;
+      if (post.productId && p.productId === post.productId) return false;
+      return true;
+    });
     const updated = [post, ...filtered].slice(0, 60);
     await db.prepare("INSERT OR REPLACE INTO store_kv (key, value) VALUES ('instagram_bio_posts', ?)")
       .bind(JSON.stringify(updated))

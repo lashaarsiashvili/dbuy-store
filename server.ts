@@ -2693,7 +2693,11 @@ function loadLocalInstagramBioPosts(): any[] {
 function saveLocalInstagramBioPost(post: any): void {
   try {
     const existing = loadLocalInstagramBioPosts();
-    const filtered = existing.filter((p: any) => p.productId !== post.productId || p.igMediaId !== post.igMediaId);
+    const filtered = existing.filter((p: any) => {
+      if (post.igMediaId && p.igMediaId === post.igMediaId) return false;
+      if (post.productId && p.productId === post.productId) return false;
+      return true;
+    });
     const updated = [post, ...filtered].slice(0, 60);
     fs.writeFileSync(IG_BIO_POSTS_FILE, JSON.stringify(updated, null, 2), 'utf-8');
   } catch {
@@ -3238,15 +3242,15 @@ app.get('/api/instagram/bio-posts', async (req, res) => {
         const mediaData: any = await mediaRes.json().catch(() => ({}));
         if (mediaRes.ok && Array.isArray(mediaData?.data)) {
           for (const item of mediaData.data) {
+            const existing = postsMap.get(item.id);
             const cap = item.caption || '';
             const idMatch =
               cap.match(/search\s*ID:\s*([A-Za-z0-9_-]+)/i) ||
               cap.match(/\b(prod-[A-Za-z0-9_-]+)\b/i) ||
               cap.match(/dbuystore\.com\/b\/([A-Za-z0-9_-]+)/i);
-            const productId = idMatch?.[1]?.trim();
+            const productId = existing?.productId || idMatch?.[1]?.trim();
             if (!productId) continue;
 
-            const existing = postsMap.get(item.id);
             const childImages = Array.isArray(item.children?.data)
               ? item.children.data.map((c: any) => c.media_url).filter(Boolean)
               : [];

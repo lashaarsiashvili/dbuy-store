@@ -10,6 +10,7 @@ import {
 } from '../utils/facebookApi';
 import {
   buildInstagramCarouselCaption,
+  buildInstagramLinkInBioCta,
   checkInstagramConnectionStatus,
   publishInstagramCarousel,
   InstagramConnectionStatus,
@@ -152,6 +153,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const [igCaption, setIgCaption] = useState<string>('');
   const [igVariant, setIgVariant] = useState(0);
   const [igCopied, setIgCopied] = useState(false);
+  const [igLinkCopied, setIgLinkCopied] = useState(false);
   const [igActiveSlide, setIgActiveSlide] = useState(0);
   const [isPublishingIg, setIsPublishingIg] = useState(false);
   const [igProgress, setIgProgress] = useState<InstagramPublishProgress | null>(null);
@@ -404,7 +406,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
           ? `💰 Special Offer: $${product.price} (Was $${orig})`
           : `💰 Price: $${product.price}`;
         const bullets = featuresList.slice(0, 3).map((f) => `✦ ${f.replace(/^[•\-\*\s]+/, '').trim()}`).join('\n');
-        const cta = `👉 Shop this product! Link in bio: dbuystore.com/bio (or visit dbuystore.com & search ID: ${product.id})`;
+        const cta = buildInstagramLinkInBioCta();
         setIgCaption(
           `✨ ${isKa ? (d.titleKa || product.titleKa || product.title) : (d.titleEn || product.title)}\n\n` +
           `${(summary || '').slice(0, 180)}\n\n` +
@@ -430,6 +432,22 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
       setIgCopied(true);
       addToast(isKa ? '✅ Instagram ტექსტი დაკოპირდა!' : '✅ Instagram caption copied!', 'success');
       setTimeout(() => setIgCopied(false), 2000);
+    }
+  };
+
+  const directBioProductUrl = product
+    ? `https://dbuystore.com/b/${encodeURIComponent((product.customSlug && product.customSlug.trim()) ? product.customSlug.trim() : product.id)}`
+    : 'https://dbuystore.com/bio';
+
+  const handleCopyDirectProductLink = async () => {
+    const success = await copyTextSafely(directBioProductUrl);
+    if (success) {
+      setIgLinkCopied(true);
+      addToast(
+        isKa ? '🔗 პროდუქტის პირდაპირი ბმული დაკოპირდა!' : '🔗 Direct product link copied!',
+        'success'
+      );
+      setTimeout(() => setIgLinkCopied(false), 2000);
     }
   };
 
@@ -649,9 +667,17 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     setIgProgress({ stage: 'uploading', message: 'Uploading media...' });
 
     const activePageId = (pageId && pageId !== 'me') ? pageId : FB_PAGE_ID;
-    const finalCaption = igCaption.includes('dbuystore.com/bio')
-      ? igCaption
-      : `${igCaption}\n\n👉 Shop this product! Link in bio: dbuystore.com/bio (or visit dbuystore.com & search ID: ${product.id})`;
+    const cleanedIgCaption = igCaption
+      .replace(/\(?\s*or\s+visit\s+dbuystore\.com\s*&\s*search\s*ID:\s*[A-Za-z0-9_-]+\s*\)?/gi, '')
+      .trim();
+    const hasBioCta =
+      cleanedIgCaption.includes('@dbuy.store') ||
+      cleanedIgCaption.toLowerCase().includes('link in our bio') ||
+      cleanedIgCaption.toLowerCase().includes('link in bio') ||
+      cleanedIgCaption.includes('dbuystore.com/bio');
+    const finalCaption = hasBioCta
+      ? cleanedIgCaption
+      : `${cleanedIgCaption}\n\n${buildInstagramLinkInBioCta()}`;
 
     try {
       const result = await publishInstagramCarousel(
@@ -1466,23 +1492,28 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                   onChange={(e) => setIgCaption(e.target.value)}
                   className="w-full p-3 h-36 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-pink-500 focus:outline-hidden resize-none"
                 />
-                <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
-                  <span>
-                    {isKa
-                      ? 'ბმულის სტრატეგია: dbuystore.com/bio + ID ძებნა ჩაშენებულია აღწერაში'
-                      : 'Link in Bio CTA active: dbuystore.com/bio · Product ID included'}
-                  </span>
+                <div className="flex flex-wrap items-center gap-2 pt-1">
                   <button
                     type="button"
-                    onClick={() => {
-                      onClose();
-                      setCurrentPage('bio');
-                    }}
-                    className="inline-flex items-center gap-1 font-semibold text-pink-600 dark:text-pink-400 hover:underline cursor-pointer"
+                    onClick={handleCopyDirectProductLink}
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 text-xs font-bold transition-colors cursor-pointer"
                   >
-                    <span>{isKa ? '/bio გვერდის ნახვა' : 'Preview /bio Storefront'}</span>
-                    <ExternalLink className="w-3 h-3" />
+                    {igLinkCopied ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <LinkIcon className="w-3.5 h-3.5 text-pink-500" />}
+                    <span>
+                      {igLinkCopied
+                        ? (isKa ? 'ბმული დაკოპირდა!' : 'Link Copied!')
+                        : (isKa ? 'პროდუქტის ბმულის კოპირება' : 'Copy Direct Product Link')}
+                    </span>
                   </button>
+                  <a
+                    href="https://dbuystore.com/bio"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl bg-pink-50 dark:bg-pink-950/40 hover:bg-pink-100 dark:hover:bg-pink-900/50 text-pink-700 dark:text-pink-300 border border-pink-200 dark:border-pink-800/60 text-xs font-bold transition-colors"
+                  >
+                    <span>{isKa ? 'გახსენი /bio მაღაზია' : 'Open /bio Shop Page'}</span>
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
                 </div>
               </div>
 

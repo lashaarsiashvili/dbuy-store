@@ -224,7 +224,7 @@ export const Header: React.FC = () => {
         <div
           ref={topBarContainerRef}
           className={`max-w-[1320px] h-[64px] md:h-[68px] lg:h-[84px] mx-auto flex items-center justify-between ${
-            isUltraNarrow ? 'px-2 gap-1.5' : isCompactControls ? 'px-2.5 gap-1.5' : 'px-3 sm:px-4 lg:px-6 gap-2 md:gap-4'
+            isUltraNarrow ? 'px-2 gap-1.5' : isCompactControls ? 'px-2.5 gap-1.5' : 'px-3 lg:px-6 gap-2 md:gap-3 lg:gap-4'
           }`}
         >
           {isMobileSearchExpanded ? (
@@ -269,7 +269,7 @@ export const Header: React.FC = () => {
               >
                 <div
                   className={`relative flex items-center justify-center shrink-0 transition-all ${
-                    isCompactControls ? 'w-8 h-8 md:w-11 md:h-11' : isCompactPhone ? 'w-9 h-9 md:w-11 md:h-11' : 'w-10 h-10 md:w-11 md:h-11'
+                    isCompactControls ? 'w-8 h-8 md:w-10 md:h-10 lg:w-11 lg:h-11' : isCompactPhone ? 'w-9 h-9 md:w-10 md:h-10 lg:w-11 lg:h-11' : 'w-10 h-10 md:w-10 md:h-10 lg:w-11 lg:h-11'
                   }`}
                 >
                   <svg viewBox="0 0 48 48" fill="none" className="w-full h-full">
@@ -358,23 +358,30 @@ export const Header: React.FC = () => {
                 </div>
               </a>
 
-              {/* CENTER: Search Bar (Tablet & Desktop md+ preserved verbatim) */}
+              {/* CENTER: Search Bar (Tablet & Desktop md+) */}
               <form
                 onSubmit={handleSearchSubmit}
-                className="hidden md:flex items-center w-full max-w-[520px] h-[48px] rounded-[24px] bg-[#F3F4F6] dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 overflow-hidden transition-all focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/15 mx-4"
+                className="hidden md:flex flex-1 min-w-[220px] max-w-md lg:max-w-[520px] items-center h-[44px] lg:h-[48px] rounded-full bg-[#F3F4F6] dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 overflow-hidden transition-all focus-within:bg-white dark:focus-within:bg-slate-800 focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/15"
               >
                 <input
                   type="text"
                   value={searchQuery ?? ''}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search products..."
+                  className="hidden md:block lg:hidden flex-1 min-w-0 w-full h-full pl-4 pr-2 text-[13px] text-slate-800 dark:text-slate-100 bg-transparent placeholder-[#64748B] focus:outline-none"
+                />
+                <input
+                  type="text"
+                  value={searchQuery ?? ''}
+                  onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Search for products, brands or categories..."
-                  className="flex-1 h-full pl-5 pr-3 text-[13.5px] text-slate-800 dark:text-slate-100 bg-transparent placeholder-[#64748B] focus:outline-none"
+                  className="hidden lg:block flex-1 min-w-0 w-full h-full pl-5 pr-3 text-[13.5px] text-slate-800 dark:text-slate-100 bg-transparent placeholder-[#64748B] focus:outline-none"
                 />
                 {searchQuery && (
                   <button
                     type="button"
                     onClick={() => setSearchQuery('')}
-                    className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                    className="p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 shrink-0"
                     aria-label="Clear search"
                   >
                     <X className="w-4 h-4" />
@@ -382,21 +389,21 @@ export const Header: React.FC = () => {
                 )}
                 <button
                   type="submit"
-                  className="w-[52px] h-[40px] mr-1 rounded-[20px] bg-[#0B132B] hover:bg-[#1E293B] text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
+                  className="w-[38px] h-[38px] lg:w-[52px] lg:h-[40px] mr-1 rounded-full bg-[#0B132B] hover:bg-[#1E293B] text-white flex items-center justify-center transition-colors shrink-0 cursor-pointer"
                   aria-label="Search"
                 >
                   <Search className="w-4 h-4 stroke-[2.2]" />
                 </button>
               </form>
 
-              {/* RIGHT: Utility & Account Icons — Guaranteed fit on mobile, identical spacing on md+/lg+ */}
+              {/* RIGHT: Utility & Account Icons */}
               <div
                 className={`flex items-center shrink-0 ${
                   isCompactControls
                     ? 'gap-1'
                     : isCompactPhone
-                    ? 'gap-1.5 md:gap-3 lg:gap-5'
-                    : 'gap-2 md:gap-3 lg:gap-5'
+                    ? 'gap-1.5 md:gap-2 lg:gap-3.5 xl:gap-5'
+                    : 'gap-2 md:gap-2 lg:gap-3.5 xl:gap-5'
                 }`}
               >
                 {/* Mobile Search Trigger */}
@@ -412,7 +419,7 @@ export const Header: React.FC = () => {
                 </button>
 
                 {/* Delivery Destination Selector — Compact flag/code on narrow screens, full pill on wider/tablet/desktop */}
-                <div className="relative" ref={geoDropdownRef}>
+                <div className="relative shrink-0" ref={geoDropdownRef}>
                   <button
                     type="button"
                     onClick={() => setGeoDropdownOpen((prev) => !prev)}
@@ -420,24 +427,24 @@ export const Header: React.FC = () => {
                     aria-label={t('delivery.changeDestination')}
                     className={`flex items-center rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-[12px] font-medium text-[#334155] dark:text-slate-200 transition-colors cursor-pointer ${
                       isCompactControls
-                        ? 'h-8 px-1.5 gap-1 md:h-auto md:px-2.5 md:py-1.5 md:gap-1.5'
+                        ? 'h-8 px-1.5 gap-1 md:h-auto md:px-2 lg:px-2.5 md:py-1.5 md:gap-1 lg:gap-1.5'
                         : isCompactPhone
-                        ? 'h-9 px-2 gap-1 md:h-auto md:px-2.5 md:py-1.5 md:gap-1.5'
-                        : 'px-2.5 py-1.5 gap-1.5'
+                        ? 'h-9 px-2 gap-1 md:h-auto md:px-2 lg:px-2.5 md:py-1.5 md:gap-1 lg:gap-1.5'
+                        : 'px-2.5 md:px-2 lg:px-2.5 py-1.5 gap-1.5 md:gap-1 lg:gap-1.5'
                     }`}
                   >
-                    <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 hidden md:inline" />
+                    <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 hidden lg:inline" />
                     <span className="text-sm leading-none">{visitorCountryFlag}</span>
-                    <span className="hidden lg:inline text-[#64748B] dark:text-slate-400">
+                    <span className="hidden xl:inline text-[#64748B] dark:text-slate-400">
                       {t('delivery.deliveringTo')}
                     </span>
                     <span
                       className={`font-semibold text-[#0F172A] dark:text-white truncate ${
                         isCompactControls
-                          ? 'hidden md:inline md:max-w-[120px]'
+                          ? 'hidden md:inline md:max-w-[68px] lg:max-w-[96px] xl:max-w-[120px]'
                           : isCompactPhone
-                          ? 'text-[11px] uppercase md:text-[12px] md:normal-case md:max-w-[120px]'
-                          : 'max-w-[76px] md:max-w-[120px]'
+                          ? 'text-[11px] uppercase md:text-[12px] md:normal-case md:max-w-[68px] lg:max-w-[96px] xl:max-w-[120px]'
+                          : 'max-w-[76px] md:max-w-[68px] lg:max-w-[96px] xl:max-w-[120px]'
                       }`}
                     >
                       {isCompactPhone ? visitorCountryCode : localizedVisitorCountry}
@@ -498,17 +505,17 @@ export const Header: React.FC = () => {
                 </div>
 
                 {/* Language Selector (Compact icon on phones, full Globe + LANG on wider/desktop) */}
-                <div className={`relative ${isUltraNarrow ? 'hidden md:block' : 'block'}`} ref={langDropdownRef}>
+                <div className={`relative shrink-0 ${isUltraNarrow ? 'hidden md:block' : 'block'}`} ref={langDropdownRef}>
                   <button
                     type="button"
                     onClick={() => setLangDropdownOpen(!langDropdownOpen)}
                     aria-label="Language and Theme"
                     className={`flex items-center text-[13px] font-medium text-[#334155] dark:text-slate-200 hover:text-[#0F172A] dark:hover:text-white transition-colors cursor-pointer ${
                       isCompactControls
-                        ? 'justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:gap-1.5 md:py-1.5'
+                        ? 'justify-center w-8 h-8 rounded-full max-md:bg-slate-100 max-md:dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:border-0 md:rounded-full md:gap-1.5 md:px-1.5 md:py-1.5 md:hover:bg-slate-900/5 md:dark:hover:bg-white/5'
                         : isCompactPhone
-                        ? 'justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:gap-1.5 md:py-1.5'
-                        : 'gap-1.5 py-1.5'
+                        ? 'justify-center w-9 h-9 rounded-full max-md:bg-slate-100 max-md:dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:border-0 md:rounded-full md:gap-1.5 md:px-1.5 md:py-1.5 md:hover:bg-slate-900/5 md:dark:hover:bg-white/5'
+                        : 'gap-1.5 py-1.5 md:px-1.5 md:rounded-full md:bg-transparent md:dark:bg-transparent md:border-0 md:hover:bg-slate-900/5 md:dark:hover:bg-white/5'
                     }`}
                   >
                     <Globe className="w-4 h-4 text-[#475569] dark:text-slate-300" />
@@ -597,7 +604,7 @@ export const Header: React.FC = () => {
                       setIsWishlistOpen(true);
                     }
                   }}
-                  className={`relative flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:p-1.5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 transition-colors cursor-pointer ${
+                  className={`relative flex items-center justify-center rounded-full max-md:bg-slate-100 max-md:dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:border-0 md:p-1.5 md:hover:bg-slate-900/5 md:dark:hover:bg-white/5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 dark:hover:text-white transition-colors cursor-pointer shrink-0 ${
                     isCompactControls ? 'w-8 h-8' : 'w-9 h-9'
                   }`}
                   aria-label="Wishlist"
@@ -616,7 +623,7 @@ export const Header: React.FC = () => {
                 </button>
 
                 {/* Sign In / Account — Always visible on mobile, tablet & desktop */}
-                <div className="relative" ref={dropdownRef}>
+                <div className="relative shrink-0" ref={dropdownRef}>
                   <button
                     type="button"
                     onClick={() => {
@@ -626,7 +633,7 @@ export const Header: React.FC = () => {
                         setIsAuthModalOpen(true);
                       }
                     }}
-                    className={`relative flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:gap-2 md:py-1 text-left hover:opacity-85 transition-opacity cursor-pointer ${
+                    className={`relative flex items-center justify-center rounded-full max-md:bg-slate-100 max-md:dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:border-0 md:gap-2 md:px-2 md:py-1 md:hover:bg-slate-900/5 md:dark:hover:bg-white/5 text-left transition-colors cursor-pointer ${
                       isWidePhone ? 'px-2.5 h-9 gap-1.5' : isCompactControls ? 'w-8 h-8' : 'w-9 h-9'
                     }`}
                     aria-label={user.isLoggedIn ? user.name : 'Sign In / Account'}
@@ -721,7 +728,7 @@ export const Header: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsCartOpen(true)}
-                  className={`relative flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:p-1.5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 transition-colors cursor-pointer ${
+                  className={`relative flex items-center justify-center rounded-full max-md:bg-slate-100 max-md:dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:border-0 md:p-1.5 md:hover:bg-slate-900/5 md:dark:hover:bg-white/5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 dark:hover:text-white transition-colors cursor-pointer shrink-0 ${
                     isCompactControls ? 'w-8 h-8' : 'w-9 h-9'
                   }`}
                   aria-label="Open Cart"

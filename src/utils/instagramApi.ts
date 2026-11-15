@@ -100,15 +100,15 @@ export function normalizeInstagramImageUrl(img: string): string {
   return resolved;
 }
 
-export function buildInstagramLinkInBioCta(productId: string): string {
-  return `👉 Shop this product! Link in bio: dbuystore.com/bio (or visit dbuystore.com & search ID: ${productId})`;
+export function buildInstagramLinkInBioCta(_productId?: string): string {
+  return '🛍️ Visit Shop: Tap the link in our bio (@dbuy.store) to order this product directly! 🌍 Fast Worldwide Shipping';
 }
 
 export function buildInstagramCarouselCaption(product: Product, variantIndex = 0, isKa = false): string {
   const title = (isKa ? (product.titleKa || product.title) : product.title) || 'Premium Store Essential';
   const orig = Number(product.origPrice ?? (product as any).original_price ?? 0);
   const price = Number(product.price || 0);
-  const ctaLine = buildInstagramLinkInBioCta(product.id);
+  const ctaLine = buildInstagramLinkInBioCta();
 
   if (isKa) {
     const hooksKa = [
@@ -249,9 +249,11 @@ export function saveBioPostToLocalCache(post: InstagramBioPost): void {
   if (typeof window === 'undefined') return;
   try {
     const existing = loadLocalInstagramBioPosts();
-    const filtered = existing.filter(
-      (p) => !(p.productId === post.productId && p.igMediaId === post.igMediaId)
-    );
+    const filtered = existing.filter((p) => {
+      if (post.igMediaId && p.igMediaId === post.igMediaId) return false;
+      if (post.productId && p.productId === post.productId) return false;
+      return true;
+    });
     const updated = [post, ...filtered].slice(0, 60);
     localStorage.setItem(LOCAL_BIO_STORAGE_KEY, JSON.stringify(updated));
   } catch {

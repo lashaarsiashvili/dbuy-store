@@ -10,6 +10,7 @@ import { ensurePersistentAbsoluteUrl } from '../utils/imageUtils';
 interface ResolvedBioItem {
   id: string;
   productId: string;
+  productSlug?: string;
   title: string;
   price?: number;
   origPrice?: number;
@@ -70,12 +71,14 @@ export const InstagramBioPage: React.FC = () => {
       const key = post.productId.trim();
       const prod = catalogMap.get(key) || catalogMap.get(key.toLowerCase()) || slugMap.get(key.toLowerCase());
       const canonicalProductId = prod?.id || key;
+      if (seenProductIds.has(canonicalProductId)) continue;
       const rawImage = post.mainImage || post.images?.[0] || prod?.image || prod?.images?.[0] || '';
       const resolvedImage = ensurePersistentAbsoluteUrl(rawImage);
 
       items.push({
         id: post.id,
         productId: canonicalProductId,
+        productSlug: prod?.customSlug || post.productSlug || canonicalProductId,
         title: (isKa ? (prod?.titleKa || prod?.title) : prod?.title) || post.title || canonicalProductId,
         price: prod?.price ?? post.price,
         origPrice: prod?.origPrice ?? (prod as any)?.original_price ?? post.origPrice,
@@ -99,6 +102,7 @@ export const InstagramBioPage: React.FC = () => {
       .map((prod) => ({
         id: `cat-${prod.id}`,
         productId: prod.id,
+        productSlug: prod.customSlug || prod.id,
         title: (isKa ? (prod.titleKa || prod.title) : prod.title) || prod.id,
         price: prod.price,
         origPrice: prod.origPrice ?? (prod as any).original_price,
@@ -129,6 +133,7 @@ export const InstagramBioPage: React.FC = () => {
             allCatalogMatches.push({
               id: `search-${prod.id}`,
               productId: prod.id,
+              productSlug: prod.customSlug || prod.id,
               title: (isKa ? (prod.titleKa || prod.title) : prod.title) || prod.id,
               price: prod.price,
               origPrice: prod.origPrice ?? (prod as any).original_price,
@@ -144,15 +149,16 @@ export const InstagramBioPage: React.FC = () => {
     return [...base, ...allCatalogMatches].filter(
       (item) =>
         item.productId.toLowerCase().includes(q) ||
+        (item.productSlug || '').toLowerCase().includes(q) ||
         item.title.toLowerCase().includes(q)
     );
   }, [displayList, resolvedItems, fallbackCatalogItems, catalogMap, lookupQuery, isKa]);
 
-  const handleOpenProduct = (e: React.MouseEvent<HTMLAnchorElement>, productId: string) => {
+  const handleOpenProduct = (e: React.MouseEvent<HTMLAnchorElement>, productId: string, productSlug?: string) => {
     e.preventDefault();
     navigateToProduct(productId);
     if (typeof window !== 'undefined') {
-      const targetBioUrl = `/b/${encodeURIComponent(productId)}`;
+      const targetBioUrl = `/b/${encodeURIComponent(productSlug || productId)}`;
       window.history.replaceState({ page: 'product', productId }, '', targetBioUrl);
     }
   };
@@ -176,8 +182,8 @@ export const InstagramBioPage: React.FC = () => {
                 </h1>
                 <p className="text-sm text-slate-600 dark:text-slate-300 max-w-md">
                   {isKa
-                    ? 'დააჭირეთ სასურველ პროდუქტს პირდაპირ შესაძენად ან მოძებნეთ პროდუქტის ID-ით.'
-                    : 'Tap any post below to jump directly to the product page, or search by Product ID.'}
+                    ? 'დააჭირეთ სასურველ პროდუქტს დეტალების სანახავად და შესაძენად — უახლესი Instagram პოსტები ზემოთ არის.'
+                    : 'Tap any product below to open it directly and order — newest Instagram posts appear first.'}
                 </p>
               </div>
             </div>
@@ -211,7 +217,7 @@ export const InstagramBioPage: React.FC = () => {
                 type="text"
                 value={lookupQuery}
                 onChange={(e) => setLookupQuery(e.target.value)}
-                placeholder={isKa ? 'მოძებნეთ პროდუქტის ID-ით (მაგ: prod-...) ან სახელით' : 'Search by Product ID (e.g. prod-...) or product name'}
+                placeholder={isKa ? 'მოძებნეთ პროდუქტი სახელით...' : 'Search products by name...'}
                 className="w-full pl-10 pr-10 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm text-slate-900 dark:text-slate-100 placeholder-slate-400 focus:outline-hidden focus:ring-2 focus:ring-blue-500"
               />
               {lookupQuery && (
@@ -276,12 +282,12 @@ export const InstagramBioPage: React.FC = () => {
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-5">
             {filteredItems.map((item) => {
-              const targetHref = `/b/${encodeURIComponent(item.productId)}`;
+              const targetHref = `/b/${encodeURIComponent(item.productSlug || item.productId)}`;
               return (
                 <a
                   key={item.id}
                   href={targetHref}
-                  onClick={(e) => handleOpenProduct(e, item.productId)}
+                  onClick={(e) => handleOpenProduct(e, item.productId, item.productSlug)}
                   className="group bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden flex flex-col transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-blue-500"
                 >
                   <div className="product-card-image-wrapper relative aspect-square w-full overflow-hidden bg-white">
@@ -309,32 +315,29 @@ export const InstagramBioPage: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="p-3.5 sm:p-4 flex flex-col flex-1 gap-2 border-t border-slate-100 dark:border-slate-800">
+                  <div className="p-3.5 sm:p-4 flex flex-col flex-1 gap-2.5 border-t border-slate-100 dark:border-slate-800">
                     <h3 className="text-xs sm:text-sm font-semibold text-slate-900 dark:text-slate-100 line-clamp-2 leading-snug">
                       {item.title}
                     </h3>
 
-                    <div className="mt-auto pt-1 flex items-center justify-between gap-2">
-                      <div className="flex items-baseline gap-1.5 tabular-nums">
-                        {typeof item.price === 'number' && (
-                          <span className="text-sm font-bold text-slate-900 dark:text-white">
-                            {formatPrice(item.price)}
-                          </span>
-                        )}
-                        {typeof item.origPrice === 'number' && item.price !== undefined && item.origPrice > item.price && (
-                          <span className="text-[11px] text-slate-400 line-through">
-                            {formatPrice(item.origPrice)}
-                          </span>
-                        )}
-                      </div>
-                      <span className="inline-flex items-center gap-0.5 text-[11px] font-semibold text-blue-600 dark:text-blue-400 group-hover:translate-x-0.5 transition-transform whitespace-nowrap">
-                        <span>{isKa ? 'ნახვა' : 'Shop'}</span>
-                        <ArrowUpRight className="w-3.5 h-3.5" />
-                      </span>
+                    <div className="flex items-baseline gap-1.5 tabular-nums">
+                      {typeof item.price === 'number' && (
+                        <span className="text-sm sm:text-base font-bold text-slate-900 dark:text-white">
+                          {formatPrice(item.price)}
+                        </span>
+                      )}
+                      {typeof item.origPrice === 'number' && item.price !== undefined && item.origPrice > item.price && (
+                        <span className="text-[11px] text-slate-400 line-through">
+                          {formatPrice(item.origPrice)}
+                        </span>
+                      )}
                     </div>
 
-                    <div className="text-[11px] font-mono text-slate-400 dark:text-slate-500 truncate tabular-nums">
-                      ID: {item.productId}
+                    <div className="mt-auto pt-1">
+                      <span className="w-full py-2 px-3 rounded-xl bg-slate-900 dark:bg-blue-600 group-hover:bg-blue-600 dark:group-hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap">
+                        <span>{isKa ? 'ნახვა და ყიდვა' : 'View & Buy'}</span>
+                        <ArrowUpRight className="w-3.5 h-3.5" />
+                      </span>
                     </div>
                   </div>
                 </a>
