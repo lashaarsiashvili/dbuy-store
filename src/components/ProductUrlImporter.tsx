@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Link as LinkIcon,
   Sparkles,
@@ -25,8 +25,15 @@ import {
   Info,
   MessageSquare,
   BadgeCheck,
+  Palette,
 } from 'lucide-react';
-import type { ExtractedProductReview } from '../types';
+import type { ExtractedProductReview, ProductVariant } from '../types';
+import { AdminVariantBuilder } from './ProductVariants';
+import { parseAmazonVariantsFromHtml } from '../utils/variantUtils';
+import {
+  autoDetectColorVariantsFromImages,
+  mergeDetectedColorVariants,
+} from '../utils/AutoColorVisionEngine';
 import {
   ScrapedProductData,
   ImporterPlatform,
@@ -178,10 +185,72 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
   const [editOrigPrice, setEditOrigPrice] = useState<number | undefined>(undefined);
   const [editCategory, setEditCategory] = useState<string>('Electronics');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [variants, setVariants] = useState<ProductVariant[]>([]);
+  const [isDetectingVariants, setIsDetectingVariants] = useState(false);
   const [extractedReviews, setExtractedReviews] = useState<ExtractedProductReview[]>([]);
   const [isReviewsExpanded, setIsReviewsExpanded] = useState<boolean>(false);
 
+  const detectRunIdRef = useRef(0);
+  const pendingDetectionRef = useRef<Promise<ProductVariant[] | null> | null>(null);
+  const latestVariantsRef = useRef<ProductVariant[]>([]);
+  useEffect(() => {
+    latestVariantsRef.current = variants;
+  }, [variants]);
+
   const activePlatformMeta = PLATFORM_CONFIGS.find((p) => p.id === selectedPlatform) || PLATFORM_CONFIGS[0];
+
+  const runAutoColorVariantDetection = (
+    images: string[],
+    productTitle: string,
+    seedVariants: ProductVariant[],
+    forceReplaceWhenEmpty: boolean = false
+  ): Promise<ProductVariant[] | null> => {
+    const validImages = images.filter((u) => typeof u === 'string' && u.trim().length > 0);
+    if (validImages.length === 0) {
+      pendingDetectionRef.current = null;
+      setIsDetectingVariants(false);
+      return Promise.resolve(null);
+    }
+
+    const runId = ++detectRunIdRef.current;
+    setIsDetectingVariants(true);
+
+    const task = (async (): Promise<ProductVariant[] | null> => {
+      try {
+        const detected = await autoDetectColorVariantsFromImages(validImages, productTitle);
+        if (detectRunIdRef.current !== runId || detected.length === 0) {
+          return null;
+        }
+
+        let resolved: ProductVariant[] = [];
+        setVariants((prev) => {
+          const base = forceReplaceWhenEmpty && prev.length === 0 ? [] : prev.length > 0 ? prev : seedVariants;
+          resolved = mergeDetectedColorVariants(base, detected);
+          latestVariantsRef.current = resolved;
+          return resolved;
+        });
+
+        addToast(
+          isKa
+            ? `AI Vision-მა სურათებიდან ავტომატურად ამოიცნო ${detected.length} ფერის ვარიანტი!`
+            : `Auto-detected ${detected.length} color variants from product images!`,
+          'success'
+        );
+        return resolved.length > 0 ? resolved : mergeDetectedColorVariants(seedVariants, detected);
+      } catch (err) {
+        console.warn('Auto color variant detection skipped:', err);
+        return null;
+      } finally {
+        if (detectRunIdRef.current === runId) {
+          setIsDetectingVariants(false);
+          pendingDetectionRef.current = null;
+        }
+      }
+    })();
+
+    pendingDetectionRef.current = task;
+    return task;
+  };
 
   const applyExtractedItem = (item: ScrapedProductData) => {
     const cleanImgs = Array.from(
@@ -193,14 +262,18 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
     );
     item.images = cleanImgs;
     const cleanRevs = Array.isArray(item.reviews) ? item.reviews : [];
+    const cleanVars = Array.isArray(item.variants) ? item.variants : [];
     setExtractedData(item);
     setEditTitle(item.title);
     setEditPrice(item.price || 49.99);
     setEditOrigPrice(item.origPrice);
     setEditCategory(normalizeProductCategory(item.category, item.title));
     setGalleryImages(cleanImgs);
+    latestVariantsRef.current = cleanVars;
+    setVariants(cleanVars);
     setExtractedReviews(cleanRevs);
     setIsReviewsExpanded(cleanRevs.length > 0);
+    void runAutoColorVariantDetection(cleanImgs, item.title, cleanVars, true);
   };
 
   // =========================================================================
@@ -243,14 +316,23 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
         ));
         item.images = cleanImgs;
         const cleanRevs = Array.isArray(item.reviews) ? item.reviews : [];
+        const parsedVars =
+          Array.isArray(item.variants) && item.variants.length > 0
+            ? item.variants
+            : htmlToUse
+            ? parseAmazonVariantsFromHtml(htmlToUse)
+            : [];
         setExtractedData(item);
         setEditTitle(item.title);
         setEditPrice(item.price || 49.99);
         setEditOrigPrice(item.origPrice);
         setEditCategory(item.category || 'tech');
         setGalleryImages(cleanImgs);
+        latestVariantsRef.current = parsedVars;
+        setVariants(parsedVars);
         setExtractedReviews(cleanRevs);
         setIsReviewsExpanded(cleanRevs.length > 0);
+        void runAutoColorVariantDetection(cleanImgs, item.title, parsedVars, true);
         addToast(
           isKa
             ? `პროდუქტი "${item.title.substring(0, 30)}..." წარმატებით ამოღებულია!`
@@ -277,14 +359,21 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
             ));
             clientParsed.images = cleanImgs;
             const cleanRevs = Array.isArray(clientParsed.reviews) ? clientParsed.reviews : [];
+            const parsedVars =
+              Array.isArray(clientParsed.variants) && clientParsed.variants.length > 0
+                ? clientParsed.variants
+                : parseAmazonVariantsFromHtml(htmlToUse);
             setExtractedData(clientParsed);
             setEditTitle(clientParsed.title);
             setEditPrice(clientParsed.price || 49.99);
             setEditOrigPrice(clientParsed.origPrice);
             setEditCategory(clientParsed.category || 'tech');
             setGalleryImages(cleanImgs);
+            latestVariantsRef.current = parsedVars;
+            setVariants(parsedVars);
             setExtractedReviews(cleanRevs);
             setIsReviewsExpanded(cleanRevs.length > 0);
+            void runAutoColorVariantDetection(cleanImgs, clientParsed.title, parsedVars, true);
             addToast('Successfully parsed product from provided HTML!', 'success');
             return;
           }
@@ -305,14 +394,21 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
           ));
           clientParsed.images = cleanImgs;
           const cleanRevs = Array.isArray(clientParsed.reviews) ? clientParsed.reviews : [];
+          const parsedVars =
+            Array.isArray(clientParsed.variants) && clientParsed.variants.length > 0
+              ? clientParsed.variants
+              : parseAmazonVariantsFromHtml(htmlToUse);
           setExtractedData(clientParsed);
           setEditTitle(clientParsed.title);
           setEditPrice(clientParsed.price || 49.99);
           setEditOrigPrice(clientParsed.origPrice);
           setEditCategory(clientParsed.category || 'tech');
           setGalleryImages(cleanImgs);
+          latestVariantsRef.current = parsedVars;
+          setVariants(parsedVars);
           setExtractedReviews(cleanRevs);
           setIsReviewsExpanded(cleanRevs.length > 0);
+          void runAutoColorVariantDetection(cleanImgs, clientParsed.title, parsedVars, true);
           addToast('Parsed directly via browser parser!', 'success');
           return;
         }
@@ -442,7 +538,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
     addToast('Removed review from import list', 'info');
   };
 
-  const getUpdatedProductData = (): ScrapedProductData => {
+  const getUpdatedProductData = (overrideVariants?: ProductVariant[]): ScrapedProductData => {
     const activeUrl = (selectedPlatform === 'amazon' ? url : platformUrl).trim();
     const resolvedMarketplace =
       extractedData?.marketplace && extractedData.marketplace !== 'unknown'
@@ -462,6 +558,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
       origPrice: editOrigPrice,
       category: editCategory,
       images: galleryImages,
+      variants: overrideVariants ?? latestVariantsRef.current ?? variants,
       reviews: extractedReviews,
     };
   };
@@ -476,11 +573,20 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
   };
 
   const handleDirectSaveClick = async () => {
-    const finalData = getUpdatedProductData();
     setIsSavingDirectly(true);
     try {
+      let resolvedVariants = latestVariantsRef.current;
+      if (pendingDetectionRef.current) {
+        const detectedVariants = await pendingDetectionRef.current;
+        if (Array.isArray(detectedVariants) && detectedVariants.length > 0) {
+          resolvedVariants = detectedVariants;
+        }
+      }
+      const finalData = getUpdatedProductData(resolvedVariants);
       const success = await onDirectSave(finalData);
       if (success) {
+        detectRunIdRef.current++;
+        pendingDetectionRef.current = null;
         if (selectedPlatform === 'amazon') {
           setUrl('');
           setRawHtml('');
@@ -490,6 +596,8 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
           setPlatformHtml('');
         }
         setExtractedData(null);
+        latestVariantsRef.current = [];
+        setVariants([]);
         setExtractedReviews([]);
         setIsReviewsExpanded(false);
       }
@@ -1120,6 +1228,56 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
               </div>
             </div>
           )}
+
+          {/* Product Variants Builder (Colors, Sizes, Custom Price & Images) */}
+          <div className="mb-4 space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+              <div className="flex items-center gap-2 text-[11px]">
+                {isDetectingVariants ? (
+                  <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-500/20 border border-indigo-400/40 text-indigo-200 font-bold">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-amber-300" />
+                    <span>
+                      {isKa
+                        ? 'AutoColorVision: მიმდინარეობს სურათებიდან ფერების ამოცნობა...'
+                        : 'AutoColorVision: Detecting color variants from photos...'}
+                    </span>
+                  </span>
+                ) : (
+                  <span className="text-slate-400">
+                    {isKa
+                      ? 'ფერის ვარიანტები ავტომატურად ამოიცნობა სურათებიდან (AutoColorVision).'
+                      : 'Color variants are automatically analyzed from product photos.'}
+                  </span>
+                )}
+              </div>
+
+              {galleryImages.length > 0 && (
+                <button
+                  type="button"
+                  disabled={isDetectingVariants}
+                  onClick={() =>
+                    void runAutoColorVariantDetection(galleryImages, editTitle, variants, true)
+                  }
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 border border-indigo-500/40 text-indigo-200 text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <Palette className="w-3.5 h-3.5 text-amber-400" />
+                  <span>{isKa ? 'ფერების ხელახალი ამოცნობა' : 'Re-Detect Colors from Images'}</span>
+                </button>
+              )}
+            </div>
+
+            <AdminVariantBuilder
+              variants={variants}
+              onChange={(next) => {
+                latestVariantsRef.current = next;
+                setVariants(next);
+              }}
+              availableImages={galleryImages}
+              defaultPrice={editPrice || 0}
+              theme="dark"
+              isKa={isKa}
+            />
+          </div>
 
           {/* Extracted Customer Reviews Collapsible Preview */}
           <div className="mb-4 rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden">

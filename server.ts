@@ -215,6 +215,34 @@ app.get('/uploads/:filename', (req, res) => {
   res.send('<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="0 0 400 400"><rect width="400" height="400" fill="#f8fafc"/><rect x="20" y="20" width="360" height="360" rx="16" stroke="#cbd5e1" stroke-width="2" stroke-dasharray="8 8"/><path d="M120 250l50-50 60 60 40-40 60 60H70l50-30z" fill="#cbd5e1"/><circle cx="140" cy="140" r="24" fill="#94a3b8"/></svg>');
 });
 
+// Image proxy for cross-origin Canvas pixel clustering (matches functions/api/image-proxy.ts)
+app.get('/api/image-proxy', async (req, res) => {
+  const imageUrl = typeof req.query.url === 'string' ? req.query.url.trim() : '';
+  if (!imageUrl || (!imageUrl.startsWith('http://') && !imageUrl.startsWith('https://'))) {
+    return res.status(400).send('Invalid or missing URL');
+  }
+  try {
+    const response = await fetch(imageUrl, {
+      signal: AbortSignal.timeout(7000),
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; DBUYStore/1.0)',
+        Accept: 'image/*,*/*;q=0.8',
+      },
+    });
+    if (!response.ok) {
+      return res.status(response.status).send('Upstream image error');
+    }
+    const contentType = response.headers.get('content-type') || 'image/jpeg';
+    const arrayBuffer = await response.arrayBuffer();
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    return res.send(Buffer.from(arrayBuffer));
+  } catch {
+    return res.status(500).send('Error proxying image');
+  }
+});
+
 const DEFAULT_THEME = {
   announcementText: '🚚 Free Shipping on orders over $50 | 🛡️ 14-Day Money Back Guarantee',
   announcementVisible: true,
@@ -1950,6 +1978,174 @@ Return ONLY a valid JSON object matching this schema:
   } catch (err: any) {
     console.error('Error generating product copy:', err);
     res.status(500).json({ success: false, error: err?.message || 'Generation failed' });
+  }
+});
+
+// ==========================================
+// AUTO COLOR VISION ENGINE API (SERVER-SIDE GEMINI VISION)
+// ==========================================
+app.post('/api/detect-color-variants', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const imageUrls: string[] = Array.isArray(body.imageUrls)
+      ? body.imageUrls.filter((u: unknown): u is string => typeof u === 'string' && u.trim().length > 0).slice(0, 12)
+      : [];
+    const productTitle = typeof body.productTitle === 'string' ? body.productTitle.trim() : '';
+
+    if (imageUrls.length === 0) {
+      return res.json({ success: true, variants: [] });
+    }
+
+    const ai = getGeminiClient();
+    if (!ai) {
+      return res.json({ success: true, variants: [], fallback: true });
+    }
+
+    const fetchedImages = await Promise.all(
+      imageUrls.map(async (url, idx) => {
+        try {
+          if (url.startsWith('data:image/')) {
+            const match = url.match(/^data:(image\/[a-zA-Z+.-]+);base64,(.+)$/);
+            if (match && match[2]) {
+              return { idx, url, mimeType: match[1], data: match[2] };
+            }
+            return null;
+          }
+          if (!url.startsWith('http://') && !url.startsWith('https://')) {
+            return null;
+          }
+          const imgResp = await fetch(url, {
+            signal: AbortSignal.timeout(6000),
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (compatible; DBUYStore/1.0)',
+              Accept: 'image/*,*/*;q=0.8',
+            },
+          });
+          if (!imgResp.ok) return null;
+          const contentType = (imgResp.headers.get('content-type') || 'image/jpeg').split(';')[0].trim();
+          if (!contentType.startsWith('image/')) return null;
+          const buf = await imgResp.arrayBuffer();
+          if (!buf || buf.byteLength === 0 || buf.byteLength > 8 * 1024 * 1024) return null;
+          return {
+            idx,
+            url,
+            mimeType: contentType,
+            data: Buffer.from(buf).toString('base64'),
+          };
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    const validImages = fetchedImages.filter(
+      (item): item is { idx: number; url: string; mimeType: string; data: string } => item !== null
+    );
+
+    if (validImages.length === 0) {
+      return res.json({ success: true, variants: [], fallback: true });
+    }
+
+    const prompt = `You are a precise e-commerce catalog visual classifier. Inspect these ${validImages.length} images for "${productTitle || 'E-Commerce Product'}".
+Each image is preceded by its exact integer imageIndex label (e.g. "imageIndex=0").
+
+For EACH provided image, return a JSON object inside an array:
+1. "imageIndex": exact integer imageIndex label given before the image.
+2. "isSingleColorProductShot": TRUE ONLY IF the image focuses on ONE specific color variant of the product. Set FALSE if:
+   - It is a group shot showing multiple different colors side-by-side (e.g., 5 bottles of different colors together).
+   - It is a dimension/size diagram, text infographic, packaging chart, or close-up texture without showing the main body color.
+3. "detectedColorName": The exact standard English color name of the product body (choose clear names like: "Yellow", "Black", "White", "Red", "Blue", "Navy Blue", "Light Blue", "Green", "Mint Green", "Pink", "Purple", "Orange", "Gray", "Silver", "Gold", "Beige", "Brown"). Use the EXACT same string for identical colors across different angles!
+4. "detectedColorHex": Accurate hex code for that color (e.g., Yellow -> "#FACC15", Black -> "#18181B", Blue -> "#2563EB").
+5. "detectedSizeLabel": Specific size/volume if clearly shown for this variant (e.g. "500ml", "1L", "32 oz"), otherwise "".
+6. "confidence": 0.0 to 1.0.`;
+
+    const parts: any[] = [{ text: prompt }];
+    for (const img of validImages) {
+      parts.push({ text: `imageIndex=${img.idx}` });
+      parts.push({
+        inlineData: {
+          mimeType: img.mimeType,
+          data: img.data,
+        },
+      });
+    }
+
+    const response = await ai.models.generateContent({
+      model: 'gemini-4-hydrogen',
+      contents: { parts },
+      config: {
+        responseMimeType: 'application/json',
+        responseSchema: {
+          type: Type.ARRAY,
+          items: {
+            type: Type.OBJECT,
+            properties: {
+              imageIndex: { type: Type.INTEGER },
+              isSingleColorProductShot: { type: Type.BOOLEAN },
+              detectedColorName: { type: Type.STRING },
+              detectedColorHex: { type: Type.STRING },
+              detectedSizeLabel: { type: Type.STRING },
+              confidence: { type: Type.NUMBER },
+            },
+            required: [
+              'imageIndex',
+              'isSingleColorProductShot',
+              'detectedColorName',
+              'detectedColorHex',
+              'confidence',
+            ],
+          },
+        },
+      },
+    });
+
+    const analyses: any[] = JSON.parse((response.text || '[]').trim());
+    if (!Array.isArray(analyses)) {
+      return res.json({ success: true, variants: [] });
+    }
+
+    const colorClusters = new Map<string, any>();
+    const validByIndex = new Map(validImages.map((img) => [img.idx, img.url]));
+
+    for (const analysis of analyses) {
+      const targetUrl = validByIndex.get(analysis.imageIndex);
+      if (!analysis.isSingleColorProductShot || (analysis.confidence ?? 0) < 0.7 || !targetUrl) {
+        continue;
+      }
+
+      const colorName = String(analysis.detectedColorName || '').trim() || 'Default';
+      const sizeLabel = String(analysis.detectedSizeLabel || '').trim();
+      const clusterKey = `${colorName.toLowerCase()}__${sizeLabel.toLowerCase()}`;
+
+      if (!colorClusters.has(clusterKey)) {
+        colorClusters.set(clusterKey, {
+          id: `var_auto_${Date.now()}_${colorClusters.size}`,
+          colorName,
+          colorHex: /^#[0-9A-Fa-f]{6}$/.test(analysis.detectedColorHex || '')
+            ? analysis.detectedColorHex
+            : '#18181B',
+          sizeLabel,
+          primaryImageUrl: targetUrl,
+          galleryImages: [targetUrl],
+          confidence: Number(analysis.confidence) || 0.85,
+        });
+      } else {
+        const existing = colorClusters.get(clusterKey);
+        if (!existing.galleryImages.includes(targetUrl)) {
+          existing.galleryImages.push(targetUrl);
+        }
+      }
+    }
+
+    const results = Array.from(colorClusters.values());
+    if (results.length <= 1 && !results[0]?.sizeLabel) {
+      return res.json({ success: true, variants: [] });
+    }
+
+    return res.json({ success: true, variants: results });
+  } catch (err: any) {
+    console.warn('[NODE-AUTO-COLOR-VISION]', err?.message || err);
+    return res.json({ success: true, variants: [], fallback: true });
   }
 });
 

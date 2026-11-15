@@ -4,6 +4,11 @@
 - **STRICT PROHIBITION**: Under absolutely NO circumstances are production databases to be modified, overwritten, dropped, reset, or altered. Product data is stored in Cloudflare D1 (text/descriptions) and Cloudflare R2 (images).
 - **Scope of Changes**: All updates, UI fixes (including dark/light mode adjustments), features, and commits MUST be strictly limited to frontend code and application logic.
 - **FORBIDDEN ACTIONS**: Strictly forbidden from writing, generating, or executing any database migration scripts, deletion commands, purge routines, or schema resets affecting D1 or R2. Treat D1 and R2 data as entirely read-only and permanent.
+- **SANDBOX / PREVIEW TEST PRODUCT ISOLATION**:
+  1. NEVER sync, push, export, or display test products created inside Google AI Studio preview/sandbox to the official production website (`www.dbuystore.com`) or live Cloudflare D1/R2 databases.
+  2. Any product added, edited, or tested inside Google AI Studio is strictly for local/sandbox testing ONLY.
+  3. NEVER overwrite, modify, delete, or touch existing products, descriptions, prices, images, or site analytics in the live production Cloudflare D1 and R2 databases.
+  4. Keep local/preview test state completely isolated from production data. Do not run automatic database migrations or seed scripts against production D1/R2 unless explicitly commanded by the owner.
 
 ## Deployment & Hosting Target
 - **Target Platform**: Cloudflare Pages / Static Site Hosting (e.g. `dbuystore.com`).

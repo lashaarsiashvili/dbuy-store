@@ -129,9 +129,9 @@ interface StoreContextType {
 
   // Cart
   cart: CartItem[];
-  addToCart: (product: Product, quantity?: number) => void;
-  updateCartQuantity: (productId: string, quantity: number) => void;
-  removeFromCart: (productId: string) => void;
+  addToCart: (product: Product, quantity?: number, selectedOption?: string) => void;
+  updateCartQuantity: (productId: string, quantity: number, selectedOption?: string) => void;
+  removeFromCart: (productId: string, selectedOption?: string) => void;
   clearCart: () => void;
   cartTotalCount: number;
   cartSubtotalUSD: number;
@@ -1670,13 +1670,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     addToast(language === 'ka' ? `დაემატა კალათაში!` : `Added to cart!`, 'success');
   };
 
-  const updateCartQuantity = (productId: string, quantity: number) => {
+  const updateCartQuantity = (productId: string, quantity: number, selectedOption?: string) => {
     if (quantity <= 0) {
-      removeFromCart(productId);
+      removeFromCart(productId, selectedOption);
       return;
     }
     setCart(prev => {
-      const next = prev.map(item => item.product.id === productId ? { ...item, quantity } : item);
+      const next = prev.map(item =>
+        item.product.id === productId && (selectedOption === undefined || item.selectedOption === selectedOption)
+          ? { ...item, quantity }
+          : item
+      );
       try {
         const key = user?.isLoggedIn && user.email 
           ? `db_cart_${user.email.trim().toLowerCase()}` 
@@ -1687,9 +1691,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
   };
 
-  const removeFromCart = (productId: string) => {
+  const removeFromCart = (productId: string, selectedOption?: string) => {
     setCart(prev => {
-      const next = prev.filter(item => item.product.id !== productId);
+      const next = prev.filter(item =>
+        !(item.product.id === productId && (selectedOption === undefined || item.selectedOption === selectedOption))
+      );
       try {
         const key = user?.isLoggedIn && user.email 
           ? `db_cart_${user.email.trim().toLowerCase()}` 

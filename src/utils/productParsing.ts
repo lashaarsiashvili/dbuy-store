@@ -1,4 +1,5 @@
 import type { Product, ProductVariant, ProductVideo } from '../types';
+import { normalizeVariantItem } from './variantUtils';
 
 /**
  * Safely parses any array-like field that may arrive from Cloudflare D1 / SQLite
@@ -140,10 +141,15 @@ export function normalizeProductArrays(product: Product): Product {
   const rawAny = product as any;
   const normalizedVariants = parseVariants(rawAny.variants)
     .filter((v) => v && typeof v === 'object')
-    .map((v) => ({
-      ...v,
-      images: parseImages((v as any).images),
-    }));
+    .map((v, idx) =>
+      normalizeVariantItem(
+        {
+          ...v,
+          images: parseImages((v as any).images),
+        },
+        idx
+      )
+    );
 
   const normalized: Product = {
     ...product,

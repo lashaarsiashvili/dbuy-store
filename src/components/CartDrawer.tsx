@@ -172,7 +172,7 @@ export const CartDrawer: React.FC = () => {
                 const itemEstimate = getEstimateForProduct(item.product, visitorCountryCode);
 
                 return (
-                  <div key={item.product.id} className="py-4 flex space-x-3 items-center">
+                  <div key={`${item.product.id}-${item.selectedOption || 'default'}`} className="py-4 flex space-x-3 items-center">
                     {/* Thumbnail */}
                     <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
                       <CachedImage
@@ -187,6 +187,11 @@ export const CartDrawer: React.FC = () => {
                       <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                         {title}
                       </h4>
+                      {item.selectedOption && (
+                        <div className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 truncate mt-0.5">
+                          {item.selectedOption}
+                        </div>
+                      )}
                       <div className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5">
                         {formatPrice(item.product.price)}
                       </div>
@@ -204,7 +209,7 @@ export const CartDrawer: React.FC = () => {
                       <div className="flex items-center space-x-2 mt-2">
                         <div className="flex items-center border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-800">
                           <button
-                            onClick={() => updateCartQuantity(item.product.id, item.quantity - 1)}
+                            onClick={() => updateCartQuantity(item.product.id, item.quantity - 1, item.selectedOption)}
                             className="p-1 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                             aria-label="Decrease quantity"
                           >
@@ -214,7 +219,7 @@ export const CartDrawer: React.FC = () => {
                             {item.quantity}
                           </span>
                           <button
-                            onClick={() => updateCartQuantity(item.product.id, item.quantity + 1)}
+                            onClick={() => updateCartQuantity(item.product.id, item.quantity + 1, item.selectedOption)}
                             className="p-1 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700"
                             aria-label="Increase quantity"
                           >
@@ -230,7 +235,7 @@ export const CartDrawer: React.FC = () => {
                         {formatPrice(item.product.price * item.quantity)}
                       </span>
                       <button
-                        onClick={() => removeFromCart(item.product.id)}
+                        onClick={() => removeFromCart(item.product.id, item.selectedOption)}
                         className="p-1.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 rounded-md hover:bg-red-50 dark:hover:bg-red-950/50 transition-colors"
                         aria-label="Remove item"
                       >

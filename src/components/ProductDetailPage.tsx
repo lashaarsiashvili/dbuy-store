@@ -10,6 +10,7 @@ import { ProductReviewsSection, reviewService } from './ProductReviewsSection';
 import { ProductSEO, ProductSEOData } from '../hooks/useDynamicMetaTags';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
 import { parseVariants, parseVideos, parseImages, parseArrayField } from '../utils/productParsing';
+import { StorefrontVariantSelector, VariantSelectionPayload } from './ProductVariants';
 import {
   calculateDeliveryEstimate,
   getEstimateForProduct,
@@ -86,6 +87,7 @@ export const ProductDetailPage: React.FC = () => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
   const [activeVariant, setActiveVariant] = useState<any>(null);
+  const [variantSelection, setVariantSelection] = useState<VariantSelectionPayload | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [justAdded, setJustAdded] = useState(false);
   const [copiedUrl, setCopiedUrl] = useState(false);
@@ -139,6 +141,7 @@ export const ProductDetailPage: React.FC = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setActiveImageIndex(0);
     setSelectedVariantIndex(0);
+    setVariantSelection(null);
     setQuantity(1);
     if (product) {
       const parsedVars = parseVariants(product.variants);
@@ -257,10 +260,20 @@ export const ProductDetailPage: React.FC = () => {
   const videos = parseVideos(product.videos);
 
   // 4. Selected Variant
-  const selectedVariant = activeVariant || variants[selectedVariantIndex] || variants[0] || null;
+  const selectedVariant = variantSelection?.matchedVariant || activeVariant || variants[selectedVariantIndex] || variants[0] || null;
 
   // 5. Variant-Specific Images vs Default Fallback
-  const selectedVariantImages = getVariantImages(selectedVariant);
+  const selectedVariantImages = React.useMemo(() => {
+    const imgs: string[] = [];
+    if (variantSelection?.variantImage) {
+      const resolved = getProductImage(variantSelection.variantImage);
+      if (resolved) imgs.push(resolved);
+    }
+    for (const img of getVariantImages(selectedVariant)) {
+      if (img && !imgs.includes(img)) imgs.push(img);
+    }
+    return imgs;
+  }, [variantSelection?.variantImage, selectedVariant]);
   const activeImages = selectedVariantImages.length > 0 ? selectedVariantImages : defaultProductImages;
 
   interface MediaItem {
@@ -457,7 +470,25 @@ export const ProductDetailPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLightboxOpen, activeMedia.length, lightboxZoom]);
 
+  const handleVariantSelection = React.useCallback((sel: VariantSelectionPayload) => {
+    setVariantSelection(sel);
+    if (sel.matchedVariant) {
+      setActiveVariant(sel.matchedVariant);
+    }
+    setActiveImageIndex(0);
+  }, []);
+
   const getSelectedVariantName = (): string | undefined => {
+    if (variantSelection) {
+      const colorPart =
+        language === 'ka' && variantSelection.matchedVariant?.nameKa
+          ? variantSelection.matchedVariant.nameKa
+          : variantSelection.colorName;
+      const parts = [colorPart, variantSelection.sizeLabel].filter(
+        (p): p is string => typeof p === 'string' && p.trim().length > 0
+      );
+      if (parts.length > 0) return parts.join(' / ');
+    }
     if (!selectedVariant) return undefined;
     if (language === 'ka' && selectedVariant.nameKa) return selectedVariant.nameKa;
     if (language === 'ru' && selectedVariant.nameRu) return selectedVariant.nameRu;
@@ -465,9 +496,21 @@ export const ProductDetailPage: React.FC = () => {
     return selectedVariant.name || selectedVariant.title || undefined;
   };
 
+  const displayedPrice = variantSelection?.finalPrice ?? selectedVariant?.price ?? product.price;
+
+  const getCartProductPayload = (): Product => {
+    if (variants.length === 0) return product;
+    const resolvedVariantImage = variantSelection?.variantImage || selectedVariantImages[0] || product.image;
+    return {
+      ...product,
+      price: displayedPrice,
+      image: resolvedVariantImage,
+    };
+  };
+
   const handleAddToCart = () => {
     const variantName = getSelectedVariantName();
-    addToCart(product, quantity, variantName);
+    addToCart(getCartProductPayload(), quantity, variantName);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 2000);
   };
@@ -481,7 +524,7 @@ export const ProductDetailPage: React.FC = () => {
     );
     analytics.trackCheckoutAttempt(isCurrentAdmin);
     const variantName = getSelectedVariantName();
-    addToCart(product, quantity, variantName);
+    addToCart(getCartProductPayload(), quantity, variantName);
     setCurrentPage('checkout');
   };
 
@@ -745,7 +788,7 @@ export const ProductDetailPage: React.FC = () => {
           <div className="p-5 bg-slate-50/80 dark:bg-slate-900/80 rounded-2xl border border-slate-200/80 dark:border-slate-800 flex items-baseline justify-between flex-wrap gap-4">
             <div className="flex items-baseline space-x-3">
               <span className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-slate-100">
-                {formatPrice(selectedVariant?.price ?? product.price)}
+                {formatPrice(displayedPrice)}
               </span>
               {(selectedVariant?.origPrice ?? product.origPrice) ? (
                 <span className="text-lg text-slate-400 line-through font-semibold">
@@ -786,58 +829,14 @@ export const ProductDetailPage: React.FC = () => {
             </p>
           </div>
 
-          {/* Single Functional Amazon-Style Color Variant Selector */}
+          {/* Storefront Variant Selector (Colors & Sizes) */}
           {variants.length > 0 && (
-            <div className="space-y-2 py-1">
-              <div className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center space-x-1.5">
-                <span className="text-slate-500 font-medium">{language === 'ka' ? 'ფერი:' : 'Color:'}</span>
-                <span className="font-extrabold text-slate-900 dark:text-slate-100">
-                  {language === 'ka' && selectedVariant?.nameKa ? selectedVariant.nameKa : (selectedVariant?.name || 'Default')}
-                </span>
-              </div>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {variants.map((variant, idx) => {
-                  const isSelected = selectedVariantIndex === idx;
-                  const variantName = language === 'ka' && variant.nameKa ? variant.nameKa : variant.name;
-                  const variantImg = getVariantImages(variant)[0];
-                  return (
-                    <button
-                      key={variant.id || idx}
-                      type="button"
-                      onClick={() => {
-                        setSelectedVariantIndex(idx);
-                        setActiveVariant(variant);
-                        setActiveImageIndex(0);
-                      }}
-                      className={`relative flex items-center space-x-2 px-3 py-1.5 rounded-lg border-2 text-xs font-semibold transition-all cursor-pointer ${
-                        isSelected
-                          ? 'border-blue-600 bg-blue-50/50 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 ring-1 ring-blue-500/30 shadow-xs'
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 hover:border-slate-400'
-                      }`}
-                      title={variantName}
-                    >
-                      {variantImg ? (
-                        <CachedImage
-                          src={variantImg}
-                          alt={variantName}
-                          className="w-5 h-5 rounded object-cover shrink-0"
-                        />
-                      ) : (
-                        <span
-                          className="w-4 h-4 rounded-full border border-black/20 shrink-0"
-                          style={{ backgroundColor: variant.colorCode || '#3b82f6' }}
-                        />
-                      )}
-                      <span>{variantName}</span>
-                      {variant.price && variant.price !== product.price && (
-                        <span className="text-[10px] opacity-75 font-mono">({formatPrice(variant.price)})</span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <StorefrontVariantSelector
+              variants={variants}
+              basePrice={product.price}
+              language={language}
+              onSelectVariant={handleVariantSelection}
+            />
           )}
 
           {/* Clean Product Purchase Section */}

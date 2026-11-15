@@ -44,13 +44,22 @@ export interface ProductVideo {
 
 export interface ProductVariant {
   id?: string;
-  name: string;
+  name?: string;
   nameKa?: string;
+  nameRu?: string;
+  nameEs?: string;
+  title?: string;
   colorCode?: string;
+  colorName?: string;
+  colorHex?: string;
+  sizeLabel?: string;
   price?: number;
   origPrice?: number;
   stock?: number;
-  images: string[];
+  image?: string;
+  img?: string;
+  imageUrl?: string;
+  images?: string[];
 }
 
 export interface Product {

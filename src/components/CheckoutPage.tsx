@@ -625,6 +625,11 @@ export const CheckoutPage: React.FC = () => {
                           <h4 className="font-semibold text-slate-900 dark:text-white truncate">
                             {item.product.title}
                           </h4>
+                          {item.selectedOption && (
+                            <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 truncate">
+                              {item.selectedOption}
+                            </p>
+                          )}
                           <p className="text-slate-500">{t("orders.qty")}: {item.quantity}</p>
                           <p className="text-[11px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1 mt-0.5 truncate">
                             <Truck className="w-3 h-3 shrink-0" />

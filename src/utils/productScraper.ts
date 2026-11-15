@@ -6,7 +6,8 @@
  * and structured English attribute extraction.
  */
 
-import type { ExtractedProductReview } from '../types';
+import type { ExtractedProductReview, ProductVariant } from '../types';
+import { parseAmazonVariantsFromHtml } from './variantUtils';
 
 export type ImporterPlatform = 'amazon' | 'ebay' | 'alibaba' | 'aliexpress' | 'temu';
 
@@ -25,6 +26,7 @@ export interface ScrapedProductData {
   sourceUrl?: string;
   marketplace: ImporterPlatform | 'unknown';
   reviews?: ExtractedProductReview[];
+  variants?: ProductVariant[];
 }
 
 export function cleanHtmlText(str: string): string {
@@ -361,6 +363,8 @@ export function parseAmazonProductHtml(html: string, sourceUrl: string = ''): Sc
     ...extractJsonLdReviews(html),
   ]);
 
+  const variants = parseAmazonVariantsFromHtml(html);
+
   return {
     title,
     category,
@@ -372,6 +376,7 @@ export function parseAmazonProductHtml(html: string, sourceUrl: string = ''): Sc
     sourceUrl,
     marketplace: 'amazon',
     reviews: amazonReviews,
+    variants,
   };
 }
 

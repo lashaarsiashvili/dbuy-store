@@ -102,6 +102,16 @@ export const onRequest: PagesFunction<any> = async (context) => {
         const titleFallback = p.title || p.name || 'Product';
         const nameFallback = p.name || p.title || 'Product';
 
+        let variantsArr: any[] = [];
+        if (p.variants) {
+          try {
+            variantsArr = typeof p.variants === 'string' ? JSON.parse(p.variants) : p.variants;
+          } catch {
+            variantsArr = [];
+          }
+        }
+        if (!Array.isArray(variantsArr)) variantsArr = [];
+
         return {
           ...p,
           id: String(p.id),
@@ -121,6 +131,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
           imageUrl: primaryImg,
           image_path: primaryImg,
           images: imagesArr,
+          variants: variantsArr,
           createdAt: p.createdAt || p.created_at || new Date().toISOString(),
         };
       });
@@ -188,6 +199,16 @@ export const onRequest: PagesFunction<any> = async (context) => {
           imagesArr = [primaryImg];
         }
         const imagesJsonVal = JSON.stringify(imagesArr);
+        let variantsArr: any[] = [];
+        if (Array.isArray(product.variants)) {
+          variantsArr = product.variants;
+        } else if (typeof product.variants === 'string') {
+          try {
+            const parsed = JSON.parse(product.variants);
+            if (Array.isArray(parsed)) variantsArr = parsed;
+          } catch {}
+        }
+        const variantsJsonVal = JSON.stringify(variantsArr);
         const nowIso = new Date().toISOString();
 
         // Dictionary of all possible candidate values mapped to standard SQLite column names
@@ -213,6 +234,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
           image_path: primaryImg,
           images: imagesJsonVal,
           images_json: imagesJsonVal,
+          variants: variantsJsonVal,
           slug: slugVal,
           customslug: slugVal,
           custom_slug: slugVal,
@@ -304,6 +326,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
           imageUrl: primaryImg,
           image: primaryImg,
           images: imagesArr,
+          variants: variantsArr,
           ...(product.sourcePlatform ? { sourcePlatform: product.sourcePlatform } : {}),
           ...(product.productOrigin ? { productOrigin: product.productOrigin } : {}),
           ...(product.sourceUrl ? { sourceUrl: product.sourceUrl } : {}),

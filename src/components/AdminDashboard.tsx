@@ -21,6 +21,12 @@ import { ADMIN_PRODUCT_CATEGORIES, normalizeProductCategory, matchesCategory } f
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
 import { compressImageForUpload, uploadImageToR2 } from '../utils/imageUpload';
 import { parseVariants, parseVideos, parseImages, parseStringArray } from '../utils/productParsing';
+import { normalizeVariantItem } from '../utils/variantUtils';
+import { AdminVariantBuilder } from './ProductVariants';
+import {
+  autoDetectColorVariantsFromImages,
+  mergeDetectedColorVariants,
+} from '../utils/AutoColorVisionEngine';
 import { detectProductOrigin, detectSourcePlatform } from '../utils/deliveryEstimate';
 import { 
   ShieldCheck, 
@@ -559,75 +565,39 @@ export const AdminDashboard: React.FC = () => {
     }));
   };
 
-  // Color Variants Handlers
-  const handleAddVariant = () => {
-    const newVar: ProductVariant = {
-      id: `var-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-      name: 'Black Edition',
-      nameKa: 'შავი ვერსია',
-      colorCode: '#000000',
-      price: Number(prodForm.price) || 0,
-      stock: Number(prodForm.stock) || 10,
-      images: [],
-    };
-    setProdForm(prev => ({
-      ...prev,
-      variants: [...parseVariants(prev.variants), newVar],
-    }));
-    addToast(isKa ? 'ახალი ფერის ვარიანტი დაემატა' : 'Added new color variant', 'info');
-  };
+  // Color & Size variants are handled via AdminVariantBuilder component
+  const [isDetectingModalColors, setIsDetectingModalColors] = useState(false);
 
-  const handleUpdateVariant = (index: number, fields: Partial<ProductVariant>) => {
-    setProdForm(prev => {
-      const list = [...parseVariants(prev.variants)];
-      if (list[index]) {
-        list[index] = { ...list[index], ...fields };
-      }
-      return { ...prev, variants: list };
-    });
-  };
-
-  const handleRemoveVariant = (index: number) => {
-    setProdForm(prev => ({
-      ...prev,
-      variants: parseVariants(prev.variants).filter((_, i) => i !== index),
-    }));
-  };
-
-  const handleUploadVariantImage = async (variantIndex: number, file: File) => {
-    if (!file.type.startsWith('image/')) return;
-    addToast(isKa ? `იტვირთება „${file.name}“ ფერის ვარიანტისთვის...` : `Uploading "${file.name}" for color variant...`, 'info');
+  const handleAutoDetectModalColors = async () => {
+    const imgs = (prodForm.images || []).filter((u) => typeof u === 'string' && u.trim().length > 0);
+    if (imgs.length === 0) return;
+    setIsDetectingModalColors(true);
     try {
-      const r2Url = await uploadImageToR2(file, `variant-${variantIndex}`);
-      setProdForm(prev => {
-        const list = [...parseVariants(prev.variants)];
-        if (list[variantIndex]) {
-          const currentImgs = parseImages(list[variantIndex].images);
-          list[variantIndex] = {
-            ...list[variantIndex],
-            images: [...currentImgs, r2Url],
-          };
-        }
-        return { ...prev, variants: list };
-      });
-      addToast(isKa ? 'სურათი დაემატა ფერის ვარიანტს!' : 'Image added to color variant!', 'success');
-    } catch (err) {
-      console.error('Variant image upload error:', err);
-      addToast(isKa ? 'შეცდომა სურათის ატვირთვისას' : 'Error uploading variant image', 'error');
-    }
-  };
-
-  const handleRemoveVariantImage = (variantIndex: number, imageIndex: number) => {
-    setProdForm(prev => {
-      const list = [...parseVariants(prev.variants)];
-      if (list[variantIndex]) {
-        list[variantIndex] = {
-          ...list[variantIndex],
-          images: parseImages(list[variantIndex].images).filter((_, i) => i !== imageIndex),
-        };
+      const detected = await autoDetectColorVariantsFromImages(imgs, prodForm.title || 'Product');
+      if (detected.length > 0) {
+        setProdForm((prev) => ({
+          ...prev,
+          variants: mergeDetectedColorVariants(parseVariants(prev.variants), detected),
+        }));
+        addToast(
+          isKa
+            ? `სურათებიდან ავტომატურად ამოიცნო ${detected.length} ფერის ვარიანტი!`
+            : `Auto-detected ${detected.length} color variants from photos!`,
+          'success'
+        );
+      } else {
+        addToast(
+          isKa
+            ? 'განსხვავებული ფერის ვარიანტები ვერ დადასტურდა (შესაძლოა ერთი ფერის პროდუქტია).'
+            : 'No multiple color variants detected (single-color product).',
+          'info'
+        );
       }
-      return { ...prev, variants: list };
-    });
+    } catch (err) {
+      console.warn('Modal color detection failed:', err);
+    } finally {
+      setIsDetectingModalColors(false);
+    }
   };
 
   // Product catalog table search & filter
@@ -1417,7 +1387,7 @@ export const AdminDashboard: React.FC = () => {
       image: coverImg,
       images: normImages,
       videos: [],
-      variants: [],
+      variants: Array.isArray(data.variants) ? data.variants.map((v, i) => normalizeVariantItem(v, i)) : [],
       description: data.description,
       descriptionKa: '', // Strict rule 3: English only!
       features: featuresList.slice(0, 4),
@@ -1463,6 +1433,25 @@ export const AdminDashboard: React.FC = () => {
         ? Math.round((importedReviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0) / computedReviewsCount) * 10) / 10
         : 5.0;
 
+    const rawVariants = Array.isArray(data.variants)
+      ? data.variants.map((v, i) => normalizeVariantItem(v, i))
+      : [];
+
+    let finalVariants = rawVariants;
+    const needsAutoVision =
+      normImages.length > 0 &&
+      (rawVariants.length === 0 || rawVariants.every((v) => !v.imageUrl));
+    if (needsAutoVision) {
+      try {
+        const autoDetected = await autoDetectColorVariantsFromImages(normImages, data.title);
+        if (autoDetected.length > 0) {
+          finalVariants = mergeDetectedColorVariants(rawVariants, autoDetected);
+        }
+      } catch (visionErr) {
+        console.warn('Direct save auto color detection skipped:', visionErr);
+      }
+    }
+
     const productPayload: Product = {
       id: generatedId,
       title: data.title,
@@ -1489,7 +1478,7 @@ export const AdminDashboard: React.FC = () => {
       image: coverImg,
       images: normImages,
       videos: [],
-      variants: [],
+      variants: finalVariants,
       description: data.description,
       descriptionKa: '',
       description_en: data.description,
@@ -1547,10 +1536,15 @@ export const AdminDashboard: React.FC = () => {
 
     const parsedVideos: ProductVideo[] = parseVideos(prod.videos);
 
-    const parsedVariants: ProductVariant[] = parseVariants(prod.variants).map((v) => ({
-      ...v,
-      images: parseImages((v as any)?.images),
-    }));
+    const parsedVariants: ProductVariant[] = parseVariants(prod.variants).map((v, i) =>
+      normalizeVariantItem(
+        {
+          ...v,
+          images: parseImages((v as any)?.images),
+        },
+        i
+      )
+    );
 
     const rawFeaturesEn = parseStringArray(prod.features_en);
     const rawFeaturesKa = parseStringArray(prod.features_ka);
@@ -1729,7 +1723,7 @@ export const AdminDashboard: React.FC = () => {
         image: imagesToSave[0] || '',
         images: imagesToSave,
         videos: parseVideos(prodForm.videos),
-        variants: parseVariants(prodForm.variants),
+        variants: parseVariants(prodForm.variants).map((v, i) => normalizeVariantItem(v, i)),
         description: prodForm.description || prodForm.descriptionKa,
         descriptionKa: prodForm.descriptionKa,
         description_en: prodForm.description,
@@ -6064,141 +6058,59 @@ export const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
-              {/* COLOR VARIANTS & VARIANT-SPECIFIC IMAGES SECTION */}
-              <div className="bg-indigo-50/70 dark:bg-slate-900/90 p-4 rounded-3xl border border-indigo-100 dark:border-slate-800 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <label className="text-xs font-black text-slate-900 dark:text-white flex items-center space-x-2">
-                      <Sliders className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
-                      <span>{isKa ? '🎨 ფერის ვარიანტები & სპეციფიკური სურათები' : '🎨 Color Variants & Variant-Specific Images'}</span>
-                    </label>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                      {isKa 
-                        ? 'თითოეული ფერის არჩევნისთვის ატვირთეთ კონკრეტული სურათები. ვიდეოები დარჩება გლობალური.'
-                        : 'Assign specific images to each color choice. Global videos remain shared across all variants.'}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={handleAddVariant}
-                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs shadow-xs transition-all flex items-center space-x-1.5 cursor-pointer shrink-0"
-                  >
-                    <Plus className="w-4 h-4" />
-                    <span>{isKa ? 'ფერის დამატება' : 'Add Color Variant'}</span>
-                  </button>
-                </div>
-
-                {/* Variants List */}
-                {parseVariants(prodForm.variants).length === 0 ? (
-                  <div className="text-center py-4 text-xs text-slate-400 border-2 border-dashed border-indigo-100 dark:border-slate-800 rounded-2xl bg-white/50 dark:bg-slate-950/50">
-                    {isKa ? 'ფერის ვარიანტები არ არის დამატებული. (გამოყენებული იქნება მთავარი გალერეა)' : 'No color variants created yet. (Standard main gallery will be used)'}
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {parseVariants(prodForm.variants).map((variant, vIdx) => (
-                      <div key={variant.id || vIdx} className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-indigo-100 dark:border-slate-800 shadow-xs space-y-3">
-                        {/* Variant details row */}
-                        <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5 items-center">
-                          {/* Color picker circle + hex */}
-                          <div className="sm:col-span-3 flex items-center space-x-2">
-                            <input type="color"
-                              value={variant.colorCode || '#000000'}
-                              onChange={e => handleUpdateVariant(vIdx, { colorCode: e.target.value })}
-                              className="w-8 h-8 rounded-full border border-slate-300 cursor-pointer overflow-hidden p-0 bg-transparent"
-                            />
-                            <input type="text"
-                              value={variant.colorCode || '#000000'}
-                              onChange={e => handleUpdateVariant(vIdx, { colorCode: e.target.value })}
-                              className="w-20 px-2 py-1 text-xs font-mono bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-800 dark:text-slate-200"
-                            />
-                          </div>
-
-                          {/* Name EN */}
-                          <div className="sm:col-span-3">
-                            <input type="text"
-                              value={variant.name}
-                              onChange={e => handleUpdateVariant(vIdx, { name: e.target.value })}
-                              placeholder="Color Name (EN)"
-                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white font-bold"
-                            />
-                          </div>
-
-                          {/* Name KA */}
-                          <div className="sm:col-span-3">
-                            <input type="text"
-                              value={variant.nameKa || ''}
-                              onChange={e => handleUpdateVariant(vIdx, { nameKa: e.target.value })}
-                              placeholder="ფერის სახელი (KA)"
-                              className="w-full px-2.5 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white"
-                            />
-                          </div>
-
-                          {/* Price & Delete */}
-                          <div className="sm:col-span-3 flex items-center space-x-2 justify-end">
-                            <input type="number"
-                              step="0.01"
-                              value={variant.price ?? ''}
-                              onChange={e => handleUpdateVariant(vIdx, { price: e.target.value === '' ? undefined : Number(e.target.value) })}
-                              placeholder={`$${prodForm.price || 'Price'}`}
-                              className="w-20 px-2 py-1.5 text-xs bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg text-slate-900 dark:text-white font-bold"
-                            />
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveVariant(vIdx)}
-                              className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-950 rounded-lg transition-colors cursor-pointer"
-                              title="Delete Variant"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-
-                        {/* Variant-Specific Images Upload Zone */}
-                        <div className="pt-2 border-t border-slate-100 dark:border-slate-900 space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
-                              📸 {isKa ? `„${variant.name}“ ფერის სურათები (${parseImages(variant.images).length}):` : `Images for "${variant.name}" (${parseImages(variant.images).length}):`}
-                            </span>
-
-                            <label className="px-3 py-1 bg-indigo-50 dark:bg-indigo-950/80 hover:bg-indigo-100 text-indigo-700 dark:text-indigo-300 font-bold text-[11px] rounded-lg border border-indigo-200 dark:border-indigo-900 transition-colors cursor-pointer inline-flex items-center space-x-1">
-                              <Upload className="w-3 h-3" />
-                              <span>{isKa ? 'სურათის ატვირთვა R2-ში' : 'Upload Image to R2'}</span>
-                              <input
-                                type="file"
-                                accept="image/*"
-                                className="hidden dark:bg-slate-800 dark:text-white dark:border-slate-700 dark:placeholder-slate-400"
-                                onChange={e => {
-                                  const file = e.target.files?.[0];
-                                  if (file) handleUploadVariantImage(vIdx, file);
-                                  e.target.value = '';
-                                }}
-                              />
-                            </label>
-                          </div>
-
-                          {/* Thumbnails grid */}
-                          {parseImages(variant.images).length > 0 && (
-                            <div className="flex items-center space-x-2 overflow-x-auto pb-1 pt-1">
-                              {parseImages(variant.images).map((imgUrl, imgIdx) => (
-                                <div key={imgIdx} className="relative w-14 h-14 rounded-xl overflow-hidden border border-slate-200 dark:border-slate-800 shrink-0 group">
-                                  <CachedImage src={imgUrl} alt="Variant photo" className="w-full h-full object-cover" />
-                                  <button
-                                    type="button"
-                                    onClick={() => handleRemoveVariantImage(vIdx, imgIdx)}
-                                    className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
-                                  >
-                                    <Trash2 className="w-4 h-4 text-red-400" />
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+              {/* VARIANTS BUILDER SECTION (Colors, Sizes, Prices & Images) */}
+              <div className="space-y-2">
+                {prodForm.images.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                    <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                      {isKa
+                        ? 'AI Vision სურათებიდან ფერის ვარიანტების ავტომატური ამოცნობა'
+                        : 'AutoColorVision: Detect color swatches from product gallery'}
+                    </span>
+                    <button
+                      type="button"
+                      disabled={isDetectingModalColors}
+                      onClick={handleAutoDetectModalColors}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
+                    >
+                      {isDetectingModalColors ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>{isKa ? 'ფერების ამოცნობა...' : 'Detecting Colors...'}</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                          <span>{isKa ? '✨ ფერების ამოცნობა სურათებიდან' : '✨ Auto-Detect Colors from Photos'}</span>
+                        </>
+                      )}
+                    </button>
                   </div>
                 )}
+
+                <AdminVariantBuilder
+                  variants={parseVariants(prodForm.variants)}
+                  onChange={(nextVariants) =>
+                    setProdForm((prev) => ({ ...prev, variants: nextVariants }))
+                  }
+                  availableImages={prodForm.images}
+                  defaultPrice={Number(prodForm.price) || 0}
+                  onUploadImage={async (file) => {
+                    addToast(
+                      isKa
+                        ? `იტვირთება „${file.name}“ Cloudflare R2-ში...`
+                        : `Uploading "${file.name}" to Cloudflare R2...`,
+                      'info'
+                    );
+                    const url = await uploadImageToR2(file, prodForm.title || 'variant');
+                    addToast(
+                      isKa ? 'ვარიანტის სურათი აიტვირთა!' : 'Variant image uploaded!',
+                      'success'
+                    );
+                    return url;
+                  }}
+                  isKa={isKa}
+                />
               </div>
 
               <div className="pt-2 flex justify-end space-x-2">
