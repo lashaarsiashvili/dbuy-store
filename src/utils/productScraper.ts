@@ -6,6 +6,8 @@
  * and structured English attribute extraction.
  */
 
+import type { ExtractedProductReview } from '../types';
+
 export type ImporterPlatform = 'amazon' | 'ebay' | 'alibaba' | 'aliexpress' | 'temu';
 
 export interface ScrapedProductData {
@@ -22,6 +24,7 @@ export interface ScrapedProductData {
   compactContext?: string;
   sourceUrl?: string;
   marketplace: ImporterPlatform | 'unknown';
+  reviews?: ExtractedProductReview[];
 }
 
 export function cleanHtmlText(str: string): string {
@@ -353,6 +356,11 @@ export function parseAmazonProductHtml(html: string, sourceUrl: string = ''): Sc
   // Category inference
   const category = inferStoreCategory(title + ' ' + features.join(' ') + ' ' + finalDescription);
 
+  const amazonReviews = finalizeExtractedReviews([
+    ...extractAmazonReviews(html),
+    ...extractJsonLdReviews(html),
+  ]);
+
   return {
     title,
     category,
@@ -363,6 +371,7 @@ export function parseAmazonProductHtml(html: string, sourceUrl: string = ''): Sc
     images,
     sourceUrl,
     marketplace: 'amazon',
+    reviews: amazonReviews,
   };
 }
 
@@ -402,6 +411,16 @@ const PRODUCT_SCRIPT_MARKERS = [
   'medialist',
   'skulist',
   'skupricelist',
+  'evaviewlist',
+  'feedbackcomponent',
+  'reviewlist',
+  'goodsreview',
+  'ratelist',
+  'reviewinfo',
+  'customerreview',
+  'feedbacklist',
+  'evaluationlist',
+  '"reviews"',
 ];
 
 /**
@@ -871,14 +890,14 @@ export function isEbayNoiseSpec(label: string, value: string): boolean {
   return false;
 }
 
-function extractBalancedTagBlocks(html: string, openTagPattern: RegExp): string[] {
+function extractBalancedTagBlocks(html: string, openTagPattern: RegExp, maxBlocks: number = 25): string[] {
   const blocks: string[] = [];
   const flags = openTagPattern.flags.includes('g') ? openTagPattern.flags : openTagPattern.flags + 'g';
   const re = new RegExp(openTagPattern.source, flags);
   let m: RegExpExecArray | null;
   let guard = 0;
 
-  while ((m = re.exec(html)) !== null && guard < 20) {
+  while ((m = re.exec(html)) !== null && guard < maxBlocks) {
     guard++;
     const tagMatch = m[0].match(/^<([a-z0-9]+)/i);
     const tagName = (tagMatch?.[1] || 'div').toLowerCase();
@@ -919,6 +938,565 @@ function decodeHtmlEntitiesOnce(str: string): string {
     .replace(/&#39;|&apos;/gi, "'")
     .replace(/&nbsp;/gi, ' ')
     .replace(/&amp;/gi, '&');
+}
+
+/**
+ * ============================================================================
+ * MULTI-PLATFORM CUSTOMER REVIEW EXTRACTION ENGINE
+ * Runtime-agnostic (Node, Cloudflare Workers, Browser) — zero DOMParser usage.
+ * Never fabricates or hallucinates reviews when HTML contains none.
+ * ============================================================================
+ */
+const MONTH_NAMES_FULL = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December',
+];
+
+function formatReviewDate(raw?: string | number | null): string {
+  if (raw === undefined || raw === null) return '';
+  if (typeof raw === 'number' && Number.isFinite(raw) && raw > 0) {
+    const ms = raw < 1e11 ? raw * 1000 : raw;
+    const d = new Date(ms);
+    if (!Number.isNaN(d.getTime()) && d.getUTCFullYear() >= 2005 && d.getUTCFullYear() <= 2100) {
+      return `${MONTH_NAMES_FULL[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+    }
+    return '';
+  }
+
+  let text = cleanHtmlText(String(raw));
+  if (!text) return '';
+
+  // Strip Amazon prefix e.g. "Reviewed in the United States on October 14, 2026"
+  text = text
+    .replace(/^Reviewed\s+in\s+[^0-9]+?\s+on\s+/i, '')
+    .replace(/^Verified\s+purchase\s*[-•|]?\s*/i, '')
+    .trim();
+
+  if (!text) return '';
+
+  // Numeric timestamp string
+  if (/^\d{10,13}$/.test(text)) {
+    return formatReviewDate(Number(text));
+  }
+
+  // Relative phrases e.g. "Past month", "Past 6 months", "3 days ago"
+  if (/^(?:past\s+(?:month|\d+\s+months?|year)|recent|\d+\s+(?:days?|weeks?|months?)\s+ago)$/i.test(text)) {
+    return text.charAt(0).toUpperCase() + text.slice(1);
+  }
+
+  // Try parsing ISO or natural dates like "October 14, 2026", "14 Oct 2026", "2026-10-14", "10/14/2026"
+  const isoMatch = text.match(/\b(\d{4})[-/](\d{1,2})(?:[-/]\d{1,2})?\b/);
+  if (isoMatch) {
+    const yr = Number(isoMatch[1]);
+    const mo = Number(isoMatch[2]) - 1;
+    if (mo >= 0 && mo <= 11 && yr >= 2005 && yr <= 2100) {
+      return `${MONTH_NAMES_FULL[mo]} ${yr}`;
+    }
+  }
+
+  const parsedDate = new Date(text);
+  if (!Number.isNaN(parsedDate.getTime())) {
+    const yr = parsedDate.getFullYear();
+    const mo = parsedDate.getMonth();
+    if (yr >= 2005 && yr <= 2100) {
+      return `${MONTH_NAMES_FULL[mo]} ${yr}`;
+    }
+  }
+
+  // Direct "Month [DD,] YYYY" fallback match
+  const monthRegex = new RegExp(`\\b(${MONTH_NAMES_FULL.join('|')}|Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Sept|Oct|Nov|Dec)[a-z.]*\\s+(?:\\d{1,2},?\\s+)?(20\\d{2})\\b`, 'i');
+  const mm = text.match(monthRegex);
+  if (mm) {
+    const rawMo = mm[1].toLowerCase().slice(0, 3);
+    const fullMo = MONTH_NAMES_FULL.find((m) => m.toLowerCase().startsWith(rawMo)) || mm[1];
+    return `${fullMo} ${mm[2]}`;
+  }
+
+  return text.length <= 32 ? text : text.slice(0, 32).trim();
+}
+
+function cleanReviewAuthor(raw?: string | null): string {
+  if (!raw || typeof raw !== 'string') return 'Verified Buyer';
+  let name = cleanHtmlText(raw)
+    .replace(/\b(?:Verified\s+(?:Purchase|Buyer|Order)|Top\s+Contributor|Vine\s+Voice)\b/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (!name || name.length < 2) return 'Verified Buyer';
+  const lower = name.toLowerCase();
+  if (
+    lower === 'anonymous' ||
+    lower === 'amazon customer' ||
+    lower === 'ebay buyer' ||
+    lower === 'aliexpress shopper' ||
+    lower === 'temu user' ||
+    lower === 'customer' ||
+    lower === 'buyer' ||
+    /^[*\s._-]+$/.test(name) ||
+    /^[a-z0-9]\*{2,}[a-z0-9]?$/i.test(name)
+  ) {
+    return 'Verified Buyer';
+  }
+
+  return name.slice(0, 48);
+}
+
+function parseStarRating(raw: unknown, defaultIfPositive: number = 5): number {
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    if (raw > 5 && raw <= 100) {
+      // AliExpress/Alibaba percentage scale e.g. 100 -> 5, 80 -> 4, 60 -> 3
+      const scaled = Math.round(raw / 20);
+      return Math.min(5, Math.max(1, scaled));
+    }
+    if (raw >= 1 && raw <= 5) {
+      return Math.min(5, Math.max(1, Math.round(raw)));
+    }
+    return defaultIfPositive;
+  }
+
+  if (typeof raw === 'string') {
+    const s = raw.trim();
+    const starClassMatch = s.match(/a-star(?:-small)?-(\d)/i);
+    if (starClassMatch) {
+      return Math.min(5, Math.max(1, Number(starClassMatch[1])));
+    }
+    const outOfMatch = s.match(/(\d+(?:\.\d+)?)\s*(?:out\s*of\s*5|\/\s*5|stars?)/i);
+    if (outOfMatch) {
+      const n = parseFloat(outOfMatch[1]);
+      if (Number.isFinite(n) && n >= 1 && n <= 5) return Math.round(n);
+    }
+    const numMatch = s.match(/^\s*(\d+(?:\.\d+)?)\s*$/);
+    if (numMatch) {
+      return parseStarRating(parseFloat(numMatch[1]), defaultIfPositive);
+    }
+    if (/\bnegative\b/i.test(s)) return 1;
+    if (/\bneutral\b/i.test(s)) return 3;
+    if (/\bpositive\b/i.test(s)) return 5;
+  }
+
+  return defaultIfPositive;
+}
+
+function cleanReviewComment(raw: string): { comment: string; detectedVerified: boolean } {
+  if (!raw || typeof raw !== 'string') return { comment: '', detectedVerified: false };
+  const detectedVerified = /verified\s+(?:purchase|buyer|order)|avp-badge/i.test(raw);
+
+  // Remove Amazon video player error boilerplate & helper action buttons before flattening text
+  let pre = raw
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, ' ')
+    .replace(/<style\b[^<]*(?:(?!<\/style>)<[^<]*)*<\/style>/gi, ' ')
+    .replace(/<span[^>]*class=["'][^"']*a-declarative[^"']*["'][^>]*>[\s\S]*?(?:Helpful|Report)[\s\S]*?<\/span>/gi, ' ')
+    .replace(/The media could not be loaded\.?/gi, ' ');
+
+  let text = cleanHtmlText(pre);
+
+  // Strip UI noise tokens commonly appended inside review containers
+  text = text
+    .replace(/\b\d+\s+people\s+found\s+this\s+helpful\b\.?/gi, ' ')
+    .replace(/\bOne\s+person\s+found\s+this\s+helpful\b\.?/gi, ' ')
+    .replace(/\bWas\s+this\s+review\s+helpful\??\b/gi, ' ')
+    .replace(/\bVerified\s+(?:Purchase|Buyer|Order)\b\.?/gi, ' ')
+    .replace(/\bReport\s+abuse\b\.?/gi, ' ')
+    .replace(/\bTranslate\s+review\s+to\s+\w+\b\.?/gi, ' ')
+    .replace(/\bSee\s+translation\b\.?/gi, ' ')
+    .replace(/\bHelpful\s*(?:\(\d+\))?\.?\s*(?:Report)?$/gi, ' ')
+    .replace(/\b(?:Read\s+more|Show\s+less|Report)\s*$/gi, ' ')
+    .replace(/^(?:Helpful|Report)\b[\s•|:-]*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (
+    text.length < 8 ||
+    /^(?:yes|no|ok|good|helpful|report abuse|verified purchase|verified buyer|\d+\s+stars?)$/i.test(text)
+  ) {
+    return { comment: '', detectedVerified };
+  }
+
+  return { comment: text.slice(0, 1200), detectedVerified };
+}
+
+function finalizeExtractedReviews(candidates: ExtractedProductReview[]): ExtractedProductReview[] {
+  const seen = new Set<string>();
+  const cleanList: ExtractedProductReview[] = [];
+
+  for (const item of candidates) {
+    if (!item || !item.comment) continue;
+    const { comment, detectedVerified } = cleanReviewComment(item.comment);
+    if (!comment || comment.length < 8) continue;
+
+    const dedupeKey = comment.toLowerCase().replace(/[^a-z0-9\u10A0-\u10FF]/g, '').slice(0, 90);
+    if (!dedupeKey || seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+
+    const cleanTitle = item.title
+      ? cleanHtmlText(item.title)
+          .replace(/^\d+(?:\.\d+)?\s+out\s+of\s+5\s+stars\s*/i, '')
+          .trim()
+          .slice(0, 140)
+      : '';
+
+    cleanList.push({
+      author_name: cleanReviewAuthor(item.author_name),
+      rating: parseStarRating(item.rating, 5),
+      title: cleanTitle && cleanTitle.toLowerCase() !== comment.toLowerCase() ? cleanTitle : undefined,
+      comment,
+      verified: Boolean(item.verified || detectedVerified),
+      review_date: item.review_date ? formatReviewDate(item.review_date) : '',
+    });
+  }
+
+  // Prioritize verified, titled, and detailed helpful reviews (up to top 15)
+  cleanList.sort((a, b) => {
+    const scoreA = (a.verified ? 40 : 0) + (a.title ? 20 : 0) + Math.min(a.comment.length, 320);
+    const scoreB = (b.verified ? 40 : 0) + (b.title ? 20 : 0) + Math.min(b.comment.length, 320);
+    return scoreB - scoreA;
+  });
+
+  return cleanList.slice(0, 15);
+}
+
+function extractJsonLdReviews(html: string): ExtractedProductReview[] {
+  const extracted: ExtractedProductReview[] = [];
+  const jsonLdMatches = html.matchAll(/<script[^>]*type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi);
+
+  const pushReviewObj = (rev: any) => {
+    if (!rev || typeof rev !== 'object') return;
+    const rawBody = rev.reviewBody || rev.description || rev.text || rev.comment;
+    if (!rawBody || typeof rawBody !== 'string') return;
+    const { comment, detectedVerified } = cleanReviewComment(rawBody);
+    if (!comment) return;
+
+    const rawAuthor =
+      typeof rev.author === 'string'
+        ? rev.author
+        : rev.author?.name || rev.author?.alternateName || '';
+
+    const rawRating =
+      rev.reviewRating?.ratingValue ??
+      rev.ratingValue ??
+      rev.rating ??
+      5;
+
+    extracted.push({
+      author_name: cleanReviewAuthor(String(rawAuthor)),
+      rating: parseStarRating(rawRating, 5),
+      title: rev.headline || rev.name ? cleanHtmlText(String(rev.headline || rev.name)) : undefined,
+      comment,
+      verified: Boolean(detectedVerified || rev.verifiedPurchase || rev.author),
+      review_date: formatReviewDate(rev.datePublished || rev.dateCreated || ''),
+    });
+  };
+
+  for (const m of jsonLdMatches) {
+    const rawText = (m[1] || '').trim();
+    if (!rawText) continue;
+    const parsed = tryParseJsonSafe(rawText);
+    if (!parsed) continue;
+
+    const nodes: any[] = [];
+    if (Array.isArray(parsed)) {
+      nodes.push(...parsed);
+    } else if (parsed && typeof parsed === 'object') {
+      if (Array.isArray(parsed['@graph'])) nodes.push(...parsed['@graph']);
+      else nodes.push(parsed);
+    }
+
+    for (const node of nodes) {
+      if (!node || typeof node !== 'object') continue;
+      const types = Array.isArray(node['@type']) ? node['@type'] : [node['@type']];
+      if (types.includes('Review')) {
+        pushReviewObj(node);
+      }
+      if (node.review) {
+        const revList = Array.isArray(node.review) ? node.review : [node.review];
+        for (const r of revList) pushReviewObj(r);
+      }
+    }
+  }
+
+  return extracted;
+}
+
+function extractAmazonReviews(html: string): ExtractedProductReview[] {
+  const results: ExtractedProductReview[] = [];
+
+  // Primary Amazon review containers: [data-hook="review"], #customer_review-*, or .review
+  const blocks = [
+    ...extractBalancedTagBlocks(html, /<(?:div|li)[^>]*(?:data-hook=["']review["']|id=["']customer_review-[^"']+["'])[^>]*>/gi, 25),
+    ...extractBalancedTagBlocks(html, /<div[^>]*class=["'][^"']*\breview\b[^"']*a-section[^"']*["'][^>]*>/gi, 25),
+  ];
+
+  for (const block of blocks) {
+    const bodyBlock =
+      extractBalancedTagBlocks(block, /<(?:span|div)[^>]*data-hook=["']review-body["'][^>]*>/gi, 1)[0] ||
+      extractBalancedTagBlocks(block, /<div[^>]*class=["'][^"']*review-text-content[^"']*["'][^>]*>/gi, 1)[0];
+    if (!bodyBlock) continue;
+
+    const { comment, detectedVerified } = cleanReviewComment(bodyBlock);
+    if (!comment) continue;
+
+    const authorMatch = block.match(/class=["'][^"']*a-profile-name[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+    const authorName = cleanReviewAuthor(authorMatch?.[1]);
+
+    const ratingBlockMatch =
+      block.match(/<i[^>]*data-hook=["'](?:cmps-)?review-star-rating["'][^>]*class=["']([^"']+)["'][^>]*>([\s\S]*?)<\/i>/i) ||
+      block.match(/<i[^>]*class=["']([^"']*a-star-(\d)[^"']*)["'][^>]*>([\s\S]*?)<\/i>/i);
+    const ratingSource = ratingBlockMatch
+      ? `${ratingBlockMatch[1] || ''} ${cleanHtmlText(ratingBlockMatch[2] || ratingBlockMatch[3] || '')}`
+      : '5';
+    const rating = parseStarRating(ratingSource, 5);
+
+    // Headline inside [data-hook="review-title"] (handling nested spans cleanly)
+    let title = '';
+    const titleBlock = extractBalancedTagBlocks(
+      block,
+      /<(?:a|span|h\d)[^>]*data-hook=["']review-title["'][^>]*>/gi,
+      1
+    )[0];
+    if (titleBlock) {
+      const withoutIcon = titleBlock.replace(/<i[^>]*>[\s\S]*?<\/i>/gi, ' ');
+      const cleanedTitle = cleanHtmlText(withoutIcon)
+        .replace(/^\d+(?:\.\d+)?\s+out\s+of\s+5\s+stars\s*/i, '')
+        .trim();
+      title = cleanedTitle;
+    }
+
+    const dateMatch = block.match(/<span[^>]*data-hook=["']review-date["'][^>]*>([\s\S]*?)<\/span>/i);
+    const reviewDate = formatReviewDate(dateMatch?.[1]);
+
+    const verified =
+      detectedVerified ||
+      /data-hook=["']avp-badge["']/i.test(block) ||
+      /Verified\s+Purchase/i.test(block);
+
+    results.push({
+      author_name: authorName,
+      rating,
+      title: title || undefined,
+      comment,
+      verified,
+      review_date: reviewDate,
+    });
+  }
+
+  // Fallback if snippet only contains isolated [data-hook="review-body"] blocks
+  if (results.length === 0) {
+    const bodyBlocks = extractBalancedTagBlocks(
+      html,
+      /<(?:span|div)[^>]*data-hook=["']review-body["'][^>]*>/gi,
+      15
+    );
+    for (const rawBody of bodyBlocks) {
+      const { comment, detectedVerified } = cleanReviewComment(rawBody);
+      if (!comment) continue;
+      results.push({
+        author_name: 'Verified Buyer',
+        rating: 5,
+        comment,
+        verified: detectedVerified,
+        review_date: '',
+      });
+    }
+  }
+
+  return results;
+}
+
+function extractStateAndDomReviews(
+  html: string,
+  stateObjects: any[],
+  platform: ImporterPlatform
+): ExtractedProductReview[] {
+  const results: ExtractedProductReview[] = [];
+
+  // 1. Embedded JSON state arrays (AliExpress evaViewList/feedbackComponent, Temu reviewList/goodsReview, Alibaba evaluationList/rateList, eBay feedback)
+  const reviewStateKeys = new Set([
+    'evaViewList',
+    'reviewList',
+    'goodsReview',
+    'rateList',
+    'feedbackList',
+    'feedbackComponent',
+    'evaluationList',
+    'commentList',
+    'reviewInfo',
+    'reviews',
+  ]);
+
+  const parsedStates = [...stateObjects];
+  // Also attempt direct array extraction for key markers if outer JS literal failed JSON.parse
+  if (parsedStates.length === 0) {
+    for (const arrRe of [
+      /["']?(?:evaViewList|reviewList|goodsReview|rateList|feedbackList|evaluationList|commentList)["']?\s*:\s*/gi,
+    ]) {
+      let m: RegExpExecArray | null;
+      let count = 0;
+      while ((m = arrRe.exec(html)) !== null && count < 4) {
+        count++;
+        const start = m.index + m[0].length;
+        if (html[start] === '[') {
+          const rawArr = extractBalancedJsonFromIndex(html, start);
+          if (rawArr) {
+            const parsedArr = tryParseJsonSafe(rawArr);
+            if (Array.isArray(parsedArr)) {
+              parsedStates.push({ reviewList: parsedArr });
+            }
+          }
+        }
+      }
+    }
+  }
+
+  for (const state of parsedStates) {
+    const hits = deepFindByKey(state, reviewStateKeys, 8);
+    for (const hit of hits) {
+      const arr = Array.isArray(hit.value)
+        ? hit.value
+        : Array.isArray(hit.value?.evaViewList)
+        ? hit.value.evaViewList
+        : Array.isArray(hit.value?.list)
+        ? hit.value.list
+        : Array.isArray(hit.value?.data)
+        ? hit.value.data
+        : Array.isArray(hit.value?.items)
+        ? hit.value.items
+        : null;
+
+      if (!Array.isArray(arr)) continue;
+
+      for (const item of arr) {
+        if (!item || typeof item !== 'object') continue;
+        const rawComment =
+          item.buyerFeedback ||
+          item.buyerTranslationFeedback ||
+          item.comment ||
+          item.content ||
+          item.reviewContent ||
+          item.reviewText ||
+          item.feedbackContent ||
+          item.text ||
+          item.body ||
+          item.desc ||
+          '';
+        if (typeof rawComment !== 'string' || !rawComment.trim()) continue;
+
+        const { comment, detectedVerified } = cleanReviewComment(rawComment);
+        if (!comment) continue;
+
+        const rawAuthor =
+          item.buyerName ||
+          item.authorName ||
+          item.userName ||
+          item.nickName ||
+          item.userNick ||
+          item.reviewerName ||
+          item.evalUserName ||
+          item.author ||
+          '';
+
+        const rawRating =
+          item.buyerEval ??
+          item.starRating ??
+          item.star ??
+          item.score ??
+          item.rating ??
+          item.grade ??
+          5;
+
+        const rawDate =
+          item.evalDate ||
+          item.reviewDate ||
+          item.gmtCreate ||
+          item.createTime ||
+          item.formattedTime ||
+          item.date ||
+          item.time ||
+          '';
+
+        const rawTitle = item.title || item.headline || item.subject || item.reviewTitle || '';
+        const isVerified =
+          detectedVerified ||
+          item.verified === true ||
+          item.verifiedPurchase === true ||
+          item.isVerified === true ||
+          platform === 'aliexpress' ||
+          platform === 'temu' ||
+          platform === 'alibaba' ||
+          platform === 'ebay';
+
+        results.push({
+          author_name: cleanReviewAuthor(String(rawAuthor)),
+          rating: parseStarRating(rawRating, 5),
+          title: typeof rawTitle === 'string' && rawTitle.trim() ? cleanHtmlText(rawTitle) : undefined,
+          comment,
+          verified: Boolean(isVerified && item.verified !== false),
+          review_date: formatReviewDate(rawDate),
+        });
+      }
+    }
+  }
+
+  // 2. HTML DOM feedback / review containers (.fdbk-detail-list__tabbed-btn, .feedback-item, [class*="review-item"], [class*="comment-item"], eBay .fdbk-container__details)
+  const domBlocks = [
+    ...extractBalancedTagBlocks(
+      html,
+      /<(?:div|li|article|section|button)[^>]*class=["'][^"']*(?:fdbk-detail-list__tabbed-btn|feedback-item|fdbk-container__details|review-item|comment-item|rate-item|eval-item|list--item--)[^"']*["'][^>]*>/gi,
+      25
+    ),
+    ...extractBalancedTagBlocks(
+      html,
+      /<(?:div|li|article)[^>]*data-testid=["'][^"']*(?:review|feedback)[^"']*["'][^>]*>/gi,
+      25
+    ),
+  ];
+
+  for (const block of domBlocks) {
+    // Prefer specific comment/body sub-elements first
+    const bodyBlock =
+      extractBalancedTagBlocks(
+        block,
+        /<(?:div|p|span)[^>]*class=["'][^"']*(?:fdbk-container__details__comment|review-content|review-text|comment-content|feedback-text|buyer-feedback|review-body|list--item-review)[^"']*["'][^>]*>/gi,
+        1
+      )[0] || block.match(/<p[^>]*>([\s\S]*?)<\/p>/i)?.[1];
+
+    const rawCandidate = bodyBlock || block;
+    const { comment, detectedVerified } = cleanReviewComment(rawCandidate);
+    if (!comment) continue;
+
+    const authorMatch =
+      block.match(/<[^>]*class=["'][^"']*(?:fdbk-container__details__info__username|user-name|author-name|reviewer-name|buyer-name|nick-name)[^"']*["'][^>]*>([\s\S]*?)<\/(?:span|div|a)>/i);
+    const authorName = cleanReviewAuthor(authorMatch?.[1]);
+
+    const titleMatch =
+      block.match(/<[^>]*class=["'][^"']*(?:review-title|review-headline|feedback-title)[^"']*["'][^>]*>([\s\S]*?)<\/(?:h3|h4|span|div)>/i);
+    const title = titleMatch?.[1] ? cleanHtmlText(titleMatch[1]) : undefined;
+
+    const dateMatch =
+      block.match(/<[^>]*class=["'][^"']*(?:fdbk-container__details__info__divide__time|review-date|comment-date|feedback-date|eval-date|time)[^"']*["'][^>]*>([\s\S]*?)<\/(?:span|div|time)>/i) ||
+      block.match(/<time[^>]*>([\s\S]*?)<\/time>/i);
+    const reviewDate = formatReviewDate(dateMatch?.[1]);
+
+    const ratingMatch =
+      block.match(/aria-label=["']([^"']*(?:star|out of 5)[^"']*)["']/i) ||
+      block.match(/class=["'][^"']*(?:star-rating|rating)[^"']*["'][^>]*>([\s\S]*?)<\/(?:span|div)>/i);
+    const rating = parseStarRating(ratingMatch ? (ratingMatch[1] || '') : '', 5);
+
+    const verified =
+      detectedVerified ||
+      /Verified\s+(?:Purchase|Buyer|Order)|fdbk-container__details__verified/i.test(block) ||
+      (platform === 'ebay' && /fdbk-container__details/i.test(block));
+
+    results.push({
+      author_name: authorName,
+      rating,
+      title,
+      comment,
+      verified,
+      review_date: reviewDate,
+    });
+  }
+
+  return results;
 }
 
 function cleanEbayDescriptionText(raw: string): string {
@@ -1472,6 +2050,11 @@ export function parseEbayProductHtml(rawHtml: string, sourceUrl: string = ''): S
     category,
   });
 
+  const ebayReviews = finalizeExtractedReviews([
+    ...extractStateAndDomReviews(html, mskuBlocks, 'ebay'),
+    ...extractJsonLdReviews(html),
+  ]);
+
   return {
     title: title || 'Imported Product',
     category,
@@ -1486,6 +2069,7 @@ export function parseEbayProductHtml(rawHtml: string, sourceUrl: string = ''): S
     compactContext: buildCompactContext('ebay', title, `${currency} ${price}`, itemSpecifics, rawDesc, html),
     sourceUrl,
     marketplace: 'ebay',
+    reviews: ebayReviews,
   };
 }
 
@@ -1759,6 +2343,11 @@ export function parseAlibabaProductHtml(rawHtml: string, sourceUrl: string = '')
     finalDescription += (finalDescription ? '\n\nProduct Specifications:\n' : 'Product Specifications:\n') + specs.slice(0, 10).join(' • ');
   }
 
+  const alibabaReviews = finalizeExtractedReviews([
+    ...extractStateAndDomReviews(html, stateObjects, 'alibaba'),
+    ...extractJsonLdReviews(html),
+  ]);
+
   return {
     title: title || 'Imported Product',
     category: inferStoreCategory(title + ' ' + finalDescription),
@@ -1773,6 +2362,7 @@ export function parseAlibabaProductHtml(rawHtml: string, sourceUrl: string = '')
     compactContext: buildCompactContext('alibaba', title, `${currency} ${price}`, specs, rawDesc, html),
     sourceUrl,
     marketplace: 'alibaba',
+    reviews: alibabaReviews,
   };
 }
 
@@ -2022,6 +2612,11 @@ export function parseAliExpressProductHtml(rawHtml: string, sourceUrl: string = 
     finalDescription += (finalDescription ? '\n\nKey Specifications:\n' : 'Key Specifications:\n') + specs.slice(0, 10).join(' • ');
   }
 
+  const aliexpressReviews = finalizeExtractedReviews([
+    ...extractStateAndDomReviews(html, stateObjects, 'aliexpress'),
+    ...extractJsonLdReviews(html),
+  ]);
+
   return {
     title: title || 'Imported Product',
     category: inferStoreCategory(title + ' ' + finalDescription),
@@ -2036,6 +2631,7 @@ export function parseAliExpressProductHtml(rawHtml: string, sourceUrl: string = 
     compactContext: buildCompactContext('aliexpress', title, `${currency} ${price}`, specs, rawDesc, html),
     sourceUrl,
     marketplace: 'aliexpress',
+    reviews: aliexpressReviews,
   };
 }
 
@@ -2282,6 +2878,11 @@ export function parseTemuProductHtml(rawHtml: string, sourceUrl: string = ''): S
     finalDescription += (finalDescription ? '\n\nProduct Attributes:\n' : 'Product Attributes:\n') + specs.slice(0, 10).join(' • ');
   }
 
+  const temuReviews = finalizeExtractedReviews([
+    ...extractStateAndDomReviews(html, stateObjects, 'temu'),
+    ...extractJsonLdReviews(html),
+  ]);
+
   return {
     title: title || 'Imported Product',
     category: inferStoreCategory(title + ' ' + finalDescription),
@@ -2296,6 +2897,7 @@ export function parseTemuProductHtml(rawHtml: string, sourceUrl: string = ''): S
     compactContext: buildCompactContext('temu', title, `${currency} ${price}`, specs, rawDesc, html),
     sourceUrl,
     marketplace: 'temu',
+    reviews: temuReviews,
   };
 }
 
@@ -2375,6 +2977,8 @@ export function parseProductHtml(html: string, url: string = ''): ScrapedProduct
                     html.match(/<meta name=["']description["'] content=["']([^"']*)["']/i);
   const description = descMatch ? cleanHtmlText(descMatch[1]) : title;
 
+  const fallbackReviews = finalizeExtractedReviews(extractJsonLdReviews(html));
+
   return {
     title,
     category: inferStoreCategory(title + ' ' + description),
@@ -2384,5 +2988,6 @@ export function parseProductHtml(html: string, url: string = ''): ScrapedProduct
     images: [],
     sourceUrl: url,
     marketplace: 'unknown',
+    reviews: fallbackReviews,
   };
 }

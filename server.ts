@@ -3616,6 +3616,7 @@ app.post('/api/import-product', async (req, res) => {
             rawAttributes: preParsed.rawAttributes && typeof preParsed.rawAttributes === 'object' ? preParsed.rawAttributes : {},
             sourceUrl: targetUrl || preParsed.sourceUrl || '',
             marketplace: platform,
+            reviews: Array.isArray(preParsed.reviews) ? preParsed.reviews : [],
           }
         : parsePlatformHtml(platform, htmlContent, targetUrl);
 
@@ -5771,6 +5772,194 @@ app.post('/api/contact/messages/delete', (req, res) => {
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Failed to delete message' });
   }
+});
+
+// ==========================================
+// Dedicated Product Reviews Storage (/api/reviews)
+// Stored strictly separately from store_database.json / products
+// ==========================================
+const PRODUCT_REVIEWS_FILE = path.join(DB_DIR, 'product_reviews.json');
+
+interface StoredReviewRow {
+  id: string;
+  product_id: string;
+  author_name: string;
+  rating: number;
+  title: string;
+  comment: string;
+  verified: boolean;
+  review_date: string;
+  created_at: string;
+}
+
+function readLocalProductReviews(): StoredReviewRow[] {
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    if (!fs.existsSync(PRODUCT_REVIEWS_FILE)) {
+      return [];
+    }
+    const raw = fs.readFileSync(PRODUCT_REVIEWS_FILE, 'utf-8');
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeLocalProductReviews(rows: StoredReviewRow[]): void {
+  try {
+    if (!fs.existsSync(DB_DIR)) {
+      fs.mkdirSync(DB_DIR, { recursive: true });
+    }
+    fs.writeFileSync(PRODUCT_REVIEWS_FILE, JSON.stringify(rows, null, 2), 'utf-8');
+  } catch (err) {
+    console.warn('[REVIEWS] Failed to save product_reviews.json:', err);
+  }
+}
+
+function summarizeLocalReviews(list: StoredReviewRow[]) {
+  const totalCount = list.length;
+  const averageRating =
+    totalCount > 0
+      ? Math.round((list.reduce((s, r) => s + r.rating, 0) / totalCount) * 10) / 10
+      : 5.0;
+  return { totalCount, averageRating };
+}
+
+function formatReviewMonthNow(): string {
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December',
+  ];
+  const d = new Date();
+  return `${months[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
+}
+
+app.get('/api/reviews', (req, res) => {
+  const productId = String(req.query.productId || '').trim();
+  const all = readLocalProductReviews();
+  const filtered = productId
+    ? all.filter((r) => String(r.product_id) === productId)
+    : all.slice(0, 300);
+
+  const sorted = [...filtered].sort(
+    (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+  );
+  const { totalCount, averageRating } = summarizeLocalReviews(sorted);
+  res.json({
+    success: true,
+    reviews: sorted,
+    totalCount,
+    averageRating,
+  });
+});
+
+app.post('/api/reviews', (req, res) => {
+  try {
+    const body = req.body || {};
+    const productId = String(body.productId || body.product_id || '').trim();
+    if (!productId) {
+      res.status(400).json({ success: false, error: 'productId is required' });
+      return;
+    }
+
+    const all = readLocalProductReviews();
+
+    if (Array.isArray(body.reviews)) {
+      const items = body.reviews.slice(0, 15);
+      const inserted: StoredReviewRow[] = [];
+      for (let idx = 0; idx < items.length; idx++) {
+        const item = items[idx];
+        const comment = String(item?.comment || '').trim().slice(0, 1500);
+        if (!comment) continue;
+        const entry: StoredReviewRow = {
+          id: `rev_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 7)}`,
+          product_id: productId,
+          author_name: String(item?.author_name || 'Verified Buyer').trim().slice(0, 60) || 'Verified Buyer',
+          rating: Math.min(5, Math.max(1, Math.round(Number(item?.rating) || 5))),
+          title: String(item?.title || '').trim().slice(0, 160),
+          comment,
+          verified: Boolean(item?.verified),
+          review_date: String(item?.review_date || '').trim().slice(0, 40),
+          created_at: new Date(Date.now() - idx * 1000).toISOString(),
+        };
+        inserted.push(entry);
+      }
+
+      const nextAll = [...inserted, ...all];
+      writeLocalProductReviews(nextAll);
+
+      const productRows = nextAll
+        .filter((r) => String(r.product_id) === productId)
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      const { totalCount, averageRating } = summarizeLocalReviews(productRows);
+
+      res.json({
+        success: true,
+        insertedCount: inserted.length,
+        reviews: productRows,
+        totalCount,
+        averageRating,
+      });
+      return;
+    }
+
+    const userEmail = String(body.userEmail || body.email || '').trim();
+    if (!userEmail || !userEmail.includes('@')) {
+      res.status(401).json({ success: false, error: 'Please sign in to your dbuystore.com account to submit a review.' });
+      return;
+    }
+
+    const comment = String(body.comment || '').trim().slice(0, 1500);
+    if (comment.length < 2) {
+      res.status(400).json({ success: false, error: 'Review comment cannot be empty.' });
+      return;
+    }
+
+    const entry: StoredReviewRow = {
+      id: `rev_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+      product_id: productId,
+      author_name: String(body.author_name || body.userName || userEmail.split('@')[0] || 'Customer').trim().slice(0, 60),
+      rating: Math.min(5, Math.max(1, Math.round(Number(body.rating) || 5))),
+      title: String(body.title || '').trim().slice(0, 160),
+      comment,
+      verified: body.verified === false ? false : true,
+      review_date: String(body.review_date || formatReviewMonthNow()).trim().slice(0, 40),
+      created_at: new Date().toISOString(),
+    };
+
+    const nextAll = [entry, ...all];
+    writeLocalProductReviews(nextAll);
+
+    const productRows = nextAll
+      .filter((r) => String(r.product_id) === productId)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    const { totalCount, averageRating } = summarizeLocalReviews(productRows);
+
+    res.json({
+      success: true,
+      review: entry,
+      reviews: productRows,
+      totalCount,
+      averageRating,
+    });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to save product review' });
+  }
+});
+
+app.delete('/api/reviews', (req, res) => {
+  const reviewId = String(req.query.id || req.body?.id || '').trim();
+  if (!reviewId) {
+    res.status(400).json({ success: false, error: 'Review id is required' });
+    return;
+  }
+  const all = readLocalProductReviews();
+  const updated = all.filter((r) => r.id !== reviewId);
+  writeLocalProductReviews(updated);
+  res.json({ success: true, deletedId: reviewId });
 });
 
 // JSON 404 handler for any unknown /api routes

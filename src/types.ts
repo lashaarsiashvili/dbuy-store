@@ -103,6 +103,27 @@ export interface Product {
   updatedAt?: string;
 }
 
+export interface ExtractedProductReview {
+  author_name: string;
+  rating: number;
+  title?: string;
+  comment: string;
+  verified: boolean;
+  review_date?: string;
+}
+
+export interface ProductReview {
+  id: string;
+  product_id: string;
+  author_name: string;
+  rating: number;
+  title?: string;
+  comment: string;
+  verified: boolean;
+  review_date?: string;
+  created_at: string;
+}
+
 export interface CartItem {
   product: Product;
   quantity: number;

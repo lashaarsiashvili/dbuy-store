@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { GeminiChat } from './GeminiChat';
 import { smartApiFetch } from '../lib/api';
-import { Product, Order, BillboardSlide, LogoOptionId, ProductVideo, ProductVariant } from '../types';
+import { Product, Order, BillboardSlide, LogoOptionId, ProductVideo, ProductVariant, ExtractedProductReview } from '../types';
 import { generateProductFeatures, isGeorgianText } from '../utils/productFeatures';
 import { generateProductAdCopy } from '../utils/adCopyGenerator';
 import { saveImageBackupIDB } from '../utils/imageStorage';
@@ -505,6 +505,7 @@ export const AdminDashboard: React.FC = () => {
     productOrigin: '' as '' | 'US' | 'CN',
     sourceUrl: '' as string,
     specs: [] as string[],
+    pendingReviews: [] as ExtractedProductReview[],
   });
 
   // Global Product Videos Handlers
@@ -1363,6 +1364,7 @@ export const AdminDashboard: React.FC = () => {
       productOrigin: '',
       sourceUrl: '',
       specs: [],
+      pendingReviews: [],
     });
     setFeaturesTab(isKa ? 'ka' : 'en');
     setIsProductModalOpen(true);
@@ -1425,6 +1427,7 @@ export const AdminDashboard: React.FC = () => {
       productOrigin: detectedOrigin,
       sourceUrl: data.sourceUrl || '',
       specs: Array.isArray(data.specs) ? data.specs : [],
+      pendingReviews: Array.isArray(data.reviews) ? data.reviews : [],
     });
 
     setIsProductModalOpen(true);
@@ -1452,6 +1455,13 @@ export const AdminDashboard: React.FC = () => {
         `origin:${detectedOrigin}`,
       ])
     );
+
+    const importedReviews = Array.isArray(data.reviews) ? data.reviews : [];
+    const computedReviewsCount = importedReviews.length;
+    const computedRating =
+      computedReviewsCount > 0
+        ? Math.round((importedReviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0) / computedReviewsCount) * 10) / 10
+        : 5.0;
 
     const productPayload: Product = {
       id: generatedId,
@@ -1498,8 +1508,8 @@ export const AdminDashboard: React.FC = () => {
       },
       isPublishedGlobally: true,
       publishedAt: new Date().toISOString(),
-      rating: 5.0,
-      reviewsCount: Math.floor(Math.random() * 10) + 1,
+      rating: computedRating,
+      reviewsCount: computedReviewsCount,
       views: 0,
     };
 
@@ -1507,10 +1517,13 @@ export const AdminDashboard: React.FC = () => {
       // addProduct now handles immediate DB persistence with auth headers
       const success = await addProduct(productPayload);
       if (success) {
+        if (importedReviews.length > 0) {
+          await reviewService.saveImportedReviews(generatedId, importedReviews, data.title);
+        }
         addToast(
           isKa 
             ? `პროდუქტი "${data.title.substring(0, 30)}..." წარმატებით დაემატა!` 
-            : `Product "${data.title.substring(0, 35)}..." saved & published directly!`, 
+            : `Product "${data.title.substring(0, 35)}..." saved & published directly${importedReviews.length > 0 ? ` with ${importedReviews.length} customer reviews` : ''}!`, 
           'success'
         );
         return true;
@@ -1597,6 +1610,7 @@ export const AdminDashboard: React.FC = () => {
       productOrigin: prod.productOrigin || detectProductOrigin(prod),
       sourceUrl: prod.sourceUrl || '',
       specs: Array.isArray(prod.specs) ? prod.specs : [],
+      pendingReviews: [],
     });
     setIsProductModalOpen(true);
   };
@@ -1691,9 +1705,15 @@ export const AdminDashboard: React.FC = () => {
 
     setIsSavingProduct(true);
     let success = false;
+    const pendingReviews = Array.isArray(prodForm.pendingReviews) ? prodForm.pendingReviews : [];
+    const generatedNewId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    const newReviewsCount = pendingReviews.length;
+    const newRating =
+      newReviewsCount > 0
+        ? Math.round((pendingReviews.reduce((sum, r) => sum + (Number(r.rating) || 5), 0) / newReviewsCount) * 10) / 10
+        : 5.0;
 
     try {
-      const generatedNewId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
       const productPayload = {
         id: editingProduct ? editingProduct.id : generatedNewId,
         title: prodForm.title || prodForm.titleKa || 'Product',
@@ -1732,8 +1752,8 @@ export const AdminDashboard: React.FC = () => {
           : {}),
         isPublishedGlobally: true,
         publishedAt: new Date().toISOString(),
-        rating: editingProduct ? (editingProduct.rating || 5.0) : 5.0,
-        reviewsCount: editingProduct ? (editingProduct.reviewsCount || 1) : 1,
+        rating: editingProduct ? (editingProduct.rating || 5.0) : newRating,
+        reviewsCount: editingProduct ? (editingProduct.reviewsCount ?? 0) : newReviewsCount,
         views: editingProduct ? (editingProduct.views || 0) : 0,
       };
 
@@ -1752,6 +1772,9 @@ export const AdminDashboard: React.FC = () => {
         success = await updateProduct(productPayload);
       } else {
         success = await addProduct(productPayload);
+        if (success && pendingReviews.length > 0) {
+          await reviewService.saveImportedReviews(generatedNewId, pendingReviews, productPayload.title);
+        }
       }
       console.log('[PRODUCT SAVE RESULT]: success =', success);
     } catch (err: any) {
@@ -1787,6 +1810,7 @@ export const AdminDashboard: React.FC = () => {
         productOrigin: '',
         sourceUrl: '',
         specs: [],
+        pendingReviews: [],
       });
     }
   };
@@ -5904,6 +5928,52 @@ export const AdminDashboard: React.FC = () => {
                   })}
                 </div>
               </div>
+
+              {/* Queued Imported Customer Reviews Preview */}
+              {!editingProduct && Array.isArray(prodForm.pendingReviews) && prodForm.pendingReviews.length > 0 && (
+                <div className="bg-slate-900 text-white p-4 rounded-3xl border border-slate-800 space-y-2.5">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black flex items-center gap-2 text-white">
+                      <MessageSquare className="w-4 h-4 text-amber-400" />
+                      <span>Imported Customer Reviews Queued ({prodForm.pendingReviews.length})</span>
+                    </span>
+                    <span className="text-[10px] text-emerald-300 font-semibold">
+                      Saved to D1 product_reviews on publish
+                    </span>
+                  </div>
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {prodForm.pendingReviews.map((rev, idx) => (
+                      <div
+                        key={`modal-rev-${idx}`}
+                        className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start justify-between gap-2 text-xs"
+                      >
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex items-center gap-2 text-[11px]">
+                            <span className="font-bold text-white">{rev.author_name}</span>
+                            <span className="text-amber-400">{'★'.repeat(rev.rating)}</span>
+                            {rev.review_date && <span className="text-slate-400 text-[10px]">{rev.review_date}</span>}
+                          </div>
+                          {rev.title && <p className="font-semibold text-slate-200 text-[11px]">{rev.title}</p>}
+                          <p className="text-slate-400 text-[11px] line-clamp-2">{rev.comment}</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setProdForm((prev) => ({
+                              ...prev,
+                              pendingReviews: (prev.pendingReviews || []).filter((_, i) => i !== idx),
+                            }))
+                          }
+                          className="p-1 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-500/10 cursor-pointer shrink-0"
+                          title="Remove review"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* GLOBAL PRODUCT VIDEOS SECTION */}
               <div className="bg-slate-900 text-white p-4 rounded-3xl border border-slate-800 space-y-3">

@@ -23,7 +23,10 @@ import {
   ShoppingBag,
   Flame,
   Info,
+  MessageSquare,
+  BadgeCheck,
 } from 'lucide-react';
+import type { ExtractedProductReview } from '../types';
 import {
   ScrapedProductData,
   ImporterPlatform,
@@ -175,6 +178,8 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
   const [editOrigPrice, setEditOrigPrice] = useState<number | undefined>(undefined);
   const [editCategory, setEditCategory] = useState<string>('Electronics');
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [extractedReviews, setExtractedReviews] = useState<ExtractedProductReview[]>([]);
+  const [isReviewsExpanded, setIsReviewsExpanded] = useState<boolean>(false);
 
   const activePlatformMeta = PLATFORM_CONFIGS.find((p) => p.id === selectedPlatform) || PLATFORM_CONFIGS[0];
 
@@ -187,12 +192,15 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
       )
     );
     item.images = cleanImgs;
+    const cleanRevs = Array.isArray(item.reviews) ? item.reviews : [];
     setExtractedData(item);
     setEditTitle(item.title);
     setEditPrice(item.price || 49.99);
     setEditOrigPrice(item.origPrice);
     setEditCategory(normalizeProductCategory(item.category, item.title));
     setGalleryImages(cleanImgs);
+    setExtractedReviews(cleanRevs);
+    setIsReviewsExpanded(cleanRevs.length > 0);
   };
 
   // =========================================================================
@@ -234,12 +242,15 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
             .filter((u: string) => u.startsWith('http'))
         ));
         item.images = cleanImgs;
+        const cleanRevs = Array.isArray(item.reviews) ? item.reviews : [];
         setExtractedData(item);
         setEditTitle(item.title);
         setEditPrice(item.price || 49.99);
         setEditOrigPrice(item.origPrice);
         setEditCategory(item.category || 'tech');
         setGalleryImages(cleanImgs);
+        setExtractedReviews(cleanRevs);
+        setIsReviewsExpanded(cleanRevs.length > 0);
         addToast(
           isKa
             ? `პროდუქტი "${item.title.substring(0, 30)}..." წარმატებით ამოღებულია!`
@@ -265,12 +276,15 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
                 .filter((u: string) => u.startsWith('http'))
             ));
             clientParsed.images = cleanImgs;
+            const cleanRevs = Array.isArray(clientParsed.reviews) ? clientParsed.reviews : [];
             setExtractedData(clientParsed);
             setEditTitle(clientParsed.title);
             setEditPrice(clientParsed.price || 49.99);
             setEditOrigPrice(clientParsed.origPrice);
             setEditCategory(clientParsed.category || 'tech');
             setGalleryImages(cleanImgs);
+            setExtractedReviews(cleanRevs);
+            setIsReviewsExpanded(cleanRevs.length > 0);
             addToast('Successfully parsed product from provided HTML!', 'success');
             return;
           }
@@ -290,12 +304,15 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
               .filter((u: string) => u.startsWith('http'))
           ));
           clientParsed.images = cleanImgs;
+          const cleanRevs = Array.isArray(clientParsed.reviews) ? clientParsed.reviews : [];
           setExtractedData(clientParsed);
           setEditTitle(clientParsed.title);
           setEditPrice(clientParsed.price || 49.99);
           setEditOrigPrice(clientParsed.origPrice);
           setEditCategory(clientParsed.category || 'tech');
           setGalleryImages(cleanImgs);
+          setExtractedReviews(cleanRevs);
+          setIsReviewsExpanded(cleanRevs.length > 0);
           addToast('Parsed directly via browser parser!', 'success');
           return;
         }
@@ -420,6 +437,11 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
     });
   };
 
+  const handleRemoveReview = (index: number) => {
+    setExtractedReviews((prev) => prev.filter((_, i) => i !== index));
+    addToast('Removed review from import list', 'info');
+  };
+
   const getUpdatedProductData = (): ScrapedProductData => {
     const activeUrl = (selectedPlatform === 'amazon' ? url : platformUrl).trim();
     const resolvedMarketplace =
@@ -440,6 +462,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
       origPrice: editOrigPrice,
       category: editCategory,
       images: galleryImages,
+      reviews: extractedReviews,
     };
   };
 
@@ -467,6 +490,8 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
           setPlatformHtml('');
         }
         setExtractedData(null);
+        setExtractedReviews([]);
+        setIsReviewsExpanded(false);
       }
     } finally {
       setIsSavingDirectly(false);
@@ -1095,6 +1120,88 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
               </div>
             </div>
           )}
+
+          {/* Extracted Customer Reviews Collapsible Preview */}
+          <div className="mb-4 rounded-2xl bg-slate-900/90 border border-slate-800 overflow-hidden">
+            <button
+              type="button"
+              onClick={() => setIsReviewsExpanded((prev) => !prev)}
+              className="w-full px-3.5 py-2.5 flex items-center justify-between text-left hover:bg-slate-800/60 transition-colors cursor-pointer"
+            >
+              <div className="flex items-center gap-2">
+                <MessageSquare className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                <span className="text-[11px] font-bold text-slate-200 uppercase tracking-wider">
+                  Extracted Customer Reviews ({extractedReviews.length})
+                </span>
+                {extractedReviews.length > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500/15 text-emerald-300 border border-emerald-500/30">
+                    ★ {(extractedReviews.reduce((s, r) => s + r.rating, 0) / extractedReviews.length).toFixed(1)} avg
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                <span>{isReviewsExpanded ? 'Collapse' : 'Inspect'}</span>
+                {isReviewsExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </div>
+            </button>
+
+            {isReviewsExpanded && (
+              <div className="px-3.5 pb-3.5 pt-1 border-t border-slate-800/80">
+                {extractedReviews.length === 0 ? (
+                  <p className="text-xs text-slate-400 py-2">
+                    No customer reviews were found in the pasted HTML source. The product will be saved cleanly with 0 reviews.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-72 overflow-y-auto pr-1 mt-2">
+                    {extractedReviews.map((rev, idx) => (
+                      <div
+                        key={`${rev.author_name}-${idx}`}
+                        className="p-3 rounded-xl bg-slate-950/90 border border-slate-800/90 flex items-start justify-between gap-3"
+                      >
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                            <span className="font-bold text-white">{rev.author_name}</span>
+                            <span className="flex items-center gap-0.5 text-amber-400 font-bold">
+                              {Array.from({ length: 5 }).map((_, starIdx) => (
+                                <Star
+                                  key={starIdx}
+                                  className={`w-3 h-3 ${
+                                    starIdx < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-slate-700'
+                                  }`}
+                                />
+                              ))}
+                            </span>
+                            {rev.verified && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                                <BadgeCheck className="w-2.5 h-2.5" />
+                                Verified Buyer
+                              </span>
+                            )}
+                            {rev.review_date && (
+                              <span className="text-[10px] text-slate-400">{rev.review_date}</span>
+                            )}
+                          </div>
+                          {rev.title && (
+                            <p className="text-xs font-bold text-slate-100">{rev.title}</p>
+                          )}
+                          <p className="text-[11px] text-slate-300 leading-relaxed">{rev.comment}</p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveReview(idx)}
+                          title="Remove this review before saving"
+                          className="p-1.5 rounded-lg bg-rose-500/15 hover:bg-rose-600 text-rose-300 hover:text-white border border-rose-500/30 transition-colors cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
 
           {/* Action Buttons: Review & Edit vs Direct Save */}
           <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3 border-t border-slate-800">

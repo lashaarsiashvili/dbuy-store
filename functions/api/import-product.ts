@@ -140,6 +140,7 @@ export async function onRequestPost(context: any) {
             rawAttributes: preParsed.rawAttributes && typeof preParsed.rawAttributes === 'object' ? preParsed.rawAttributes : {},
             sourceUrl: targetUrl || preParsed.sourceUrl || '',
             marketplace: platform,
+            reviews: Array.isArray(preParsed.reviews) ? preParsed.reviews : [],
           }
         : parsePlatformHtml(platform, htmlContent, targetUrl);
 

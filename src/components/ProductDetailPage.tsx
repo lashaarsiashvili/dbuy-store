@@ -159,10 +159,10 @@ export const ProductDetailPage: React.FC = () => {
           const avg = revs.reduce((sum, r) => sum + r.rating, 0) / revs.length;
           setReviewsState({ count: revs.length, avgRating: avg });
         } else {
-          setReviewsState({ count: product.reviewsCount ?? 1, avgRating: product.rating ?? 5.0 });
+          setReviewsState({ count: product.reviewsCount ?? 0, avgRating: product.rating ?? 5.0 });
         }
       } catch (e) {
-        setReviewsState({ count: product.reviewsCount ?? 1, avgRating: product.rating ?? 5.0 });
+        setReviewsState({ count: product.reviewsCount ?? 0, avgRating: product.rating ?? 5.0 });
       }
     }
     return () => {
