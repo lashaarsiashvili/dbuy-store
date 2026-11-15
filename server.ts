@@ -2047,7 +2047,7 @@ app.post('/api/chat', async (req, res) => {
 });
 
 const DEFAULT_FB_PAGE_ID = '215073415343195';
-const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABS4Gsz4xns3S13hX6SEhstOZCWZCylIxKGhFz3qUGJZBblFoQU7C2ngzCxQ8rGRVCTKe1rhpz9ZB7hYET5c9Ar4vMHXFZAlB9oZBKPHzQbmMCt0kQt6vcTC7JnZCp5v5Nb4ZCtMpBWsfIYTKTpOXOq8GcSn5unmQbZASGdT6rUZAckNlDG1bcbcX2IqwFjwQRoZD';
+const DEFAULT_FB_PAGE_TOKEN = 'EAAXgEb3A7ZCABS4HbURXoldCfeC5ZCSaLzYPqZA9Jo4UNZAR1qc9IKZBmuKNBocgaQbSFiHe4Q7ZA1EZBmZBPK7S5V7a5xSa5tFdCn84SwtgqjXydaqRHrqZATJO83oehDDFwQsq6VSZCyZB5Fv7cFxzeZBDQcumPvjzm66oP4DtWdvIu8K6lg5sI4woPQh9xrrK';
 let runtimeFbPageToken = '';
 
 function isFacebookTokenExpiredError(err: any): boolean {
@@ -2671,6 +2671,618 @@ app.post('/api/facebook/post-feed', async (req, res) => {
 });
 
 app.post('/api/facebook/publish', handleFacebookMultiPhotoPublish);
+
+// ==========================================
+// INSTAGRAM GRAPH API v26.0 CAROUSEL PUBLISHER & /BIO FEED
+// ==========================================
+const IG_GRAPH_VERSION = 'v26.0';
+const IG_BIO_POSTS_FILE = path.join(DB_DIR, 'instagram_posts.json');
+
+function loadLocalInstagramBioPosts(): any[] {
+  try {
+    if (fs.existsSync(IG_BIO_POSTS_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(IG_BIO_POSTS_FILE, 'utf-8'));
+      if (Array.isArray(parsed)) return parsed;
+    }
+  } catch {
+    // Ignore read error
+  }
+  return [];
+}
+
+function saveLocalInstagramBioPost(post: any): void {
+  try {
+    const existing = loadLocalInstagramBioPosts();
+    const filtered = existing.filter((p: any) => p.productId !== post.productId || p.igMediaId !== post.igMediaId);
+    const updated = [post, ...filtered].slice(0, 60);
+    fs.writeFileSync(IG_BIO_POSTS_FILE, JSON.stringify(updated, null, 2), 'utf-8');
+  } catch {
+    // Ignore disk write errors on read-only containers
+  }
+}
+
+function normalizeInstagramImageUrlServer(imgUrl: string): string {
+  const clean = (imgUrl || '').trim();
+  if (!clean) return '';
+  if (clean.startsWith('data:')) return clean;
+  let resolved = clean;
+  if (clean.startsWith('/')) {
+    resolved = `https://www.dbuystore.com${clean}`;
+  } else if (clean.startsWith('https://dbuystore.com/')) {
+    resolved = clean.replace('https://dbuystore.com/', 'https://www.dbuystore.com/');
+  } else if (clean.startsWith('http://dbuystore.com/')) {
+    resolved = clean.replace('http://dbuystore.com/', 'https://www.dbuystore.com/');
+  }
+  resolved = resolved.replace(/ /g, '%20');
+  const lower = resolved.toLowerCase().split('?')[0];
+  if (lower.endsWith('.webp') || lower.endsWith('.avif') || lower.endsWith('.heic')) {
+    return `https://wsrv.nl/?url=${encodeURIComponent(resolved)}&output=jpg&q=92`;
+  }
+  return resolved;
+}
+
+async function fetchInstagramConnectionServer(token: string, targetPageId: string) {
+  if (!token) {
+    return {
+      connected: false,
+      expired: false,
+      requiresReconnect: true,
+      error: 'Meta Page Access Token is not configured.',
+    };
+  }
+  try {
+    const pageUrl = `https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(targetPageId)}?fields=id,name,instagram_business_account{id,username,name,profile_picture_url},connected_instagram_account{id,username,name,profile_picture_url}&access_token=${encodeURIComponent(token)}`;
+    const pageRes = await fetch(pageUrl);
+    const pageData: any = await pageRes.json().catch(() => ({}));
+
+    if (!pageRes.ok || pageData?.error) {
+      const minimalUrl = `https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(targetPageId)}?fields=id,name,instagram_business_account,connected_instagram_account&access_token=${encodeURIComponent(token)}`;
+      const minRes = await fetch(minimalUrl);
+      const minData: any = await minRes.json().catch(() => ({}));
+
+      if (!minRes.ok || !minData?.id) {
+        const err = minData?.error || pageData?.error || {};
+        const expired = isFacebookTokenExpiredError(err);
+        return {
+          connected: false,
+          expired,
+          requiresReconnect: true,
+          errorCode: err.code,
+          errorSubcode: err.error_subcode,
+          error: expired
+            ? 'Meta session has expired. Please reconnect your Page Access Token.'
+            : (err.message || 'Unable to verify connected Instagram Business Account.'),
+        };
+      }
+
+      const igId = minData?.instagram_business_account?.id || minData?.connected_instagram_account?.id;
+      if (!igId) {
+        return {
+          connected: false,
+          expired: false,
+          requiresReconnect: false,
+          pageId: minData.id,
+          pageName: minData.name || 'Facebook Page',
+          error: 'No Instagram Business Account is linked to this Facebook Page.',
+        };
+      }
+
+      let username = 'dbuy.store';
+      let igName = 'DBUY Store';
+      let profilePictureUrl = '';
+      try {
+        const igRes = await fetch(
+          `https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(igId)}?fields=id,username,name,profile_picture_url&access_token=${encodeURIComponent(token)}`
+        );
+        if (igRes.ok) {
+          const igData: any = await igRes.json();
+          if (igData.username) username = igData.username;
+          if (igData.name) igName = igData.name;
+          if (igData.profile_picture_url) profilePictureUrl = igData.profile_picture_url;
+        }
+      } catch {
+        // Fallback to default handle
+      }
+
+      return {
+        connected: true,
+        expired: false,
+        requiresReconnect: false,
+        pageId: minData.id,
+        pageName: minData.name || 'Facebook Page',
+        igUserId: igId,
+        username,
+        igName,
+        profilePictureUrl,
+      };
+    }
+
+    const igAccount = pageData.instagram_business_account || pageData.connected_instagram_account;
+    if (!igAccount?.id) {
+      return {
+        connected: false,
+        expired: false,
+        requiresReconnect: false,
+        pageId: pageData.id,
+        pageName: pageData.name || 'Facebook Page',
+        error: 'No Instagram Business Account is linked to this Facebook Page.',
+      };
+    }
+
+    return {
+      connected: true,
+      expired: false,
+      requiresReconnect: false,
+      pageId: pageData.id,
+      pageName: pageData.name || 'Facebook Page',
+      igUserId: igAccount.id,
+      username: igAccount.username || 'dbuy.store',
+      igName: igAccount.name || 'DBUY Store',
+      profilePictureUrl: igAccount.profile_picture_url || '',
+    };
+  } catch (err: any) {
+    return {
+      connected: false,
+      expired: false,
+      requiresReconnect: false,
+      error: err?.message || 'Network error verifying Instagram Business Account',
+    };
+  }
+}
+
+app.get('/api/instagram/status', async (req, res) => {
+  const pageId = typeof req.query.pageId === 'string' ? req.query.pageId : undefined;
+  const { token, targetPageId } = await resolveFacebookPageCredentials(undefined, pageId);
+  const result = await fetchInstagramConnectionServer(token, targetPageId);
+  res.json({ success: true, ...result });
+});
+
+app.post('/api/instagram/status', async (req, res) => {
+  try {
+    const { accessToken, pageAccessToken, pageId } = req.body || {};
+    const passedToken = (pageAccessToken || accessToken || '').trim();
+    const { token, targetPageId, envToken } = await resolveFacebookPageCredentials(passedToken, pageId);
+    let result = await fetchInstagramConnectionServer(token, targetPageId);
+    if (!result.connected && result.expired && passedToken && envToken && passedToken !== envToken) {
+      result = await fetchInstagramConnectionServer(envToken, targetPageId);
+    }
+    res.json({ success: true, ...result });
+  } catch (err: any) {
+    res.status(500).json({
+      success: false,
+      connected: false,
+      error: err?.message || 'Failed to verify Instagram status',
+    });
+  }
+});
+
+async function createIgItemContainerServer(igUserId: string, rawImgUrl: string, token: string): Promise<{ id?: string; error?: any }> {
+  const normalized = normalizeInstagramImageUrlServer(rawImgUrl);
+  if (!normalized || normalized.startsWith('data:')) {
+    return { error: { message: 'Instagram Graph API requires public HTTPS image URLs (data URIs are not supported).' } };
+  }
+  const attemptCreate = async (imageUrl: string) => {
+    const params = new URLSearchParams();
+    params.append('image_url', imageUrl);
+    params.append('is_carousel_item', 'true');
+    params.append('access_token', token);
+    const res = await fetch(`https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(igUserId)}/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    return { ok: res.ok && Boolean(data.id), id: data.id as string | undefined, error: data?.error };
+  };
+
+  const first = await attemptCreate(normalized);
+  if (first.ok && first.id) return { id: first.id };
+  if (isFacebookTokenExpiredError(first.error)) return { error: first.error };
+
+  if (!normalized.includes('wsrv.nl')) {
+    const jpgFallback = `https://wsrv.nl/?url=${encodeURIComponent(normalized)}&output=jpg&q=92`;
+    const second = await attemptCreate(jpgFallback);
+    if (second.ok && second.id) return { id: second.id };
+    return { error: second.error || first.error };
+  }
+  return { error: first.error || { message: 'Failed to create Instagram item container' } };
+}
+
+async function checkIgContainerStatusesServer(containerIds: string[], token: string) {
+  const statuses = await Promise.all(
+    containerIds.map(async (id) => {
+      const res = await fetch(
+        `https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(id)}?fields=id,status_code,status&access_token=${encodeURIComponent(token)}`
+      );
+      const data: any = await res.json().catch(() => ({}));
+      return {
+        id,
+        statusCode: data?.status_code || (res.ok ? 'IN_PROGRESS' : 'ERROR'),
+        status: data?.status || data?.error?.message || '',
+        error: data?.error,
+      };
+    })
+  );
+  const hasError = statuses.find((s) => s.statusCode === 'ERROR' || s.statusCode === 'EXPIRED');
+  const allFinished = statuses.every((s) => s.statusCode === 'FINISHED');
+  return { allFinished, hasError, statuses };
+}
+
+async function waitForIgContainersServer(containerIds: string[], token: string, maxAttempts = 14, delayMs = 1500) {
+  for (let i = 0; i < maxAttempts; i++) {
+    const check = await checkIgContainerStatusesServer(containerIds, token);
+    if (check.hasError) {
+      return {
+        ok: false,
+        error: check.hasError.error || { message: `Container ${check.hasError.id} failed (${check.hasError.statusCode})` },
+      };
+    }
+    if (check.allFinished) return { ok: true };
+    await new Promise((r) => setTimeout(r, delayMs));
+  }
+  return { ok: false, error: { message: 'Timed out waiting for Instagram media containers to finish processing.' } };
+}
+
+app.post('/api/instagram/publish', async (req, res) => {
+  try {
+    const {
+      action,
+      accessToken,
+      pageAccessToken,
+      pageId,
+      igUserId: passedIgUserId,
+      images,
+      imageUrl,
+      containerId,
+      containerIds,
+      children,
+      parentContainerId,
+      caption,
+      productId,
+      productSlug,
+      title,
+      price,
+      origPrice,
+      mainImage,
+    } = req.body || {};
+
+    let { token, targetPageId, envToken } = await resolveFacebookPageCredentials(pageAccessToken || accessToken, pageId);
+    if (!token) {
+      return res.status(401).json({
+        success: false,
+        requiresReconnect: true,
+        expired: true,
+        error: 'Meta Page Access Token is missing or expired. Please reconnect in the Share modal.',
+      });
+    }
+
+    let activeIgUserId = (passedIgUserId || '').trim();
+    if (!activeIgUserId && action !== 'check-status') {
+      let conn = await fetchInstagramConnectionServer(token, targetPageId);
+      if (!conn.connected && conn.expired && envToken && envToken !== token) {
+        token = envToken;
+        conn = await fetchInstagramConnectionServer(token, targetPageId);
+      }
+      if (!conn.connected || !conn.igUserId) {
+        return res.status(conn.expired ? 401 : 400).json({
+          success: false,
+          requiresReconnect: Boolean(conn.requiresReconnect),
+          expired: Boolean(conn.expired),
+          error: conn.error || 'Could not resolve Instagram Business Account ID.',
+        });
+      }
+      activeIgUserId = conn.igUserId;
+    }
+
+    if (action === 'create-item') {
+      if (!imageUrl) return res.status(400).json({ success: false, error: 'imageUrl is required' });
+      const created = await createIgItemContainerServer(activeIgUserId, imageUrl, token);
+      if (!created.id) {
+        const expired = isFacebookTokenExpiredError(created.error);
+        return res.status(expired ? 401 : 400).json({
+          success: false,
+          requiresReconnect: expired,
+          expired,
+          error: created.error?.message || 'Failed to create item container',
+          details: created.error,
+        });
+      }
+      return res.json({ success: true, igUserId: activeIgUserId, containerId: created.id });
+    }
+
+    if (action === 'check-status') {
+      const ids: string[] = Array.isArray(containerIds)
+        ? containerIds.filter(Boolean)
+        : (containerId ? [String(containerId)] : []);
+      if (ids.length === 0) return res.status(400).json({ success: false, error: 'containerIds required' });
+      const check = await checkIgContainerStatusesServer(ids, token);
+      return res.status(check.hasError ? 400 : 200).json({
+        success: !check.hasError,
+        allFinished: check.allFinished,
+        statuses: check.statuses,
+        error: check.hasError
+          ? (check.hasError.error?.message || `Container ${check.hasError.id} failed (${check.hasError.statusCode})`)
+          : undefined,
+      });
+    }
+
+    if (action === 'create-carousel') {
+      const childList: string[] = Array.isArray(children) ? children.filter(Boolean) : [];
+      if (childList.length < 2 || childList.length > 10) {
+        return res.status(400).json({ success: false, error: 'Instagram Carousels require between 2 and 10 child containers.' });
+      }
+      const params = new URLSearchParams();
+      params.append('media_type', 'CAROUSEL');
+      params.append('children', childList.join(','));
+      if (caption) params.append('caption', caption);
+      params.append('access_token', token);
+
+      const cRes = await fetch(`https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(activeIgUserId)}/media`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const cData: any = await cRes.json().catch(() => ({}));
+      if (!cRes.ok || !cData.id) {
+        const expired = isFacebookTokenExpiredError(cData?.error);
+        return res.status(expired ? 401 : 400).json({
+          success: false,
+          requiresReconnect: expired,
+          expired,
+          error: cData?.error?.message || 'Failed to create parent carousel container',
+          details: cData?.error,
+        });
+      }
+      return res.json({ success: true, igUserId: activeIgUserId, parentContainerId: cData.id });
+    }
+
+    if (action === 'publish-carousel') {
+      if (!parentContainerId) return res.status(400).json({ success: false, error: 'parentContainerId is required' });
+      const params = new URLSearchParams();
+      params.append('creation_id', String(parentContainerId));
+      params.append('access_token', token);
+
+      const pRes = await fetch(`https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(activeIgUserId)}/media_publish`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+        body: params.toString(),
+      });
+      const pData: any = await pRes.json().catch(() => ({}));
+      if (!pRes.ok || !pData.id) {
+        const expired = isFacebookTokenExpiredError(pData?.error);
+        return res.status(expired ? 401 : 400).json({
+          success: false,
+          requiresReconnect: expired,
+          expired,
+          error: pData?.error?.message || 'Failed to publish carousel to Instagram',
+          details: pData?.error,
+        });
+      }
+
+      let permalink = '';
+      try {
+        const permRes = await fetch(
+          `https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(pData.id)}?fields=id,permalink&access_token=${encodeURIComponent(token)}`
+        );
+        if (permRes.ok) {
+          const permData: any = await permRes.json();
+          permalink = permData?.permalink || '';
+        }
+      } catch {}
+
+      if (productId) {
+        saveLocalInstagramBioPost({
+          id: `ig-${pData.id}`,
+          igMediaId: pData.id,
+          permalink,
+          productId,
+          productSlug: productSlug || productId,
+          title: title || '',
+          price: typeof price === 'number' ? price : undefined,
+          origPrice: typeof origPrice === 'number' ? origPrice : undefined,
+          mainImage: mainImage || (Array.isArray(images) ? images[0] : ''),
+          images: Array.isArray(images) ? images : [],
+          caption: caption || '',
+          publishedAt: new Date().toISOString(),
+        });
+      }
+
+      return res.json({ success: true, igUserId: activeIgUserId, mediaId: pData.id, permalink });
+    }
+
+    // Default full 3-step carousel lifecycle
+    const imageList: string[] = Array.isArray(images)
+      ? images.filter((u: any) => typeof u === 'string' && u.trim().length > 0)
+      : [];
+    if (imageList.length < 2 || imageList.length > 10) {
+      return res.status(400).json({ success: false, error: 'Instagram Carousels require between 2 and 10 product photos.' });
+    }
+
+    const childResults = await Promise.all(
+      imageList.map((img) => createIgItemContainerServer(activeIgUserId, img, token))
+    );
+    const failedChild = childResults.find((r) => !r.id);
+    if (failedChild) {
+      const expired = isFacebookTokenExpiredError(failedChild.error);
+      return res.status(expired ? 401 : 400).json({
+        success: false,
+        requiresReconnect: expired,
+        expired,
+        error: failedChild.error?.message || 'Failed to upload carousel media to Instagram',
+        details: failedChild.error,
+      });
+    }
+    const childIds = childResults.map((r) => r.id as string);
+
+    const childWait = await waitForIgContainersServer(childIds, token);
+    if (!childWait.ok) {
+      return res.status(400).json({
+        success: false,
+        error: childWait.error?.message || 'Child container processing failed',
+        details: childWait.error,
+      });
+    }
+
+    const parentParams = new URLSearchParams();
+    parentParams.append('media_type', 'CAROUSEL');
+    parentParams.append('children', childIds.join(','));
+    if (caption) parentParams.append('caption', caption);
+    parentParams.append('access_token', token);
+
+    const parentRes = await fetch(`https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(activeIgUserId)}/media`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: parentParams.toString(),
+    });
+    const parentData: any = await parentRes.json().catch(() => ({}));
+    if (!parentRes.ok || !parentData.id) {
+      const expired = isFacebookTokenExpiredError(parentData?.error);
+      return res.status(expired ? 401 : 400).json({
+        success: false,
+        requiresReconnect: expired,
+        expired,
+        error: parentData?.error?.message || 'Failed to create parent carousel container',
+        details: parentData?.error,
+      });
+    }
+
+    const parentWait = await waitForIgContainersServer([parentData.id], token);
+    if (!parentWait.ok) {
+      return res.status(400).json({
+        success: false,
+        error: parentWait.error?.message || 'Parent carousel container processing failed',
+        details: parentWait.error,
+      });
+    }
+
+    const pubParams = new URLSearchParams();
+    pubParams.append('creation_id', parentData.id);
+    pubParams.append('access_token', token);
+
+    const pubRes = await fetch(`https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(activeIgUserId)}/media_publish`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: pubParams.toString(),
+    });
+    const pubData: any = await pubRes.json().catch(() => ({}));
+    if (!pubRes.ok || !pubData.id) {
+      const expired = isFacebookTokenExpiredError(pubData?.error);
+      return res.status(expired ? 401 : 400).json({
+        success: false,
+        requiresReconnect: expired,
+        expired,
+        error: pubData?.error?.message || 'Failed to publish Instagram carousel',
+        details: pubData?.error,
+      });
+    }
+
+    let permalink = '';
+    try {
+      const permRes = await fetch(
+        `https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(pubData.id)}?fields=id,permalink&access_token=${encodeURIComponent(token)}`
+      );
+      if (permRes.ok) {
+        const permData: any = await permRes.json();
+        permalink = permData?.permalink || '';
+      }
+    } catch {}
+
+    if (productId) {
+      saveLocalInstagramBioPost({
+        id: `ig-${pubData.id}`,
+        igMediaId: pubData.id,
+        permalink,
+        productId,
+        productSlug: productSlug || productId,
+        title: title || '',
+        price: typeof price === 'number' ? price : undefined,
+        origPrice: typeof origPrice === 'number' ? origPrice : undefined,
+        mainImage: mainImage || imageList[0],
+        images: imageList,
+        caption: caption || '',
+        publishedAt: new Date().toISOString(),
+      });
+    }
+
+    return res.json({
+      success: true,
+      igUserId: activeIgUserId,
+      mediaId: pubData.id,
+      parentContainerId: parentData.id,
+      childIds,
+      permalink,
+      slideCount: imageList.length,
+    });
+  } catch (err: any) {
+    console.error('Error publishing Instagram Carousel:', err);
+    return res.status(500).json({ success: false, error: err?.message || 'Server error publishing Instagram Carousel' });
+  }
+});
+
+app.get('/api/instagram/bio-posts', async (req, res) => {
+  const postsMap = new Map<string, any>();
+  for (const item of loadLocalInstagramBioPosts()) {
+    if (item && (item.igMediaId || item.productId)) {
+      postsMap.set(item.igMediaId || item.productId, item);
+    }
+  }
+
+  try {
+    const { token, targetPageId } = await resolveFacebookPageCredentials();
+    if (token) {
+      const conn = await fetchInstagramConnectionServer(token, targetPageId);
+      if (conn.connected && conn.igUserId) {
+        const mediaRes = await fetch(
+          `https://graph.facebook.com/${IG_GRAPH_VERSION}/${encodeURIComponent(conn.igUserId)}/media?fields=id,caption,media_type,media_url,thumbnail_url,permalink,timestamp,children{id,media_url}&limit=24&access_token=${encodeURIComponent(token)}`
+        );
+        const mediaData: any = await mediaRes.json().catch(() => ({}));
+        if (mediaRes.ok && Array.isArray(mediaData?.data)) {
+          for (const item of mediaData.data) {
+            const cap = item.caption || '';
+            const idMatch =
+              cap.match(/search\s*ID:\s*([A-Za-z0-9_-]+)/i) ||
+              cap.match(/\b(prod-[A-Za-z0-9_-]+)\b/i) ||
+              cap.match(/dbuystore\.com\/b\/([A-Za-z0-9_-]+)/i);
+            const productId = idMatch?.[1]?.trim();
+            if (!productId) continue;
+
+            const existing = postsMap.get(item.id);
+            const childImages = Array.isArray(item.children?.data)
+              ? item.children.data.map((c: any) => c.media_url).filter(Boolean)
+              : [];
+            const mainImg = existing?.mainImage || childImages[0] || item.media_url || item.thumbnail_url || '';
+
+            postsMap.set(item.id, {
+              id: existing?.id || `ig-${item.id}`,
+              igMediaId: item.id,
+              permalink: item.permalink || existing?.permalink || '',
+              productId,
+              productSlug: existing?.productSlug || productId,
+              title: existing?.title || '',
+              price: existing?.price,
+              origPrice: existing?.origPrice,
+              mainImage: mainImg,
+              images: existing?.images?.length ? existing.images : (childImages.length ? childImages : (mainImg ? [mainImg] : [])),
+              caption: cap || existing?.caption || '',
+              mediaType: item.media_type,
+              publishedAt: item.timestamp || existing?.publishedAt || new Date().toISOString(),
+            });
+          }
+        }
+      }
+    }
+  } catch {
+    // Graceful fallback to local posts
+  }
+
+  const posts = Array.from(postsMap.values()).sort((a, b) => {
+    const tA = new Date(a.publishedAt || 0).getTime();
+    const tB = new Date(b.publishedAt || 0).getTime();
+    return tB - tA;
+  });
+
+  res.json({ success: true, posts });
+});
 
 // ==========================================
 // UPLOAD PRODUCT IMAGE API

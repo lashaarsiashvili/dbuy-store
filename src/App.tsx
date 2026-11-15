@@ -24,6 +24,7 @@ import { CategoryPage } from './components/CategoryPage';
 import { VerifiedDeliveriesPage } from './components/VerifiedDeliveriesPage';
 import { AdsGallery } from './components/AdsGallery';
 import { AuthCallbackPage } from './components/AuthCallbackPage';
+import { InstagramBioPage } from './components/InstagramBioPage';
 import { ToastContainer } from './components/ToastContainer';
 import { getPayPalV6Instance } from './utils/paypalV6';
 import { analytics, isUserAdmin } from './components/AdminAnalyticsDashboard';
@@ -275,6 +276,7 @@ const MainLayout: React.FC = () => {
         deliveries: 'Verified Live Customer Deliveries',
         campaigns: 'Tbilisi Ad Campaigns',
         'auth-callback': 'Google Authentication',
+        bio: 'Instagram Shop · @dbuy.store',
       };
 
       const pageTitlesKa: Record<string, string> = {
@@ -287,6 +289,7 @@ const MainLayout: React.FC = () => {
         deliveries: 'ვერიფიცირებული მიწოდებები',
         campaigns: 'თბილისის სარეკლამო კამპანიები',
         'auth-callback': 'Google ავტორიზაცია',
+        bio: 'Instagram მაღაზია · @dbuy.store',
       };
 
       const pageTitle = language === 'ka' 
@@ -348,6 +351,7 @@ const MainLayout: React.FC = () => {
         {currentPage === 'admin' && <AdminDashboard />}
         {currentPage === 'checkout' && <CheckoutPage />}
         {currentPage === 'auth-callback' && <AuthCallbackPage />}
+        {currentPage === 'bio' && <InstagramBioPage />}
       </main>
 
       {/* Universal Footer */}

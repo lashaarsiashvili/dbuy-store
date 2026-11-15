@@ -63,6 +63,43 @@ export const Header: React.FC = () => {
   const [isChangePasswordOpen, setIsChangePasswordOpen] = useState(false);
   const [isMobileSearchExpanded, setIsMobileSearchExpanded] = useState(false);
 
+  // Smart screen-width adaptive tier strictly for mobile (< 768px) top bar
+  const topBarContainerRef = useRef<HTMLDivElement>(null);
+  const [mobileWidth, setMobileWidth] = useState<number>(() =>
+    typeof window !== 'undefined' ? window.innerWidth : 1024
+  );
+
+  useEffect(() => {
+    const updateWidth = () => {
+      const measured = topBarContainerRef.current?.clientWidth || window.innerWidth;
+      setMobileWidth(measured);
+    };
+    updateWidth();
+
+    let observer: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined' && topBarContainerRef.current) {
+      observer = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          if (entry.contentRect?.width) {
+            setMobileWidth(entry.contentRect.width);
+          }
+        }
+      });
+      observer.observe(topBarContainerRef.current);
+    }
+    window.addEventListener('resize', updateWidth);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', updateWidth);
+    };
+  }, []);
+
+  // Adaptive breakpoints strictly for mobile viewports (< 768px)
+  const isUltraNarrow = mobileWidth < 345;     // e.g. 320px - 344px
+  const isCompactControls = mobileWidth < 420; // e.g. 345px - 419px (standard 360px/375px/390px/414px phones)
+  const isCompactPhone = mobileWidth < 480;    // hide subtitle below 480px
+  const isWidePhone = mobileWidth >= 560 && mobileWidth < 768;
+
   const dropdownRef = useRef<HTMLDivElement>(null);
   const langDropdownRef = useRef<HTMLDivElement>(null);
   const geoDropdownRef = useRef<HTMLDivElement>(null);
@@ -156,6 +193,7 @@ export const Header: React.FC = () => {
     if (currentPage !== 'home') {
       setCurrentPage('home');
     }
+    setIsMobileSearchExpanded(false);
     const el = document.getElementById('featured-products-section') || document.getElementById('products');
     if (el) {
       el.scrollIntoView({ behavior: 'smooth' });
@@ -181,13 +219,18 @@ export const Header: React.FC = () => {
       className="sticky top-0 z-40 w-full bg-white dark:bg-slate-900 transition-colors"
       style={{ boxShadow: '0 2px 20px rgba(0,0,0,0.04)' }}
     >
-      {/* TOP ROW: Height 84px on desktop */}
+      {/* TOP ROW: Height 84px on desktop, compact adaptive on mobile (< md) */}
       <div className="w-full border-b border-slate-100 dark:border-slate-800/80">
-        <div className="max-w-[1320px] h-[68px] lg:h-[84px] mx-auto px-4 lg:px-6 flex items-center justify-between gap-4">
+        <div
+          ref={topBarContainerRef}
+          className={`max-w-[1320px] h-[64px] md:h-[68px] lg:h-[84px] mx-auto flex items-center justify-between ${
+            isUltraNarrow ? 'px-2 gap-1.5' : isCompactControls ? 'px-2.5 gap-1.5' : 'px-3 sm:px-4 lg:px-6 gap-2 md:gap-4'
+          }`}
+        >
           {isMobileSearchExpanded ? (
             <form onSubmit={handleSearchSubmit} className="flex items-center w-full gap-2">
-              <div className="flex-1 flex items-center h-11 rounded-[24px] bg-[#F3F4F6] dark:bg-slate-800 px-4 border border-slate-200 dark:border-slate-700">
-                <Search className="w-4 h-4 text-slate-500 mr-2.5 shrink-0" />
+              <div className="flex-1 flex items-center h-10 sm:h-11 rounded-[24px] bg-[#F3F4F6] dark:bg-slate-800 px-3.5 sm:px-4 border border-slate-200 dark:border-slate-700 min-w-0">
+                <Search className="w-4 h-4 text-slate-500 mr-2 shrink-0" />
                 <input
                   type="text"
                   autoFocus
@@ -209,21 +252,27 @@ export const Header: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsMobileSearchExpanded(false)}
-                className="px-3.5 py-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold shrink-0"
+                className="px-3 py-2 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 text-xs font-semibold shrink-0 cursor-pointer"
               >
                 Cancel
               </button>
             </form>
           ) : (
             <>
-              {/* LEFT: DBuy Logo — 100% Identical to Reference */}
+              {/* LEFT: DBuy Logo — Adapts scale smoothly on mobile, 100% preserved on tablet/desktop */}
               <a
                 href="#home"
                 onClick={handleLogoClick}
-                className="flex items-center gap-3 shrink-0 cursor-pointer group focus:outline-none"
+                className={`flex items-center shrink min-w-0 md:shrink-0 cursor-pointer group focus:outline-none ${
+                  isCompactControls ? 'gap-1.5' : 'gap-2 sm:gap-3'
+                }`}
               >
-                <div className="relative w-11 h-11 flex items-center justify-center shrink-0">
-                  <svg viewBox="0 0 48 48" fill="none" className="w-11 h-11">
+                <div
+                  className={`relative flex items-center justify-center shrink-0 transition-all ${
+                    isCompactControls ? 'w-8 h-8 md:w-11 md:h-11' : isCompactPhone ? 'w-9 h-9 md:w-11 md:h-11' : 'w-10 h-10 md:w-11 md:h-11'
+                  }`}
+                >
+                  <svg viewBox="0 0 48 48" fill="none" className="w-full h-full">
                     <defs>
                       {/* Front Face Gradient: Bright Cyan-Blue at bottom-left to Azure Blue at top-right */}
                       <linearGradient id="dbuyFrontGrad" x1="6" y1="42" x2="30" y2="12" gradientUnits="userSpaceOnUse">
@@ -287,17 +336,29 @@ export const Header: React.FC = () => {
                     />
                   </svg>
                 </div>
-                <div className="flex flex-col justify-center">
-                  <span className="text-[23px] lg:text-[25px] font-extrabold tracking-[-0.02em] text-[#0A1122] dark:text-white leading-[0.95]">
+                <div className="flex flex-col justify-center min-w-0">
+                  <span
+                    className={`font-extrabold tracking-[-0.02em] text-[#0A1122] dark:text-white leading-[0.95] ${
+                      isCompactControls
+                        ? 'text-[18px] md:text-[23px] lg:text-[25px]'
+                        : isCompactPhone
+                        ? 'text-[20px] md:text-[23px] lg:text-[25px]'
+                        : 'text-[22px] md:text-[23px] lg:text-[25px]'
+                    }`}
+                  >
                     DBuy
                   </span>
-                  <span className="text-[11px] font-medium text-[#475569] dark:text-slate-400 tracking-[-0.01em] leading-none mt-[6px] whitespace-nowrap">
+                  <span
+                    className={`text-[10.5px] md:text-[11px] font-medium text-[#475569] dark:text-slate-400 tracking-[-0.01em] leading-none mt-[5px] md:mt-[6px] whitespace-nowrap ${
+                      isCompactPhone ? 'hidden md:block' : 'block'
+                    }`}
+                  >
                     Tech for a Better You
                   </span>
                 </div>
               </a>
 
-              {/* CENTER: Search Bar (520px width, 48px height, 24px radius) */}
+              {/* CENTER: Search Bar (Tablet & Desktop md+ preserved verbatim) */}
               <form
                 onSubmit={handleSearchSubmit}
                 className="hidden md:flex items-center w-full max-w-[520px] h-[48px] rounded-[24px] bg-[#F3F4F6] dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700 overflow-hidden transition-all focus-within:bg-white focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/15 mx-4"
@@ -328,39 +389,64 @@ export const Header: React.FC = () => {
                 </button>
               </form>
 
-              {/* RIGHT: Utility & Account Icons */}
-              <div className="flex items-center gap-3 lg:gap-5 shrink-0">
+              {/* RIGHT: Utility & Account Icons — Guaranteed fit on mobile, identical spacing on md+/lg+ */}
+              <div
+                className={`flex items-center shrink-0 ${
+                  isCompactControls
+                    ? 'gap-1'
+                    : isCompactPhone
+                    ? 'gap-1.5 md:gap-3 lg:gap-5'
+                    : 'gap-2 md:gap-3 lg:gap-5'
+                }`}
+              >
                 {/* Mobile Search Trigger */}
                 <button
                   type="button"
                   onClick={() => setIsMobileSearchExpanded(true)}
-                  className="md:hidden flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200"
+                  className={`md:hidden flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors cursor-pointer ${
+                    isCompactControls ? 'w-8 h-8' : 'w-9 h-9'
+                  }`}
                   aria-label="Search"
                 >
                   <Search className="w-4 h-4" />
                 </button>
 
-                {/* Subtle Delivery Destination Selector */}
+                {/* Delivery Destination Selector — Compact flag/code on narrow screens, full pill on wider/tablet/desktop */}
                 <div className="relative" ref={geoDropdownRef}>
                   <button
                     type="button"
                     onClick={() => setGeoDropdownOpen((prev) => !prev)}
                     title={t('delivery.changeDestination')}
-                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-[12px] font-medium text-[#334155] dark:text-slate-200 transition-colors cursor-pointer"
+                    aria-label={t('delivery.changeDestination')}
+                    className={`flex items-center rounded-xl bg-slate-50 dark:bg-slate-800/80 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200/80 dark:border-slate-700/80 text-[12px] font-medium text-[#334155] dark:text-slate-200 transition-colors cursor-pointer ${
+                      isCompactControls
+                        ? 'h-8 px-1.5 gap-1 md:h-auto md:px-2.5 md:py-1.5 md:gap-1.5'
+                        : isCompactPhone
+                        ? 'h-9 px-2 gap-1 md:h-auto md:px-2.5 md:py-1.5 md:gap-1.5'
+                        : 'px-2.5 py-1.5 gap-1.5'
+                    }`}
                   >
-                    <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 hidden sm:inline" />
+                    <MapPin className="w-3.5 h-3.5 text-blue-600 dark:text-blue-400 shrink-0 hidden md:inline" />
                     <span className="text-sm leading-none">{visitorCountryFlag}</span>
                     <span className="hidden lg:inline text-[#64748B] dark:text-slate-400">
                       {t('delivery.deliveringTo')}
                     </span>
-                    <span className="font-semibold text-[#0F172A] dark:text-white max-w-[90px] sm:max-w-[120px] truncate">
-                      {localizedVisitorCountry}
+                    <span
+                      className={`font-semibold text-[#0F172A] dark:text-white truncate ${
+                        isCompactControls
+                          ? 'hidden md:inline md:max-w-[120px]'
+                          : isCompactPhone
+                          ? 'text-[11px] uppercase md:text-[12px] md:normal-case md:max-w-[120px]'
+                          : 'max-w-[76px] md:max-w-[120px]'
+                      }`}
+                    >
+                      {isCompactPhone ? visitorCountryCode : localizedVisitorCountry}
                     </span>
                     <ChevronDown className="w-3 h-3 text-slate-400 shrink-0" />
                   </button>
 
                   {geoDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 p-2 z-50">
+                    <div className="fixed left-3 right-3 top-[68px] md:top-auto md:left-auto md:right-0 md:absolute md:mt-2 md:w-64 bg-white dark:bg-slate-900 rounded-2xl shadow-xl border border-slate-100 dark:border-slate-800 p-2 z-50">
                       <div className="px-2 py-1.5 border-b border-slate-100 dark:border-slate-800 mb-1.5">
                         <p className="text-[11px] font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1.5">
                           <Globe className="w-3.5 h-3.5 text-blue-600" />
@@ -411,20 +497,29 @@ export const Header: React.FC = () => {
                   )}
                 </div>
 
-                {/* Language Selector (Globe + LANG v) */}
-                <div className="relative hidden sm:block" ref={langDropdownRef}>
+                {/* Language Selector (Compact icon on phones, full Globe + LANG on wider/desktop) */}
+                <div className={`relative ${isUltraNarrow ? 'hidden md:block' : 'block'}`} ref={langDropdownRef}>
                   <button
                     type="button"
                     onClick={() => setLangDropdownOpen(!langDropdownOpen)}
-                    className="flex items-center gap-1.5 text-[13px] font-medium text-[#334155] dark:text-slate-200 hover:text-[#0F172A] dark:hover:text-white transition-colors cursor-pointer py-1.5"
+                    aria-label="Language and Theme"
+                    className={`flex items-center text-[13px] font-medium text-[#334155] dark:text-slate-200 hover:text-[#0F172A] dark:hover:text-white transition-colors cursor-pointer ${
+                      isCompactControls
+                        ? 'justify-center w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:gap-1.5 md:py-1.5'
+                        : isCompactPhone
+                        ? 'justify-center w-9 h-9 rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:gap-1.5 md:py-1.5'
+                        : 'gap-1.5 py-1.5'
+                    }`}
                   >
                     <Globe className="w-4 h-4 text-[#475569] dark:text-slate-300" />
-                    <span className="uppercase font-semibold">{language}</span>
-                    <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                    <span className={`${isCompactPhone ? 'hidden md:inline' : 'inline'} uppercase font-semibold`}>
+                      {language}
+                    </span>
+                    <ChevronDown className={`${isCompactPhone ? 'hidden md:inline' : 'inline'} w-3.5 h-3.5 text-slate-400`} />
                   </button>
 
                   {langDropdownOpen && (
-                    <div className="absolute right-0 mt-2 w-48 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-100 dark:border-slate-800 py-1.5 z-50">
+                    <div className="fixed left-3 right-3 top-[68px] md:top-auto md:left-auto md:right-0 md:absolute md:mt-2 md:w-48 bg-white dark:bg-slate-900 rounded-xl shadow-lg border border-slate-100 dark:border-slate-800 py-1.5 z-50">
                       {languagesList.map((langItem) => (
                         <button
                           key={langItem.code}
@@ -492,7 +587,7 @@ export const Header: React.FC = () => {
                   <span>Track Order</span>
                 </button>
 
-                {/* Wishlist Heart Icon */}
+                {/* Wishlist Heart Icon — Always visible on mobile, tablet & desktop */}
                 <button
                   type="button"
                   onClick={() => {
@@ -502,22 +597,25 @@ export const Header: React.FC = () => {
                       setIsWishlistOpen(true);
                     }
                   }}
-                  className="relative p-1.5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 transition-colors cursor-pointer"
+                  className={`relative flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:p-1.5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 transition-colors cursor-pointer ${
+                    isCompactControls ? 'w-8 h-8' : 'w-9 h-9'
+                  }`}
                   aria-label="Wishlist"
+                  title={t('wishlist.title') || 'Wishlist'}
                 >
                   <Heart
-                    className={`w-[21px] h-[21px] ${
-                      wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'stroke-[1.8]'
+                    className={`w-[18px] h-[18px] md:w-[21px] md:h-[21px] ${
+                      wishlistCount > 0 ? 'fill-red-500 text-red-500' : 'stroke-[1.9]'
                     }`}
                   />
                   {wishlistCount > 0 && (
-                    <span className="absolute -top-1 -right-1 min-w-[17px] h-[17px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center">
+                    <span className="absolute -top-1 -right-1 min-w-[16px] h-[16px] md:min-w-[17px] md:h-[17px] px-1 rounded-full bg-blue-600 text-white text-[9.5px] md:text-[10px] font-bold flex items-center justify-center tabular-nums">
                       {wishlistCount}
                     </span>
                   )}
                 </button>
 
-                {/* Sign In / Account */}
+                {/* Sign In / Account — Always visible on mobile, tablet & desktop */}
                 <div className="relative" ref={dropdownRef}>
                   <button
                     type="button"
@@ -528,22 +626,28 @@ export const Header: React.FC = () => {
                         setIsAuthModalOpen(true);
                       }
                     }}
-                    className="flex items-center gap-2 text-left hover:opacity-85 transition-opacity cursor-pointer py-1"
-                    aria-label="User Account"
+                    className={`relative flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:gap-2 md:py-1 text-left hover:opacity-85 transition-opacity cursor-pointer ${
+                      isWidePhone ? 'px-2.5 h-9 gap-1.5' : isCompactControls ? 'w-8 h-8' : 'w-9 h-9'
+                    }`}
+                    aria-label={user.isLoggedIn ? user.name : 'Sign In / Account'}
+                    title={user.isLoggedIn ? user.name : 'Sign In'}
                   >
-                    <UserIcon className="w-[21px] h-[21px] text-[#1E293B] dark:text-slate-200 stroke-[1.8]" />
-                    <div className="hidden sm:flex flex-col leading-tight">
-                      <span className="text-[12px] font-semibold text-[#0F172A] dark:text-white">
+                    <UserIcon className="w-[18px] h-[18px] md:w-[21px] md:h-[21px] text-[#1E293B] dark:text-slate-200 stroke-[1.9] shrink-0" />
+                    {user.isLoggedIn && (
+                      <span className="md:hidden absolute top-0.5 right-0.5 w-2 h-2 rounded-full bg-emerald-500 ring-2 ring-white dark:ring-slate-900" />
+                    )}
+                    <div className={`${isWidePhone ? 'flex' : 'hidden md:flex'} flex-col leading-tight`}>
+                      <span className="text-[11.5px] md:text-[12px] font-semibold text-[#0F172A] dark:text-white max-w-[78px] md:max-w-none truncate">
                         {user.isLoggedIn ? user.name : 'Sign In'}
                       </span>
-                      <span className="text-[11px] text-[#64748B] dark:text-slate-400">
+                      <span className="hidden md:block text-[11px] text-[#64748B] dark:text-slate-400">
                         Account
                       </span>
                     </div>
                   </button>
 
                   {userDropdownOpen && user.isLoggedIn && (
-                    <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-50">
+                    <div className="fixed left-3 right-3 top-[68px] md:top-auto md:left-auto md:right-0 md:absolute md:mt-2 md:w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-slate-100 dark:border-slate-800 py-2 z-50">
                       <div className="px-4 py-2 border-b border-slate-100 dark:border-slate-800">
                         <p className="text-xs font-semibold text-slate-900 dark:text-slate-100">{user.name}</p>
                         <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">{user.email}</p>
@@ -613,15 +717,18 @@ export const Header: React.FC = () => {
                   )}
                 </div>
 
-                {/* Shopping Cart Icon with Blue Count Badge */}
+                {/* Shopping Cart Icon with Blue Count Badge — Always visible on mobile, tablet & desktop */}
                 <button
                   type="button"
                   onClick={() => setIsCartOpen(true)}
-                  className="relative p-1.5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 transition-colors cursor-pointer"
+                  className={`relative flex items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 md:w-auto md:h-auto md:bg-transparent md:dark:bg-transparent md:rounded-none md:p-1.5 text-[#1E293B] dark:text-slate-200 hover:text-blue-600 transition-colors cursor-pointer ${
+                    isCompactControls ? 'w-8 h-8' : 'w-9 h-9'
+                  }`}
                   aria-label="Open Cart"
+                  title="Cart"
                 >
-                  <ShoppingCart className="w-[22px] h-[22px] stroke-[1.8]" />
-                  <span className="absolute -top-1 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-[#2563EB] text-white text-[10px] font-bold flex items-center justify-center shadow-xs">
+                  <ShoppingCart className="w-[18px] h-[18px] md:w-[22px] md:h-[22px] stroke-[1.9]" />
+                  <span className="absolute -top-1 -right-1 md:-right-1.5 min-w-[17px] h-[17px] md:min-w-[18px] md:h-[18px] px-1 rounded-full bg-[#2563EB] text-white text-[9.5px] md:text-[10px] font-bold flex items-center justify-center shadow-xs tabular-nums">
                     {cartTotalCount}
                   </span>
                 </button>

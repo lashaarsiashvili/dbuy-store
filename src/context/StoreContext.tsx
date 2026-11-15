@@ -378,6 +378,9 @@ const parseRouteFromLocation = (
   if (lower === 'returns') return { page: 'returns', productId: null };
   if (lower === 'guarantee') return { page: 'guarantee', productId: null };
   if (lower === 'deliveries') return { page: 'deliveries', productId: null };
+  if (lower === 'bio' || lower === 'instagram' || lower === 'ig' || lower.startsWith('bio/') || lower.startsWith('instagram/')) {
+    return { page: 'bio', productId: null };
+  }
   if (lower === 'my-orders' || lower === 'orders') return { page: 'my-orders', productId: null };
   return { page: 'home', productId: null };
 };
@@ -576,6 +579,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     } else if (page === 'admin') {
       targetPath = `/${adminSecretSlug}`;
+      setActiveProductId(null);
+    } else if (page === 'bio') {
+      targetPath = '/bio';
       setActiveProductId(null);
     } else {
       targetPath = `/${page}`;

@@ -32,7 +32,7 @@ export type Currency = 'USD' | 'EUR' | 'GEL';
 
 export type Language = 'en' | 'ka' | 'es' | 'ru' | 'de' | 'fr' | 'zh' | 'it';
 
-export type PageView = 'home' | 'category' | 'product' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders' | 'deliveries' | 'campaigns' | 'checkout' | 'auth-callback';
+export type PageView = 'home' | 'category' | 'product' | 'about' | 'contact' | 'privacy' | 'returns' | 'guarantee' | 'admin' | 'my-orders' | 'deliveries' | 'campaigns' | 'checkout' | 'auth-callback' | 'bio';
 
 export interface ProductVideo {
   id?: string;
