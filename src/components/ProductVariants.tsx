@@ -27,11 +27,13 @@ export interface VariantSelectionPayload {
   finalPrice: number;
   variantImage?: string;
   matchedVariant?: ProductVariant | null;
+  isUserClick?: boolean;
 }
 
 export interface StorefrontVariantSelectorProps {
   variants: ProductVariant[];
   basePrice: number;
+  productTitle?: string;
   language?: string;
   onSelectVariant: (selection: VariantSelectionPayload) => void;
 }
@@ -341,6 +343,7 @@ export const AdminVariantBuilder: React.FC<AdminVariantBuilderProps> = ({
 export const StorefrontVariantSelector: React.FC<StorefrontVariantSelectorProps> = ({
   variants,
   basePrice,
+  productTitle = '',
   language = 'en',
   onSelectVariant,
 }) => {
@@ -360,11 +363,17 @@ export const StorefrontVariantSelector: React.FC<StorefrontVariantSelectorProps>
       const key = cname.toLowerCase();
       const existing = map.get(key);
       const vImg = getVariantDisplayImage(v);
+      const resolvedHex =
+        v.colorHex && v.colorHex !== '#000000'
+          ? v.colorHex
+          : v.colorCode && v.colorCode !== '#000000'
+          ? v.colorCode
+          : guessColorHex(cname);
       if (!existing) {
         map.set(key, {
           name: cname,
           nameKa: v.nameKa,
-          hex: v.colorHex || v.colorCode || '#000000',
+          hex: resolvedHex,
           imageUrl: vImg || undefined,
         });
       } else if (!existing.imageUrl && vImg) {
@@ -388,18 +397,33 @@ export const StorefrontVariantSelector: React.FC<StorefrontVariantSelectorProps>
     [normalizedVariants]
   );
 
-  const [selectedColor, setSelectedColor] = useState<string>(uniqueColors[0]?.name || '');
+  const resolveInitialColor = () => {
+    if (uniqueColors.length === 0) return '';
+    const lowerTitle = (productTitle || '').toLowerCase();
+    if (lowerTitle) {
+      const titleMatch = uniqueColors.find((c) => {
+        const cname = c.name.toLowerCase();
+        return cname.length > 1 && new RegExp(`\\b${cname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'i').test(lowerTitle);
+      });
+      if (titleMatch) return titleMatch.name;
+    }
+    return uniqueColors[0]?.name || '';
+  };
+
+  const [selectedColor, setSelectedColor] = useState<string>(resolveInitialColor);
   const [selectedSize, setSelectedSize] = useState<string>(uniqueSizes[0] || '');
   const lastEmittedRef = useRef<string>('');
+  const pendingUserClickRef = useRef<boolean>(false);
   const onSelectRef = useRef(onSelectVariant);
   onSelectRef.current = onSelectVariant;
 
   // Reset initial selections when product variants change
   useEffect(() => {
-    setSelectedColor(uniqueColors[0]?.name || '');
+    setSelectedColor(resolveInitialColor());
     setSelectedSize(uniqueSizes[0] || '');
     lastEmittedRef.current = '';
-  }, [variantsSignature]);
+    pendingUserClickRef.current = false;
+  }, [variantsSignature, productTitle]);
 
   // Resolve matching variant cleanly
   const matchedVariant = useMemo(() => {
@@ -448,12 +472,16 @@ export const StorefrontVariantSelector: React.FC<StorefrontVariantSelectorProps>
     if (lastEmittedRef.current === emitKey) return;
     lastEmittedRef.current = emitKey;
 
+    const isUserClick = pendingUserClickRef.current;
+    pendingUserClickRef.current = false;
+
     onSelectRef.current({
       colorName: selectedColor || undefined,
       sizeLabel: selectedSize || undefined,
       finalPrice,
       variantImage,
       matchedVariant,
+      isUserClick,
     });
   }, [normalizedVariants.length, matchedVariant, basePrice, selectedColor, selectedSize, uniqueColors]);
 
@@ -468,7 +496,11 @@ export const StorefrontVariantSelector: React.FC<StorefrontVariantSelectorProps>
     isKa && activeColorObj?.nameKa ? activeColorObj.nameKa : selectedColor;
 
   const handleColorClick = (colorName: string) => {
+    pendingUserClickRef.current = true;
+    const alreadySelected = selectedColor.trim().toLowerCase() === colorName.trim().toLowerCase();
     setSelectedColor(colorName);
+
+    let nextSize = selectedSize;
     if (uniqueSizes.length > 0) {
       const hasCurrentSize = normalizedVariants.some(
         (v) =>
@@ -482,9 +514,31 @@ export const StorefrontVariantSelector: React.FC<StorefrontVariantSelectorProps>
             (v.sizeLabel || '').trim() !== ''
         );
         if (firstForColor?.sizeLabel) {
-          setSelectedSize(firstForColor.sizeLabel.trim());
+          nextSize = firstForColor.sizeLabel.trim();
+          setSelectedSize(nextSize);
         }
       }
+    }
+
+    // If user clicked the already-active color, immediately jump gallery to its matching image
+    if (alreadySelected) {
+      pendingUserClickRef.current = false;
+      const colorObj = uniqueColors.find(
+        (c) => c.name.toLowerCase() === colorName.trim().toLowerCase()
+      );
+      const finalPrice =
+        matchedVariant?.price !== undefined && matchedVariant.price > 0
+          ? matchedVariant.price
+          : basePrice;
+      const variantImage = getVariantDisplayImage(matchedVariant) || colorObj?.imageUrl || undefined;
+      onSelectRef.current({
+        colorName,
+        sizeLabel: nextSize || undefined,
+        finalPrice,
+        variantImage,
+        matchedVariant,
+        isUserClick: true,
+      });
     }
   };
 
@@ -538,18 +592,10 @@ export const StorefrontVariantSelector: React.FC<StorefrontVariantSelectorProps>
                   }`}
                   title={label}
                 >
-                  {c.imageUrl ? (
-                    <img
-                      src={c.imageUrl}
-                      alt={label}
-                      className="w-5 h-5 rounded object-cover shrink-0 border border-black/10"
-                    />
-                  ) : (
-                    <span
-                      className="w-4 h-4 rounded-full border border-black/20 dark:border-white/25 shrink-0 shadow-2xs"
-                      style={{ backgroundColor: c.hex }}
-                    />
-                  )}
+                  <span
+                    className="w-4 h-4 rounded-full border border-slate-300 dark:border-white/30 shrink-0 shadow-2xs"
+                    style={{ backgroundColor: c.hex || guessColorHex(c.name) }}
+                  />
                   <span>{label}</span>
                 </button>
               );

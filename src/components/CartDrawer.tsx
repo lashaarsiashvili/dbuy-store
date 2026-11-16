@@ -168,11 +168,16 @@ export const CartDrawer: React.FC = () => {
                   : item.product.title;
 
                 const parsedImages = parseImages(item.product.images);
-                const imageSrc = item.product.image || parsedImages[0] || '';
+                const imageSrc = item.variantImage || item.product.image || parsedImages[0] || '';
                 const itemEstimate = getEstimateForProduct(item.product, visitorCountryCode);
+                const variantParts = [
+                  item.selectedColor ? (language === 'ka' ? `ფერი: ${item.selectedColor}` : `Color: ${item.selectedColor}`) : '',
+                  item.selectedSize ? (language === 'ka' ? `ზომა: ${item.selectedSize}` : `Size: ${item.selectedSize}`) : '',
+                ].filter(Boolean);
+                const variantDisplayLabel = variantParts.length > 0 ? variantParts.join(' · ') : item.selectedOption;
 
                 return (
-                  <div key={`${item.product.id}-${item.selectedOption || 'default'}`} className="py-4 flex space-x-3 items-center">
+                  <div key={`${item.product.id}-${item.selectedOption || 'default'}-${item.selectedColor || ''}-${item.selectedSize || ''}`} className="py-4 flex space-x-3 items-center">
                     {/* Thumbnail */}
                     <div className="w-16 h-16 rounded-xl bg-slate-100 dark:bg-slate-800 overflow-hidden shrink-0">
                       <CachedImage
@@ -187,9 +192,9 @@ export const CartDrawer: React.FC = () => {
                       <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 truncate">
                         {title}
                       </h4>
-                      {item.selectedOption && (
+                      {variantDisplayLabel && (
                         <div className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 truncate mt-0.5">
-                          {item.selectedOption}
+                          {variantDisplayLabel}
                         </div>
                       )}
                       <div className="text-xs font-black text-slate-800 dark:text-slate-200 mt-0.5">

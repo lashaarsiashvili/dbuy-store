@@ -116,16 +116,48 @@ export async function onRequestPost(context: EventContext<any, any, any>): Promi
       },
     });
 
+    const titleColorMatch = (() => {
+      const t = (productTitle || '').trim();
+      const map: Array<{ p: RegExp; name: string; hex: string }> = [
+        { p: /\bnavy\s*blue\b/i, name: 'Navy Blue', hex: '#1E3A8A' },
+        { p: /\blight\s*blue\b/i, name: 'Light Blue', hex: '#60A5FA' },
+        { p: /\blilac\b/i, name: 'Lilac', hex: '#C4B5FD' },
+        { p: /\blavender\b/i, name: 'Lilac', hex: '#C4B5FD' },
+        { p: /\bblue\b/i, name: 'Blue', hex: '#2563EB' },
+        { p: /\bblack\b/i, name: 'Black', hex: '#18181B' },
+        { p: /\bwhite\b/i, name: 'White', hex: '#F8FAFC' },
+        { p: /\bred\b/i, name: 'Red', hex: '#EF4444' },
+        { p: /\byellow\b/i, name: 'Yellow', hex: '#FACC15' },
+        { p: /\bgreen\b/i, name: 'Green', hex: '#22C55E' },
+        { p: /\bpink\b/i, name: 'Pink', hex: '#EC4899' },
+        { p: /\bpurple\b/i, name: 'Purple', hex: '#8B5CF6' },
+        { p: /\borange\b/i, name: 'Orange', hex: '#F97316' },
+        { p: /\bsilver\b/i, name: 'Silver', hex: '#CBD5E1' },
+        { p: /\bgold\b/i, name: 'Gold', hex: '#EAB308' },
+        { p: /\bgr[ae]y\b/i, name: 'Gray', hex: '#9CA3AF' },
+      ];
+      const segs = t.split(/[-–|,/()\[\]]+/).map((s) => s.trim()).filter(Boolean);
+      for (let i = segs.length - 1; i >= 0; i--) {
+        if (segs[i].length > 35) continue;
+        for (const m of map) if (m.p.test(segs[i])) return { name: m.name, hex: m.hex };
+      }
+      for (const m of map) if (m.p.test(t)) return { name: m.name, hex: m.hex };
+      return null;
+    })();
+
     const prompt = `You are a precise e-commerce catalog visual classifier. Inspect these ${validImages.length} images for "${productTitle || 'E-Commerce Product'}".
 Each image is preceded by its exact integer imageIndex label (e.g. "imageIndex=0").
+${titleColorMatch ? `CRITICAL RULE: The product title explicitly states the color "${titleColorMatch.name}". The main hero image (imageIndex=0) depicts "${titleColorMatch.name}" — NEVER label it as "Black" just because the studio background is dark!` : ''}
 
-For EACH provided image, return a JSON object inside an array:
+CRITICAL VISUAL RULES:
+- IGNORE ALL BACKGROUNDS (both dark/black studio backgrounds and white/gray studio backgrounds). Detect ONLY the physical color of the center product object itself!
+- For EACH provided image, return a JSON object inside an array:
 1. "imageIndex": exact integer imageIndex label given before the image.
 2. "isSingleColorProductShot": TRUE ONLY IF the image focuses on ONE specific color variant of the product. Set FALSE if:
    - It is a group shot showing multiple different colors side-by-side (e.g., 5 bottles of different colors together).
    - It is a dimension/size diagram, text infographic, packaging chart, or close-up texture without showing the main body color.
-3. "detectedColorName": The exact standard English color name of the product body (choose clear names like: "Yellow", "Black", "White", "Red", "Blue", "Navy Blue", "Light Blue", "Green", "Mint Green", "Pink", "Purple", "Orange", "Gray", "Silver", "Gold", "Beige", "Brown"). Use the EXACT same string for identical colors across different angles!
-4. "detectedColorHex": Accurate hex code for that color (e.g., Yellow -> "#FACC15", Black -> "#18181B", Blue -> "#2563EB").
+3. "detectedColorName": The exact standard English color name of the center product body (choose clear names like: "Yellow", "Black", "White", "Red", "Blue", "Navy Blue", "Light Blue", "Lilac", "Green", "Mint Green", "Pink", "Purple", "Orange", "Gray", "Silver", "Gold", "Beige", "Brown"). Use the EXACT same string for identical colors across different angles!
+4. "detectedColorHex": Accurate hex code for that color (e.g., Yellow -> "#FACC15", Black -> "#18181B", Blue -> "#2563EB", Lilac -> "#C4B5FD", White -> "#F8FAFC").
 5. "detectedSizeLabel": Specific size/volume if clearly shown for this variant (e.g. "500ml", "1L", "32 oz"), otherwise "".
 6. "confidence": 0.0 to 1.0.`;
 
@@ -172,6 +204,26 @@ For EACH provided image, return a JSON object inside an array:
     const analyses: VisionImageAnalysis[] = JSON.parse((response.text || '[]').trim());
     if (!Array.isArray(analyses)) {
       return new Response(JSON.stringify({ success: true, variants: [] }), { headers: CORS_HEADERS });
+    }
+
+    // Enforce title-color assignment on hero image (imageIndex === 0)
+    if (titleColorMatch && validImages.some((v) => v.idx === 0)) {
+      const heroAnalysis = analyses.find((a) => a.imageIndex === 0);
+      if (heroAnalysis) {
+        heroAnalysis.isSingleColorProductShot = true;
+        heroAnalysis.detectedColorName = titleColorMatch.name;
+        heroAnalysis.detectedColorHex = titleColorMatch.hex;
+        heroAnalysis.confidence = Math.max(Number(heroAnalysis.confidence) || 0.95, 0.95);
+      } else {
+        analyses.unshift({
+          imageIndex: 0,
+          isSingleColorProductShot: true,
+          detectedColorName: titleColorMatch.name,
+          detectedColorHex: titleColorMatch.hex,
+          detectedSizeLabel: '',
+          confidence: 0.96,
+        });
+      }
     }
 
     const colorClusters = new Map<string, AutoDetectedVariant>();

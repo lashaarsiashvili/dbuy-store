@@ -1,9 +1,9 @@
 import type { ProductVariant } from '../types';
 import { smartApiFetch } from '../lib/api';
-import { normalizeVariantItem } from './variantUtils';
+import { normalizeVariantItem, extractColorFromTitle, guessColorHex } from './variantUtils';
 
 // ============================================================================
-// AutoColorVisionEngine.ts (v2 - Fixed Yellow & Multi-Color Detection)
+// AutoColorVisionEngine.ts (v3 - Title Hero Color Priority & Dark BG Ignore)
 // ============================================================================
 
 export interface AutoDetectedVariant {
@@ -17,8 +17,11 @@ export interface AutoDetectedVariant {
 }
 
 /**
- * მთავარი ფუნქცია: აფასებს პროდუქტის სურათებს, გამორიცხავს ჯგუფურ ფოტოებსა და
- * ინფოგრაფიკებს, ამოიცნობს პროდუქტის რეალურ ფერებს და აჯგუფებს სურათებს ფერების მიხედვით.
+ * მთავარი ფუნქცია:
+ * 1) ჯერ ამოწმებს პროდუქტის სათაურს (მაგ. "Logitech G733 ... - Blue") და Hero სურათს (index 0)
+ *    აუცილებლად აკავშირებს სათაურში მითითებულ ფერთან (არასდროს "Black"-თან მუქი ფონის გამო).
+ * 2) იყენებს სერვერულ Gemini Vision API-ს და სარეზერვო HSL Hue Histogram Voting ალგორითმს,
+ *    რომელიც აიგნორებს მუქ და თეთრ ფონებს და აანალიზებს მხოლოდ ცენტრალური ობიექტის ფერს.
  */
 export async function autoDetectColorVariantsFromImages(
   imageUrls: string[],
@@ -35,18 +38,98 @@ export async function autoDetectColorVariantsFromImages(
 
   if (cleanUrls.length === 0) return [];
 
+  const titleColor = extractColorFromTitle(productTitle);
+
   // 1. პირველ რიგში ვიყენებთ სერვერულ Gemini Vision API-ს (/api/detect-color-variants)
   try {
     const aiVariants = await analyzeImagesViaServerVision(cleanUrls, productTitle);
     if (aiVariants.length > 0) {
-      return aiVariants;
+      return applyTitleColorHeroRule(aiVariants, cleanUrls[0], titleColor);
     }
   } catch (err) {
     console.warn('Gemini Vision fallback to HSL Histogram:', err);
   }
 
-  // 2. გაუმჯობესებული HSL Hue Histogram Voting ალგორითმი (ზუსტად ცნობს ყვითელს და სხვა ფერებს)
-  return await analyzeImagesViaHslHistogram(cleanUrls);
+  // 2. გაუმჯობესებული HSL Hue Histogram Voting ალგორითმი (მუქი/თეთრი ფონის იგნორირებით)
+  const hslVariants = await analyzeImagesViaHslHistogram(cleanUrls, titleColor);
+  return applyTitleColorHeroRule(hslVariants, cleanUrls[0], titleColor);
+}
+
+/**
+ * Ensures the hero image (index 0) is strictly assigned to the color mentioned in the product title
+ * (e.g., "Blue" in "Logitech G733 ... - Blue") and NEVER mislabeled as "Black" due to a dark background.
+ */
+function applyTitleColorHeroRule(
+  variants: AutoDetectedVariant[],
+  heroImageUrl: string,
+  titleColor: { name: string; hex: string } | null
+): AutoDetectedVariant[] {
+  if (!titleColor || !heroImageUrl || variants.length === 0) {
+    return variants;
+  }
+
+  const targetKey = titleColor.name.trim().toLowerCase();
+  const updated: AutoDetectedVariant[] = [];
+  let heroVariant: AutoDetectedVariant | null = null;
+
+  for (const v of variants) {
+    const vKey = (v.colorName || '').trim().toLowerCase();
+    const isTargetColor = vKey === targetKey || vKey.includes(targetKey) || targetKey.includes(vKey);
+
+    if (isTargetColor) {
+      const mergedGallery = [
+        heroImageUrl,
+        ...(v.galleryImages || []).filter((u) => u && u !== heroImageUrl),
+      ];
+      if (!heroVariant) {
+        heroVariant = {
+          ...v,
+          colorName: titleColor.name,
+          colorHex: v.colorHex || titleColor.hex,
+          primaryImageUrl: heroImageUrl,
+          galleryImages: mergedGallery,
+          confidence: Math.max(v.confidence || 0.9, 0.95),
+        };
+      } else {
+        for (const img of mergedGallery) {
+          if (!heroVariant.galleryImages.includes(img)) {
+            heroVariant.galleryImages.push(img);
+          }
+        }
+      }
+      continue;
+    }
+
+    // Remove heroImageUrl from any non-title-color variant (e.g. "Black" from dark background)
+    const remainingGallery = (v.galleryImages || []).filter((u) => u && u !== heroImageUrl);
+    const nextPrimary =
+      v.primaryImageUrl === heroImageUrl ? remainingGallery[0] || '' : v.primaryImageUrl;
+
+    if (!nextPrimary || remainingGallery.length === 0) {
+      continue;
+    }
+
+    updated.push({
+      ...v,
+      primaryImageUrl: nextPrimary,
+      galleryImages: remainingGallery,
+    });
+  }
+
+  if (!heroVariant) {
+    heroVariant = {
+      id: `var_hero_${Date.now()}`,
+      colorName: titleColor.name,
+      colorHex: titleColor.hex,
+      sizeLabel: '',
+      primaryImageUrl: heroImageUrl,
+      galleryImages: [heroImageUrl],
+      confidence: 0.96,
+    };
+  }
+
+  const finalList = [heroVariant, ...updated];
+  return finalList.length > 1 || Boolean(finalList[0]?.sizeLabel) ? finalList : [];
 }
 
 // ============================================================================
@@ -85,7 +168,7 @@ async function analyzeImagesViaServerVision(
     .map((v: AutoDetectedVariant, idx: number) => ({
       id: v.id || `var_auto_${Date.now()}_${idx}`,
       colorName: v.colorName.trim(),
-      colorHex: /^#[0-9A-Fa-f]{6}$/.test(v.colorHex || '') ? v.colorHex : '#18181B',
+      colorHex: /^#[0-9A-Fa-f]{6}$/.test(v.colorHex || '') ? v.colorHex : guessColorHex(v.colorName),
       sizeLabel: typeof v.sizeLabel === 'string' ? v.sizeLabel.trim() : '',
       primaryImageUrl: v.primaryImageUrl.trim(),
       galleryImages:
@@ -97,19 +180,29 @@ async function analyzeImagesViaServerVision(
 }
 
 // ============================================================================
-// ნაწილი 2: HSL HUE HISTOGRAM VOTING (პიქსელების ხმის მიცემის ალგორითმი)
+// ნაწილი 2: HSL HUE HISTOGRAM VOTING (მუქი/თეთრი ფონის იგნორირება + ცენტრალური ობიექტი)
 // ============================================================================
 async function analyzeImagesViaHslHistogram(
-  imageUrls: string[]
+  imageUrls: string[],
+  titleColor: { name: string; hex: string } | null
 ): Promise<AutoDetectedVariant[]> {
   if (typeof document === 'undefined' || typeof Image === 'undefined') {
     return [];
   }
 
   const grouped = new Map<string, AutoDetectedVariant>();
+  const sliceUrls = imageUrls.slice(0, 12);
 
-  for (const url of imageUrls.slice(0, 12)) {
-    const detected = await detectDominantColorByHslVoting(url);
+  for (let i = 0; i < sliceUrls.length; i++) {
+    const url = sliceUrls[i];
+    let detected: { name: string; hex: string; confidence: number } | null = null;
+
+    if (i === 0 && titleColor) {
+      detected = { name: titleColor.name, hex: titleColor.hex, confidence: 0.96 };
+    } else {
+      detected = await detectDominantColorByHslVoting(url);
+    }
+
     if (!detected) continue;
 
     const key = detected.name.toLowerCase();
@@ -196,44 +289,88 @@ async function detectDominantColorByHslVoting(
     canvas.height = size;
     ctx.drawImage(img, 0, 0, size, size);
 
-    // ვამოწმებთ ცენტრალურ ნაწილს (20%-დან 80%-მდე)
-    const start = Math.floor(size * 0.2);
-    const end = Math.floor(size * 0.8);
-    const data = ctx.getImageData(start, start, end - start, end - start).data;
+    const fullData = ctx.getImageData(0, 0, size, size).data;
+
+    // 1. Detect outer border background brightness so dark studio backgrounds are ignored
+    let borderLSum = 0;
+    let borderSSum = 0;
+    let borderCount = 0;
+    const borderBand = Math.floor(size * 0.08);
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (x >= borderBand && x < size - borderBand && y >= borderBand && y < size - borderBand) {
+          continue;
+        }
+        const idx = (y * size + x) * 4;
+        if (fullData[idx + 3] < 150) continue;
+        const { s, l } = rgbToHsl(fullData[idx], fullData[idx + 1], fullData[idx + 2]);
+        borderLSum += l;
+        borderSSum += s;
+        borderCount++;
+      }
+    }
+    const borderAvgL = borderCount > 0 ? borderLSum / borderCount : 100;
+    const borderAvgS = borderCount > 0 ? borderSSum / borderCount : 0;
+    const isDarkBackground = borderAvgL < 24 && borderAvgS < 28;
+
+    // 2. Analyze ONLY the inner center box (24% to 76%) with radial center weighting
+    const start = Math.floor(size * 0.24);
+    const end = Math.floor(size * 0.76);
+    const centerCoord = size / 2;
 
     const votes: Record<string, number> = {};
-    let validPixels = 0;
+    let totalWeight = 0;
+    let chromaticWeight = 0;
 
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      const a = data[i + 3];
+    for (let y = start; y < end; y++) {
+      for (let x = start; x < end; x++) {
+        const idx = (y * size + x) * 4;
+        const r = fullData[idx];
+        const g = fullData[idx + 1];
+        const b = fullData[idx + 2];
+        const a = fullData[idx + 3];
 
-      if (a < 150) continue;
+        if (a < 150) continue;
 
-      const { h, s, l } = rgbToHsl(r, g, b);
+        const { h, s, l } = rgbToHsl(r, g, b);
 
-      // სუფთა თეთრი ფონის გამორიცხვა (L > 92% დაბალი სატურაციით)
-      if (l > 92 && s < 20) continue;
+        // Exclude pure/near-white studio background
+        if (l > 91 && s < 22) continue;
+        // Exclude dark studio background pixels when image has a dark background
+        if (isDarkBackground && l < 24 && s < 28) continue;
+        // Always ignore near-black backdrop/shadow noise (L < 12, low saturation)
+        if (l < 12 && s < 22) continue;
 
-      validPixels++;
-      const colorBucket = classifyHslPixel(h, s, l);
-      votes[colorBucket] = (votes[colorBucket] || 0) + 1;
+        const dx = (x - centerCoord) / (size * 0.3);
+        const dy = (y - centerCoord) / (size * 0.3);
+        const radialWeight = Math.max(0.4, 1.5 - 0.5 * (dx * dx + dy * dy));
+
+        const colorBucket = classifyHslPixel(h, s, l);
+        votes[colorBucket] = (votes[colorBucket] || 0) + radialWeight;
+        totalWeight += radialWeight;
+
+        if (!['Black', 'White', 'Gray', 'Silver'].includes(colorBucket)) {
+          chromaticWeight += radialWeight;
+        }
+      }
     }
 
-    if (validPixels < 20) return null;
+    if (totalWeight < 15) return null;
 
-    // ვპოულობთ ყველაზე მეტი ხმის მქონე ფერს (ქრომატულ ფერებს ვანიჭებთ პრიორიტეტს შავ თავსახურთან შედარებით)
+    const hasSignificantChromatic = chromaticWeight / totalWeight >= 0.1;
+
+    // 3. Vote for the dominant center-object color (chromatic body beats dark caps/shadows)
     let bestColor = '';
     let maxScore = 0;
 
-    for (const [colorName, count] of Object.entries(votes)) {
-      const ratio = count / validPixels;
-      // თუ პროდუქტი ყვითელი/წითელი/ლურჯია, მას ხშირად აქვს შავი თავსახური ან ჩრდილი,
-      // ამიტომ ფერად პიქსელებს 1.6x წონას ვაძლევთ შავ/ნაცრისფერთან შედარებით
-      const isChromatic = !['Black', 'White', 'Gray'].includes(colorName);
-      const weightedScore = isChromatic ? ratio * 1.6 : ratio;
+    for (const [colorName, weight] of Object.entries(votes)) {
+      const ratio = weight / totalWeight;
+      if (colorName === 'Black' && (isDarkBackground || hasSignificantChromatic)) {
+        // Dark background or shadow should never beat a colored product body
+        continue;
+      }
+      const isChromatic = !['Black', 'White', 'Gray', 'Silver'].includes(colorName);
+      const weightedScore = isChromatic ? ratio * 1.9 : ratio;
 
       if (weightedScore > maxScore) {
         maxScore = weightedScore;
@@ -241,18 +378,27 @@ async function detectDominantColorByHslVoting(
       }
     }
 
+    // If everything except Black was tiny, allow Black only when background was NOT dark
+    if (!bestColor && !isDarkBackground && votes['Black']) {
+      bestColor = 'Black';
+      maxScore = votes['Black'] / totalWeight;
+    }
+
     const standardHexMap: Record<string, string> = {
       Yellow: '#FACC15',
       Orange: '#F97316',
       Red: '#EF4444',
       Pink: '#EC4899',
+      Lilac: '#C4B5FD',
       Purple: '#8B5CF6',
+      'Light Blue': '#60A5FA',
       Blue: '#2563EB',
       'Navy Blue': '#1E3A8A',
       Cyan: '#06B6D4',
       Green: '#22C55E',
       Black: '#18181B',
       White: '#F8FAFC',
+      Silver: '#CBD5E1',
       Gray: '#9CA3AF',
       Brown: '#92400E',
     };
@@ -265,7 +411,6 @@ async function detectDominantColorByHslVoting(
       confidence: Math.min(0.95, maxScore),
     };
   } catch {
-    // თუ CORS-მა მაინც დაბლოკა Canvas წაკითხვა
     return null;
   }
 }
@@ -304,8 +449,11 @@ function rgbToHsl(r: number, g: number, b: number) {
 // თითოეული პიქსელის კლასიფიკაცია Hue კუთხის მიხედვით
 function classifyHslPixel(h: number, s: number, l: number): string {
   if (l < 18) return 'Black';
-  if (l > 86 && s < 25) return 'White';
-  if (s < 18) return 'Gray';
+  if (l > 84 && s < 25) return 'White';
+  if (s < 16) {
+    if (l >= 66) return 'Silver';
+    return 'Gray';
+  }
 
   // ყვითელი დიაპაზონი (40° - 68°)
   if (h >= 40 && h <= 68) {
@@ -319,12 +467,16 @@ function classifyHslPixel(h: number, s: number, l: number): string {
   }
   // წითელი (0° - 18° ან 340° - 360°)
   if (h < 18 || h >= 340) return 'Red';
-  // ვარდისფერი / იასამნისფერი (265° - 340°)
+  // ვარდისფერი / იასამნისფერი / იასამნისფერი ღია (Lilac)
   if (h >= 295 && h < 340) return 'Pink';
-  if (h >= 265 && h < 295) return 'Purple';
-  // ლურჯი და ცისფერი (175° - 265°)
-  if (h >= 200 && h < 265) {
+  if (h >= 248 && h < 295) {
+    if (l >= 64) return 'Lilac';
+    return 'Purple';
+  }
+  // ლურჯი და ცისფერი (175° - 248°)
+  if (h >= 200 && h < 248) {
     if (l < 32) return 'Navy Blue';
+    if (l >= 64) return 'Light Blue';
     return 'Blue';
   }
   if (h >= 175 && h < 200) return 'Cyan';

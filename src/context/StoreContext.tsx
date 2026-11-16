@@ -129,7 +129,18 @@ interface StoreContextType {
 
   // Cart
   cart: CartItem[];
-  addToCart: (product: Product, quantity?: number, selectedOption?: string) => void;
+  addToCart: (
+    product: Product,
+    quantity?: number,
+    selectedOptionOrMeta?:
+      | string
+      | {
+          selectedOption?: string;
+          selectedColor?: string;
+          selectedSize?: string;
+          variantImage?: string;
+        }
+  ) => void;
   updateCartQuantity: (productId: string, quantity: number, selectedOption?: string) => void;
   removeFromCart: (productId: string, selectedOption?: string) => void;
   clearCart: () => void;
@@ -1642,22 +1653,70 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const changeAdminPassword = () => true;
   const changeUserPassword = async () => true;
 
-  const addToCart = (product: Product, quantity = 1, selectedOption?: string) => {
+  const addToCart = (
+    product: Product,
+    quantity = 1,
+    selectedOptionOrMeta?:
+      | string
+      | {
+          selectedOption?: string;
+          selectedColor?: string;
+          selectedSize?: string;
+          variantImage?: string;
+        }
+  ) => {
+    const meta =
+      typeof selectedOptionOrMeta === 'object' && selectedOptionOrMeta !== null
+        ? selectedOptionOrMeta
+        : undefined;
+    const selectedColor = meta?.selectedColor?.trim() || undefined;
+    const selectedSize = meta?.selectedSize?.trim() || undefined;
+    const variantImage = meta?.variantImage?.trim() || undefined;
+    const selectedOption =
+      typeof selectedOptionOrMeta === 'string'
+        ? selectedOptionOrMeta
+        : meta?.selectedOption || [selectedColor, selectedSize].filter(Boolean).join(' / ') || undefined;
+
+    const cartProduct: Product = variantImage ? { ...product, image: variantImage } : product;
+
     setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id && item.selectedOption === selectedOption);
+      const existing = prev.find(
+        item =>
+          item.product.id === cartProduct.id &&
+          item.selectedOption === selectedOption &&
+          (item.selectedColor || '') === (selectedColor || '') &&
+          (item.selectedSize || '') === (selectedSize || '')
+      );
       let next: CartItem[];
       if (existing) {
         next = prev.map(item =>
-          (item.product.id === product.id && item.selectedOption === selectedOption)
-            ? { ...item, quantity: item.quantity + quantity }
+          item.product.id === cartProduct.id &&
+          item.selectedOption === selectedOption &&
+          (item.selectedColor || '') === (selectedColor || '') &&
+          (item.selectedSize || '') === (selectedSize || '')
+            ? {
+                ...item,
+                quantity: item.quantity + quantity,
+                variantImage: variantImage || item.variantImage,
+              }
             : item
         );
       } else {
-        next = [...prev, { product, quantity, selectedOption }];
+        next = [
+          ...prev,
+          {
+            product: cartProduct,
+            quantity,
+            selectedOption,
+            selectedColor,
+            selectedSize,
+            variantImage,
+          },
+        ];
       }
       try {
-        const key = user?.isLoggedIn && user.email 
-          ? `db_cart_${user.email.trim().toLowerCase()}` 
+        const key = user?.isLoggedIn && user.email
+          ? `db_cart_${user.email.trim().toLowerCase()}`
           : 'db_guest_cart';
         localStorage.setItem(key, JSON.stringify(next));
       } catch (e) {}
@@ -1803,7 +1862,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       ...(resolvedGooglePayTxnId ? { googlePayTransactionId: resolvedGooglePayTxnId } : {}),
       userId: user.isLoggedIn && user.email ? user.email.toLowerCase().trim() : 'guest',
       email: userEmail,
-      items: cart.map(i => ({ productId: i.product.id, title: i.product.title, price: i.product.price, quantity: i.quantity, image: i.product.image })),
+      items: cart.map(i => ({
+        productId: i.product.id,
+        title: i.product.title,
+        price: i.product.price,
+        quantity: i.quantity,
+        image: i.variantImage || i.product.image,
+        selectedColor: i.selectedColor,
+        selectedSize: i.selectedSize,
+      })),
       subtotal, discount, shipping, tax, total,
       currency,
       status: 'Processing',

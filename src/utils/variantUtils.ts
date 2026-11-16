@@ -2,21 +2,87 @@ import type { ProductVariant } from '../types';
 
 export function guessColorHex(colorName: string): string {
   const lower = (colorName || '').toLowerCase();
-  if (lower.includes('black') || lower.includes('ebony') || lower.includes('onyx')) return '#111111';
-  if (lower.includes('white') || lower.includes('ivory') || lower.includes('cream') || lower.includes('pearl')) return '#FFFFFF';
+  if (lower.includes('black') || lower.includes('ebony') || lower.includes('onyx')) return '#18181B';
+  if (lower.includes('white') || lower.includes('ivory') || lower.includes('cream') || lower.includes('pearl')) return '#F8FAFC';
   if (lower.includes('red') || lower.includes('crimson') || lower.includes('scarlet') || lower.includes('burgundy') || lower.includes('wine')) return '#DC2626';
   if (lower.includes('navy') || lower.includes('midnight')) return '#1E3A8A';
+  if (lower.includes('light blue') || lower.includes('sky blue') || lower.includes('baby blue')) return '#60A5FA';
   if (lower.includes('blue') || lower.includes('cobalt') || lower.includes('azure') || lower.includes('sky')) return '#2563EB';
-  if (lower.includes('teal') || lower.includes('cyan') || lower.includes('turquoise') || lower.includes('aqua')) return '#0D9488';
-  if (lower.includes('green') || lower.includes('olive') || lower.includes('emerald') || lower.includes('sage') || lower.includes('mint')) return '#16A34A';
-  if (lower.includes('yellow') || lower.includes('gold') || lower.includes('amber')) return '#EAB308';
-  if (lower.includes('orange') || lower.includes('coral') || lower.includes('peach')) return '#EA580C';
-  if (lower.includes('purple') || lower.includes('violet') || lower.includes('lavender') || lower.includes('plum')) return '#7C3AED';
+  if (lower.includes('mint')) return '#34D399';
+  if (lower.includes('teal') || lower.includes('cyan') || lower.includes('turquoise') || lower.includes('aqua')) return '#06B6D4';
+  if (lower.includes('green') || lower.includes('olive') || lower.includes('emerald') || lower.includes('sage')) return '#16A34A';
+  if (lower.includes('yellow') || lower.includes('amber')) return '#FACC15';
+  if (lower.includes('gold')) return '#EAB308';
+  if (lower.includes('orange') || lower.includes('coral') || lower.includes('peach')) return '#F97316';
+  if (lower.includes('lilac') || lower.includes('lavender')) return '#C4B5FD';
+  if (lower.includes('purple') || lower.includes('violet') || lower.includes('plum')) return '#8B5CF6';
+  if (lower.includes('rose gold')) return '#E8B4B8';
   if (lower.includes('pink') || lower.includes('rose') || lower.includes('magenta') || lower.includes('blush')) return '#EC4899';
-  if (lower.includes('brown') || lower.includes('coffee') || lower.includes('espresso') || lower.includes('walnut') || lower.includes('tan') || lower.includes('khaki') || lower.includes('beige')) return '#92400E';
+  if (lower.includes('beige') || lower.includes('khaki') || lower.includes('tan')) return '#D6C7B2';
+  if (lower.includes('brown') || lower.includes('coffee') || lower.includes('espresso') || lower.includes('walnut')) return '#92400E';
   if (lower.includes('silver') || lower.includes('chrome') || lower.includes('platinum') || lower.includes('titanium')) return '#CBD5E1';
-  if (lower.includes('gray') || lower.includes('grey') || lower.includes('charcoal') || lower.includes('slate') || lower.includes('graphite')) return '#64748B';
+  if (lower.includes('gray') || lower.includes('grey') || lower.includes('charcoal') || lower.includes('slate') || lower.includes('graphite')) return '#9CA3AF';
   return '#3B82F6';
+}
+
+const TITLE_COLOR_MAP: Array<{ pattern: RegExp; name: string; hex: string }> = [
+  { pattern: /\bnavy\s*blue\b/i, name: 'Navy Blue', hex: '#1E3A8A' },
+  { pattern: /\blight\s*blue\b/i, name: 'Light Blue', hex: '#60A5FA' },
+  { pattern: /\bsky\s*blue\b/i, name: 'Light Blue', hex: '#38BDF8' },
+  { pattern: /\brose\s*gold\b/i, name: 'Rose Gold', hex: '#E8B4B8' },
+  { pattern: /\bmint\s*green\b/i, name: 'Mint Green', hex: '#34D399' },
+  { pattern: /\bforest\s*green\b/i, name: 'Green', hex: '#15803D' },
+  { pattern: /\bspace\s*gr[ae]y\b/i, name: 'Gray', hex: '#64748B' },
+  { pattern: /\bmidnight\s*black\b/i, name: 'Black', hex: '#18181B' },
+  { pattern: /\bmatte\s*black\b/i, name: 'Black', hex: '#18181B' },
+  { pattern: /\blilac\b/i, name: 'Lilac', hex: '#C4B5FD' },
+  { pattern: /\blavender\b/i, name: 'Lilac', hex: '#C4B5FD' },
+  { pattern: /\bblue\b/i, name: 'Blue', hex: '#2563EB' },
+  { pattern: /\bblack\b/i, name: 'Black', hex: '#18181B' },
+  { pattern: /\bwhite\b/i, name: 'White', hex: '#F8FAFC' },
+  { pattern: /\bred\b/i, name: 'Red', hex: '#EF4444' },
+  { pattern: /\byellow\b/i, name: 'Yellow', hex: '#FACC15' },
+  { pattern: /\bgreen\b/i, name: 'Green', hex: '#22C55E' },
+  { pattern: /\bpink\b/i, name: 'Pink', hex: '#EC4899' },
+  { pattern: /\bpurple\b/i, name: 'Purple', hex: '#8B5CF6' },
+  { pattern: /\borange\b/i, name: 'Orange', hex: '#F97316' },
+  { pattern: /\bcyan\b/i, name: 'Cyan', hex: '#06B6D4' },
+  { pattern: /\bteal\b/i, name: 'Cyan', hex: '#0D9488' },
+  { pattern: /\bsilver\b/i, name: 'Silver', hex: '#CBD5E1' },
+  { pattern: /\bgold\b/i, name: 'Gold', hex: '#EAB308' },
+  { pattern: /\bbeige\b/i, name: 'Beige', hex: '#D6C7B2' },
+  { pattern: /\bbrown\b/i, name: 'Brown', hex: '#92400E' },
+  { pattern: /\bgr[ae]y\b/i, name: 'Gray', hex: '#9CA3AF' },
+];
+
+/**
+ * Extracts a color explicitly stated in the product title (e.g. "Logitech G733 ... - Blue").
+ * Prioritizes trailing/separator color segments before checking the full title.
+ */
+export function extractColorFromTitle(productTitle: string): { name: string; hex: string } | null {
+  const title = (productTitle || '').trim();
+  if (!title) return null;
+
+  // 1. Check trailing segments after "-", "–", "|", ",", "(" (e.g., "... - Blue", "... (Lilac)")
+  const segments = title.split(/[-–|,/()\[\]]+/).map((s) => s.trim()).filter(Boolean);
+  for (let i = segments.length - 1; i >= 0; i--) {
+    const seg = segments[i];
+    if (seg.length > 35) continue;
+    for (const entry of TITLE_COLOR_MAP) {
+      if (entry.pattern.test(seg)) {
+        return { name: entry.name, hex: entry.hex };
+      }
+    }
+  }
+
+  // 2. Fallback: scan entire title
+  for (const entry of TITLE_COLOR_MAP) {
+    if (entry.pattern.test(title)) {
+      return { name: entry.name, hex: entry.hex };
+    }
+  }
+
+  return null;
 }
 
 function generateVariantId(seed?: number): string {

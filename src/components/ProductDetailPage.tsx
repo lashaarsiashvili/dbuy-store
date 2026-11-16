@@ -247,10 +247,12 @@ export const ProductDetailPage: React.FC = () => {
     return [];
   };
 
-  // 1. Default Product Images
+  // 1. Default Product Images (ALL imported gallery images, never filtered out)
   const defaultProductImages = parseImageArray(product.images);
   if (defaultProductImages.length === 0) {
     defaultProductImages.push(cleanMainImg);
+  } else if (cleanMainImg && !defaultProductImages.includes(cleanMainImg)) {
+    defaultProductImages.unshift(cleanMainImg);
   }
 
   // 2. Parse Color Variants safely using parseVariants
@@ -262,7 +264,7 @@ export const ProductDetailPage: React.FC = () => {
   // 4. Selected Variant
   const selectedVariant = variantSelection?.matchedVariant || activeVariant || variants[selectedVariantIndex] || variants[0] || null;
 
-  // 5. Variant-Specific Images vs Default Fallback
+  // 5. Variant-Specific Images (used for matching/jumping and cart payload, NOT for filtering gallery)
   const selectedVariantImages = React.useMemo(() => {
     const imgs: string[] = [];
     if (variantSelection?.variantImage) {
@@ -274,7 +276,22 @@ export const ProductDetailPage: React.FC = () => {
     }
     return imgs;
   }, [variantSelection?.variantImage, selectedVariant]);
-  const activeImages = selectedVariantImages.length > 0 ? selectedVariantImages : defaultProductImages;
+
+  // Keep ALL imported product images visible in the main gallery thumbnails at all times,
+  // plus any variant-specific images that weren't already in defaultProductImages.
+  const allGalleryImages = React.useMemo(() => {
+    const combined = [...defaultProductImages];
+    for (const v of variants) {
+      for (const vImg of getVariantImages(v)) {
+        if (vImg && !combined.includes(vImg)) {
+          combined.push(vImg);
+        }
+      }
+    }
+    return combined;
+  }, [defaultProductImages.join('|'), variants.length]);
+
+  const activeImages = allGalleryImages;
 
   interface MediaItem {
     id: string;
@@ -284,10 +301,10 @@ export const ProductDetailPage: React.FC = () => {
     thumbUrl?: string;
   }
 
-  // 6. Combine Variant Images with Global Videos
+  // 6. Combine Full Gallery Images with Global Videos
   const activeMedia: MediaItem[] = [
     ...activeImages.map((imgUrl, i) => ({
-      id: `img-${selectedVariantIndex}-${i}-${imgUrl.slice(-12)}`,
+      id: `img-${i}-${imgUrl.slice(-12)}`,
       type: 'image' as const,
       url: imgUrl,
     })),
@@ -470,13 +487,53 @@ export const ProductDetailPage: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isLightboxOpen, activeMedia.length, lightboxZoom]);
 
-  const handleVariantSelection = React.useCallback((sel: VariantSelectionPayload) => {
-    setVariantSelection(sel);
-    if (sel.matchedVariant) {
-      setActiveVariant(sel.matchedVariant);
-    }
-    setActiveImageIndex(0);
-  }, []);
+  const findMatchingImageIndex = React.useCallback(
+    (targetImgUrl?: string): number => {
+      if (!targetImgUrl) return -1;
+      const normalizedTarget = getProductImage(targetImgUrl) || targetImgUrl.trim();
+      if (!normalizedTarget) return -1;
+
+      const exactIdx = allGalleryImages.findIndex(
+        (img) => img === normalizedTarget || img === targetImgUrl.trim()
+      );
+      if (exactIdx >= 0) return exactIdx;
+
+      const stripQuery = (u: string) => u.split('?')[0].split('#')[0];
+      const baseTarget = stripQuery(normalizedTarget);
+      const looseIdx = allGalleryImages.findIndex((img) => stripQuery(img) === baseTarget);
+      if (looseIdx >= 0) return looseIdx;
+
+      const filename = baseTarget.split('/').pop();
+      if (filename && filename.length > 4) {
+        return allGalleryImages.findIndex((img) => stripQuery(img).endsWith(`/${filename}`));
+      }
+      return -1;
+    },
+    [allGalleryImages]
+  );
+
+  const handleVariantSelection = React.useCallback(
+    (sel: VariantSelectionPayload) => {
+      setVariantSelection(sel);
+      if (sel.matchedVariant) {
+        setActiveVariant(sel.matchedVariant);
+      }
+
+      const candidateUrls = [
+        sel.variantImage,
+        ...getVariantImages(sel.matchedVariant),
+      ].filter((u): u is string => Boolean(u && u.trim()));
+
+      for (const candidate of candidateUrls) {
+        const matchIdx = findMatchingImageIndex(candidate);
+        if (matchIdx >= 0) {
+          setActiveImageIndex(matchIdx);
+          return;
+        }
+      }
+    },
+    [findMatchingImageIndex]
+  );
 
   const getSelectedVariantName = (): string | undefined => {
     if (variantSelection) {
@@ -498,19 +555,36 @@ export const ProductDetailPage: React.FC = () => {
 
   const displayedPrice = variantSelection?.finalPrice ?? selectedVariant?.price ?? product.price;
 
+  const resolveCartVariantMeta = () => {
+    const selectedColor =
+      variantSelection?.colorName?.trim() || selectedVariant?.colorName?.trim() || undefined;
+    const selectedSize =
+      variantSelection?.sizeLabel?.trim() || selectedVariant?.sizeLabel?.trim() || undefined;
+    const resolvedVariantImage =
+      (variantSelection?.variantImage ? getProductImage(variantSelection.variantImage) : '') ||
+      selectedVariantImages[0] ||
+      allGalleryImages[activeImageIndex] ||
+      cleanMainImg;
+    return {
+      selectedOption: getSelectedVariantName(),
+      selectedColor,
+      selectedSize,
+      variantImage: resolvedVariantImage,
+    };
+  };
+
   const getCartProductPayload = (): Product => {
-    if (variants.length === 0) return product;
-    const resolvedVariantImage = variantSelection?.variantImage || selectedVariantImages[0] || product.image;
+    const { variantImage } = resolveCartVariantMeta();
     return {
       ...product,
       price: displayedPrice,
-      image: resolvedVariantImage,
+      image: variantImage || product.image,
     };
   };
 
   const handleAddToCart = () => {
-    const variantName = getSelectedVariantName();
-    addToCart(getCartProductPayload(), quantity, variantName);
+    const meta = resolveCartVariantMeta();
+    addToCart(getCartProductPayload(), quantity, meta);
     setJustAdded(true);
     setTimeout(() => setJustAdded(false), 2000);
   };
@@ -523,8 +597,8 @@ export const ProductDetailPage: React.FC = () => {
       user?.email?.toLowerCase().trim() === 'admin@dbuy.com'
     );
     analytics.trackCheckoutAttempt(isCurrentAdmin);
-    const variantName = getSelectedVariantName();
-    addToCart(getCartProductPayload(), quantity, variantName);
+    const meta = resolveCartVariantMeta();
+    addToCart(getCartProductPayload(), quantity, meta);
     setCurrentPage('checkout');
   };
 
@@ -589,7 +663,7 @@ export const ProductDetailPage: React.FC = () => {
         {/* Left Column: Image Gallery (5 cols) */}
         <div className="lg:col-span-6 xl:col-span-6 space-y-4">
           <div 
-            key={`main-display-var-${selectedVariantIndex}`} 
+            key={`main-display-${product.id}`} 
             className="product-image-showcase relative w-full aspect-square rounded-3xl bg-[#ffffff] dark:bg-[#ffffff] border border-slate-200/90 dark:border-slate-800 overflow-hidden shadow-sm group select-none flex items-center justify-center"
             style={{ backgroundColor: '#ffffff' }}
           >
@@ -707,7 +781,7 @@ export const ProductDetailPage: React.FC = () => {
 
           {/* Thumbnails list with Amazon-style Play overlays for videos */}
           {activeMedia.length > 1 && (
-            <div key={`thumbs-list-var-${selectedVariantIndex}`} className="flex items-center space-x-3 overflow-x-auto pb-2 pt-1">
+            <div key={`thumbs-list-${product.id}`} className="flex items-center space-x-3 overflow-x-auto pb-2 pt-1">
               {activeMedia.map((item, idx) => (
                 <button
                   key={item.id || idx}
@@ -834,6 +908,7 @@ export const ProductDetailPage: React.FC = () => {
             <StorefrontVariantSelector
               variants={variants}
               basePrice={product.price}
+              productTitle={product.title}
               language={language}
               onSelectVariant={handleVariantSelection}
             />

@@ -137,6 +137,9 @@ export interface CartItem {
   product: Product;
   quantity: number;
   selectedOption?: string;
+  selectedColor?: string;
+  selectedSize?: string;
+  variantImage?: string;
 }
 
 export interface OrderItem {
@@ -145,6 +148,8 @@ export interface OrderItem {
   price: number;
   quantity: number;
   image: string;
+  selectedColor?: string;
+  selectedSize?: string;
 }
 
 export interface Order {

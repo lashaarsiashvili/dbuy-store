@@ -761,14 +761,32 @@ export const CheckoutModal: React.FC = () => {
                 {/* Per-item delivery estimates */}
                 {cart.length > 0 && (
                   <div className="space-y-1.5 pb-2 border-b border-slate-200/80 dark:border-slate-700/80 max-h-36 overflow-y-auto">
-                    {cart.map((item) => {
+                    {cart.map((item, idx) => {
                       const itemEst = getEstimateForProduct(item.product, activeCountryCode);
+                      const variantParts = [
+                        item.selectedColor ? `Color: ${item.selectedColor}` : '',
+                        item.selectedSize ? `Size: ${item.selectedSize}` : '',
+                      ].filter(Boolean);
+                      const variantDisplayLabel = variantParts.length > 0 ? variantParts.join(' · ') : item.selectedOption;
+                      const thumbSrc = item.variantImage || item.product.image || '';
                       return (
-                        <div key={item.product.id} className="flex items-start justify-between gap-2 text-[11px]">
+                        <div key={`${item.product.id}-${item.selectedOption || idx}`} className="flex items-start justify-between gap-2 text-[11px]">
+                          {thumbSrc && (
+                            <img
+                              src={thumbSrc}
+                              alt={item.product.title}
+                              className="w-9 h-9 rounded-lg object-cover border border-slate-200 dark:border-slate-700 shrink-0"
+                            />
+                          )}
                           <div className="min-w-0 flex-1">
                             <p className="font-semibold text-slate-800 dark:text-slate-200 truncate">
                               {item.product.title} × {item.quantity}
                             </p>
+                            {variantDisplayLabel && (
+                              <p className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 truncate">
+                                {variantDisplayLabel}
+                              </p>
+                            )}
                             <p className="text-[10px] font-medium text-emerald-700 dark:text-emerald-400 flex items-center gap-1">
                               <Truck className="w-3 h-3 shrink-0" />
                               <span className="truncate">

@@ -5,7 +5,9 @@ import { getProductImage } from '../utils/imageResolver';
 import { CachedImage } from './CachedImage';
 import { analytics } from './AdminAnalyticsDashboard';
 import { getProductTitle, getProductDescription } from '../utils/productLanguage';
-import { parseImages } from '../utils/productParsing';
+import { parseImages, parseVariants } from '../utils/productParsing';
+import { StorefrontVariantSelector, VariantSelectionPayload } from './ProductVariants';
+import { getVariantDisplayImage } from '../utils/variantUtils';
 import { getEstimateForProduct, getLocalizedCountryName } from '../utils/deliveryEstimate';
 import { 
   X, 
@@ -47,6 +49,7 @@ export const QuickViewModal: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [added, setAdded] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [variantSelection, setVariantSelection] = useState<VariantSelectionPayload | null>(null);
 
   // Strictly manual zoom & Lightbox state (Default state is static 1x)
   const [isZoomOpen, setIsZoomOpen] = useState(false);
@@ -59,6 +62,7 @@ export const QuickViewModal: React.FC = () => {
   // Reset active image index whenever a new product is selected
   useEffect(() => {
     setActiveImageIndex(0);
+    setVariantSelection(null);
     setQuantity(1);
     setIsZoomOpen(false);
     setZoomScale(1);
@@ -77,10 +81,28 @@ export const QuickViewModal: React.FC = () => {
   const localizedVisitorCountry = getLocalizedCountryName(visitorCountryCode, language);
 
   const cleanMainImg = getProductImage(quickViewProduct);
-  const parsedQuickImages = parseImages(quickViewProduct.images);
-  const galleryImages: string[] = (parsedQuickImages.length > 0 && !parsedQuickImages[0].includes('/uploads/'))
-    ? parsedQuickImages
-    : [cleanMainImg];
+  const parsedQuickImages = parseImages(quickViewProduct.images).map((img) => getProductImage(img)).filter(Boolean);
+  const variants = parseVariants(quickViewProduct.variants);
+
+  // Keep ALL imported product images visible at all times, plus any variant images
+  const galleryImages: string[] = [];
+  if (cleanMainImg) galleryImages.push(cleanMainImg);
+  for (const img of parsedQuickImages) {
+    if (img && !galleryImages.includes(img)) galleryImages.push(img);
+  }
+  for (const v of variants) {
+    const vImg = getProductImage(getVariantDisplayImage(v));
+    if (vImg && !galleryImages.includes(vImg)) galleryImages.push(vImg);
+    if (Array.isArray(v.images)) {
+      for (const extra of v.images) {
+        const resolved = getProductImage(extra);
+        if (resolved && !galleryImages.includes(resolved)) galleryImages.push(resolved);
+      }
+    }
+  }
+  if (galleryImages.length === 0 && cleanMainImg) {
+    galleryImages.push(cleanMainImg);
+  }
 
   const currentImage = galleryImages[activeImageIndex] || cleanMainImg;
 
@@ -251,8 +273,48 @@ export const QuickViewModal: React.FC = () => {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isZoomOpen, galleryImages.length, zoomScale]);
 
+  const handleVariantSelection = (sel: VariantSelectionPayload) => {
+    setVariantSelection(sel);
+    const candidate = sel.variantImage || getVariantDisplayImage(sel.matchedVariant);
+    if (candidate) {
+      const normalized = getProductImage(candidate) || candidate.trim();
+      const idx = galleryImages.findIndex(
+        (img) => img === normalized || img.split('?')[0] === normalized.split('?')[0]
+      );
+      if (idx >= 0) {
+        setActiveImageIndex(idx);
+      }
+    }
+  };
+
+  const resolveQuickViewCartMeta = () => {
+    const selectedColor = variantSelection?.colorName?.trim() || variants[0]?.colorName?.trim() || undefined;
+    const selectedSize = variantSelection?.sizeLabel?.trim() || variants[0]?.sizeLabel?.trim() || undefined;
+    const resolvedVariantImage =
+      (variantSelection?.variantImage ? getProductImage(variantSelection.variantImage) : '') ||
+      (variants[0] ? getProductImage(getVariantDisplayImage(variants[0])) : '') ||
+      galleryImages[activeImageIndex] ||
+      cleanMainImg;
+    const selectedOption = [selectedColor, selectedSize].filter(Boolean).join(' / ') || undefined;
+    const displayedPrice = variantSelection?.finalPrice ?? quickViewProduct.price;
+    return {
+      cartProduct: {
+        ...quickViewProduct,
+        price: displayedPrice,
+        image: resolvedVariantImage || quickViewProduct.image,
+      },
+      meta: {
+        selectedOption,
+        selectedColor,
+        selectedSize,
+        variantImage: resolvedVariantImage,
+      },
+    };
+  };
+
   const handleAdd = () => {
-    addToCart(quickViewProduct, quantity);
+    const { cartProduct, meta } = resolveQuickViewCartMeta();
+    addToCart(cartProduct, quantity, meta);
     setAdded(true);
     setTimeout(() => {
       setAdded(false);
@@ -268,7 +330,8 @@ export const QuickViewModal: React.FC = () => {
       user?.email?.toLowerCase().trim() === 'admin@dbuy.com'
     );
     analytics.trackCheckoutAttempt(isCurrentAdmin);
-    addToCart(quickViewProduct, quantity);
+    const { cartProduct, meta } = resolveQuickViewCartMeta();
+    addToCart(cartProduct, quantity, meta);
     setQuickViewProduct(null);
     setCurrentPage('checkout');
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -453,7 +516,7 @@ export const QuickViewModal: React.FC = () => {
               <div className="flex items-center justify-between py-2 border-y border-slate-100 dark:border-slate-800">
                 <div className="flex items-baseline space-x-3">
                   <span className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-slate-100">
-                    {formatPrice(quickViewProduct.price)}
+                    {formatPrice(variantSelection?.finalPrice ?? quickViewProduct.price)}
                   </span>
                   {quickViewProduct.origPrice && (
                     <span className="text-sm text-slate-400 line-through font-medium">
@@ -488,6 +551,16 @@ export const QuickViewModal: React.FC = () => {
                   {deliveryEstimate.productOrigin === 'US' ? t('delivery.originUS') : t('delivery.originCN')}
                 </span>
               </div>
+
+              {variants.length > 0 && (
+                <StorefrontVariantSelector
+                  variants={variants}
+                  basePrice={quickViewProduct.price}
+                  productTitle={quickViewProduct.title}
+                  language={language}
+                  onSelectVariant={handleVariantSelection}
+                />
+              )}
 
               {/* Description */}
               <p className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 leading-relaxed">

@@ -614,10 +614,15 @@ export const CheckoutPage: React.FC = () => {
                 <div className="max-h-64 overflow-y-auto space-y-3 pr-1">
                   {cart.map((item, idx) => {
                     const itemEst = getEstimateForProduct(item.product, activeCountryCode);
+                    const variantParts = [
+                      item.selectedColor ? `Color: ${item.selectedColor}` : '',
+                      item.selectedSize ? `Size: ${item.selectedSize}` : '',
+                    ].filter(Boolean);
+                    const variantDisplayLabel = variantParts.length > 0 ? variantParts.join(' · ') : item.selectedOption;
                     return (
                       <div key={idx} className="flex items-center space-x-3 text-xs">
                         <img
-                          src={item.product.image || parseImages(item.product.images)[0] || ''}
+                          src={item.variantImage || item.product.image || parseImages(item.product.images)[0] || ''}
                           alt={item.product.title}
                           className="w-12 h-12 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
                         />
@@ -625,9 +630,9 @@ export const CheckoutPage: React.FC = () => {
                           <h4 className="font-semibold text-slate-900 dark:text-white truncate">
                             {item.product.title}
                           </h4>
-                          {item.selectedOption && (
+                          {variantDisplayLabel && (
                             <p className="text-[11px] font-semibold text-blue-600 dark:text-blue-400 truncate">
-                              {item.selectedOption}
+                              {variantDisplayLabel}
                             </p>
                           )}
                           <p className="text-slate-500">{t("orders.qty")}: {item.quantity}</p>
