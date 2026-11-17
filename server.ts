@@ -4310,6 +4310,660 @@ app.post(
 );
 
 // ==========================================
+// YOUTUBE OAUTH 2.0 & YOUTUBE SHORTS DATA API v3
+// ==========================================
+const YOUTUBE_TOKEN_FILE = path.join(DB_DIR, 'youtube_oauth.json');
+const YOUTUBE_SCOPES_SERVER =
+  'https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.readonly';
+let youtubeTokenMemoryCache: any = null;
+
+function loadYouTubeTokenLocal(): any | null {
+  if (youtubeTokenMemoryCache?.access_token) return youtubeTokenMemoryCache;
+  try {
+    if (fs.existsSync(YOUTUBE_TOKEN_FILE)) {
+      const parsed = JSON.parse(fs.readFileSync(YOUTUBE_TOKEN_FILE, 'utf-8'));
+      if (parsed && parsed.access_token) {
+        youtubeTokenMemoryCache = parsed;
+        return parsed;
+      }
+    }
+  } catch {
+    // Ignore read error
+  }
+  return null;
+}
+
+function saveYouTubeTokenLocal(record: any): void {
+  youtubeTokenMemoryCache = record;
+  try {
+    if (!fs.existsSync(DB_DIR)) fs.mkdirSync(DB_DIR, { recursive: true });
+    fs.writeFileSync(YOUTUBE_TOKEN_FILE, JSON.stringify(record, null, 2), 'utf-8');
+  } catch {
+    // Keep in-memory cache on read-only containers
+  }
+}
+
+function deleteYouTubeTokenLocal(): void {
+  youtubeTokenMemoryCache = null;
+  try {
+    if (fs.existsSync(YOUTUBE_TOKEN_FILE)) fs.unlinkSync(YOUTUBE_TOKEN_FILE);
+  } catch {
+    // Ignore unlink errors
+  }
+}
+
+function resolveYouTubeRedirectUriServer(req: express.Request): string {
+  const explicit = (process.env.YOUTUBE_REDIRECT_URI || '').trim();
+  if (explicit) return explicit;
+  const appUrl = (process.env.APP_URL || '').trim().replace(/\/+$/, '');
+  if (appUrl) return `${appUrl}/api/youtube/callback`;
+  const host = (req.get('x-forwarded-host') || req.get('host') || 'localhost:3000').toLowerCase();
+  if (host === 'dbuystore.com' || host === 'www.dbuystore.com') {
+    return 'https://www.dbuystore.com/api/youtube/callback';
+  }
+  const proto = (req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim();
+  return `${proto}://${host}/api/youtube/callback`;
+}
+
+function createSignedYouTubeStateServer(
+  redirectUri: string,
+  clientSecret: string,
+  returnTo = '/'
+): string {
+  const payload = Buffer.from(
+    JSON.stringify({
+      r: redirectUri,
+      ret: returnTo.startsWith('/') ? returnTo : '/',
+      n: nodeCrypto.randomUUID(),
+      t: Date.now(),
+    }),
+    'utf-8'
+  ).toString('base64url');
+  const sig = nodeCrypto
+    .createHmac('sha256', clientSecret || 'dbuy-youtube-state-key')
+    .update(payload)
+    .digest('base64url');
+  return `${payload}.${sig}`;
+}
+
+function verifySignedYouTubeStateServer(
+  state: string,
+  clientSecret: string
+): { valid: boolean; redirectUri?: string; returnTo?: string } {
+  try {
+    const parts = (state || '').split('.');
+    if (parts.length !== 2) return { valid: false };
+    const [payload, sig] = parts;
+    const expected = nodeCrypto
+      .createHmac('sha256', clientSecret || 'dbuy-youtube-state-key')
+      .update(payload)
+      .digest('base64url');
+    if (sig !== expected) return { valid: false };
+    const parsed = JSON.parse(Buffer.from(payload, 'base64url').toString('utf-8'));
+    if (!parsed || typeof parsed.r !== 'string') return { valid: false };
+    if (typeof parsed.t === 'number' && Date.now() - parsed.t > 20 * 60 * 1000) {
+      return { valid: false };
+    }
+    return {
+      valid: true,
+      redirectUri: parsed.r,
+      returnTo: typeof parsed.ret === 'string' && parsed.ret.startsWith('/') ? parsed.ret : '/',
+    };
+  } catch {
+    return { valid: false };
+  }
+}
+
+async function refreshYouTubeTokenServerIfNeeded(
+  record: any,
+  forceRefresh = false
+): Promise<any | null> {
+  if (!record) return null;
+  if (!forceRefresh && record.expires_at && record.expires_at - Date.now() > 90_000) return record;
+  if (!record.refresh_token) return record;
+
+  const clientId = (process.env.YOUTUBE_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.YOUTUBE_CLIENT_SECRET || '').trim();
+  if (!clientId || !clientSecret) return record;
+
+  try {
+    const params = new URLSearchParams();
+    params.set('client_id', clientId);
+    params.set('client_secret', clientSecret);
+    params.set('grant_type', 'refresh_token');
+    params.set('refresh_token', record.refresh_token);
+
+    const res = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: params.toString(),
+    });
+    const data: any = await res.json().catch(() => ({}));
+    if (res.ok && data?.access_token) {
+      const updated = {
+        ...record,
+        access_token: data.access_token,
+        refresh_token: data.refresh_token || record.refresh_token,
+        expires_at: Date.now() + (Number(data.expires_in) || 3600) * 1000,
+        scope: data.scope || record.scope,
+        updated_at: new Date().toISOString(),
+      };
+      saveYouTubeTokenLocal(updated);
+      return updated;
+    }
+  } catch {
+    // Keep existing record
+  }
+  return record;
+}
+
+async function fetchYouTubeChannelInfoServer(accessToken: string) {
+  try {
+    const res = await fetch(
+      'https://www.googleapis.com/youtube/v3/channels?part=snippet&mine=true',
+      {
+        method: 'GET',
+        headers: { Authorization: `Bearer ${accessToken}` },
+      }
+    );
+    const data: any = await res.json().catch(() => ({}));
+    const item = Array.isArray(data?.items) ? data.items[0] : null;
+    if (res.ok && item) {
+      const snippet = item.snippet || {};
+      const thumbs = snippet.thumbnails || {};
+      const avatarUrl =
+        thumbs.high?.url || thumbs.medium?.url || thumbs.default?.url || '';
+      return {
+        channelId: item.id || '',
+        channelTitle: snippet.title || 'YouTube Channel',
+        avatarUrl,
+      };
+    }
+    return {
+      error:
+        data?.error?.message ||
+        (res.ok ? 'No YouTube channel found for this Google account.' : 'Unable to fetch YouTube channel.'),
+    };
+  } catch (err: any) {
+    return { error: err?.message || 'Network error fetching YouTube channel info.' };
+  }
+}
+
+app.get('/api/youtube/status', async (req, res) => {
+  const clientId = (process.env.YOUTUBE_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.YOUTUBE_CLIENT_SECRET || '').trim();
+  const configured = Boolean(clientId && clientSecret);
+  const redirectUri = resolveYouTubeRedirectUriServer(req);
+
+  let record = loadYouTubeTokenLocal();
+  if (!record) {
+    res.json({ success: true, configured, connected: false, redirectUri });
+    return;
+  }
+
+  record = await refreshYouTubeTokenServerIfNeeded(record);
+  if (!record?.access_token) {
+    res.json({ success: true, configured, connected: false, redirectUri });
+    return;
+  }
+
+  if (!record.channel_title || record.channel_title === 'YouTube Channel') {
+    const channel = await fetchYouTubeChannelInfoServer(record.access_token);
+    if (channel.channelTitle) {
+      record = {
+        ...record,
+        channel_id: channel.channelId || record.channel_id,
+        channel_title: channel.channelTitle,
+        avatar_url: channel.avatarUrl || record.avatar_url,
+        updated_at: new Date().toISOString(),
+      };
+      saveYouTubeTokenLocal(record);
+    }
+  }
+
+  res.json({
+    success: true,
+    configured,
+    connected: true,
+    channelId: record.channel_id,
+    channelTitle: record.channel_title,
+    avatarUrl: record.avatar_url,
+    scope: record.scope,
+    expiresAt: record.expires_at,
+    redirectUri,
+  });
+});
+
+app.get('/api/youtube/auth-url', (req, res) => {
+  const clientId = (process.env.YOUTUBE_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.YOUTUBE_CLIENT_SECRET || '').trim();
+  const redirectUri = resolveYouTubeRedirectUriServer(req);
+
+  if (!clientId || !clientSecret) {
+    res.status(400).json({
+      success: false,
+      error:
+        'YouTube API credentials (YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET) are not configured in server environment variables.',
+      redirectUri,
+    });
+    return;
+  }
+
+  const returnTo = typeof req.query.returnTo === 'string' ? req.query.returnTo : '/';
+  const state = createSignedYouTubeStateServer(redirectUri, clientSecret, returnTo);
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
+    scope: YOUTUBE_SCOPES_SERVER,
+    state,
+  });
+
+  res.json({
+    success: true,
+    url: `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`,
+    redirectUri,
+  });
+});
+
+app.get('/api/youtube/auth', (req, res) => {
+  const clientId = (process.env.YOUTUBE_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.YOUTUBE_CLIENT_SECRET || '').trim();
+  const redirectUri = resolveYouTubeRedirectUriServer(req);
+  const wantsJson =
+    req.query.format === 'json' ||
+    String(req.headers.accept || '').includes('application/json');
+
+  if (!clientId || !clientSecret) {
+    res.status(400).json({
+      success: false,
+      error:
+        'YouTube API credentials (YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET) are not configured in server environment variables.',
+      redirectUri,
+    });
+    return;
+  }
+
+  const returnTo = typeof req.query.returnTo === 'string' ? req.query.returnTo : '/';
+  const state = createSignedYouTubeStateServer(redirectUri, clientSecret, returnTo);
+  const params = new URLSearchParams({
+    client_id: clientId,
+    redirect_uri: redirectUri,
+    response_type: 'code',
+    access_type: 'offline',
+    prompt: 'consent',
+    include_granted_scopes: 'true',
+    scope: YOUTUBE_SCOPES_SERVER,
+    state,
+  });
+
+  const url = `https://accounts.google.com/o/oauth2/v2/auth?${params.toString()}`;
+  if (wantsJson) {
+    res.json({ success: true, url, redirectUri });
+    return;
+  }
+  res.redirect(302, url);
+});
+
+function sendYouTubePopupHtml(
+  res: express.Response,
+  payload: Record<string, any>,
+  heading: string,
+  bodyText: string,
+  fallbackRedirect = '/'
+) {
+  const serialized = JSON.stringify(payload).replace(/</g, '\\u003c');
+  const safeRedirect = JSON.stringify(fallbackRedirect).replace(/</g, '\\u003c');
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>YouTube Connection — DBuy Store</title>
+    <style>
+      body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #09090b; color: #f8fafc; display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; padding: 24px; }
+      .card { max-width: 420px; width: 100%; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 24px; text-align: center; box-shadow: 0 20px 50px rgba(0,0,0,0.45); }
+      h1 { font-size: 18px; margin: 0 0 8px; }
+      p { font-size: 13px; color: #a1a1aa; line-height: 1.5; margin: 0 0 16px; }
+      button { background: #FF0000; color: #ffffff; border: none; border-radius: 10px; padding: 10px 18px; font-weight: 700; font-size: 13px; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>${heading}</h1>
+      <p>${bodyText}</p>
+      <button onclick="window.close()">Close Window</button>
+    </div>
+    <script>
+      (function() {
+        var data = ${serialized};
+        var redirectTarget = ${safeRedirect};
+        if (window.opener) {
+          try { window.opener.postMessage(data, '*'); } catch (e) {}
+          if (data.type === 'YOUTUBE_OAUTH_SUCCESS') {
+            setTimeout(function() { window.close(); }, 300);
+          }
+        } else if (data.type === 'YOUTUBE_OAUTH_SUCCESS') {
+          window.location.href = redirectTarget;
+        }
+      })();
+    </script>
+  </body>
+</html>`);
+}
+
+app.get(['/api/youtube/callback', '/api/youtube/callback/'], async (req, res) => {
+  const code = typeof req.query.code === 'string' ? req.query.code : '';
+  const state = typeof req.query.state === 'string' ? req.query.state : '';
+  const errParam = typeof req.query.error === 'string' ? req.query.error : '';
+  const errDesc = typeof req.query.error_description === 'string' ? req.query.error_description : '';
+
+  if (errParam) {
+    const msg = errDesc || errParam;
+    sendYouTubePopupHtml(
+      res,
+      { type: 'YOUTUBE_OAUTH_ERROR', error: msg },
+      'YouTube Authorization Cancelled',
+      msg
+    );
+    return;
+  }
+
+  const clientId = (process.env.YOUTUBE_CLIENT_ID || '').trim();
+  const clientSecret = (process.env.YOUTUBE_CLIENT_SECRET || '').trim();
+  if (!clientId || !clientSecret) {
+    const msg = 'YOUTUBE_CLIENT_ID and YOUTUBE_CLIENT_SECRET are missing on the server.';
+    sendYouTubePopupHtml(
+      res,
+      { type: 'YOUTUBE_OAUTH_ERROR', error: msg },
+      'Configuration Required',
+      msg
+    );
+    return;
+  }
+
+  if (!code) {
+    const msg = 'Missing authorization code from Google OAuth callback.';
+    sendYouTubePopupHtml(
+      res,
+      { type: 'YOUTUBE_OAUTH_ERROR', error: msg },
+      'Authorization Failed',
+      msg
+    );
+    return;
+  }
+
+  const stateCheck = verifySignedYouTubeStateServer(state, clientSecret);
+  if (!stateCheck.valid || !stateCheck.redirectUri) {
+    const msg = 'Invalid or expired OAuth state parameter. Please try connecting again.';
+    sendYouTubePopupHtml(
+      res,
+      { type: 'YOUTUBE_OAUTH_ERROR', error: msg },
+      'Security Verification Failed',
+      msg
+    );
+    return;
+  }
+
+  const redirectUri = stateCheck.redirectUri || resolveYouTubeRedirectUriServer(req);
+  const returnTo = stateCheck.returnTo || '/';
+
+  try {
+    const tokenParams = new URLSearchParams();
+    tokenParams.set('client_id', clientId);
+    tokenParams.set('client_secret', clientSecret);
+    tokenParams.set('code', code);
+    tokenParams.set('grant_type', 'authorization_code');
+    tokenParams.set('redirect_uri', redirectUri);
+
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: tokenParams.toString(),
+    });
+    const tokenData: any = await tokenRes.json().catch(() => ({}));
+
+    if (!tokenRes.ok || !tokenData?.access_token) {
+      const msg =
+        tokenData?.error_description ||
+        tokenData?.error ||
+        'Google rejected the authorization code exchange.';
+      sendYouTubePopupHtml(
+        res,
+        { type: 'YOUTUBE_OAUTH_ERROR', error: msg },
+        'YouTube Connection Failed',
+        msg
+      );
+      return;
+    }
+
+    const channel = await fetchYouTubeChannelInfoServer(tokenData.access_token);
+    const existing = loadYouTubeTokenLocal();
+    const channelId = channel.channelId || existing?.channel_id || '';
+    const channelTitle = channel.channelTitle || existing?.channel_title || 'YouTube Channel';
+    const avatarUrl = channel.avatarUrl || existing?.avatar_url || '';
+
+    saveYouTubeTokenLocal({
+      id: 'default',
+      channel_id: channelId,
+      channel_title: channelTitle,
+      avatar_url: avatarUrl,
+      access_token: tokenData.access_token,
+      refresh_token: tokenData.refresh_token || existing?.refresh_token || '',
+      expires_at: Date.now() + (Number(tokenData.expires_in) || 3600) * 1000,
+      scope: tokenData.scope || YOUTUBE_SCOPES_SERVER,
+      updated_at: new Date().toISOString(),
+    });
+
+    sendYouTubePopupHtml(
+      res,
+      { type: 'YOUTUBE_OAUTH_SUCCESS', account: { channelId, channelTitle, avatarUrl } },
+      'YouTube Connected!',
+      `Connected to ${channelTitle}. You can close this window.`,
+      returnTo
+    );
+  } catch (err: any) {
+    const msg = err?.message || 'Unexpected error during YouTube OAuth callback.';
+    sendYouTubePopupHtml(
+      res,
+      { type: 'YOUTUBE_OAUTH_ERROR', error: msg },
+      'YouTube Connection Error',
+      msg
+    );
+  }
+});
+
+app.post('/api/youtube/disconnect', async (_req, res) => {
+  try {
+    const record = loadYouTubeTokenLocal();
+    if (record?.access_token) {
+      try {
+        const params = new URLSearchParams();
+        params.set('token', record.refresh_token || record.access_token);
+        await fetch('https://oauth2.googleapis.com/revoke', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: params.toString(),
+        });
+      } catch {
+        // Ignore revoke failure
+      }
+    }
+    deleteYouTubeTokenLocal();
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to disconnect YouTube.' });
+  }
+});
+
+app.post(
+  '/api/youtube/upload',
+  express.raw({ type: 'multipart/form-data', limit: '150mb' }),
+  async (req, res) => {
+    try {
+      let record = loadYouTubeTokenLocal();
+      record = await refreshYouTubeTokenServerIfNeeded(record);
+
+      if (!record?.access_token) {
+        res.status(401).json({
+          success: false,
+          requiresReconnect: true,
+          error: 'YouTube channel is not connected. Please connect your YouTube account first.',
+        });
+        return;
+      }
+
+      const contentType = String(req.headers['content-type'] || '');
+      if (!contentType.includes('multipart/form-data')) {
+        res.status(400).json({
+          success: false,
+          error: 'Expected multipart/form-data with MP4 video file and metadata.',
+        });
+        return;
+      }
+
+      const bodyBuf = Buffer.isBuffer(req.body) ? req.body : Buffer.from(req.body || '');
+      const webReq = new Request('http://localhost/api/youtube/upload', {
+        method: 'POST',
+        headers: { 'content-type': contentType },
+        body: new Uint8Array(bodyBuf),
+      });
+      const formData = await webReq.formData();
+      const videoFile = formData.get('video');
+      if (!(videoFile instanceof File) || videoFile.size <= 0) {
+        res.status(400).json({ success: false, error: 'Valid MP4 video file is required.' });
+        return;
+      }
+
+      const rawTitle = String(formData.get('title') || 'DBUY Store Product #Shorts').trim();
+      const title = rawTitle.slice(0, 100) || 'DBUY Store Product #Shorts';
+      const description = String(formData.get('description') || '').trim().slice(0, 5000);
+      const rawTags = String(formData.get('tags') || '');
+      const tags = rawTags
+        .split(',')
+        .map((t) => t.trim().replace(/^#/, ''))
+        .filter(Boolean)
+        .slice(0, 30);
+
+      const rawPrivacy = String(formData.get('privacyStatus') || 'private').toLowerCase();
+      const privacyStatus =
+        rawPrivacy === 'public' || rawPrivacy === 'unlisted' || rawPrivacy === 'private'
+          ? rawPrivacy
+          : 'private';
+
+      const videoBuffer = await videoFile.arrayBuffer();
+      const mimeType =
+        videoFile.type && videoFile.type.startsWith('video/') ? videoFile.type : 'video/mp4';
+
+      const initUpload = async (accessToken: string) => {
+        return fetch(
+          'https://www.googleapis.com/upload/youtube/v3/videos?uploadType=resumable&part=snippet,status',
+          {
+            method: 'POST',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json; charset=UTF-8',
+              'X-Upload-Content-Length': String(videoBuffer.byteLength),
+              'X-Upload-Content-Type': mimeType,
+            },
+            body: JSON.stringify({
+              snippet: {
+                title,
+                description,
+                tags,
+                categoryId: '22',
+              },
+              status: {
+                privacyStatus,
+                selfDeclaredMadeForKids: false,
+              },
+            }),
+          }
+        );
+      };
+
+      let initRes = await initUpload(record.access_token);
+      if (initRes.status === 401 && record.refresh_token) {
+        const refreshed = await refreshYouTubeTokenServerIfNeeded(record, true);
+        if (refreshed?.access_token) {
+          record = refreshed;
+          initRes = await initUpload(record.access_token);
+        }
+      }
+
+      if (!initRes.ok) {
+        const errJson: any = await initRes.json().catch(() => ({}));
+        const errMsg =
+          errJson?.error?.message ||
+          errJson?.error_description ||
+          `YouTube API rejected upload initialization (HTTP ${initRes.status}).`;
+        const errCode = errJson?.error?.errors?.[0]?.reason || errJson?.error?.code || '';
+        res.status(initRes.status >= 400 ? initRes.status : 400).json({
+          success: false,
+          requiresReconnect: initRes.status === 401,
+          errorCode: errCode ? String(errCode) : undefined,
+          error: errMsg,
+          details: errJson,
+        });
+        return;
+      }
+
+      const uploadLocation = initRes.headers.get('location') || initRes.headers.get('Location');
+      if (!uploadLocation) {
+        res.status(502).json({
+          success: false,
+          error: 'YouTube API did not return a resumable upload session URL.',
+        });
+        return;
+      }
+
+      const putRes = await fetch(uploadLocation, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': mimeType,
+          'Content-Length': String(videoBuffer.byteLength),
+        },
+        body: videoBuffer,
+      });
+      const putData: any = await putRes.json().catch(() => ({}));
+      if (!putRes.ok || !putData?.id) {
+        const errMsg =
+          putData?.error?.message ||
+          `YouTube video binary upload failed (HTTP ${putRes.status}).`;
+        const errCode = putData?.error?.errors?.[0]?.reason || putData?.error?.code || '';
+        res.status(putRes.status >= 400 ? putRes.status : 502).json({
+          success: false,
+          requiresReconnect: putRes.status === 401,
+          errorCode: errCode ? String(errCode) : undefined,
+          error: errMsg,
+          details: putData,
+        });
+        return;
+      }
+
+      const videoId = String(putData.id);
+      res.json({
+        success: true,
+        videoId,
+        shortsUrl: `https://youtube.com/shorts/${videoId}`,
+        watchUrl: `https://www.youtube.com/watch?v=${videoId}`,
+        privacyStatus: putData?.status?.privacyStatus || privacyStatus,
+        title: putData?.snippet?.title || title,
+      });
+    } catch (err: any) {
+      res.status(500).json({
+        success: false,
+        error: err?.message || 'Unexpected error uploading Short to YouTube.',
+      });
+    }
+  }
+);
+
+// ==========================================
 // UPLOAD PRODUCT IMAGE API
 // ==========================================
 const DEFAULT_R2_PUBLIC_PREFIX = 'https://pub-27ddbcb3c0b9415685d441c14a264005.r2.dev/products/';

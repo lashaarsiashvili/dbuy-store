@@ -90,6 +90,8 @@ import {
   Bot
 } from 'lucide-react';
 import { SocialShareModal } from './SocialShareModal';
+import { YouTubeShortsModal } from './YouTubeShortsModal';
+import { YouTubeShortsLogo } from './YouTubeLogo';
 import { formatInstagramUrl, getInstagramHandle } from '../utils/instagram';
 import { InstagramOriginalLogo } from './InstagramLogo';
 
@@ -444,6 +446,15 @@ export const AdminDashboard: React.FC = () => {
   const handleOpenSocialShare = (prod: Product) => {
     setSocialShareProduct(prod);
     setIsSocialShareOpen(true);
+  };
+
+  // YouTube Shorts Publisher Modal
+  const [youtubeShortsProduct, setYoutubeShortsProduct] = useState<Product | null>(null);
+  const [isYouTubeShortsOpen, setIsYouTubeShortsOpen] = useState(false);
+
+  const handleOpenYouTubeShorts = (prod: Product) => {
+    setYoutubeShortsProduct(prod);
+    setIsYouTubeShortsOpen(true);
   };
 
   // Tracking Number Management Modal
@@ -2718,6 +2729,14 @@ export const AdminDashboard: React.FC = () => {
                                 title={isKa ? 'სარეკლამო პოსტი & გაზიარება (Facebook & Instagram)' : 'Social Ad Post & Share (FB & IG)'}
                               >
                                 <Share2 className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleOpenYouTubeShorts(prod)}
+                                className="px-2 py-1 rounded-lg text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/40 hover:bg-red-100 dark:hover:bg-red-900/60 transition-colors cursor-pointer inline-flex items-center gap-1 text-[11px] font-bold"
+                                title={isKa ? 'YouTube Shorts პუბლიკატორი' : 'YouTube Shorts Publisher'}
+                              >
+                                <YouTubeShortsLogo size="xs" showHoverEffect={false} />
+                                <span className="hidden xl:inline">Shorts</span>
                               </button>
                               <button
                                 onClick={() => handleOpenEditProduct(prod)}
@@ -5352,15 +5371,26 @@ export const AdminDashboard: React.FC = () => {
               </h3>
 
               {editingProduct && (
-                <button
-                  type="button"
-                  onClick={() => handleOpenSocialShare(editingProduct)}
-                  className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
-                  title={isKa ? 'სარეკლამო პოსტი (Facebook & Instagram)' : 'Social Ad Post (FB & IG)'}
-                >
-                  <Megaphone className="w-3.5 h-3.5 text-amber-300" />
-                  <span>{isKa ? 'სარეკლამო პოსტი (FB/IG)' : 'Social Ad Post'}</span>
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenSocialShare(editingProduct)}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-pink-600 hover:opacity-95 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
+                    title={isKa ? 'სარეკლამო პოსტი (Facebook & Instagram)' : 'Social Ad Post (FB & IG)'}
+                  >
+                    <Megaphone className="w-3.5 h-3.5 text-amber-300" />
+                    <span>{isKa ? 'სარეკლამო პოსტი (FB/IG)' : 'Social Ad Post'}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenYouTubeShorts(editingProduct)}
+                    className="px-3 py-1.5 rounded-xl bg-gradient-to-r from-red-600 to-rose-600 hover:opacity-95 text-white text-xs font-bold flex items-center space-x-1.5 shadow-xs transition-all cursor-pointer"
+                    title={isKa ? 'YouTube Shorts პუბლიკატორი' : 'YouTube Shorts Publisher'}
+                  >
+                    <YouTubeShortsLogo size="xs" showHoverEffect={false} />
+                    <span>YouTube Shorts</span>
+                  </button>
+                </div>
               )}
             </div>
 
@@ -6639,6 +6669,17 @@ export const AdminDashboard: React.FC = () => {
         onClose={() => {
           setIsSocialShareOpen(false);
           setSocialShareProduct(null);
+        }}
+        isKa={isKa}
+      />
+
+      {/* YouTube Shorts Publisher Modal */}
+      <YouTubeShortsModal
+        isOpen={isYouTubeShortsOpen}
+        product={youtubeShortsProduct}
+        onClose={() => {
+          setIsYouTubeShortsOpen(false);
+          setYoutubeShortsProduct(null);
         }}
         isKa={isKa}
       />
