@@ -36,6 +36,12 @@ import {
   TikTokPublishProgress,
 } from '../utils/tiktokApi';
 import {
+  generateTikTokPromoVideo,
+  PROMO_VIBE_OPTIONS,
+  PromoVideoGenerationProgress,
+  PromoVideoVibe,
+} from '../utils/tiktokVideoGenerator';
+import {
   X,
   Megaphone,
   RefreshCw,
@@ -58,6 +64,9 @@ import {
   Upload,
   LogOut,
   Play,
+  Music,
+  Film,
+  Download,
 } from 'lucide-react';
 
 interface SocialShareModalProps {
@@ -193,7 +202,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const [isConnectingTt, setIsConnectingTt] = useState(false);
   const [isDisconnectingTt, setIsDisconnectingTt] = useState(false);
   const [showTtRedirectHelper, setShowTtRedirectHelper] = useState(false);
-  const [ttVideoSourceMode, setTtVideoSourceMode] = useState<'file' | 'url'>('file');
+  const [ttVideoSourceMode, setTtVideoSourceMode] = useState<'file' | 'url' | 'generator'>('file');
   const [ttProductVideos, setTtProductVideos] = useState<Array<{ title: string; url: string }>>([]);
   const [ttVideoFile, setTtVideoFile] = useState<File | null>(null);
   const [ttVideoPreviewUrl, setTtVideoPreviewUrl] = useState<string>('');
@@ -214,6 +223,16 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   } | null>(null);
   const ttTextareaRef = useRef<HTMLTextAreaElement>(null);
   const ttFileInputRef = useRef<HTMLInputElement>(null);
+
+  // TikTok AI Promo Video Generator State (Isolated 9:16 H.264 MP4 Studio)
+  const [ttGenSelectedImages, setTtGenSelectedImages] = useState<string[]>([]);
+  const [ttGenTitleOffer, setTtGenTitleOffer] = useState<string>('');
+  const [ttGenPriceBanner, setTtGenPriceBanner] = useState<string>('');
+  const [ttGenMusicVibe, setTtGenMusicVibe] = useState<PromoVideoVibe>('upbeat');
+  const [ttGenIncludeWebLink, setTtGenIncludeWebLink] = useState<boolean>(true);
+  const [isGeneratingTtVideo, setIsGeneratingTtVideo] = useState<boolean>(false);
+  const [ttGenProgress, setTtGenProgress] = useState<PromoVideoGenerationProgress | null>(null);
+  const [ttGeneratedByStudio, setTtGeneratedByStudio] = useState<boolean>(false);
 
   // Verify live Facebook & Instagram Graph API connection status when modal opens
   useEffect(() => {
@@ -417,6 +436,20 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     setTtVideoSourceMode('file');
     setTtStatusAlert(null);
     setTtProgress(null);
+
+    // Initialize AI Promo Video Generator defaults from selected product
+    setTtGenSelectedImages(allUrls.slice(0, 5));
+    const displayPrice = (() => {
+      const n = Math.max(0, Number(product.price) || 0);
+      const r = Math.round(n * 100) / 100;
+      return Number.isInteger(r) ? String(r) : r.toFixed(2);
+    })();
+    setTtGenTitleOffer(`🔥 Trending Tech: ${product.title}!`);
+    setTtGenPriceBanner(`Only $${displayPrice}!`);
+    setTtGenMusicVibe('upbeat');
+    setTtGenIncludeWebLink(true);
+    setTtGenProgress(null);
+    setTtGeneratedByStudio(false);
   }, [product, isOpen]);
 
   useEffect(() => {
@@ -748,9 +781,91 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
       return;
     }
     setTtVideoFile(file);
+    setTtGeneratedByStudio(false);
     setTtVideoSourceMode('file');
     setTtStatusAlert(null);
     setTtProgress(null);
+  };
+
+  // AI Promo Video Generator Handlers
+  const toggleTtGenImage = (url: string) => {
+    setTtGenSelectedImages((prev) => {
+      if (prev.includes(url)) {
+        if (prev.length <= 1) {
+          addToast(
+            isKa ? 'მინიმუმ 1 ფოტო აუცილებელია ვიდეოსთვის.' : 'Keep at least 1 image selected for your video.',
+            'warning'
+          );
+          return prev;
+        }
+        return prev.filter((u) => u !== url);
+      }
+      return [...prev, url];
+    });
+  };
+
+  const handleGeneratePromoVideo = async () => {
+    if (!product || isGeneratingTtVideo) return;
+    const chosenImages = ttGenSelectedImages.length > 0 ? ttGenSelectedImages : images.slice(0, 4);
+    if (chosenImages.length === 0) {
+      const msg = isKa
+        ? 'პროდუქტს არ აქვს ფოტოები ვიდეოს შესაქმნელად.'
+        : 'No product images available to generate a promo video.';
+      addToast(`⚠️ ${msg}`, 'error');
+      setTtStatusAlert({ type: 'error', message: msg });
+      return;
+    }
+
+    setIsGeneratingTtVideo(true);
+    setTtStatusAlert(null);
+    setTtProgress(null);
+    setTtGenProgress({
+      stage: 'extracting',
+      progressPct: 5,
+      message: 'Extracting Images...',
+    });
+
+    try {
+      const result = await generateTikTokPromoVideo(
+        {
+          product,
+          selectedImages: chosenImages,
+          titleOffer: ttGenTitleOffer,
+          priceBanner: ttGenPriceBanner,
+          musicVibe: ttGenMusicVibe,
+          includeWebLinkOverlay: ttGenIncludeWebLink,
+          isKa,
+        },
+        (progress) => {
+          setTtGenProgress(progress);
+        }
+      );
+
+      // Automatically populate the MP4 preview & set as selected file in the dialog
+      setTtVideoFile(result.file);
+      setTtGeneratedByStudio(true);
+      setTtStatusAlert({
+        type: 'success',
+        message: isKa
+          ? `პრომო ვიდეო მზადაა (${(result.file.size / (1024 * 1024)).toFixed(2)} MB)! დააჭირეთ „ვიდეოს გამოქვეყნება TikTok-ზე“.`
+          : `9:16 Ad Video ready (${(result.file.size / (1024 * 1024)).toFixed(2)} MB, ${result.durationSec}s MP4)! Click "Publish MP4 Video to TikTok" below to share.`,
+      });
+      addToast(
+        isKa ? '🎬 9:16 პრომო ვიდეო შეიქმნა!' : '🎬 9:16 TikTok Ad Video generated!',
+        'success'
+      );
+    } catch (err: any) {
+      const errMsg = err?.message || 'Failed to render 9:16 promo video.';
+      setTtGenProgress({
+        stage: 'error',
+        progressPct: 0,
+        message: errMsg,
+      });
+      setTtStatusAlert({ type: 'error', message: errMsg });
+      addToast(`❌ ${errMsg}`, 'error');
+    } finally {
+      setIsGeneratingTtVideo(false);
+    }
   };
 
   // Safe early return placed AFTER all React hooks have been called unconditionally
@@ -1051,10 +1166,10 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
       return;
     }
 
-    if (ttVideoSourceMode === 'file' && !ttVideoFile) {
+    if (ttVideoSourceMode !== 'url' && !ttVideoFile) {
       const msg = isKa
-        ? 'გთხოვთ აირჩიოთ ასატვირთი MP4 ვიდეო.'
-        : 'Please choose an MP4 video file to share to TikTok.';
+        ? 'გთხოვთ აირჩიოთ ან შექმნათ ასატვირთი MP4 ვიდეო.'
+        : 'Please select an MP4 file or generate an AI Promo Video first.';
       addToast(`⚠️ ${msg}`, 'warning');
       setTtStatusAlert({ type: 'error', message: msg });
       return;
@@ -1078,7 +1193,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     try {
       const result = await publishVideoToTikTok(
         {
-          file: ttVideoSourceMode === 'file' ? ttVideoFile : null,
+          file: ttVideoSourceMode !== 'url' ? ttVideoFile : null,
           videoUrl: ttVideoSourceMode === 'url' ? ttVideoUrlInput.trim() : undefined,
           caption: ttCaption,
           privacyLevel: ttPrivacyLevel,
@@ -2145,22 +2260,22 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                 </div>
               </div>
 
-              {/* Video Source Switcher: Upload MP4 File vs Public MP4 URL */}
-              <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl gap-1">
+              {/* Video Source Switcher: Upload MP4 Video | Product / Public MP4 URL | ✨ AI Promo Video Generator */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl gap-1">
                 <button
                   type="button"
                   onClick={() => {
                     setTtVideoSourceMode('file');
                     setTtStatusAlert(null);
                   }}
-                  className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     ttVideoSourceMode === 'file'
                       ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  <Upload className="w-4 h-4" />
-                  <span>{isKa ? 'MP4 ფაილის ატვირთვა' : 'Upload MP4 Video'}</span>
+                  <Upload className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{isKa ? 'MP4 ფაილის ატვირთვა' : 'Upload MP4 Video'}</span>
                 </button>
                 <button
                   type="button"
@@ -2168,19 +2283,217 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                     setTtVideoSourceMode('url');
                     setTtStatusAlert(null);
                   }}
-                  className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                  className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
                     ttVideoSourceMode === 'url'
                       ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                   }`}
                 >
-                  <LinkIcon className="w-4 h-4" />
-                  <span>{isKa ? 'პროდუქტის / საჯარო MP4 ბმული' : 'Product / Public MP4 URL'}</span>
+                  <LinkIcon className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{isKa ? 'საჯარო MP4 ბმული' : 'Product / Public MP4 URL'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTtVideoSourceMode('generator');
+                    setTtStatusAlert(null);
+                  }}
+                  className={`py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    ttVideoSourceMode === 'generator'
+                      ? 'bg-gradient-to-r from-[#25F4EE] via-[#19B5FE] to-[#F97316] text-slate-950 shadow-md font-extrabold'
+                      : 'bg-slate-900/5 dark:bg-slate-900/60 text-cyan-700 dark:text-cyan-300 hover:text-slate-950 dark:hover:text-white border border-cyan-500/30'
+                  }`}
+                >
+                  <Sparkles className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{isKa ? '✨ AI პრომო ვიდეო' : '✨ AI Promo Video Generator'}</span>
                 </button>
               </div>
 
-              {/* MP4 Video Picker & Preview */}
-              {ttVideoSourceMode === 'file' ? (
+              {/* ✨ AI Promo Video Generator Studio (Inserted cleanly above MP4 Video Picker) */}
+              {ttVideoSourceMode === 'generator' && (
+                <div className="p-4 rounded-2xl bg-slate-950 border border-cyan-500/35 text-slate-100 space-y-4 shadow-lg">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-[#25F4EE]/20 to-[#F97316]/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300">
+                        <Film className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="text-xs sm:text-sm font-black text-white">
+                          {isKa ? '9:16 AI პრომო ვიდეოს გენერატორი' : '9:16 TikTok Promo Video Studio'}
+                        </h4>
+                        <p className="text-[11px] text-slate-400">
+                          {isKa
+                            ? 'პროდუქტის ფოტოებიდან 12-წამიანი 9:16 H.264 MP4 ვიდეო მუსიკით და ანიმაციებით'
+                            : 'Turns selected product photos, offer pricing & music into a ready-to-post 12s 9:16 MP4'}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="px-2.5 py-1 rounded-lg bg-cyan-500/15 border border-cyan-400/30 text-[10px] font-bold text-cyan-300">
+                      9:16 · H.264 MP4
+                    </span>
+                  </div>
+
+                  {/* Product Images Selection Grid with Checkboxes */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-bold text-slate-200">
+                        {isKa ? 'აირჩიეთ ფოტოები სლაიდშოუსთვის' : 'Select Product Images for Slideshow'}
+                      </span>
+                      <span className="text-[11px] font-bold text-cyan-400 tabular-nums">
+                        {ttGenSelectedImages.length}/{images.length} {isKa ? 'არჩეული' : 'included'}
+                      </span>
+                    </div>
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
+                      {images.map((url, idx) => {
+                        const checkedIdx = ttGenSelectedImages.indexOf(url);
+                        const isChecked = checkedIdx !== -1;
+                        return (
+                          <button
+                            key={`tt-gen-img-${url}-${idx}`}
+                            type="button"
+                            onClick={() => toggleTtGenImage(url)}
+                            className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
+                              isChecked
+                                ? 'border-cyan-400 shadow-xs opacity-100 scale-[1.02]'
+                                : 'border-slate-700 opacity-45 hover:opacity-80'
+                            }`}
+                          >
+                            <img src={url} alt="" className="w-full h-full object-cover" />
+                            <span
+                              className={`absolute top-1 right-1 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold ${
+                                isChecked
+                                  ? 'bg-cyan-500 text-slate-950'
+                                  : 'bg-slate-900/80 text-slate-400 border border-slate-600'
+                              }`}
+                            >
+                              {isChecked ? <Check className="w-3 h-3 stroke-[3]" /> : ''}
+                            </span>
+                            {isChecked && (
+                              <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-slate-950/85 text-[9px] font-black text-cyan-300 tabular-nums">
+                                {checkedIdx === 0 ? 'Lead' : `#${checkedIdx + 1}`}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Video Title & Offer + Price Banner */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+                    <div className="sm:col-span-8 space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-300">
+                        {isKa ? 'ვიდეოს სათაური და შეთავაზება' : 'Video Title & Offer'}
+                      </label>
+                      <input
+                        type="text"
+                        value={ttGenTitleOffer}
+                        onChange={(e) => setTtGenTitleOffer(e.target.value)}
+                        placeholder={`🔥 Trending Tech: ${product.title}!`}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-hidden"
+                      />
+                    </div>
+                    <div className="sm:col-span-4 space-y-1">
+                      <label className="block text-[11px] font-bold text-slate-300">
+                        {isKa ? 'ფასის ბანერი' : 'Price Banner'}
+                      </label>
+                      <input
+                        type="text"
+                        value={ttGenPriceBanner}
+                        onChange={(e) => setTtGenPriceBanner(e.target.value)}
+                        placeholder="Only $49.99!"
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-orange-300 font-bold text-xs focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Music / Vibe Dropdown + Web Link Overlay Toggle */}
+                  <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                    <div className="sm:col-span-6 space-y-1">
+                      <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
+                        <Music className="w-3.5 h-3.5 text-cyan-400" />
+                        <span>{isKa ? 'აირჩიეთ მუსიკა / სტილი' : 'Choose Music/Vibe'}</span>
+                      </label>
+                      <select
+                        value={ttGenMusicVibe}
+                        onChange={(e) => setTtGenMusicVibe(e.target.value as PromoVideoVibe)}
+                        className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-100 text-xs font-semibold focus:ring-2 focus:ring-cyan-500 focus:outline-hidden"
+                      >
+                        {PROMO_VIBE_OPTIONS.map((opt) => (
+                          <option key={opt.value} value={opt.value}>
+                            {isKa ? opt.labelKa : opt.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div className="sm:col-span-6 sm:pt-4">
+                      <label className="flex items-start gap-2 text-xs text-slate-200 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={ttGenIncludeWebLink}
+                          onChange={(e) => setTtGenIncludeWebLink(e.target.checked)}
+                          className="mt-0.5 rounded border-slate-600 bg-slate-900 text-cyan-500 focus:ring-cyan-500"
+                        />
+                        <span className="leading-snug">
+                          {isKa
+                            ? "ვებ-ბმულის დამატება ბოლოში ('Shop at www.dbuystore.com')"
+                            : "Include Web Link Overlay ('Shop at www.dbuystore.com' at the bottom)"}
+                        </span>
+                      </label>
+                    </div>
+                  </div>
+
+                  {/* Create Video CTA Button */}
+                  <button
+                    type="button"
+                    disabled={isGeneratingTtVideo || ttGenSelectedImages.length === 0}
+                    onClick={handleGeneratePromoVideo}
+                    className="w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm text-slate-950 bg-gradient-to-r from-[#25F4EE] via-[#19B5FE] to-[#F97316] hover:brightness-110 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50"
+                  >
+                    {isGeneratingTtVideo ? (
+                      <>
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>{ttGenProgress?.message || 'Rendering 9:16 Video...'}</span>
+                      </>
+                    ) : (
+                      <>
+                        <Film className="w-4 h-4" />
+                        <span>{isKa ? 'ვიდეოს შექმნა 🎬' : 'Create Video 🎬'}</span>
+                      </>
+                    )}
+                  </button>
+
+                  {/* Animated Multi-Stage Render Progress Bar */}
+                  {(isGeneratingTtVideo || (ttGenProgress && ttGenProgress.stage !== 'error')) && ttGenProgress && (
+                    <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span className="flex items-center gap-2 text-cyan-300">
+                          {isGeneratingTtVideo ? (
+                            <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
+                          ) : (
+                            <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
+                          )}
+                          <span>{ttGenProgress.message}</span>
+                        </span>
+                        <span className="text-orange-300 tabular-nums">{ttGenProgress.progressPct}%</span>
+                      </div>
+                      <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#25F4EE] via-[#19B5FE] to-[#F97316] transition-all duration-200"
+                          style={{ width: `${Math.max(4, Math.min(100, ttGenProgress.progressPct))}%` }}
+                        />
+                      </div>
+                      {ttGenProgress.detail && (
+                        <div className="text-[11px] text-slate-400 truncate">{ttGenProgress.detail}</div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* MP4 Video Picker & Preview (Used for Upload MP4 Video OR Generated AI Promo Video Preview) */}
+              {ttVideoSourceMode !== 'url' ? (
                 <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
                   <input
                     ref={ttFileInputRef}
@@ -2205,14 +2518,15 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                       <div className="text-[11px] text-slate-500 dark:text-slate-400">
                         {isKa
                           ? 'რეკომენდებულია ვერტიკალური 9:16 MP4 (H.264)'
-                          : 'MP4 (H.264) recommended · Direct upload via TikTok Content Posting API'}
+                          : 'MP4 (H.264) recommended · Or use ✨ AI Promo Video Generator above'}
                       </div>
                     </button>
                   ) : (
                     <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                      <div className="sm:col-span-5 rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-56 mx-auto w-full flex items-center justify-center border border-slate-700">
+                      <div className="sm:col-span-5 rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-60 mx-auto w-full flex items-center justify-center border border-slate-700">
                         {ttVideoPreviewUrl ? (
                           <video
+                            key={ttVideoPreviewUrl}
                             src={ttVideoPreviewUrl}
                             controls
                             playsInline
@@ -2223,6 +2537,12 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                         )}
                       </div>
                       <div className="sm:col-span-7 space-y-2.5 min-w-0">
+                        {ttGeneratedByStudio && (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-cyan-500/15 text-cyan-600 dark:text-cyan-300 border border-cyan-500/30 text-[10px] font-extrabold">
+                            <Sparkles className="w-3 h-3" />
+                            <span>AI Generated 9:16 Ad Video</span>
+                          </span>
+                        )}
                         <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
                           {ttVideoFile.name}
                         </div>
@@ -2237,10 +2557,21 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                           >
                             {isKa ? 'ვიდეოს შეცვლა' : 'Replace Video'}
                           </button>
+                          {ttVideoPreviewUrl && (
+                            <a
+                              href={ttVideoPreviewUrl}
+                              download={ttVideoFile.name}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-slate-900 text-cyan-300 border border-slate-700 text-xs font-bold hover:bg-slate-800"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                              <span>{isKa ? 'ჩამოტვირთვა' : 'Download MP4'}</span>
+                            </a>
+                          )}
                           <button
                             type="button"
                             onClick={() => {
                               setTtVideoFile(null);
+                              setTtGeneratedByStudio(false);
                               if (ttFileInputRef.current) ttFileInputRef.current.value = '';
                             }}
                             className="px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100 cursor-pointer"
@@ -2509,8 +2840,9 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
               type="button"
               disabled={
                 isPublishingTt ||
+                isGeneratingTtVideo ||
                 !ttConnection?.connected ||
-                (ttVideoSourceMode === 'file' ? !ttVideoFile : !ttVideoUrlInput.trim())
+                (ttVideoSourceMode !== 'url' ? !ttVideoFile : !ttVideoUrlInput.trim())
               }
               onClick={handlePublishToTikTok}
               className="w-full py-4 text-white font-bold rounded-2xl flex items-center justify-center gap-2.5 shadow-lg hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"

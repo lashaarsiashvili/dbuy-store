@@ -34,6 +34,7 @@
     "express": "^4.21.2",
     "lucide-react": "^0.475.0",
     "motion": "^12.4.7",
+    "mp4-muxer": "^5.2.2",
     "nodemailer": "^6.10.0",
     "posthog-js": "^1.447.5",
     "react": "^19.0.0",
