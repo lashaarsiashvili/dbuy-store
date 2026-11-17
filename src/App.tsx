@@ -17,7 +17,10 @@ import { AuthModal } from './components/AuthModal';
 import { AdminDashboard } from './components/AdminDashboard';
 import { AboutPage } from './components/AboutPage';
 import { ContactPage } from './components/ContactPage';
-import { PolicyPages, GuaranteePage, ReturnsPage, PrivacyPage } from './components/PolicyPages';
+import { PolicyPages } from './components/PolicyPages';
+import { TermsPage } from './components/TermsPage';
+import { RefundPolicyPage } from './components/RefundPolicyPage';
+import { PrivacyPolicyPage } from './components/PrivacyPolicyPage';
 import { MyOrdersPage } from './components/MyOrdersPage';
 import { ProductDetailPage } from './components/ProductDetailPage';
 import { CategoryPage } from './components/CategoryPage';
@@ -99,8 +102,12 @@ const MainLayout: React.FC = () => {
         product: 'Product Detail Page',
         about: 'About Us Page',
         contact: 'Contact Us Page',
+        terms: 'Terms and Conditions',
+        'terms-and-conditions': 'Terms and Conditions',
+        'refund-policy': 'Refund & Return Policy',
+        'privacy-policy': 'Privacy Policy',
         guarantee: 'Guarantee Policy',
-        returns: 'Returns Policy',
+        returns: 'Refund & Return Policy',
         privacy: 'Privacy Policy',
         'my-orders': 'My Orders Page',
         deliveries: 'Verified Deliveries Page',
@@ -269,9 +276,13 @@ const MainLayout: React.FC = () => {
       const pageTitlesEn: Record<string, string> = {
         about: 'About Us',
         contact: 'Contact Support',
+        terms: 'Terms and Conditions',
+        'terms-and-conditions': 'Terms and Conditions',
+        'refund-policy': 'Refund & Return Policy',
+        'privacy-policy': 'Privacy Policy',
         guarantee: 'Money Back Guarantee',
-        returns: 'Return & Refund Policy',
-        privacy: 'Privacy Policy & Data Security',
+        returns: 'Refund & Return Policy',
+        privacy: 'Privacy Policy',
         'my-orders': 'My Placed Orders',
         deliveries: 'Verified Live Customer Deliveries',
         campaigns: 'Tbilisi Ad Campaigns',
@@ -282,6 +293,10 @@ const MainLayout: React.FC = () => {
       const pageTitlesKa: Record<string, string> = {
         about: 'ჩვენ შესახებ',
         contact: 'დაგვიკავშირდით',
+        terms: 'წესები და პირობები',
+        'terms-and-conditions': 'წესები და პირობები',
+        'refund-policy': 'დაბრუნების და თანხის უკან გაცემის პოლიტიკა',
+        'privacy-policy': 'კონფიდენციალურობის პოლიტიკა',
         guarantee: 'თანხის დაბრუნების გარანტია',
         returns: 'დაბრუნების წესები',
         privacy: 'კონფიდენციალურობის პოლიტიკა',
@@ -342,9 +357,10 @@ const MainLayout: React.FC = () => {
         {currentPage === 'product' && <ProductDetailPage />}
         {currentPage === 'about' && <AboutPage />}
         {currentPage === 'contact' && <ContactPage />}
+        {(currentPage === 'terms' || currentPage === 'terms-and-conditions') && <TermsPage />}
+        {(currentPage === 'refund-policy' || currentPage === 'returns') && <RefundPolicyPage />}
+        {(currentPage === 'privacy-policy' || currentPage === 'privacy') && <PrivacyPolicyPage />}
         {currentPage === 'guarantee' && <PolicyPages policyType="guarantee" />}
-        {currentPage === 'returns' && <PolicyPages policyType="returns" />}
-        {currentPage === 'privacy' && <PolicyPages policyType="privacy" />}
         {currentPage === 'my-orders' && <MyOrdersPage />}
         {currentPage === 'deliveries' && <PolicyPages policyType="deliveries" />}
         {currentPage === 'campaigns' && <AdsGallery />}

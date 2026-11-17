@@ -187,35 +187,47 @@ export const Footer: React.FC = () => {
             </ul>
           </div>
 
-          {/* Customer Care & Policies */}
+          {/* Customer Care & Legal */}
           <div className="space-y-3.5">
             <h4 className="text-xs font-bold uppercase tracking-wider text-slate-200">
               {t('footer.customerCare')}
             </h4>
             <ul className="space-y-2.5">
               <li>
-                <button
-                  onClick={() => setCurrentPage('guarantee')}
-                  className="hover:text-white transition-colors cursor-pointer text-left"
+                <a
+                  href="/terms"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setCurrentPage('terms');
+                  }}
+                  className="hover:text-cyan-400 transition-colors cursor-pointer text-left inline-block"
                 >
-                  {t('footer.moneyBackGuarantee')}
-                </button>
+                  {t('footer.terms')}
+                </a>
               </li>
               <li>
-                <button
-                  onClick={() => setCurrentPage('returns')}
-                  className="hover:text-white transition-colors cursor-pointer text-left"
+                <a
+                  href="/refund-policy"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setCurrentPage('refund-policy');
+                  }}
+                  className="hover:text-cyan-400 transition-colors cursor-pointer text-left inline-block"
                 >
-                  {t('footer.returns')}
-                </button>
+                  {t('footer.refundPolicy')}
+                </a>
               </li>
               <li>
-                <button
-                  onClick={() => setCurrentPage('privacy')}
-                  className="hover:text-white transition-colors cursor-pointer text-left"
+                <a
+                  href="/privacy-policy"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    setCurrentPage('privacy-policy');
+                  }}
+                  className="hover:text-cyan-400 transition-colors cursor-pointer text-left inline-block"
                 >
                   {t('footer.privacy')}
-                </button>
+                </a>
               </li>
               <li>
                 <button
@@ -253,8 +265,40 @@ export const Footer: React.FC = () => {
                 <span>{t('footer.securityBadge')}</span>
               </span>
             </div>
-            <p className="text-[10px] text-slate-500 mt-0.5 font-mono">
-            </p>
+            <div className="flex flex-wrap items-center justify-center sm:justify-start gap-x-2.5 gap-y-1 text-[10px] text-slate-500 mt-1">
+              <a
+                href="/terms"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCurrentPage('terms');
+                }}
+                className="hover:text-cyan-400 transition-colors"
+              >
+                Terms &amp; Conditions
+              </a>
+              <span className="text-slate-700">•</span>
+              <a
+                href="/refund-policy"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCurrentPage('refund-policy');
+                }}
+                className="hover:text-cyan-400 transition-colors"
+              >
+                Refund &amp; Return Policy
+              </a>
+              <span className="text-slate-700">•</span>
+              <a
+                href="/privacy-policy"
+                onClick={(e) => {
+                  e.preventDefault();
+                  setCurrentPage('privacy-policy');
+                }}
+                className="hover:text-cyan-400 transition-colors"
+              >
+                Privacy Policy
+              </a>
+            </div>
           </div>
 
           {/* Authentic Official Payment Methods Bar */}

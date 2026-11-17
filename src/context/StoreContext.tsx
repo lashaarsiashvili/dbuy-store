@@ -385,8 +385,9 @@ const parseRouteFromLocation = (
   }
   if (lower === 'about') return { page: 'about', productId: null };
   if (lower === 'contact') return { page: 'contact', productId: null };
-  if (lower === 'privacy') return { page: 'privacy', productId: null };
-  if (lower === 'returns') return { page: 'returns', productId: null };
+  if (lower === 'terms' || lower === 'terms-and-conditions') return { page: 'terms', productId: null };
+  if (lower === 'refund-policy' || lower === 'returns') return { page: 'refund-policy', productId: null };
+  if (lower === 'privacy-policy' || lower === 'privacy') return { page: 'privacy-policy', productId: null };
   if (lower === 'guarantee') return { page: 'guarantee', productId: null };
   if (lower === 'deliveries') return { page: 'deliveries', productId: null };
   if (lower === 'bio' || lower === 'instagram' || lower === 'ig' || lower.startsWith('bio/') || lower.startsWith('instagram/')) {
@@ -593,6 +594,15 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       setActiveProductId(null);
     } else if (page === 'bio') {
       targetPath = '/bio';
+      setActiveProductId(null);
+    } else if (page === 'terms' || page === 'terms-and-conditions') {
+      targetPath = '/terms';
+      setActiveProductId(null);
+    } else if (page === 'refund-policy' || page === 'returns') {
+      targetPath = '/refund-policy';
+      setActiveProductId(null);
+    } else if (page === 'privacy-policy' || page === 'privacy') {
+      targetPath = '/privacy-policy';
       setActiveProductId(null);
     } else {
       targetPath = `/${page}`;
