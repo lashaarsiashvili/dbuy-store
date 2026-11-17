@@ -59,6 +59,8 @@ export interface PublishTikTokVideoParams {
   disableComment?: boolean;
   disableDuet?: boolean;
   disableStitch?: boolean;
+  brandOrganicToggle?: boolean;
+  brandContentToggle?: boolean;
 }
 
 export interface PublishTikTokVideoResult {
@@ -276,6 +278,38 @@ export async function publishVideoToTikTok(
   }
 
   try {
+    // 1. Creator Info Query first per TikTok Content Sharing Guidelines
+    onProgress?.({
+      stage: 'initializing',
+      progressPct: 4,
+      message: 'Checking TikTok creator publishing rules...',
+      detail: 'Querying /v2/post/publish/creator_info/query/',
+    });
+
+    const creatorCheck = await fetchTikTokCreatorInfo();
+    const allowedOptions = creatorCheck.data?.privacyLevelOptions?.length
+      ? creatorCheck.data.privacyLevelOptions
+      : (['SELF_ONLY'] as TikTokPrivacyLevel[]);
+
+    const effectivePrivacy: TikTokPrivacyLevel = allowedOptions.includes(params.privacyLevel)
+      ? params.privacyLevel
+      : allowedOptions.includes('SELF_ONLY')
+      ? 'SELF_ONLY'
+      : allowedOptions[0];
+
+    const effectiveDisableComment = Boolean(
+      creatorCheck.data?.commentDisabled || params.disableComment
+    );
+    const effectiveDisableDuet = Boolean(
+      creatorCheck.data?.duetDisabled || params.disableDuet
+    );
+    const effectiveDisableStitch = Boolean(
+      creatorCheck.data?.stitchDisabled || params.disableStitch
+    );
+    const effectiveBrandOrganic = Boolean(params.brandOrganicToggle);
+    const effectiveBrandContent =
+      effectivePrivacy === 'SELF_ONLY' ? false : Boolean(params.brandContentToggle);
+
     let publishId = '';
 
     if (useFileUpload && params.file) {
@@ -294,17 +328,19 @@ export async function publishVideoToTikTok(
       onProgress?.({
         stage: 'initializing',
         progressPct: 8,
-        message: 'Initializing TikTok video upload...',
+        message: 'Initializing TikTok video post...',
         detail: 'Calling TikTok /v2/post/publish/video/init/',
       });
 
       const initRes = await callTikTokPublishAction({
         action: 'init-upload',
         caption: cleanCaption,
-        privacyLevel: params.privacyLevel || 'SELF_ONLY',
-        disableComment: Boolean(params.disableComment),
-        disableDuet: Boolean(params.disableDuet),
-        disableStitch: Boolean(params.disableStitch),
+        privacyLevel: effectivePrivacy,
+        disableComment: effectiveDisableComment,
+        disableDuet: effectiveDisableDuet,
+        disableStitch: effectiveDisableStitch,
+        brandOrganicToggle: effectiveBrandOrganic,
+        brandContentToggle: effectiveBrandContent,
         videoSize,
         chunkSize,
         totalChunkCount,
@@ -379,16 +415,18 @@ export async function publishVideoToTikTok(
         stage: 'initializing',
         progressPct: 20,
         message: 'Submitting MP4 URL to TikTok...',
-        detail: 'Calling TikTok Content Posting API (PULL_FROM_URL)',
+        detail: 'Calling TikTok /v2/post/publish/video/init/ (PULL_FROM_URL)',
       });
 
       const initUrlRes = await callTikTokPublishAction({
         action: 'init-url',
         caption: cleanCaption,
-        privacyLevel: params.privacyLevel || 'SELF_ONLY',
-        disableComment: Boolean(params.disableComment),
-        disableDuet: Boolean(params.disableDuet),
-        disableStitch: Boolean(params.disableStitch),
+        privacyLevel: effectivePrivacy,
+        disableComment: effectiveDisableComment,
+        disableDuet: effectiveDisableDuet,
+        disableStitch: effectiveDisableStitch,
+        brandOrganicToggle: effectiveBrandOrganic,
+        brandContentToggle: effectiveBrandContent,
         videoUrl: cleanUrl,
       });
 
@@ -411,7 +449,7 @@ export async function publishVideoToTikTok(
       onProgress?.({
         stage: 'processing',
         progressPct: pct,
-        message: 'TikTok is processing and publishing your video...',
+        message: 'TikTok is processing your video upload (may take a few moments)...',
         detail: `Publish ID: ${publishId}`,
       });
 
@@ -435,7 +473,7 @@ export async function publishVideoToTikTok(
       if (ttStatus === 'PUBLISH_COMPLETE' || ttStatus === 'SEND_TO_USER_INBOX') {
         const doneMsg =
           ttStatus === 'SEND_TO_USER_INBOX'
-            ? 'Video uploaded to your TikTok Inbox (ready to finalize in the TikTok app)!'
+            ? 'Video delivered to your TikTok Inbox / Drafts! Check TikTok notifications to post.'
             : 'Video published to TikTok successfully!';
         onProgress?.({
           stage: 'published',

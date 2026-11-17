@@ -36,7 +36,7 @@ export async function onRequestPost(context: any) {
 
     const token = record.access_token;
 
-    // 1. Creator Info Query (returns allowed privacy_level_options)
+    // 1. Creator Info Query (POST /v2/post/publish/creator_info/query/)
     if (action === 'creator-info') {
       const res = await fetch('https://open.tiktokapis.com/v2/post/publish/creator_info/query/', {
         method: 'POST',
@@ -77,7 +77,7 @@ export async function onRequestPost(context: any) {
       );
     }
 
-    // 2. Initialize Video Direct Post (FILE_UPLOAD or PULL_FROM_URL)
+    // 2. Initialize Video Post: Query Creator Info first, enforce SELF_ONLY & boolean flags, pass Commercial Disclosure toggles
     if (action === 'init-upload' || action === 'init-url') {
       const {
         caption = '',
@@ -85,6 +85,8 @@ export async function onRequestPost(context: any) {
         disableDuet = false,
         disableComment = false,
         disableStitch = false,
+        brandOrganicToggle = false,
+        brandContentToggle = false,
         videoSize,
         chunkSize,
         totalChunkCount,
@@ -119,43 +121,129 @@ export async function onRequestPost(context: any) {
         );
       }
 
-      const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: JSON.stringify({
-          post_info: {
-            title: cleanTitle,
-            privacy_level: privacyLevel || 'SELF_ONLY',
-            disable_duet: Boolean(disableDuet),
-            disable_comment: Boolean(disableComment),
-            disable_stitch: Boolean(disableStitch),
-          },
-          source_info: sourceInfo,
-        }),
-      });
+      // Mandatory Step 1 per Content Sharing Guidelines: Query creator_info first
+      let allowedPrivacyOptions: string[] = ['SELF_ONLY'];
+      let creatorDuetDisabled = false;
+      let creatorCommentDisabled = false;
+      let creatorStitchDisabled = false;
 
-      const initData: any = await initRes.json().catch(() => ({}));
-      if (!initRes.ok || (initData?.error?.code && initData.error.code !== 'ok') || !initData?.data?.publish_id) {
+      try {
+        const creatorRes = await fetch('https://open.tiktokapis.com/v2/post/publish/creator_info/query/', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: JSON.stringify({}),
+        });
+        const creatorData: any = await creatorRes.json().catch(() => ({}));
+        if (creatorRes.ok && creatorData?.data) {
+          if (Array.isArray(creatorData.data.privacy_level_options) && creatorData.data.privacy_level_options.length > 0) {
+            allowedPrivacyOptions = creatorData.data.privacy_level_options;
+          }
+          creatorDuetDisabled = Boolean(creatorData.data.duet_disabled);
+          creatorCommentDisabled = Boolean(creatorData.data.comment_disabled);
+          creatorStitchDisabled = Boolean(creatorData.data.stitch_disabled);
+        }
+      } catch {
+        // Proceed with safe SELF_ONLY default if creator_info query encounters transient error
+      }
+
+      const requestedPrivacy = String(privacyLevel || 'SELF_ONLY');
+      const selectedPrivacy = allowedPrivacyOptions.includes(requestedPrivacy)
+        ? requestedPrivacy
+        : allowedPrivacyOptions.includes('SELF_ONLY')
+        ? 'SELF_ONLY'
+        : allowedPrivacyOptions[0] || 'SELF_ONLY';
+
+      const effectiveDisableComment = Boolean(creatorCommentDisabled || disableComment);
+      const effectiveDisableDuet = Boolean(creatorDuetDisabled || disableDuet);
+      const effectiveDisableStitch = Boolean(creatorStitchDisabled || disableStitch);
+      const effectiveBrandOrganic = Boolean(brandOrganicToggle);
+      const effectiveBrandContent = selectedPrivacy === 'SELF_ONLY' ? false : Boolean(brandContentToggle);
+
+      const callDirectInit = async (privacyToUse: string, allowBrandContent: boolean) => {
+        const res = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: JSON.stringify({
+            post_info: {
+              title: cleanTitle,
+              privacy_level: privacyToUse,
+              disable_duet: effectiveDisableDuet,
+              disable_comment: effectiveDisableComment,
+              disable_stitch: effectiveDisableStitch,
+              brand_organic_toggle: effectiveBrandOrganic,
+              brand_content_toggle: privacyToUse === 'SELF_ONLY' ? false : allowBrandContent,
+            },
+            source_info: sourceInfo,
+          }),
+        });
+        const data: any = await res.json().catch(() => ({}));
+        return { res, data };
+      };
+
+      let { res: finalRes, data: finalData } = await callDirectInit(selectedPrivacy, effectiveBrandContent);
+      let publishMode: 'direct' | 'inbox' = 'direct';
+
+      const errCode = String(finalData?.error?.code || '').toLowerCase();
+      const errMsg = String(finalData?.error?.message || '').toLowerCase();
+
+      // Enforce SELF_ONLY fallback if PUBLIC_TO_EVERYONE / non-private fails in Unaudited/Sandbox mode
+      if (
+        (!finalRes.ok || (errCode && errCode !== 'ok') || !finalData?.data?.publish_id) &&
+        selectedPrivacy !== 'SELF_ONLY' &&
+        (errCode === 'unaudited_client_can_only_post_to_private_accounts' ||
+          errMsg.includes('content-sharing-guidelines') ||
+          errMsg.includes('private') ||
+          errMsg.includes('privacy'))
+      ) {
+        const retryResult = await callDirectInit('SELF_ONLY', false);
+        finalRes = retryResult.res;
+        finalData = retryResult.data;
+      }
+
+      // Graceful fallback to Inbox upload if Direct Post scope is not authorized
+      const postErrCode = String(finalData?.error?.code || '').toLowerCase();
+      if (
+        (!finalRes.ok || (postErrCode && postErrCode !== 'ok') || !finalData?.data?.publish_id) &&
+        postErrCode === 'scope_not_authorized'
+      ) {
+        const inboxRes = await fetch('https://open.tiktokapis.com/v2/post/publish/inbox/video/init/', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: JSON.stringify({ source_info: sourceInfo }),
+        });
+        finalRes = inboxRes;
+        finalData = await inboxRes.json().catch(() => ({}));
+        publishMode = 'inbox';
+      }
+
+      if (!finalRes.ok || (finalData?.error?.code && finalData.error.code !== 'ok') || !finalData?.data?.publish_id) {
         return new Response(
           JSON.stringify({
             success: false,
-            requiresReconnect: isTikTokAuthError(initData, initRes.status),
-            error: initData?.error?.message || 'TikTok video publish initialization failed.',
-            errorCode: initData?.error?.code,
-            details: initData,
+            requiresReconnect: isTikTokAuthError(finalData, finalRes.status),
+            error: finalData?.error?.message || 'TikTok video publish initialization failed.',
+            errorCode: finalData?.error?.code,
+            details: finalData,
           }),
-          { status: initRes.ok ? 400 : initRes.status, headers: tiktokCorsHeaders }
+          { status: finalRes.ok ? 400 : finalRes.status, headers: tiktokCorsHeaders }
         );
       }
 
       return new Response(
         JSON.stringify({
           success: true,
-          publishId: initData.data.publish_id,
-          uploadUrl: initData.data.upload_url || '',
+          publishMode,
+          publishId: finalData.data.publish_id,
+          uploadUrl: finalData.data.upload_url || '',
         }),
         { headers: tiktokCorsHeaders }
       );

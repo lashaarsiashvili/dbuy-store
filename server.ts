@@ -3999,6 +3999,8 @@ app.post('/api/tiktok/publish', async (req, res) => {
         disableDuet = false,
         disableComment = false,
         disableStitch = false,
+        brandOrganicToggle = false,
+        brandContentToggle = false,
         videoSize,
         chunkSize,
         totalChunkCount,
@@ -4016,39 +4018,123 @@ app.post('/api/tiktok/publish', async (req, res) => {
               total_chunk_count: Number(totalChunkCount || 1),
             };
 
-      const initRes = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json; charset=UTF-8',
-        },
-        body: JSON.stringify({
-          post_info: {
-            title: cleanTitle,
-            privacy_level: privacyLevel || 'SELF_ONLY',
-            disable_duet: Boolean(disableDuet),
-            disable_comment: Boolean(disableComment),
-            disable_stitch: Boolean(disableStitch),
+      let allowedPrivacyOptions: string[] = ['SELF_ONLY'];
+      let creatorDuetDisabled = false;
+      let creatorCommentDisabled = false;
+      let creatorStitchDisabled = false;
+
+      try {
+        const creatorRes = await fetch('https://open.tiktokapis.com/v2/post/publish/creator_info/query/', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json; charset=UTF-8',
           },
-          source_info: sourceInfo,
-        }),
-      });
-      const initData: any = await initRes.json().catch(() => ({}));
-      if (!initRes.ok || (initData?.error?.code && initData.error.code !== 'ok') || !initData?.data?.publish_id) {
-        res.status(initRes.ok ? 400 : initRes.status).json({
+          body: JSON.stringify({}),
+        });
+        const creatorData: any = await creatorRes.json().catch(() => ({}));
+        if (creatorRes.ok && creatorData?.data) {
+          if (Array.isArray(creatorData.data.privacy_level_options) && creatorData.data.privacy_level_options.length > 0) {
+            allowedPrivacyOptions = creatorData.data.privacy_level_options;
+          }
+          creatorDuetDisabled = Boolean(creatorData.data.duet_disabled);
+          creatorCommentDisabled = Boolean(creatorData.data.comment_disabled);
+          creatorStitchDisabled = Boolean(creatorData.data.stitch_disabled);
+        }
+      } catch {
+        // Proceed with safe defaults
+      }
+
+      const requestedPrivacy = String(privacyLevel || 'SELF_ONLY');
+      const selectedPrivacy = allowedPrivacyOptions.includes(requestedPrivacy)
+        ? requestedPrivacy
+        : allowedPrivacyOptions.includes('SELF_ONLY')
+        ? 'SELF_ONLY'
+        : allowedPrivacyOptions[0] || 'SELF_ONLY';
+
+      const effectiveDisableComment = Boolean(creatorCommentDisabled || disableComment);
+      const effectiveDisableDuet = Boolean(creatorDuetDisabled || disableDuet);
+      const effectiveDisableStitch = Boolean(creatorStitchDisabled || disableStitch);
+      const effectiveBrandOrganic = Boolean(brandOrganicToggle);
+      const effectiveBrandContent = selectedPrivacy === 'SELF_ONLY' ? false : Boolean(brandContentToggle);
+
+      const callDirectInit = async (privacyToUse: string, allowBrandContent: boolean) => {
+        const r = await fetch('https://open.tiktokapis.com/v2/post/publish/video/init/', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: JSON.stringify({
+            post_info: {
+              title: cleanTitle,
+              privacy_level: privacyToUse,
+              disable_duet: effectiveDisableDuet,
+              disable_comment: effectiveDisableComment,
+              disable_stitch: effectiveDisableStitch,
+              brand_organic_toggle: effectiveBrandOrganic,
+              brand_content_toggle: privacyToUse === 'SELF_ONLY' ? false : allowBrandContent,
+            },
+            source_info: sourceInfo,
+          }),
+        });
+        const d: any = await r.json().catch(() => ({}));
+        return { r, d };
+      };
+
+      let { r: finalRes, d: finalData } = await callDirectInit(selectedPrivacy, effectiveBrandContent);
+      let publishMode: 'direct' | 'inbox' = 'direct';
+
+      const errCode = String(finalData?.error?.code || '').toLowerCase();
+      const errMsg = String(finalData?.error?.message || '').toLowerCase();
+
+      if (
+        (!finalRes.ok || (errCode && errCode !== 'ok') || !finalData?.data?.publish_id) &&
+        selectedPrivacy !== 'SELF_ONLY' &&
+        (errCode === 'unaudited_client_can_only_post_to_private_accounts' ||
+          errMsg.includes('content-sharing-guidelines') ||
+          errMsg.includes('private') ||
+          errMsg.includes('privacy'))
+      ) {
+        const retryResult = await callDirectInit('SELF_ONLY', false);
+        finalRes = retryResult.r;
+        finalData = retryResult.d;
+      }
+
+      const postErrCode = String(finalData?.error?.code || '').toLowerCase();
+      if (
+        (!finalRes.ok || (postErrCode && postErrCode !== 'ok') || !finalData?.data?.publish_id) &&
+        postErrCode === 'scope_not_authorized'
+      ) {
+        const inboxRes = await fetch('https://open.tiktokapis.com/v2/post/publish/inbox/video/init/', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${token}`,
+            'Content-Type': 'application/json; charset=UTF-8',
+          },
+          body: JSON.stringify({ source_info: sourceInfo }),
+        });
+        finalRes = inboxRes;
+        finalData = await inboxRes.json().catch(() => ({}));
+        publishMode = 'inbox';
+      }
+
+      if (!finalRes.ok || (finalData?.error?.code && finalData.error.code !== 'ok') || !finalData?.data?.publish_id) {
+        res.status(finalRes.ok ? 400 : finalRes.status).json({
           success: false,
-          requiresReconnect: isAuthErr(initData, initRes.status),
-          error: initData?.error?.message || 'TikTok video publish initialization failed.',
-          errorCode: initData?.error?.code,
-          details: initData,
+          requiresReconnect: isAuthErr(finalData, finalRes.status),
+          error: finalData?.error?.message || 'TikTok video publish initialization failed.',
+          errorCode: finalData?.error?.code,
+          details: finalData,
         });
         return;
       }
 
       res.json({
         success: true,
-        publishId: initData.data.publish_id,
-        uploadUrl: initData.data.upload_url || '',
+        publishMode,
+        publishId: finalData.data.publish_id,
+        uploadUrl: finalData.data.upload_url || '',
       });
       return;
     }
