@@ -44,16 +44,21 @@ export type TikTokPublishStageKey =
   | 'published'
   | 'error';
 
+export type TikTokPublishMode = 'inbox' | 'direct';
+
 export interface TikTokPublishProgress {
   stage: TikTokPublishStageKey;
   progressPct: number;
   message: string;
   detail?: string;
+  errorCode?: string;
+  errorMessage?: string;
 }
 
 export interface PublishTikTokVideoParams {
   file?: File | null;
   videoUrl?: string;
+  publishMode?: TikTokPublishMode;
   caption: string;
   privacyLevel: TikTokPrivacyLevel;
   disableComment?: boolean;
@@ -65,10 +70,13 @@ export interface PublishTikTokVideoParams {
 
 export interface PublishTikTokVideoResult {
   success: boolean;
+  publishMode?: TikTokPublishMode;
   publishId?: string;
   status?: string;
   publicalyAvailablePostId?: string[];
   error?: string;
+  errorCode?: string;
+  errorMessage?: string;
   requiresReconnect?: boolean;
 }
 
@@ -266,6 +274,7 @@ export async function publishVideoToTikTok(
   params: PublishTikTokVideoParams,
   onProgress?: (progress: TikTokPublishProgress) => void
 ): Promise<PublishTikTokVideoResult> {
+  const publishMode: TikTokPublishMode = params.publishMode === 'direct' ? 'direct' : 'inbox';
   const cleanCaption = (params.caption || '').trim().slice(0, MAX_TIKTOK_CAPTION_LENGTH);
   const useFileUpload = Boolean(params.file);
   const cleanUrl = (params.videoUrl || '').trim();
@@ -277,38 +286,68 @@ export async function publishVideoToTikTok(
     };
   }
 
+  const extractTikTokError = (resData: any, fallbackMessage: string) => {
+    const rawCode =
+      resData?.errorCode ||
+      (resData?.details?.error?.code && resData.details.error.code !== 'ok'
+        ? resData.details.error.code
+        : '');
+    const errorCode = rawCode ? String(rawCode) : '';
+    const errorMessage = String(
+      resData?.errorMessage ||
+        resData?.details?.error?.message ||
+        resData?.error ||
+        fallbackMessage
+    );
+    const combinedError =
+      errorCode && !errorMessage.includes(errorCode)
+        ? `[${errorCode}] ${errorMessage}`
+        : errorMessage;
+    return { errorCode, errorMessage, combinedError };
+  };
+
   try {
-    // 1. Creator Info Query first per TikTok Content Sharing Guidelines
-    onProgress?.({
-      stage: 'initializing',
-      progressPct: 4,
-      message: 'Checking TikTok creator publishing rules...',
-      detail: 'Querying /v2/post/publish/creator_info/query/',
-    });
-
-    const creatorCheck = await fetchTikTokCreatorInfo();
-    const allowedOptions = creatorCheck.data?.privacyLevelOptions?.length
-      ? creatorCheck.data.privacyLevelOptions
-      : (['SELF_ONLY'] as TikTokPrivacyLevel[]);
-
-    const effectivePrivacy: TikTokPrivacyLevel = allowedOptions.includes(params.privacyLevel)
-      ? params.privacyLevel
-      : allowedOptions.includes('SELF_ONLY')
-      ? 'SELF_ONLY'
-      : allowedOptions[0];
-
-    const effectiveDisableComment = Boolean(
-      creatorCheck.data?.commentDisabled || params.disableComment
-    );
-    const effectiveDisableDuet = Boolean(
-      creatorCheck.data?.duetDisabled || params.disableDuet
-    );
-    const effectiveDisableStitch = Boolean(
-      creatorCheck.data?.stitchDisabled || params.disableStitch
-    );
-    const effectiveBrandOrganic = Boolean(params.brandOrganicToggle);
-    const effectiveBrandContent =
+    let effectivePrivacy: TikTokPrivacyLevel = params.privacyLevel;
+    let effectiveDisableComment = Boolean(params.disableComment);
+    let effectiveDisableDuet = Boolean(params.disableDuet);
+    let effectiveDisableStitch = Boolean(params.disableStitch);
+    let effectiveBrandOrganic = Boolean(params.brandOrganicToggle);
+    let effectiveBrandContent =
       effectivePrivacy === 'SELF_ONLY' ? false : Boolean(params.brandContentToggle);
+
+    if (publishMode === 'direct') {
+      // Creator Info Query first per TikTok Direct Post Content Sharing Guidelines
+      onProgress?.({
+        stage: 'initializing',
+        progressPct: 4,
+        message: 'Checking TikTok creator publishing rules...',
+        detail: 'Querying /v2/post/publish/creator_info/query/',
+      });
+
+      const creatorCheck = await fetchTikTokCreatorInfo();
+      const allowedOptions = creatorCheck.data?.privacyLevelOptions?.length
+        ? creatorCheck.data.privacyLevelOptions
+        : (['SELF_ONLY'] as TikTokPrivacyLevel[]);
+
+      effectivePrivacy = allowedOptions.includes(params.privacyLevel)
+        ? params.privacyLevel
+        : allowedOptions.includes('SELF_ONLY')
+        ? 'SELF_ONLY'
+        : allowedOptions[0];
+
+      effectiveDisableComment = Boolean(
+        creatorCheck.data?.commentDisabled || params.disableComment
+      );
+      effectiveDisableDuet = Boolean(
+        creatorCheck.data?.duetDisabled || params.disableDuet
+      );
+      effectiveDisableStitch = Boolean(
+        creatorCheck.data?.stitchDisabled || params.disableStitch
+      );
+      effectiveBrandOrganic = Boolean(params.brandOrganicToggle);
+      effectiveBrandContent =
+        effectivePrivacy === 'SELF_ONLY' ? false : Boolean(params.brandContentToggle);
+    }
 
     let publishId = '';
 
@@ -328,12 +367,19 @@ export async function publishVideoToTikTok(
       onProgress?.({
         stage: 'initializing',
         progressPct: 8,
-        message: 'Initializing TikTok video post...',
-        detail: 'Calling TikTok /v2/post/publish/video/init/',
+        message:
+          publishMode === 'inbox'
+            ? 'Initializing TikTok draft upload...'
+            : 'Initializing TikTok direct post...',
+        detail:
+          publishMode === 'inbox'
+            ? 'Calling TikTok /v2/post/publish/inbox/video/init/'
+            : 'Calling TikTok /v2/post/publish/video/init/',
       });
 
       const initRes = await callTikTokPublishAction({
         action: 'init-upload',
+        publishMode,
         caption: cleanCaption,
         privacyLevel: effectivePrivacy,
         disableComment: effectiveDisableComment,
@@ -347,12 +393,24 @@ export async function publishVideoToTikTok(
       });
 
       if (!initRes.ok || !initRes.data?.publishId || !initRes.data?.uploadUrl) {
-        const errMsg = initRes.data?.error || 'Failed to initialize TikTok video upload.';
-        onProgress?.({ stage: 'error', progressPct: 0, message: errMsg });
+        const { errorCode, errorMessage, combinedError } = extractTikTokError(
+          initRes.data,
+          'Failed to initialize TikTok video upload.'
+        );
+        onProgress?.({
+          stage: 'error',
+          progressPct: 0,
+          message: combinedError,
+          errorCode,
+          errorMessage,
+        });
         return {
           success: false,
+          publishMode,
           requiresReconnect: Boolean(initRes.data?.requiresReconnect),
-          error: errMsg,
+          error: combinedError,
+          errorCode,
+          errorMessage,
         };
       }
 
@@ -393,10 +451,12 @@ export async function publishVideoToTikTok(
         const putJson: any = await putRes.json().catch(() => ({}));
         if (!putRes.ok || !putJson?.success) {
           const errMsg = putJson?.error || `Video chunk ${i + 1} upload failed.`;
-          onProgress?.({ stage: 'error', progressPct: basePct, message: errMsg });
+          onProgress?.({ stage: 'error', progressPct: basePct, message: errMsg, errorMessage: errMsg });
           return {
             success: false,
+            publishMode,
             error: errMsg,
+            errorMessage: errMsg,
           };
         }
 
@@ -414,12 +474,19 @@ export async function publishVideoToTikTok(
       onProgress?.({
         stage: 'initializing',
         progressPct: 20,
-        message: 'Submitting MP4 URL to TikTok...',
-        detail: 'Calling TikTok /v2/post/publish/video/init/ (PULL_FROM_URL)',
+        message:
+          publishMode === 'inbox'
+            ? 'Submitting MP4 URL to TikTok Drafts...'
+            : 'Submitting MP4 URL to TikTok...',
+        detail:
+          publishMode === 'inbox'
+            ? 'Calling TikTok /v2/post/publish/inbox/video/init/ (PULL_FROM_URL)'
+            : 'Calling TikTok /v2/post/publish/video/init/ (PULL_FROM_URL)',
       });
 
       const initUrlRes = await callTikTokPublishAction({
         action: 'init-url',
+        publishMode,
         caption: cleanCaption,
         privacyLevel: effectivePrivacy,
         disableComment: effectiveDisableComment,
@@ -431,12 +498,24 @@ export async function publishVideoToTikTok(
       });
 
       if (!initUrlRes.ok || !initUrlRes.data?.publishId) {
-        const errMsg = initUrlRes.data?.error || 'TikTok rejected the MP4 video URL.';
-        onProgress?.({ stage: 'error', progressPct: 0, message: errMsg });
+        const { errorCode, errorMessage, combinedError } = extractTikTokError(
+          initUrlRes.data,
+          'TikTok rejected the MP4 video URL.'
+        );
+        onProgress?.({
+          stage: 'error',
+          progressPct: 0,
+          message: combinedError,
+          errorCode,
+          errorMessage,
+        });
         return {
           success: false,
+          publishMode,
           requiresReconnect: Boolean(initUrlRes.data?.requiresReconnect),
-          error: errMsg,
+          error: combinedError,
+          errorCode,
+          errorMessage,
         };
       }
 
@@ -459,20 +538,32 @@ export async function publishVideoToTikTok(
       });
 
       if (!statusRes.ok) {
-        const errMsg = statusRes.data?.error || 'Failed to verify TikTok publish status.';
-        onProgress?.({ stage: 'error', progressPct: pct, message: errMsg });
+        const { errorCode, errorMessage, combinedError } = extractTikTokError(
+          statusRes.data,
+          'Failed to verify TikTok publish status.'
+        );
+        onProgress?.({
+          stage: 'error',
+          progressPct: pct,
+          message: combinedError,
+          errorCode,
+          errorMessage,
+        });
         return {
           success: false,
+          publishMode,
           publishId,
           requiresReconnect: Boolean(statusRes.data?.requiresReconnect),
-          error: errMsg,
+          error: combinedError,
+          errorCode,
+          errorMessage,
         };
       }
 
       const ttStatus = String(statusRes.data?.status || '');
       if (ttStatus === 'PUBLISH_COMPLETE' || ttStatus === 'SEND_TO_USER_INBOX') {
         const doneMsg =
-          ttStatus === 'SEND_TO_USER_INBOX'
+          ttStatus === 'SEND_TO_USER_INBOX' || publishMode === 'inbox'
             ? 'Video delivered to your TikTok Inbox / Drafts! Check TikTok notifications to post.'
             : 'Video published to TikTok successfully!';
         onProgress?.({
@@ -482,6 +573,7 @@ export async function publishVideoToTikTok(
         });
         return {
           success: true,
+          publishMode,
           publishId,
           status: ttStatus,
           publicalyAvailablePostId: statusRes.data?.publicalyAvailablePostId || [],
@@ -490,12 +582,21 @@ export async function publishVideoToTikTok(
 
       if (ttStatus === 'FAILED') {
         const reason = statusRes.data?.failReason || 'TikTok processing failed for this video.';
-        onProgress?.({ stage: 'error', progressPct: pct, message: reason });
+        onProgress?.({
+          stage: 'error',
+          progressPct: pct,
+          message: reason,
+          errorCode: 'FAILED',
+          errorMessage: reason,
+        });
         return {
           success: false,
+          publishMode,
           publishId,
           status: ttStatus,
           error: reason,
+          errorCode: 'FAILED',
+          errorMessage: reason,
         };
       }
 
@@ -509,15 +610,18 @@ export async function publishVideoToTikTok(
     });
     return {
       success: true,
+      publishMode,
       publishId,
       status: 'PROCESSING_UPLOAD',
     };
   } catch (err: any) {
     const msg = err?.message || 'Unexpected network error publishing video to TikTok.';
-    onProgress?.({ stage: 'error', progressPct: 0, message: msg });
+    onProgress?.({ stage: 'error', progressPct: 0, message: msg, errorMessage: msg });
     return {
       success: false,
+      publishMode,
       error: msg,
+      errorMessage: msg,
     };
   }
 }

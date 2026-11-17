@@ -33,6 +33,7 @@ import {
   TikTokConnectionStatus,
   TikTokCreatorInfo,
   TikTokPrivacyLevel,
+  TikTokPublishMode,
   TikTokPublishProgress,
 } from '../utils/tiktokApi';
 import {
@@ -210,6 +211,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const [ttCaption, setTtCaption] = useState<string>('');
   const [ttVariant, setTtVariant] = useState(0);
   const [ttCopied, setTtCopied] = useState(false);
+  const [ttPublishMode, setTtPublishMode] = useState<TikTokPublishMode>('inbox');
   const [ttPrivacyLevel, setTtPrivacyLevel] = useState<TikTokPrivacyLevel>('SELF_ONLY');
   const [ttDisableComment, setTtDisableComment] = useState(false);
   const [ttDisableDuet, setTtDisableDuet] = useState(false);
@@ -222,6 +224,8 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const [ttStatusAlert, setTtStatusAlert] = useState<{
     type: 'success' | 'error' | 'info';
     message: string;
+    errorCode?: string;
+    errorMessage?: string;
     publishId?: string;
   } | null>(null);
   const ttTextareaRef = useRef<HTMLTextAreaElement>(null);
@@ -1212,6 +1216,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         {
           file: ttVideoSourceMode !== 'url' ? ttVideoFile : null,
           videoUrl: ttVideoSourceMode === 'url' ? ttVideoUrlInput.trim() : undefined,
+          publishMode: ttPublishMode,
           caption: ttCaption,
           privacyLevel: ttPrivacyLevel,
           disableComment: ttDisableComment,
@@ -1231,19 +1236,22 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                 ? 'error'
                 : 'info',
             message: progress.message,
+            errorCode: progress.errorCode,
+            errorMessage: progress.errorMessage,
           });
         }
       );
 
       if (result.success) {
-        const successMsg =
-          result.status === 'SEND_TO_USER_INBOX'
-            ? isKa
-              ? 'ვიდეო გაიგზავნა TikTok Inbox / Drafts-ში! შეამოწმეთ TikTok შეტყობინებები გამოსაქვეყნებლად.'
-              : 'Video delivered to your TikTok Inbox / Drafts! Check your TikTok app notifications to finish posting.'
-            : isKa
-            ? 'ვიდეო წარმატებით გამოქვეყნდა TikTok-ზე!'
-            : `Video published to TikTok (${ttConnection.displayName || 'Creator'})!`;
+        const isInboxResult =
+          result.status === 'SEND_TO_USER_INBOX' || ttPublishMode === 'inbox';
+        const successMsg = isInboxResult
+          ? isKa
+            ? 'ვიდეო გაიგზავნა TikTok Inbox / Drafts-ში! შეამოწმეთ TikTok შეტყობინებები გამოსაქვეყნებლად.'
+            : 'Video delivered to your TikTok Inbox / Drafts! Check your TikTok app notifications to finish posting.'
+          : isKa
+          ? 'ვიდეო წარმატებით გამოქვეყნდა TikTok-ზე!'
+          : `Video published to TikTok (${ttConnection.displayName || 'Creator'})!`;
         setTtStatusAlert({
           type: 'success',
           message: successMsg,
@@ -1251,22 +1259,29 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         });
         addToast(`✅ ${successMsg}`, 'success');
       } else {
-        const errMsg = result.error || 'Failed to publish video to TikTok.';
+        const errCode = result.errorCode || '';
+        const errMessage = result.errorMessage || result.error || 'Failed to publish video to TikTok.';
+        const combinedToast = errCode ? `[${errCode}] ${errMessage}` : errMessage;
         if (result.requiresReconnect) {
           setTtConnection((prev) => ({
             configured: prev?.configured ?? true,
             connected: false,
             requiresReconnect: true,
             redirectUri: prev?.redirectUri,
-            error: errMsg,
+            error: combinedToast,
           }));
         }
-        setTtStatusAlert({ type: 'error', message: errMsg });
-        addToast(`❌ ${errMsg}`, 'error');
+        setTtStatusAlert({
+          type: 'error',
+          message: errMessage,
+          errorCode: errCode || undefined,
+          errorMessage: errMessage,
+        });
+        addToast(`❌ ${combinedToast}`, 'error');
       }
     } catch (err: any) {
       const errMsg = err?.message || 'Unexpected error publishing video to TikTok.';
-      setTtStatusAlert({ type: 'error', message: errMsg });
+      setTtStatusAlert({ type: 'error', message: errMsg, errorMessage: errMsg });
       addToast(`❌ ${errMsg}`, 'error');
     } finally {
       setIsPublishingTt(false);
@@ -2659,157 +2674,188 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                 </div>
               )}
 
-              {/* TikTok Privacy, Interactions & Commercial Content Disclosure (Content Sharing Guidelines) */}
+              {/* TikTok Publish Mode, Privacy, Interactions & Commercial Content Disclosure */}
               <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
-                      {isKa ? 'ხილვადობა (Privacy Level)' : 'Who can watch this video'}
-                    </label>
-                    <select
-                      value={ttPrivacyLevel}
-                      onChange={(e) => {
-                        const nextPrivacy = e.target.value as TikTokPrivacyLevel;
-                        setTtPrivacyLevel(nextPrivacy);
-                        if (nextPrivacy === 'SELF_ONLY') {
-                          setTtBrandContent(false);
-                        }
-                      }}
-                      className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold focus:ring-2 focus:ring-cyan-500 focus:outline-hidden"
-                    >
-                      {(ttCreatorInfo?.privacyLevelOptions?.length
-                        ? ttCreatorInfo.privacyLevelOptions
-                        : (['SELF_ONLY', 'PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS'] as TikTokPrivacyLevel[])
-                      ).map((opt) => (
-                        <option key={opt} value={opt}>
-                          {opt === 'PUBLIC_TO_EVERYONE'
-                            ? 'Public (Everyone — Audited Apps)'
-                            : opt === 'MUTUAL_FOLLOW_FRIENDS'
-                            ? 'Friends (Mutual Followers)'
-                            : opt === 'FOLLOWER_OF_CREATOR'
-                            ? 'Followers Only'
-                            : 'Private (Only Me / Sandbox Default)'}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700 dark:text-slate-300 sm:pt-4">
-                    <label className={`inline-flex items-center gap-1.5 ${ttCreatorInfo?.commentDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <input
-                        type="checkbox"
-                        checked={!ttDisableComment && !ttCreatorInfo?.commentDisabled}
-                        disabled={Boolean(ttCreatorInfo?.commentDisabled)}
-                        onChange={(e) => setTtDisableComment(!e.target.checked)}
-                        className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
-                      />
-                      <span>{isKa ? 'კომენტარები' : 'Comments'}</span>
-                    </label>
-                    <label className={`inline-flex items-center gap-1.5 ${ttCreatorInfo?.duetDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <input
-                        type="checkbox"
-                        checked={!ttDisableDuet && !ttCreatorInfo?.duetDisabled}
-                        disabled={Boolean(ttCreatorInfo?.duetDisabled)}
-                        onChange={(e) => setTtDisableDuet(!e.target.checked)}
-                        className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
-                      />
-                      <span>{isKa ? 'დუეტი' : 'Duet'}</span>
-                    </label>
-                    <label className={`inline-flex items-center gap-1.5 ${ttCreatorInfo?.stitchDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
-                      <input
-                        type="checkbox"
-                        checked={!ttDisableStitch && !ttCreatorInfo?.stitchDisabled}
-                        disabled={Boolean(ttCreatorInfo?.stitchDisabled)}
-                        onChange={(e) => setTtDisableStitch(!e.target.checked)}
-                        className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
-                      />
-                      <span>Stitch</span>
-                    </label>
-                  </div>
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {isKa ? 'გამოქვეყნების რეჟიმი (Publish Mode)' : 'TikTok Publish Mode'}
+                  </label>
+                  <select
+                    value={ttPublishMode}
+                    onChange={(e) => setTtPublishMode(e.target.value as TikTokPublishMode)}
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold focus:ring-2 focus:ring-cyan-500 focus:outline-hidden"
+                  >
+                    <option value="inbox">
+                      Send to TikTok Drafts (Sandbox Compatible)
+                    </option>
+                    <option value="direct">
+                      Direct Post (Production)
+                    </option>
+                  </select>
+                  <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+                    {ttPublishMode === 'inbox'
+                      ? isKa
+                        ? 'იყენებს TikTok Inbox/Drafts API-ს (/v2/post/publish/inbox/video/init/). ვიდეო გაიგზავნება თქვენს TikTok Drafts-ში.'
+                        : 'Uses TikTok Inbox/Drafts endpoint (/v2/post/publish/inbox/video/init/ with source_info only). Ideal for Sandbox testing and finalizing your post inside TikTok.'
+                      : isKa
+                        ? 'იყენებს Direct Post API-ს (/v2/post/publish/video/init/) — საჭიროებს დამტკიცებულ Production აპლიკაციას.'
+                        : 'Uses Direct Post endpoint (/v2/post/publish/video/init/) for approved Production apps.'}
+                  </p>
                 </div>
 
-                {/* Commercial Content Disclosure Toggle */}
-                <div className="pt-3 border-t border-slate-200 dark:border-slate-700/80 space-y-2">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                        {isKa ? 'კომერციული კონტენტის გამჟღავნება' : 'Commercial Content Disclosure'}
+                {ttPublishMode === 'direct' && (
+                  <>
+                    <div className="pt-2 border-t border-slate-200 dark:border-slate-700/80 grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                          {isKa ? 'ხილვადობა (Privacy Level)' : 'Who can watch this video'}
+                        </label>
+                        <select
+                          value={ttPrivacyLevel}
+                          onChange={(e) => {
+                            const nextPrivacy = e.target.value as TikTokPrivacyLevel;
+                            setTtPrivacyLevel(nextPrivacy);
+                            if (nextPrivacy === 'SELF_ONLY') {
+                              setTtBrandContent(false);
+                            }
+                          }}
+                          className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold focus:ring-2 focus:ring-cyan-500 focus:outline-hidden"
+                        >
+                          {(ttCreatorInfo?.privacyLevelOptions?.length
+                            ? ttCreatorInfo.privacyLevelOptions
+                            : (['SELF_ONLY', 'PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS'] as TikTokPrivacyLevel[])
+                          ).map((opt) => (
+                            <option key={opt} value={opt}>
+                              {opt === 'PUBLIC_TO_EVERYONE'
+                                ? 'Public (Everyone — Audited Apps)'
+                                : opt === 'MUTUAL_FOLLOW_FRIENDS'
+                                ? 'Friends (Mutual Followers)'
+                                : opt === 'FOLLOWER_OF_CREATOR'
+                                ? 'Followers Only'
+                                : 'Private (Only Me / Sandbox Default)'}
+                            </option>
+                          ))}
+                        </select>
                       </div>
-                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
-                        {isKa
-                          ? 'ჩართეთ, თუ ვიდეო არეკლამებს თქვენს ბრენდს (DBuy Store) ან პარტნიორს.'
-                          : 'Disclose video content that promotes yourself, DBuy Store, or a third party.'}
+
+                      <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700 dark:text-slate-300 sm:pt-4">
+                        <label className={`inline-flex items-center gap-1.5 ${ttCreatorInfo?.commentDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={!ttDisableComment && !ttCreatorInfo?.commentDisabled}
+                            disabled={Boolean(ttCreatorInfo?.commentDisabled)}
+                            onChange={(e) => setTtDisableComment(!e.target.checked)}
+                            className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                          />
+                          <span>{isKa ? 'კომენტარები' : 'Comments'}</span>
+                        </label>
+                        <label className={`inline-flex items-center gap-1.5 ${ttCreatorInfo?.duetDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={!ttDisableDuet && !ttCreatorInfo?.duetDisabled}
+                            disabled={Boolean(ttCreatorInfo?.duetDisabled)}
+                            onChange={(e) => setTtDisableDuet(!e.target.checked)}
+                            className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                          />
+                          <span>{isKa ? 'დუეტი' : 'Duet'}</span>
+                        </label>
+                        <label className={`inline-flex items-center gap-1.5 ${ttCreatorInfo?.stitchDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}>
+                          <input
+                            type="checkbox"
+                            checked={!ttDisableStitch && !ttCreatorInfo?.stitchDisabled}
+                            disabled={Boolean(ttCreatorInfo?.stitchDisabled)}
+                            onChange={(e) => setTtDisableStitch(!e.target.checked)}
+                            className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                          />
+                          <span>Stitch</span>
+                        </label>
                       </div>
                     </div>
-                    <label className="inline-flex items-center gap-2 cursor-pointer shrink-0">
-                      <input
-                        type="checkbox"
-                        checked={ttDiscloseCommercial}
-                        onChange={(e) => {
-                          const enabled = e.target.checked;
-                          setTtDiscloseCommercial(enabled);
-                          if (enabled && !ttBrandOrganic && !ttBrandContent) {
-                            setTtBrandOrganic(true);
-                          }
-                        }}
-                        className="w-4 h-4 rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
-                      />
-                      <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
-                        {isKa ? 'გამჟღავნება' : 'Disclose video content'}
-                      </span>
-                    </label>
-                  </div>
 
-                  {ttDiscloseCommercial && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
-                      <label className="flex items-start gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer">
-                        <input
-                          type="checkbox"
-                          checked={ttBrandOrganic}
-                          onChange={(e) => setTtBrandOrganic(e.target.checked)}
-                          className="mt-0.5 rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
-                        />
-                        <div className="text-[11px]">
-                          <div className="font-bold text-slate-800 dark:text-slate-100">
-                            Your Brand
+                    {/* Commercial Content Disclosure Toggle */}
+                    <div className="pt-3 border-t border-slate-200 dark:border-slate-700/80 space-y-2">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            {isKa ? 'კომერციული კონტენტის გამჟღავნება' : 'Commercial Content Disclosure'}
                           </div>
-                          <div className="text-slate-500 dark:text-slate-400">
-                            Promoting DBuy Store / your own business
+                          <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                            {isKa
+                              ? 'ჩართეთ, თუ ვიდეო არეკლამებს თქვენს ბრენდს (DBuy Store) ან პარტნიორს.'
+                              : 'Disclose video content that promotes yourself, DBuy Store, or a third party.'}
                           </div>
                         </div>
-                      </label>
+                        <label className="inline-flex items-center gap-2 cursor-pointer shrink-0">
+                          <input
+                            type="checkbox"
+                            checked={ttDiscloseCommercial}
+                            onChange={(e) => {
+                              const enabled = e.target.checked;
+                              setTtDiscloseCommercial(enabled);
+                              if (enabled && !ttBrandOrganic && !ttBrandContent) {
+                                setTtBrandOrganic(true);
+                              }
+                            }}
+                            className="w-4 h-4 rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                          />
+                          <span className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                            {isKa ? 'გამჟღავნება' : 'Disclose video content'}
+                          </span>
+                        </label>
+                      </div>
 
-                      <label
-                        className={`flex items-start gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 ${
-                          ttPrivacyLevel === 'SELF_ONLY' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
-                        }`}
-                        title={
-                          ttPrivacyLevel === 'SELF_ONLY'
-                            ? 'Branded content visibility cannot be Private (Only Me)'
-                            : undefined
-                        }
-                      >
-                        <input
-                          type="checkbox"
-                          checked={ttBrandContent && ttPrivacyLevel !== 'SELF_ONLY'}
-                          disabled={ttPrivacyLevel === 'SELF_ONLY'}
-                          onChange={(e) => setTtBrandContent(e.target.checked)}
-                          className="mt-0.5 rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
-                        />
-                        <div className="text-[11px]">
-                          <div className="font-bold text-slate-800 dark:text-slate-100">
-                            Branded Content
-                          </div>
-                          <div className="text-slate-500 dark:text-slate-400">
-                            {ttPrivacyLevel === 'SELF_ONLY'
-                              ? 'Unavailable while Privacy is Only Me'
-                              : 'Paid partnership with a third party'}
-                          </div>
+                      {ttDiscloseCommercial && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+                          <label className="flex items-start gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={ttBrandOrganic}
+                              onChange={(e) => setTtBrandOrganic(e.target.checked)}
+                              className="mt-0.5 rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                            />
+                            <div className="text-[11px]">
+                              <div className="font-bold text-slate-800 dark:text-slate-100">
+                                Your Brand
+                              </div>
+                              <div className="text-slate-500 dark:text-slate-400">
+                                Promoting DBuy Store / your own business
+                              </div>
+                            </div>
+                          </label>
+
+                          <label
+                            className={`flex items-start gap-2 p-2.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 ${
+                              ttPrivacyLevel === 'SELF_ONLY' ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'
+                            }`}
+                            title={
+                              ttPrivacyLevel === 'SELF_ONLY'
+                                ? 'Branded content visibility cannot be Private (Only Me)'
+                                : undefined
+                            }
+                          >
+                            <input
+                              type="checkbox"
+                              checked={ttBrandContent && ttPrivacyLevel !== 'SELF_ONLY'}
+                              disabled={ttPrivacyLevel === 'SELF_ONLY'}
+                              onChange={(e) => setTtBrandContent(e.target.checked)}
+                              className="mt-0.5 rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                            />
+                            <div className="text-[11px]">
+                              <div className="font-bold text-slate-800 dark:text-slate-100">
+                                Branded Content
+                              </div>
+                              <div className="text-slate-500 dark:text-slate-400">
+                                {ttPrivacyLevel === 'SELF_ONLY'
+                                  ? 'Unavailable while Privacy is Only Me'
+                                  : 'Paid partnership with a third party'}
+                              </div>
+                            </div>
+                          </label>
                         </div>
-                      </label>
+                      )}
                     </div>
-                  )}
-                </div>
+                  </>
+                )}
               </div>
 
               {/* Editable TikTok Video Caption */}
@@ -2886,7 +2932,22 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                       {ttStatusAlert.type === 'success' ? '✅' : ttStatusAlert.type === 'error' ? '⚠️' : '⏳'}
                     </span>
                     <div className="min-w-0">
-                      <div className="break-words">{ttStatusAlert.message}</div>
+                      {ttStatusAlert.type === 'error' ? (
+                        <div className="space-y-0.5">
+                          {ttStatusAlert.errorCode && (
+                            <div className="text-[11px] font-mono font-bold tracking-tight opacity-95 break-all">
+                              error.code: {ttStatusAlert.errorCode}
+                            </div>
+                          )}
+                          <div className="break-words">
+                            {ttStatusAlert.errorCode
+                              ? `error.message: ${ttStatusAlert.errorMessage || ttStatusAlert.message}`
+                              : ttStatusAlert.message}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="break-words">{ttStatusAlert.message}</div>
+                      )}
                       {ttStatusAlert.publishId && (
                         <div className="text-[11px] font-normal opacity-80">
                           Publish ID: {ttStatusAlert.publishId}
@@ -2975,7 +3036,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                   isPublishingTt ||
                   isGeneratingTtVideo ||
                   !ttConnection?.connected ||
-                  (ttDiscloseCommercial && !ttBrandOrganic && !ttBrandContent) ||
+                  (ttPublishMode === 'direct' && ttDiscloseCommercial && !ttBrandOrganic && !ttBrandContent) ||
                   (ttVideoSourceMode !== 'url' ? !ttVideoFile : !ttVideoUrlInput.trim())
                 }
                 onClick={handlePublishToTikTok}
@@ -2998,14 +3059,24 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                   <>
                     <Check className="w-5 h-5" />
                     <span>
-                      {isKa ? 'ვიდეო გამოქვეყნდა TikTok-ზე!' : 'Video Published to TikTok!'}
+                      {ttPublishMode === 'inbox'
+                        ? isKa
+                          ? 'ვიდეო გაიგზავნა TikTok Drafts-ში!'
+                          : 'Video Sent to TikTok Drafts!'
+                        : isKa
+                        ? 'ვიდეო გამოქვეყნდა TikTok-ზე!'
+                        : 'Video Published to TikTok!'}
                     </span>
                   </>
                 ) : (
                   <>
                     <TikTokOriginalLogo size="xs" showHoverEffect={false} />
                     <span>
-                      {isKa
+                      {ttPublishMode === 'inbox'
+                        ? isKa
+                          ? 'TikTok Drafts-ში გაგზავნა (Sandbox)'
+                          : 'Send MP4 to TikTok Drafts'
+                        : isKa
                         ? 'ვიდეოს გამოქვეყნება TikTok-ზე'
                         : 'Publish MP4 Video to TikTok'}
                     </span>
