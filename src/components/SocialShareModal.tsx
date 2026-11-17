@@ -21,6 +21,20 @@ import {
   InstagramPublishProgress,
 } from '../utils/instagramApi';
 import { InstagramOriginalLogo } from './InstagramLogo';
+import { TikTokOriginalLogo } from './TikTokLogo';
+import {
+  buildTikTokProductCaption,
+  checkTikTokConnectionStatus,
+  disconnectTikTokAccount,
+  fetchTikTokCreatorInfo,
+  getTikTokAuthUrl,
+  normalizeProductVideoUrl,
+  publishVideoToTikTok,
+  TikTokConnectionStatus,
+  TikTokCreatorInfo,
+  TikTokPrivacyLevel,
+  TikTokPublishProgress,
+} from '../utils/tiktokApi';
 import {
   X,
   Megaphone,
@@ -40,6 +54,10 @@ import {
   Sparkles,
   Loader2,
   GripVertical,
+  Video,
+  Upload,
+  LogOut,
+  Play,
 } from 'lucide-react';
 
 interface SocialShareModalProps {
@@ -119,7 +137,7 @@ function loadSavedFbToken(): string {
 
 export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isOpen, onClose, isKa }) => {
   const { addToast, setCurrentPage } = useStore();
-  const [activePlatform, setActivePlatform] = useState<'facebook' | 'instagram'>('facebook');
+  const [activePlatform, setActivePlatform] = useState<'facebook' | 'instagram' | 'tiktok'>('facebook');
 
   // Shared Meta Token & Connection State
   const [pageId, setPageId] = useState<string>(() => {
@@ -168,6 +186,35 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
   const touchStartXRef = useRef<number | null>(null);
   const igTextareaRef = useRef<HTMLTextAreaElement>(null);
 
+  // TikTok Video Publisher State (OAuth 2.0 Login Kit + Content Posting API v2)
+  const [ttConnection, setTtConnection] = useState<TikTokConnectionStatus | null>(null);
+  const [ttCreatorInfo, setTtCreatorInfo] = useState<TikTokCreatorInfo | null>(null);
+  const [isCheckingTtStatus, setIsCheckingTtStatus] = useState(false);
+  const [isConnectingTt, setIsConnectingTt] = useState(false);
+  const [isDisconnectingTt, setIsDisconnectingTt] = useState(false);
+  const [showTtRedirectHelper, setShowTtRedirectHelper] = useState(false);
+  const [ttVideoSourceMode, setTtVideoSourceMode] = useState<'file' | 'url'>('file');
+  const [ttProductVideos, setTtProductVideos] = useState<Array<{ title: string; url: string }>>([]);
+  const [ttVideoFile, setTtVideoFile] = useState<File | null>(null);
+  const [ttVideoPreviewUrl, setTtVideoPreviewUrl] = useState<string>('');
+  const [ttVideoUrlInput, setTtVideoUrlInput] = useState<string>('');
+  const [ttCaption, setTtCaption] = useState<string>('');
+  const [ttVariant, setTtVariant] = useState(0);
+  const [ttCopied, setTtCopied] = useState(false);
+  const [ttPrivacyLevel, setTtPrivacyLevel] = useState<TikTokPrivacyLevel>('SELF_ONLY');
+  const [ttDisableComment, setTtDisableComment] = useState(false);
+  const [ttDisableDuet, setTtDisableDuet] = useState(false);
+  const [ttDisableStitch, setTtDisableStitch] = useState(false);
+  const [isPublishingTt, setIsPublishingTt] = useState(false);
+  const [ttProgress, setTtProgress] = useState<TikTokPublishProgress | null>(null);
+  const [ttStatusAlert, setTtStatusAlert] = useState<{
+    type: 'success' | 'error' | 'info';
+    message: string;
+    publishId?: string;
+  } | null>(null);
+  const ttTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const ttFileInputRef = useRef<HTMLInputElement>(null);
+
   // Verify live Facebook & Instagram Graph API connection status when modal opens
   useEffect(() => {
     if (!isOpen) return;
@@ -207,10 +254,93 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         if (!cancelled) setIsCheckingIgStatus(false);
       });
 
+    setIsCheckingTtStatus(true);
+    checkTikTokConnectionStatus()
+      .then((ttStatus) => {
+        if (cancelled) return;
+        setTtConnection(ttStatus);
+        if (ttStatus.connected) {
+          fetchTikTokCreatorInfo().then((infoRes) => {
+            if (cancelled) return;
+            if (infoRes.success && infoRes.data) {
+              setTtCreatorInfo(infoRes.data);
+              if (infoRes.data.privacyLevelOptions.length > 0) {
+                setTtPrivacyLevel((prev) =>
+                  infoRes.data!.privacyLevelOptions.includes(prev)
+                    ? prev
+                    : infoRes.data!.privacyLevelOptions[0]
+                );
+              }
+            }
+          });
+        } else {
+          setTtCreatorInfo(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingTtStatus(false);
+      });
+
     return () => {
       cancelled = true;
     };
   }, [isOpen]);
+
+  // Listen for TikTok OAuth popup callback messages
+  useEffect(() => {
+    if (!isOpen) return;
+    const handleMessage = (event: MessageEvent) => {
+      const origin = (event.origin || '').toLowerCase();
+      const isTrustedOrigin =
+        !origin ||
+        origin.includes('dbuystore.com') ||
+        origin.includes('.run.app') ||
+        origin.includes('localhost') ||
+        origin === window.location.origin.toLowerCase();
+      if (!isTrustedOrigin) return;
+
+      const data = event.data;
+      if (!data || typeof data !== 'object') return;
+
+      if (data.type === 'TIKTOK_OAUTH_SUCCESS') {
+        setIsConnectingTt(false);
+        setTtStatusAlert({
+          type: 'success',
+          message: isKa
+            ? `TikTok ანგარიში დაკავშირდა: ${data.account?.displayName || 'TikTok Creator'}`
+            : `Connected to TikTok as ${data.account?.displayName || 'TikTok Creator'}!`,
+        });
+        addToast(
+          isKa ? '✅ TikTok ანგარიში დაკავშირდა!' : '✅ TikTok account connected!',
+          'success'
+        );
+        setIsCheckingTtStatus(true);
+        checkTikTokConnectionStatus()
+          .then((status) => {
+            setTtConnection(status);
+            if (status.connected) {
+              fetchTikTokCreatorInfo().then((infoRes) => {
+                if (infoRes.success && infoRes.data) {
+                  setTtCreatorInfo(infoRes.data);
+                  if (infoRes.data.privacyLevelOptions.length > 0) {
+                    setTtPrivacyLevel(infoRes.data.privacyLevelOptions[0]);
+                  }
+                }
+              });
+            }
+          })
+          .finally(() => setIsCheckingTtStatus(false));
+      } else if (data.type === 'TIKTOK_OAUTH_ERROR') {
+        setIsConnectingTt(false);
+        const errMsg = data.error || 'TikTok OAuth authorization failed.';
+        setTtStatusAlert({ type: 'error', message: errMsg });
+        addToast(`❌ ${errMsg}`, 'error');
+      }
+    };
+
+    window.addEventListener('message', handleMessage);
+    return () => window.removeEventListener('message', handleMessage);
+  }, [isOpen, isKa, addToast]);
 
   // Populate all product gallery images when product changes or modal opens
   useEffect(() => {
@@ -262,12 +392,51 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
         ? (isKa ? '🚀 გამოაქვეყნე Facebook-ზე' : '🚀 Publish Feed Post to Facebook')
         : (isKa ? '🚀 გამოაქვეყნე გალერეა Facebook-ზე' : '🚀 Publish Multi-Photo Gallery')
     );
+
+    // Extract any product-uploaded MP4 videos for TikTok quick-pick
+    let parsedVideos: any[] = [];
+    if (Array.isArray(product.videos)) {
+      parsedVideos = product.videos;
+    } else if (typeof product.videos === 'string' && (product.videos as string).trim().startsWith('[')) {
+      try {
+        const parsed = JSON.parse(product.videos as string);
+        if (Array.isArray(parsed)) parsedVideos = parsed;
+      } catch {
+        parsedVideos = [];
+      }
+    }
+    const uploadedMp4s = parsedVideos
+      .filter((v) => v && v.type === 'upload' && typeof v.url === 'string' && v.url.trim())
+      .map((v, idx) => ({
+        title: v.title || `Product Video ${idx + 1}`,
+        url: normalizeProductVideoUrl(v.url),
+      }));
+    setTtProductVideos(uploadedMp4s);
+    setTtVideoFile(null);
+    setTtVideoUrlInput(uploadedMp4s[0]?.url || '');
+    setTtVideoSourceMode('file');
+    setTtStatusAlert(null);
+    setTtProgress(null);
   }, [product, isOpen]);
+
+  useEffect(() => {
+    if (!ttVideoFile) {
+      setTtVideoPreviewUrl('');
+      return;
+    }
+    const objectUrl = URL.createObjectURL(ttVideoFile);
+    setTtVideoPreviewUrl(objectUrl);
+    return () => {
+      URL.revokeObjectURL(objectUrl);
+    };
+  }, [ttVideoFile]);
 
   useEffect(() => {
     if (isOpen && product) {
       setCaption(buildHighConvertingAdCopy(product, 0));
       setIgCaption(buildInstagramCarouselCaption(product, 0, Boolean(isKa)));
+      setTtCaption(buildTikTokProductCaption(product, 0, Boolean(isKa)));
+      setTtVariant(0);
     }
   }, [isOpen, product]);
 
@@ -461,6 +630,127 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
       );
       setTimeout(() => setIgLinkCopied(false), 2000);
     }
+  };
+
+  // TikTok OAuth & Caption Handlers
+  const handleRefreshTikTokStatus = async () => {
+    setIsCheckingTtStatus(true);
+    try {
+      const status = await checkTikTokConnectionStatus();
+      setTtConnection(status);
+      if (status.connected) {
+        const infoRes = await fetchTikTokCreatorInfo();
+        if (infoRes.success && infoRes.data) {
+          setTtCreatorInfo(infoRes.data);
+        }
+      } else {
+        setTtCreatorInfo(null);
+      }
+    } finally {
+      setIsCheckingTtStatus(false);
+    }
+  };
+
+  const handleConnectTikTok = async () => {
+    if (isConnectingTt) return;
+    setIsConnectingTt(true);
+    setTtStatusAlert(null);
+    try {
+      const res = await getTikTokAuthUrl();
+      if (!res.success || !res.url) {
+        const errMsg =
+          res.error ||
+          (isKa
+            ? 'TikTok OAuth კონფიგურაცია არ არის დაყენებული სერვერზე.'
+            : 'TikTok API credentials are not configured on the server.');
+        setTtStatusAlert({ type: 'error', message: errMsg });
+        addToast(`⚠️ ${errMsg}`, 'error');
+        setIsConnectingTt(false);
+        return;
+      }
+
+      const popup = window.open(
+        res.url,
+        'tiktok_oauth_popup',
+        'width=600,height=740,scrollbars=yes,resizable=yes'
+      );
+      if (!popup || popup.closed || typeof popup.closed === 'undefined') {
+        const popupMsg = isKa
+          ? 'გთხოვთ დაუშვათ pop-up ფანჯრები ბრაუზერში TikTok-ით შესასვლელად.'
+          : 'Pop-up was blocked by your browser. Please allow pop-ups and try again.';
+        setTtStatusAlert({ type: 'error', message: popupMsg });
+        addToast(`⚠️ ${popupMsg}`, 'warning');
+        setIsConnectingTt(false);
+        return;
+      }
+
+      const pollTimer = window.setInterval(() => {
+        if (popup.closed) {
+          window.clearInterval(pollTimer);
+          setIsConnectingTt(false);
+          handleRefreshTikTokStatus();
+        }
+      }, 650);
+    } catch (err: any) {
+      setIsConnectingTt(false);
+      setTtStatusAlert({
+        type: 'error',
+        message: err?.message || 'Failed to launch TikTok OAuth.',
+      });
+    }
+  };
+
+  const handleDisconnectTikTok = async () => {
+    if (isDisconnectingTt) return;
+    setIsDisconnectingTt(true);
+    try {
+      const res = await disconnectTikTokAccount();
+      if (res.success) {
+        setTtConnection((prev) => ({
+          configured: prev?.configured ?? true,
+          connected: false,
+          redirectUri: prev?.redirectUri,
+        }));
+        setTtCreatorInfo(null);
+        setTtStatusAlert(null);
+        addToast(isKa ? 'TikTok ანგარიში გაითიშა.' : 'TikTok account disconnected.', 'info');
+      } else {
+        addToast(`❌ ${res.error || 'Disconnect failed'}`, 'error');
+      }
+    } finally {
+      setIsDisconnectingTt(false);
+    }
+  };
+
+  const regenerateTtCaption = () => {
+    if (!product) return;
+    const nextIdx = ttVariant + 1;
+    setTtVariant(nextIdx);
+    setTtCaption(buildTikTokProductCaption(product, nextIdx, Boolean(isKa)));
+  };
+
+  const handleCopyTtCaption = async () => {
+    const success = await copyTextSafely(ttCaption, ttTextareaRef.current);
+    if (success) {
+      setTtCopied(true);
+      addToast(isKa ? '✅ TikTok ტექსტი დაკოპირდა!' : '✅ TikTok caption copied!', 'success');
+      setTimeout(() => setTtCopied(false), 2000);
+    }
+  };
+
+  const handleSelectTtVideoFile = (file?: File | null) => {
+    if (!file) return;
+    const lowerName = file.name.toLowerCase();
+    if (file.type && !file.type.startsWith('video/') && !lowerName.endsWith('.mp4')) {
+      const msg = isKa ? 'გთხოვთ აირჩიოთ MP4 ვიდეო ფაილი.' : 'Please select a valid MP4 video file.';
+      addToast(`⚠️ ${msg}`, 'error');
+      setTtStatusAlert({ type: 'error', message: msg });
+      return;
+    }
+    setTtVideoFile(file);
+    setTtVideoSourceMode('file');
+    setTtStatusAlert(null);
+    setTtProgress(null);
   };
 
   // Safe early return placed AFTER all React hooks have been called unconditionally
@@ -748,7 +1038,108 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
     }
   };
 
+  // One-Click TikTok Video Publisher Handler
+  const handlePublishToTikTok = async () => {
+    if (isPublishingTt) return;
+
+    if (!ttConnection?.connected) {
+      const msg = isKa
+        ? 'გთხოვთ ჯერ დააკავშიროთ თქვენი TikTok ანგარიში.'
+        : 'Please connect your TikTok account first.';
+      addToast(`⚠️ ${msg}`, 'warning');
+      setTtStatusAlert({ type: 'error', message: msg });
+      return;
+    }
+
+    if (ttVideoSourceMode === 'file' && !ttVideoFile) {
+      const msg = isKa
+        ? 'გთხოვთ აირჩიოთ ასატვირთი MP4 ვიდეო.'
+        : 'Please choose an MP4 video file to share to TikTok.';
+      addToast(`⚠️ ${msg}`, 'warning');
+      setTtStatusAlert({ type: 'error', message: msg });
+      return;
+    }
+
+    if (ttVideoSourceMode === 'url' && !ttVideoUrlInput.trim()) {
+      const msg = isKa
+        ? 'გთხოვთ შეიყვანოთ MP4 ვიდეოს საჯარო ბმული.'
+        : 'Please provide a public HTTPS MP4 video URL.';
+      addToast(`⚠️ ${msg}`, 'warning');
+      setTtStatusAlert({ type: 'error', message: msg });
+      return;
+    }
+
+    setIsPublishingTt(true);
+    setTtStatusAlert({
+      type: 'info',
+      message: isKa ? 'მიმდინარეობს TikTok-ზე ატვირთვა...' : 'Initializing TikTok video upload...',
+    });
+
+    try {
+      const result = await publishVideoToTikTok(
+        {
+          file: ttVideoSourceMode === 'file' ? ttVideoFile : null,
+          videoUrl: ttVideoSourceMode === 'url' ? ttVideoUrlInput.trim() : undefined,
+          caption: ttCaption,
+          privacyLevel: ttPrivacyLevel,
+          disableComment: ttDisableComment,
+          disableDuet: ttDisableDuet,
+          disableStitch: ttDisableStitch,
+        },
+        (progress) => {
+          setTtProgress(progress);
+          setTtStatusAlert({
+            type:
+              progress.stage === 'published'
+                ? 'success'
+                : progress.stage === 'error'
+                ? 'error'
+                : 'info',
+            message: progress.message,
+          });
+        }
+      );
+
+      if (result.success) {
+        const successMsg =
+          result.status === 'SEND_TO_USER_INBOX'
+            ? isKa
+              ? 'ვიდეო გაიგზავნა TikTok Inbox-ში!'
+              : 'Video uploaded to your TikTok Inbox!'
+            : isKa
+            ? 'ვიდეო წარმატებით გამოქვეყნდა TikTok-ზე!'
+            : `Video published to TikTok (${ttConnection.displayName || 'Creator'})!`;
+        setTtStatusAlert({
+          type: 'success',
+          message: successMsg,
+          publishId: result.publishId,
+        });
+        addToast(`✅ ${successMsg}`, 'success');
+      } else {
+        const errMsg = result.error || 'Failed to publish video to TikTok.';
+        if (result.requiresReconnect) {
+          setTtConnection((prev) => ({
+            configured: prev?.configured ?? true,
+            connected: false,
+            requiresReconnect: true,
+            redirectUri: prev?.redirectUri,
+            error: errMsg,
+          }));
+        }
+        setTtStatusAlert({ type: 'error', message: errMsg });
+        addToast(`❌ ${errMsg}`, 'error');
+      }
+    } catch (err: any) {
+      const errMsg = err?.message || 'Unexpected error publishing video to TikTok.';
+      setTtStatusAlert({ type: 'error', message: errMsg });
+      addToast(`❌ ${errMsg}`, 'error');
+    } finally {
+      setIsPublishingTt(false);
+    }
+  };
+
   const igHandle = `@${igConnection?.username || 'dbuy.store'}`;
+  const ttHandle = ttConnection?.displayName || 'TikTok Creator';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs">
@@ -759,12 +1150,18 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
             <h3 className="text-lg font-black text-slate-900 dark:text-white truncate">
               {activePlatform === 'facebook'
                 ? (isKa ? 'Facebook პოსტის გამომქვეყნებელი' : 'Facebook Post Publisher')
-                : (isKa ? 'Instagram კარუსელის გამომქვეყნებელი' : 'Instagram Post Publisher')}
+                : activePlatform === 'instagram'
+                ? (isKa ? 'Instagram კარუსელის გამომქვეყნებელი' : 'Instagram Post Publisher')
+                : (isKa ? 'TikTok ვიდეოს გამომქვეყნებელი' : 'TikTok Video Publisher')}
             </h3>
             <p className="text-xs text-slate-500 dark:text-slate-400">
               {activePlatform === 'facebook'
                 ? (isKa ? 'ავტომატური გამოქვეყნება @Dbuystore გვერდზე' : 'Direct one-click publishing to @Dbuystore page')
-                : (isKa ? `ავტომატური კარუსელის გამოქვეყნება ${igHandle}-ზე` : `Direct one-click carousel publishing to ${igHandle}`)}
+                : activePlatform === 'instagram'
+                ? (isKa ? `ავტომატური კარუსელის გამოქვეყნება ${igHandle}-ზე` : `Direct one-click carousel publishing to ${igHandle}`)
+                : (isKa
+                    ? `პირდაპირი MP4 ვიდეოს გამოქვეყნება TikTok-ზე (${ttConnection?.connected ? ttHandle : 'OAuth 2.0'})`
+                    : `Direct MP4 video publishing to ${ttConnection?.connected ? ttHandle : 'your connected TikTok account'}`)}
             </p>
           </div>
           <button
@@ -775,7 +1172,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
           </button>
         </div>
 
-        {/* Platform Switcher: Facebook Post Publisher vs Instagram Post Publisher */}
+        {/* Platform Switcher: Facebook Post Publisher vs Instagram Post Publisher vs TikTok Video Publisher */}
         <div className="px-5 pt-4">
           <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl gap-1">
             <button
@@ -800,7 +1197,19 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
               }`}
             >
               <InstagramOriginalLogo size="xs" showHoverEffect={false} />
-              <span>{isKa ? 'Instagram კარუსელი (@dbuy.store)' : 'Instagram Post Publisher'}</span>
+              <span>{isKa ? 'Instagram კარუსელი' : 'Instagram Post Publisher'}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setActivePlatform('tiktok')}
+              className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                activePlatform === 'tiktok'
+                  ? 'bg-white dark:bg-slate-900 text-cyan-600 dark:text-cyan-400 shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              }`}
+            >
+              <TikTokOriginalLogo size="xs" showHoverEffect={false} />
+              <span>{isKa ? 'TikTok ვიდეო' : 'TikTok Video Publisher'}</span>
             </button>
           </div>
         </div>
@@ -1580,6 +1989,474 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
               )}
             </>
           )}
+
+          {/* ============================================================== */}
+          {/* TIKTOK VIDEO PUBLISHER TAB (OAuth 2.0 + Content Posting v2)    */}
+          {/* ============================================================== */}
+          {activePlatform === 'tiktok' && (
+            <>
+              {/* TikTok OAuth 2.0 Connection Card */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-900 text-slate-100 p-3.5 text-xs transition-colors">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {ttConnection?.connected && ttConnection?.avatarUrl ? (
+                      <img
+                        src={ttConnection.avatarUrl}
+                        alt={ttHandle}
+                        className="w-10 h-10 rounded-xl object-cover border border-cyan-400/40 shrink-0"
+                      />
+                    ) : (
+                      <TikTokOriginalLogo size="md" showHoverEffect={false} />
+                    )}
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-bold text-white truncate">
+                          {ttConnection?.connected ? ttHandle : 'TikTok Login Kit v2'}
+                        </span>
+                        {ttConnection?.connected && (
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 text-[10px] font-bold">
+                            Connected
+                          </span>
+                        )}
+                      </div>
+                      <div
+                        className={`text-[11px] truncate ${
+                          ttConnection?.connected
+                            ? 'text-emerald-400'
+                            : isCheckingTtStatus
+                            ? 'text-slate-400'
+                            : 'text-amber-300'
+                        }`}
+                      >
+                        {isCheckingTtStatus
+                          ? (isKa ? 'მოწმდება TikTok კავშირი...' : 'Checking TikTok OAuth 2.0 connection...')
+                          : ttConnection?.connected
+                          ? `OAuth Active (${ttConnection.scope || 'user.info.basic,video.upload,video.publish'})`
+                          : ttConnection?.configured === false
+                          ? (isKa
+                              ? 'დაამატეთ TIKTOK_CLIENT_KEY და TIKTOK_CLIENT_SECRET სერვერზე'
+                              : 'Requires TIKTOK_CLIENT_KEY & TIKTOK_CLIENT_SECRET env vars')
+                          : (ttConnection?.error ||
+                              (isKa ? 'დააკავშირეთ TikTok ანგარიში ვიდეოს ასატვირთად' : 'Connect your TikTok account to publish MP4 videos'))}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => setShowTtRedirectHelper((v) => !v)}
+                      className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer"
+                      title="Show TikTok Callback URI"
+                    >
+                      <KeyRound className="w-3 h-3" />
+                      <span>{showTtRedirectHelper ? (isKa ? 'დამალვა' : 'Hide URI') : 'Callback URI'}</span>
+                    </button>
+
+                    {ttConnection?.connected ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={handleRefreshTikTokStatus}
+                          disabled={isCheckingTtStatus}
+                          className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 cursor-pointer disabled:opacity-50"
+                          title="Refresh status"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isCheckingTtStatus ? 'animate-spin' : ''}`} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleDisconnectTikTok}
+                          disabled={isDisconnectingTt}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold bg-rose-950/70 hover:bg-rose-900 text-rose-200 border border-rose-800/70 cursor-pointer disabled:opacity-50"
+                        >
+                          {isDisconnectingTt ? (
+                            <Loader2 className="w-3 h-3 animate-spin" />
+                          ) : (
+                            <LogOut className="w-3 h-3" />
+                          )}
+                          <span>{isKa ? 'გათიშვა' : 'Disconnect'}</span>
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={handleConnectTikTok}
+                        disabled={isConnectingTt}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold bg-gradient-to-r from-[#25F4EE] to-[#FE2C55] text-slate-950 hover:brightness-105 cursor-pointer disabled:opacity-60"
+                      >
+                        {isConnectingTt ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <TikTokOriginalLogo size="xs" showHoverEffect={false} />
+                        )}
+                        <span className="text-white drop-shadow-xs">
+                          {isConnectingTt
+                            ? (isKa ? 'იხსნება TikTok...' : 'Connecting...')
+                            : (isKa ? 'TikTok-ის დაკავშირება' : 'Connect TikTok')}
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {showTtRedirectHelper && (
+                  <div className="mt-3 pt-3 border-t border-slate-800 space-y-1.5 text-[11px] text-slate-300">
+                    <div className="font-semibold text-cyan-300">
+                      TikTok Developer Portal → Login Kit Redirect URI:
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <code className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-200 truncate font-mono text-[11px]">
+                        {ttConnection?.redirectUri || `${window.location.origin}/api/tiktok/callback`}
+                      </code>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const uri = ttConnection?.redirectUri || `${window.location.origin}/api/tiktok/callback`;
+                          const ok = await copyTextSafely(uri);
+                          if (ok) addToast('✅ Callback URI copied!', 'success');
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold cursor-pointer shrink-0"
+                      >
+                        Copy
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Product Link Reference Card (Matches Facebook Feed Card Styling) */}
+              <div className="p-3.5 bg-slate-50 dark:bg-slate-800/60 rounded-2xl border border-slate-200 dark:border-slate-700 flex items-center gap-3">
+                {images[0] && (
+                  <img
+                    src={images[0]}
+                    alt={product.title}
+                    className="w-14 h-14 object-cover rounded-xl border border-slate-200 dark:border-slate-700 shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] uppercase tracking-wider text-cyan-600 dark:text-cyan-400 font-black">
+                    DBUYSTORE.COM
+                  </div>
+                  <div className="text-sm font-bold truncate text-slate-900 dark:text-white">{product.title}</div>
+                  <div className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                    https://www.dbuystore.com/b/{product.id}
+                  </div>
+                </div>
+              </div>
+
+              {/* Video Source Switcher: Upload MP4 File vs Public MP4 URL */}
+              <div className="flex p-1 bg-slate-100 dark:bg-slate-800 rounded-2xl gap-1">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTtVideoSourceMode('file');
+                    setTtStatusAlert(null);
+                  }}
+                  className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    ttVideoSourceMode === 'file'
+                      ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <Upload className="w-4 h-4" />
+                  <span>{isKa ? 'MP4 ფაილის ატვირთვა' : 'Upload MP4 Video'}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTtVideoSourceMode('url');
+                    setTtStatusAlert(null);
+                  }}
+                  className={`flex-1 py-2.5 px-3 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                    ttVideoSourceMode === 'url'
+                      ? 'bg-white dark:bg-slate-700 text-cyan-600 dark:text-cyan-400 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  <LinkIcon className="w-4 h-4" />
+                  <span>{isKa ? 'პროდუქტის / საჯარო MP4 ბმული' : 'Product / Public MP4 URL'}</span>
+                </button>
+              </div>
+
+              {/* MP4 Video Picker & Preview */}
+              {ttVideoSourceMode === 'file' ? (
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-3">
+                  <input
+                    ref={ttFileInputRef}
+                    type="file"
+                    accept="video/mp4,video/*"
+                    className="hidden"
+                    onChange={(e) => handleSelectTtVideoFile(e.target.files?.[0] || null)}
+                  />
+
+                  {!ttVideoFile ? (
+                    <button
+                      type="button"
+                      onClick={() => ttFileInputRef.current?.click()}
+                      className="w-full py-7 px-4 rounded-xl border-2 border-dashed border-slate-300 dark:border-slate-600 hover:border-cyan-500 dark:hover:border-cyan-400 bg-white/60 dark:bg-slate-900/50 flex flex-col items-center justify-center gap-2 text-center transition-colors cursor-pointer"
+                    >
+                      <div className="w-11 h-11 rounded-2xl bg-cyan-500/10 text-cyan-500 flex items-center justify-center">
+                        <Video className="w-6 h-6" />
+                      </div>
+                      <div className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                        {isKa ? 'აირჩიეთ MP4 ვიდეო TikTok-ზე გასაზიარებლად' : 'Click to select an MP4 video file'}
+                      </div>
+                      <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {isKa
+                          ? 'რეკომენდებულია ვერტიკალური 9:16 MP4 (H.264)'
+                          : 'MP4 (H.264) recommended · Direct upload via TikTok Content Posting API'}
+                      </div>
+                    </button>
+                  ) : (
+                    <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
+                      <div className="sm:col-span-5 rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-56 mx-auto w-full flex items-center justify-center border border-slate-700">
+                        {ttVideoPreviewUrl ? (
+                          <video
+                            src={ttVideoPreviewUrl}
+                            controls
+                            playsInline
+                            className="w-full h-full object-contain"
+                          />
+                        ) : (
+                          <Play className="w-8 h-8 text-slate-500" />
+                        )}
+                      </div>
+                      <div className="sm:col-span-7 space-y-2.5 min-w-0">
+                        <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
+                          {ttVideoFile.name}
+                        </div>
+                        <div className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Size: {(ttVideoFile.size / (1024 * 1024)).toFixed(2)} MB · {ttVideoFile.type || 'video/mp4'}
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <button
+                            type="button"
+                            onClick={() => ttFileInputRef.current?.click()}
+                            className="px-3 py-1.5 rounded-lg bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-xs font-bold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer"
+                          >
+                            {isKa ? 'ვიდეოს შეცვლა' : 'Replace Video'}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setTtVideoFile(null);
+                              if (ttFileInputRef.current) ttFileInputRef.current.value = '';
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-800 text-xs font-bold text-rose-700 dark:text-rose-300 hover:bg-rose-100 cursor-pointer"
+                          >
+                            {isKa ? 'წაშლა' : 'Remove'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 space-y-2.5">
+                  <label className="block text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {isKa ? 'საჯარო HTTPS MP4 ვიდეოს ბმული' : 'Public HTTPS MP4 Video URL'}
+                  </label>
+                  <input
+                    type="url"
+                    value={ttVideoUrlInput}
+                    onChange={(e) => setTtVideoUrlInput(e.target.value)}
+                    placeholder="https://www.dbuystore.com/uploads/product-demo.mp4"
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs focus:ring-2 focus:ring-cyan-500 focus:outline-hidden"
+                  />
+                  {ttProductVideos.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {isKa ? 'პროდუქტის ვიდეოები:' : 'Product videos:'}
+                      </span>
+                      {ttProductVideos.map((vid, idx) => (
+                        <button
+                          key={`${vid.url}-${idx}`}
+                          type="button"
+                          onClick={() => setTtVideoUrlInput(vid.url)}
+                          className={`px-2.5 py-1 rounded-lg text-[11px] font-bold border cursor-pointer transition-colors ${
+                            ttVideoUrlInput === vid.url
+                              ? 'bg-cyan-600 text-white border-cyan-500'
+                              : 'bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-300 dark:border-slate-700 hover:border-cyan-500'
+                          }`}
+                        >
+                          {vid.title}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {ttVideoUrlInput.trim().startsWith('https://') && (
+                    <div className="rounded-xl overflow-hidden bg-black max-h-48 flex items-center justify-center border border-slate-700">
+                      <video
+                        src={ttVideoUrlInput.trim()}
+                        controls
+                        playsInline
+                        className="max-h-48 w-full object-contain"
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* TikTok Privacy & Interaction Controls */}
+              <div className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-700 grid grid-cols-1 sm:grid-cols-2 gap-3 items-center">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-600 dark:text-slate-300 mb-1">
+                    {isKa ? 'ხილვადობა (Privacy Level)' : 'Who can watch this video'}
+                  </label>
+                  <select
+                    value={ttPrivacyLevel}
+                    onChange={(e) => setTtPrivacyLevel(e.target.value as TikTokPrivacyLevel)}
+                    className="w-full px-3 py-2 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-900 dark:text-slate-100 text-xs font-semibold focus:ring-2 focus:ring-cyan-500 focus:outline-hidden"
+                  >
+                    {(ttCreatorInfo?.privacyLevelOptions?.length
+                      ? ttCreatorInfo.privacyLevelOptions
+                      : (['PUBLIC_TO_EVERYONE', 'MUTUAL_FOLLOW_FRIENDS', 'SELF_ONLY'] as TikTokPrivacyLevel[])
+                    ).map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt === 'PUBLIC_TO_EVERYONE'
+                          ? 'Public (Everyone)'
+                          : opt === 'MUTUAL_FOLLOW_FRIENDS'
+                          ? 'Friends (Mutual Followers)'
+                          : opt === 'FOLLOWER_OF_CREATOR'
+                          ? 'Followers Only'
+                          : 'Private (Only Me / Sandbox Default)'}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3 text-xs text-slate-700 dark:text-slate-300 sm:pt-4">
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!ttDisableComment}
+                      disabled={Boolean(ttCreatorInfo?.commentDisabled)}
+                      onChange={(e) => setTtDisableComment(!e.target.checked)}
+                      className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                    />
+                    <span>{isKa ? 'კომენტარები' : 'Comments'}</span>
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!ttDisableDuet}
+                      disabled={Boolean(ttCreatorInfo?.duetDisabled)}
+                      onChange={(e) => setTtDisableDuet(!e.target.checked)}
+                      className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                    />
+                    <span>{isKa ? 'დუეტი' : 'Duet'}</span>
+                  </label>
+                  <label className="inline-flex items-center gap-1.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={!ttDisableStitch}
+                      disabled={Boolean(ttCreatorInfo?.stitchDisabled)}
+                      onChange={(e) => setTtDisableStitch(!e.target.checked)}
+                      className="rounded border-slate-400 text-cyan-500 focus:ring-cyan-500"
+                    />
+                    <span>Stitch</span>
+                  </label>
+                </div>
+              </div>
+
+              {/* Editable TikTok Video Caption */}
+              <div className="space-y-1.5">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                    {isKa ? 'TikTok ვიდეოს აღწერა & პროდუქტის ბმული' : 'TikTok Video Caption & Product Link'}
+                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[11px] text-slate-400 tabular-nums">
+                      {ttCaption.length}/2200
+                    </span>
+                    <button
+                      type="button"
+                      onClick={regenerateTtCaption}
+                      className="inline-flex items-center gap-1 text-xs text-cyan-600 dark:text-cyan-400 hover:underline font-semibold cursor-pointer px-2 py-1 rounded-md hover:bg-cyan-50 dark:hover:bg-cyan-950/40"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      <span>{isKa ? 'განახლება' : 'Regenerate'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCopyTtCaption}
+                      className="inline-flex items-center gap-1 text-xs text-slate-600 dark:text-slate-300 hover:text-slate-900 font-semibold cursor-pointer px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                    >
+                      {ttCopied ? <Check className="w-3 h-3 text-emerald-500" /> : <Copy className="w-3 h-3" />}
+                      <span>{ttCopied ? (isKa ? 'დაკოპირდა!' : 'Copied!') : (isKa ? 'კოპირება' : 'Copy')}</span>
+                    </button>
+                  </div>
+                </div>
+                <textarea
+                  ref={ttTextareaRef}
+                  value={ttCaption}
+                  maxLength={2200}
+                  onChange={(e) => setTtCaption(e.target.value)}
+                  className="w-full p-3 h-32 rounded-xl bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-cyan-500 focus:outline-hidden resize-none"
+                />
+              </div>
+
+              {/* Upload Progress & Status Feedback */}
+              {ttProgress && isPublishingTt && (
+                <div className="p-3 rounded-2xl bg-slate-900 border border-slate-800 space-y-2">
+                  <div className="flex items-center justify-between text-xs text-slate-200 font-semibold">
+                    <span className="flex items-center gap-2 truncate">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-cyan-400 shrink-0" />
+                      <span className="truncate">{ttProgress.message}</span>
+                    </span>
+                    <span className="text-cyan-400 tabular-nums shrink-0">{ttProgress.progressPct}%</span>
+                  </div>
+                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full bg-gradient-to-r from-[#25F4EE] to-[#FE2C55] transition-all duration-300"
+                      style={{ width: `${Math.max(4, Math.min(100, ttProgress.progressPct))}%` }}
+                    />
+                  </div>
+                  {ttProgress.detail && (
+                    <div className="text-[11px] text-slate-400 truncate">{ttProgress.detail}</div>
+                  )}
+                </div>
+              )}
+
+              {ttStatusAlert && (!isPublishingTt || ttStatusAlert.type !== 'info') && (
+                <div
+                  className={`p-3.5 rounded-2xl border text-xs sm:text-sm font-semibold flex flex-wrap items-center justify-between gap-3 ${
+                    ttStatusAlert.type === 'success'
+                      ? 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-800 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                      : ttStatusAlert.type === 'info'
+                      ? 'bg-slate-900 text-slate-100 border-slate-700'
+                      : 'bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="shrink-0">
+                      {ttStatusAlert.type === 'success' ? '✅' : ttStatusAlert.type === 'error' ? '⚠️' : '⏳'}
+                    </span>
+                    <div className="min-w-0">
+                      <div className="break-words">{ttStatusAlert.message}</div>
+                      {ttStatusAlert.publishId && (
+                        <div className="text-[11px] font-normal opacity-80">
+                          Publish ID: {ttStatusAlert.publishId}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  {ttStatusAlert.type === 'success' && (
+                    <a
+                      href="https://www.tiktok.com/"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-slate-900 text-white rounded-lg text-xs font-bold hover:bg-slate-800 transition shrink-0"
+                    >
+                      <span>{isKa ? 'TikTok-ის გახსნა' : 'Open TikTok'}</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              )}
+            </>
+          )}
         </div>
 
         {/* Footer Action Button */}
@@ -1594,7 +2471,7 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
               <Megaphone className="w-5 h-5" />
               {buttonText}
             </button>
-          ) : (
+          ) : activePlatform === 'instagram' ? (
             <button
               type="button"
               disabled={isPublishingIg || igSelectedImages.length < 2 || igSelectedImages.length > 10}
@@ -1623,6 +2500,48 @@ export const SocialShareModal: React.FC<SocialShareModalProps> = ({ product, isO
                     {isKa
                       ? `გამოქვეყნება Instagram-ზე (${igSelectedImages.length} ფოტო)`
                       : `Publish to Instagram (${igSelectedImages.length} Carousel Slides)`}
+                  </span>
+                </>
+              )}
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={
+                isPublishingTt ||
+                !ttConnection?.connected ||
+                (ttVideoSourceMode === 'file' ? !ttVideoFile : !ttVideoUrlInput.trim())
+              }
+              onClick={handlePublishToTikTok}
+              className="w-full py-4 text-white font-bold rounded-2xl flex items-center justify-center gap-2.5 shadow-lg hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
+              style={{
+                background:
+                  ttProgress?.stage === 'published'
+                    ? '#10B981'
+                    : 'linear-gradient(90deg, #020611 0%, #0f172a 50%, #fe2c55 100%)',
+              }}
+            >
+              {isPublishingTt ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>
+                    {ttProgress?.message || (isKa ? 'იტვირთება TikTok-ზე...' : 'Uploading MP4 to TikTok...')}
+                  </span>
+                </>
+              ) : ttProgress?.stage === 'published' ? (
+                <>
+                  <Check className="w-5 h-5" />
+                  <span>
+                    {isKa ? 'ვიდეო გამოქვეყნდა TikTok-ზე!' : 'Video Published to TikTok!'}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <TikTokOriginalLogo size="xs" showHoverEffect={false} />
+                  <span>
+                    {isKa
+                      ? 'ვიდეოს გამოქვეყნება TikTok-ზე'
+                      : 'Publish MP4 Video to TikTok'}
                   </span>
                 </>
               )}
