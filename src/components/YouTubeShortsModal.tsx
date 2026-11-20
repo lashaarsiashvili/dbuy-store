@@ -13,13 +13,12 @@ import {
   Video,
   Play,
   Sparkles,
-  Music,
-  Film,
   Download,
   Copy,
   Tag,
 } from 'lucide-react';
 import { YouTubeShortsLogo } from './YouTubeLogo';
+import { CommercialVideoStudio } from './CommercialVideoStudio';
 import {
   buildYouTubeShortDescription,
   buildYouTubeShortTags,
@@ -34,12 +33,7 @@ import {
   YouTubePrivacyStatus,
   YouTubeUploadProgress,
 } from '../utils/youtubeApi';
-import {
-  generateTikTokPromoVideo,
-  PROMO_VIBE_OPTIONS,
-  PromoVideoGenerationProgress,
-  PromoVideoVibe,
-} from '../utils/tiktokVideoGenerator';
+import { PromoVideoGenerationResult } from '../utils/tiktokVideoGenerator';
 
 interface YouTubeShortsModalProps {
   isOpen: boolean;
@@ -93,15 +87,11 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string>('');
   const [generatedByStudio, setGeneratedByStudio] = useState(false);
-
-  // Client-Side 9:16 AI Promo Video Generator State (reuses tiktokVideoGenerator)
-  const [genSelectedImages, setGenSelectedImages] = useState<string[]>([]);
-  const [genTitleOffer, setGenTitleOffer] = useState<string>('');
-  const [genPriceBanner, setGenPriceBanner] = useState<string>('');
-  const [genMusicVibe, setGenMusicVibe] = useState<PromoVideoVibe>('upbeat');
-  const [genIncludeWebLink, setGenIncludeWebLink] = useState<boolean>(true);
-  const [isGeneratingVideo, setIsGeneratingVideo] = useState<boolean>(false);
-  const [genProgress, setGenProgress] = useState<PromoVideoGenerationProgress | null>(null);
+  const [generatedMeta, setGeneratedMeta] = useState<{
+    aspectRatio: '9:16' | '16:9';
+    hasVoiceover: boolean;
+    durationSec: number;
+  } | null>(null);
 
   // YouTube Shorts Metadata
   const [ytTitle, setYtTitle] = useState<string>('');
@@ -193,25 +183,12 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
       new Set([product.image, ...(product.images || [])].filter(Boolean))
     );
     setImages(allImgs);
-    setGenSelectedImages(allImgs.slice(0, 6));
     setVideoSourceMode('generator');
     setVideoFile(null);
     setGeneratedByStudio(false);
-    setGenProgress(null);
+    setGeneratedMeta(null);
     setUploadProgress(null);
     setStatusAlert(null);
-
-    const displayTitle = (isKa ? product.titleKa || product.title : product.title) || '';
-    const formattedPrice =
-      Number(product.price) > 0
-        ? `Only $${(Math.round(Number(product.price) * 100) / 100).toFixed(
-            Number.isInteger(Number(product.price)) ? 0 : 2
-          )}!`
-        : 'Limited Offer!';
-    setGenTitleOffer(displayTitle);
-    setGenPriceBanner(formattedPrice);
-    setGenMusicVibe('upbeat');
-    setGenIncludeWebLink(true);
 
     setYtTitle(buildYouTubeShortTitle(product, Boolean(isKa)));
     setYtDescription(buildYouTubeShortDescription(product, Boolean(isKa)));
@@ -313,24 +290,6 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
     }
   };
 
-  const toggleGenImage = (url: string) => {
-    setGenSelectedImages((prev) => {
-      if (prev.includes(url)) {
-        if (prev.length <= 1) {
-          addToast(
-            isKa
-              ? 'მინიმუმ 1 ფოტო აუცილებელია ვიდეოსთვის.'
-              : 'Keep at least 1 image selected for your video.',
-            'warning'
-          );
-          return prev;
-        }
-        return prev.filter((u) => u !== url);
-      }
-      return [...prev, url];
-    });
-  };
-
   const handleSelectVideoFile = (file?: File | null) => {
     if (!file) return;
     const lowerName = file.name.toLowerCase();
@@ -342,72 +301,33 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
     }
     setVideoFile(file);
     setGeneratedByStudio(false);
+    setGeneratedMeta(null);
     setVideoSourceMode('file');
     setStatusAlert(null);
     setUploadProgress(null);
   };
 
-  const handleGeneratePromoVideo = async () => {
-    if (!product || isGeneratingVideo) return;
-    const chosenImages = genSelectedImages.length > 0 ? genSelectedImages : images.slice(0, 4);
-    if (chosenImages.length === 0) {
-      const msg = isKa
-        ? 'პროდუქტს არ აქვს ფოტოები ვიდეოს შესაქმნელად.'
-        : 'No product images available to generate a promo video.';
-      addToast(`⚠️ ${msg}`, 'error');
-      setStatusAlert({ type: 'error', message: msg });
-      return;
-    }
-
-    setIsGeneratingVideo(true);
-    setStatusAlert(null);
-    setUploadProgress(null);
-    setGenProgress({
-      stage: 'extracting',
-      progressPct: 5,
-      message: 'Extracting Images...',
+  const handleStudioVideoGenerated = (result: PromoVideoGenerationResult) => {
+    setVideoFile(result.file);
+    setGeneratedByStudio(true);
+    setGeneratedMeta({
+      aspectRatio: result.aspectRatio,
+      hasVoiceover: result.hasVoiceover,
+      durationSec: result.durationSec,
     });
-
-    try {
-      const result = await generateTikTokPromoVideo(
-        {
-          product,
-          selectedImages: chosenImages,
-          titleOffer: genTitleOffer,
-          priceBanner: genPriceBanner,
-          musicVibe: genMusicVibe,
-          includeWebLinkOverlay: genIncludeWebLink,
-          isKa,
-        },
-        (progress) => {
-          setGenProgress(progress);
-        }
-      );
-
-      setVideoFile(result.file);
-      setGeneratedByStudio(true);
-      setStatusAlert({
-        type: 'success',
-        message: isKa
-          ? `9:16 Short ვიდეო მზადაა (${(result.file.size / (1024 * 1024)).toFixed(2)} MB)! დააჭირეთ „YouTube Shorts-ზე ატვირთვა“.`
-          : `9:16 Shorts Video ready (${(result.file.size / (1024 * 1024)).toFixed(2)} MB, ${result.durationSec}s MP4)! Click "Publish Short to YouTube" below.`,
-      });
-      addToast(
-        isKa ? '🎬 9:16 Short ვიდეო შეიქმნა!' : '🎬 9:16 YouTube Short generated!',
-        'success'
-      );
-    } catch (err: any) {
-      const errMsg = err?.message || 'Failed to render 9:16 promo video.';
-      setGenProgress({
-        stage: 'error',
-        progressPct: 0,
-        message: errMsg,
-      });
-      setStatusAlert({ type: 'error', message: errMsg });
-      addToast(`❌ ${errMsg}`, 'error');
-    } finally {
-      setIsGeneratingVideo(false);
-    }
+    setUploadProgress(null);
+    setStatusAlert({
+      type: 'success',
+      message: isKa
+        ? `${result.aspectRatio} კომერციული ვიდეო მზადაა (${(result.file.size / (1024 * 1024)).toFixed(2)} MB)! დააჭირეთ „YouTube Shorts-ზე ატვირთვა“.`
+        : `${result.aspectRatio} Commercial Video ready (${(result.file.size / (1024 * 1024)).toFixed(2)} MB, ${result.durationSec}s MP4${result.hasVoiceover ? ' · English Voiceover + Auto-Ducked Music' : ''})! Click "Publish Short to YouTube" below.`,
+    });
+    addToast(
+      isKa
+        ? `🎬 ${result.aspectRatio} კომერციული ვიდეო შეიქმნა!`
+        : `🎬 ${result.aspectRatio} Commercial Ad Video ready!`,
+      'success'
+    );
   };
 
   const handlePublishShort = async () => {
@@ -732,187 +652,18 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
             </button>
           </div>
 
-          {/* AI Promo Video Generator Studio (Reuses tiktokVideoGenerator) */}
+          {/* Upgraded 4-Stage Commercial Video Studio */}
           {videoSourceMode === 'generator' && (
-            <div className="p-4 rounded-2xl bg-slate-950 border border-red-500/35 text-slate-100 space-y-4 shadow-lg">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-red-500/25 to-orange-500/25 border border-red-400/40 flex items-center justify-center text-red-400">
-                    <Film className="w-4 h-4" />
-                  </div>
-                  <div>
-                    <h4 className="text-xs sm:text-sm font-black text-white">
-                      {isKa ? '9:16 YouTube Shorts სტუდიო' : '9:16 YouTube Shorts Promo Studio'}
-                    </h4>
-                    <p className="text-[11px] text-slate-400">
-                      {isKa
-                        ? 'პროდუქტის ფოტოებიდან 12-წამიანი 9:16 H.264 MP4 ვიდეო მუსიკით და ანიმაციებით'
-                        : 'Generates a 12s vertical 9:16 H.264 MP4 from product photos, price & music'}
-                    </p>
-                  </div>
-                </div>
-                <span className="px-2.5 py-1 rounded-lg bg-red-500/15 border border-red-400/30 text-[10px] font-bold text-red-300">
-                  9:16 · H.264 MP4
-                </span>
-              </div>
-
-              {/* Product Images Selection Grid */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between text-xs">
-                  <span className="font-bold text-slate-200">
-                    {isKa ? 'აირჩიეთ ფოტოები სლაიდშოუსთვის' : 'Select Product Images for Slideshow'}
-                  </span>
-                  <span className="text-[11px] font-bold text-red-400 tabular-nums">
-                    {genSelectedImages.length}/{images.length} {isKa ? 'არჩეული' : 'included'}
-                  </span>
-                </div>
-                <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
-                  {images.map((url, idx) => {
-                    const checkedIdx = genSelectedImages.indexOf(url);
-                    const isChecked = checkedIdx !== -1;
-                    return (
-                      <button
-                        key={`yt-gen-img-${url}-${idx}`}
-                        type="button"
-                        onClick={() => toggleGenImage(url)}
-                        className={`relative aspect-square rounded-xl overflow-hidden border-2 transition-all cursor-pointer ${
-                          isChecked
-                            ? 'border-red-500 shadow-xs opacity-100 scale-[1.02]'
-                            : 'border-slate-700 opacity-45 hover:opacity-80'
-                        }`}
-                      >
-                        <img src={url} alt="" className="w-full h-full object-cover" />
-                        <span
-                          className={`absolute top-1 right-1 w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold ${
-                            isChecked
-                              ? 'bg-red-500 text-white'
-                              : 'bg-slate-900/80 text-slate-400 border border-slate-600'
-                          }`}
-                        >
-                          {isChecked ? <Check className="w-3 h-3 stroke-[3]" /> : ''}
-                        </span>
-                        {isChecked && (
-                          <span className="absolute bottom-1 left-1 px-1.5 py-0.5 rounded bg-slate-950/85 text-[9px] font-black text-red-300 tabular-nums">
-                            {checkedIdx === 0 ? 'Lead' : `#${checkedIdx + 1}`}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Video Title & Offer + Price Banner */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
-                <div className="sm:col-span-8 space-y-1">
-                  <label className="block text-[11px] font-bold text-slate-300">
-                    {isKa ? 'ვიდეოს სათაური და შეთავაზება' : 'Video Overlay Title & Offer'}
-                  </label>
-                  <input
-                    type="text"
-                    value={genTitleOffer}
-                    onChange={(e) => setGenTitleOffer(e.target.value)}
-                    placeholder={`🔥 Trending Tech: ${product.title}!`}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:ring-2 focus:ring-red-500 focus:outline-hidden"
-                  />
-                </div>
-                <div className="sm:col-span-4 space-y-1">
-                  <label className="block text-[11px] font-bold text-slate-300">
-                    {isKa ? 'ფასის ბანერი' : 'Price Banner'}
-                  </label>
-                  <input
-                    type="text"
-                    value={genPriceBanner}
-                    onChange={(e) => setGenPriceBanner(e.target.value)}
-                    placeholder="Only $49.99!"
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-orange-300 font-bold text-xs focus:ring-2 focus:ring-orange-500 focus:outline-hidden"
-                  />
-                </div>
-              </div>
-
-              {/* Music / Vibe + Web Link Overlay Toggle */}
-              <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                <div className="sm:col-span-6 space-y-1">
-                  <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
-                    <Music className="w-3.5 h-3.5 text-red-400" />
-                    <span>{isKa ? 'აირჩიეთ მუსიკა / სტილი' : 'Choose Music/Vibe'}</span>
-                  </label>
-                  <select
-                    value={genMusicVibe}
-                    onChange={(e) => setGenMusicVibe(e.target.value as PromoVideoVibe)}
-                    className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-100 text-xs font-semibold focus:ring-2 focus:ring-red-500 focus:outline-hidden"
-                  >
-                    {PROMO_VIBE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {isKa ? opt.labelKa : opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="sm:col-span-6 sm:pt-4">
-                  <label className="flex items-start gap-2 text-xs text-slate-200 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={genIncludeWebLink}
-                      onChange={(e) => setGenIncludeWebLink(e.target.checked)}
-                      className="mt-0.5 rounded border-slate-600 bg-slate-900 text-red-500 focus:ring-red-500"
-                    />
-                    <span className="leading-snug">
-                      {isKa
-                        ? "ვებ-ბმულის დამატება ბოლოში ('Shop at www.dbuystore.com')"
-                        : "Include Web Link Overlay ('Shop at www.dbuystore.com')"}
-                    </span>
-                  </label>
-                </div>
-              </div>
-
-              {/* Create Video CTA Button */}
-              <button
-                type="button"
-                disabled={isGeneratingVideo || genSelectedImages.length === 0}
-                onClick={handleGeneratePromoVideo}
-                className="w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm text-white bg-gradient-to-r from-[#FF0000] via-[#F97316] to-[#EF4444] hover:brightness-110 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50"
-              >
-                {isGeneratingVideo ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    <span>{genProgress?.message || 'Rendering 9:16 Video...'}</span>
-                  </>
-                ) : (
-                  <>
-                    <Film className="w-4 h-4" />
-                    <span>{isKa ? 'Short ვიდეოს შექმნა 🎬' : 'Create 9:16 Short Video 🎬'}</span>
-                  </>
-                )}
-              </button>
-
-              {/* Render Progress Bar */}
-              {(isGeneratingVideo || (genProgress && genProgress.stage !== 'error')) && genProgress && (
-                <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
-                  <div className="flex items-center justify-between text-xs font-bold">
-                    <span className="flex items-center gap-2 text-red-300">
-                      {isGeneratingVideo ? (
-                        <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
-                      ) : (
-                        <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                      )}
-                      <span>{genProgress.message}</span>
-                    </span>
-                    <span className="text-orange-300 tabular-nums">{genProgress.progressPct}%</span>
-                  </div>
-                  <div className="w-full h-2 rounded-full bg-slate-800 overflow-hidden">
-                    <div
-                      className="h-full bg-gradient-to-r from-[#FF0000] via-[#F97316] to-[#F59E0B] transition-all duration-200"
-                      style={{ width: `${Math.max(4, Math.min(100, genProgress.progressPct))}%` }}
-                    />
-                  </div>
-                  {genProgress.detail && (
-                    <div className="text-[11px] text-slate-400 truncate">{genProgress.detail}</div>
-                  )}
-                </div>
-              )}
-            </div>
+            <CommercialVideoStudio
+              product={product}
+              images={images}
+              accentTheme="red"
+              defaultAspectRatio="9:16"
+              isKa={isKa}
+              onVideoGenerated={handleStudioVideoGenerated}
+              onError={(msg) => setStatusAlert({ type: 'error', message: msg })}
+              onToast={addToast}
+            />
           )}
 
           {/* MP4 Video Picker & Preview */}
@@ -945,7 +696,11 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
               </button>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
-                <div className="sm:col-span-5 rounded-xl overflow-hidden bg-black aspect-[9/16] max-h-60 mx-auto w-full flex items-center justify-center border border-slate-700">
+                <div
+                  className={`sm:col-span-5 rounded-xl overflow-hidden bg-black ${
+                    generatedMeta?.aspectRatio === '16:9' ? 'aspect-video' : 'aspect-[9/16] max-h-60'
+                  } mx-auto w-full flex items-center justify-center border border-slate-700`}
+                >
                   {videoPreviewUrl ? (
                     <video
                       key={videoPreviewUrl}
@@ -962,7 +717,10 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
                   {generatedByStudio && (
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-500/15 text-red-600 dark:text-red-300 border border-red-500/30 text-[10px] font-extrabold">
                       <Sparkles className="w-3 h-3" />
-                      <span>AI Generated 9:16 Short</span>
+                      <span>
+                        AI Commercial {generatedMeta?.aspectRatio || '9:16'}
+                        {generatedMeta?.hasVoiceover ? ' · Voiceover + Auto-Ducking' : ''}
+                      </span>
                     </span>
                   )}
                   <div className="text-xs font-bold text-slate-900 dark:text-white truncate">
@@ -1205,7 +963,7 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
         <div className="p-5 border-t border-slate-100 dark:border-slate-800">
           <button
             type="button"
-            disabled={isUploading || isGeneratingVideo || !ytConnection?.connected || !videoFile}
+            disabled={isUploading || !ytConnection?.connected || !videoFile}
             onClick={handlePublishShort}
             className="w-full py-4 text-white font-bold rounded-2xl flex items-center justify-center gap-2.5 shadow-lg hover:brightness-105 active:scale-[0.99] transition-all cursor-pointer text-sm sm:text-base disabled:opacity-50 disabled:cursor-not-allowed"
             style={{

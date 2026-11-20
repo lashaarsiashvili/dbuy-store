@@ -410,8 +410,14 @@ export async function startPayPalV6ApplePayCheckout(options: ProcessPaymentOptio
   }
 
   const ApplePaySession = (window as any).ApplePaySession;
-  if (!ApplePaySession || !ApplePaySession.canMakePayments()) {
-    onError(new Error('Apple Pay is not supported or active on this device'));
+  let canMakePayments = false;
+  try {
+    canMakePayments = Boolean(ApplePaySession && ApplePaySession.canMakePayments());
+  } catch {
+    canMakePayments = false;
+  }
+  if (!canMakePayments) {
+    onError(new Error('Apple Pay is not supported or active in this context'));
     return;
   }
 

@@ -122,12 +122,15 @@ export const CheckoutModal: React.FC = () => {
     name: "",
     smsCode: "",
   });
-  const isApplePaySupported =
-    typeof window !== "undefined" &&
-    Boolean(
-      (window as any).ApplePaySession &&
-        (window as any).ApplePaySession.canMakePayments(),
-    );
+  const isApplePaySupported = (() => {
+    if (typeof window === "undefined") return false;
+    try {
+      const ApplePaySession = (window as any).ApplePaySession;
+      return Boolean(ApplePaySession && ApplePaySession.canMakePayments());
+    } catch {
+      return false;
+    }
+  })();
 
   // Form State
   const [formData, setFormData] = useState({

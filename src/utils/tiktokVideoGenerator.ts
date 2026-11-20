@@ -1,321 +1,411 @@
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer';
 import { Product } from '../types';
-import { extractTopProductHighlights } from './instagramApi';
+import {
+  buildCombinedActionVideoPrompt,
+  COMMERCIAL_ASPECT_RATIO_OPTIONS,
+  COMMERCIAL_MUSIC_MOOD_OPTIONS,
+  COMMERCIAL_VISUAL_THEME_OPTIONS,
+  COMMERCIAL_VOICE_ACCENT_OPTIONS,
+  COMMERCIAL_VOICE_TONE_OPTIONS,
+  CommercialAspectRatio,
+  CommercialMusicMood,
+  CommercialScenePlan,
+  CommercialVideoPlan,
+  CommercialVisualTheme,
+  CommercialVoiceAccent,
+  CommercialVoiceoverResult,
+  CommercialVoiceTone,
+  ENFORCED_NEGATIVE_PROMPT,
+  MANDATORY_STYLE_MODIFIERS,
+  optimizeCommercialVisualPrompt,
+  sanitizeCommercialCopy,
+} from './videoPromptOptimizer';
 
-export type PromoVideoVibe = 'upbeat' | 'tech' | 'cinematic' | 'cyberpunk';
+export {
+  COMMERCIAL_ASPECT_RATIO_OPTIONS,
+  COMMERCIAL_MUSIC_MOOD_OPTIONS,
+  COMMERCIAL_VISUAL_THEME_OPTIONS,
+  COMMERCIAL_VOICE_ACCENT_OPTIONS,
+  COMMERCIAL_VOICE_TONE_OPTIONS,
+  ENFORCED_NEGATIVE_PROMPT,
+  MANDATORY_STYLE_MODIFIERS,
+  optimizeCommercialVisualPrompt,
+  sanitizeCommercialCopy,
+};
 
-export type PromoVideoStage =
-  | 'extracting'
-  | 'music_transitions'
-  | 'finalizing'
-  | 'complete'
-  | 'error';
+export type {
+  CommercialAspectRatio,
+  CommercialMusicMood,
+  CommercialScenePlan,
+  CommercialVideoPlan,
+  CommercialVisualTheme,
+  CommercialVoiceAccent,
+  CommercialVoiceoverResult,
+  CommercialVoiceTone,
+};
+
+export type PromoVideoVibe =
+  | 'upbeat_tech'
+  | 'modern_corporate'
+  | 'chill_lofi'
+  | 'luxury_ambient'
+  | 'upbeat'
+  | 'tech'
+  | 'cinematic'
+  | 'cyberpunk';
+
+export interface GeneratedActionVideoClip {
+  blob: Blob;
+  mimeType: string;
+  videoUrl?: string;
+}
+
+export interface PromoVideoGeneratorOptions {
+  product: Product;
+  selectedImages: string[];
+  titleOffer?: string;
+  priceBanner?: string;
+  musicVibe?: PromoVideoVibe;
+  musicMood?: CommercialMusicMood;
+  visualTheme?: CommercialVisualTheme;
+  aspectRatio?: CommercialAspectRatio;
+  includeWebLinkOverlay?: boolean;
+  isKa?: boolean;
+  durationSec?: number;
+  scenes?: CommercialScenePlan[];
+  combinedActionPrompt?: string;
+  voiceoverAudioBase64?: string;
+  voiceoverMimeType?: string;
+  voiceoverScript?: string;
+  generatedVideoBlob?: Blob;
+  generatedVideoBase64?: string;
+  generatedVideoMimeType?: string;
+}
 
 export interface PromoVideoGenerationProgress {
-  stage: PromoVideoStage;
+  stage:
+    | 'planning'
+    | 'voiceover'
+    | 'video_ai'
+    | 'extracting'
+    | 'audio'
+    | 'rendering'
+    | 'encoding'
+    | 'done'
+    | 'error';
   progressPct: number;
   message: string;
   detail?: string;
 }
 
-export interface PromoVideoOptions {
-  product: Product;
-  selectedImages: string[];
-  titleOffer: string;
-  priceBanner: string;
-  musicVibe: PromoVideoVibe;
-  includeWebLinkOverlay: boolean;
-  isKa?: boolean;
-}
-
-export interface GeneratedPromoVideoResult {
+export interface PromoVideoGenerationResult {
   file: File;
   durationSec: number;
   width: number;
   height: number;
-  hasAudio: boolean;
-  rendererUsed: 'webcodecs-mp4' | 'mediarecorder-mp4';
+  aspectRatio: CommercialAspectRatio;
+  encoderUsed: 'webcodecs-mp4' | 'mediarecorder-fallback';
+  hasVoiceover: boolean;
+  autoDucked: boolean;
 }
-
-const VIDEO_WIDTH = 720;
-const VIDEO_HEIGHT = 1280;
-const FPS = 30;
-const TOTAL_DURATION_SEC = 12; // 12 seconds (ideal 10-15s TikTok pacing)
-const TOTAL_FRAMES = FPS * TOTAL_DURATION_SEC; // 360 frames
-const AUDIO_SAMPLE_RATE = 48000;
 
 export const PROMO_VIBE_OPTIONS: Array<{
-  value: PromoVideoVibe;
+  value: CommercialMusicMood;
   label: string;
   labelKa: string;
-  bpm: number;
 }> = [
-  {
-    value: 'upbeat',
-    label: 'Upbeat & Energetic (124 BPM)',
-    labelKa: 'ენერგიული და დინამიური (124 BPM)',
-    bpm: 124,
-  },
-  {
-    value: 'tech',
-    label: 'Modern Tech (116 BPM)',
-    labelKa: 'თანამედროვე ტექნოლოგიური (116 BPM)',
-    bpm: 116,
-  },
-  {
-    value: 'cinematic',
-    label: 'Cinematic Epic (92 BPM)',
-    labelKa: 'კინემატოგრაფიული (92 BPM)',
-    bpm: 92,
-  },
-  {
-    value: 'cyberpunk',
-    label: 'Cyberpunk / Electronic (128 BPM)',
-    labelKa: 'კიბერპანკი / ელექტრონული (128 BPM)',
-    bpm: 128,
-  },
+  { value: 'upbeat_tech', label: 'Upbeat Tech (Modern)', labelKa: 'Upbeat Tech (თანამედროვე)' },
+  { value: 'modern_corporate', label: 'Modern Corporate (Polished)', labelKa: 'Modern Corporate (ბიზნეს)' },
+  { value: 'chill_lofi', label: 'Chill Lo-Fi (Warm Studio)', labelKa: 'Chill Lo-Fi (მშვიდი სტუდიო)' },
+  { value: 'luxury_ambient', label: 'Luxury Ambient (Flagship)', labelKa: 'Luxury Ambient (პრემიუმ)' },
 ];
 
-function clamp01(val: number): number {
-  return Math.max(0, Math.min(1, val));
-}
+const FPS = 30;
+const SAMPLE_RATE = 44100;
+const CHANNELS = 2;
 
-function easeOutCubic(t: number): number {
-  const x = clamp01(t);
-  return 1 - Math.pow(1 - x, 3);
-}
+// ============================================================================
+// Stage 1 & 2 Client Helper — Server-Side Product-Bound Script & Scene Planner
+// ============================================================================
+export async function planCommercialVideoAd(params: {
+  product: Product;
+  visualTheme: CommercialVisualTheme;
+  aspectRatio: CommercialAspectRatio;
+  voiceTone: CommercialVoiceTone;
+  musicMood: CommercialMusicMood;
+}): Promise<CommercialVideoPlan> {
+  const response = await fetch('/api/video-ad/plan', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      product: {
+        id: params.product.id,
+        title: params.product.title,
+        description: params.product.description || '',
+        features: params.product.features || [],
+        price: params.product.price,
+        origPrice: params.product.origPrice,
+        category: params.product.category,
+        images: [params.product.image, ...(params.product.images || [])].filter(Boolean).slice(0, 6),
+      },
+      visualTheme: params.visualTheme,
+      aspectRatio: params.aspectRatio,
+      voiceTone: params.voiceTone,
+      musicMood: params.musicMood,
+    }),
+  });
 
-function easeInOutQuad(t: number): number {
-  const x = clamp01(t);
-  return x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2, 2) / 2;
-}
-
-function formatPriceAmount(value: number): string {
-  const n = Math.max(0, Number(value) || 0);
-  const rounded = Math.round(n * 100) / 100;
-  return Number.isInteger(rounded) ? String(rounded) : rounded.toFixed(2);
-}
-
-function buildUrlCandidates(rawUrl: string): string[] {
-  const clean = (rawUrl || '').trim();
-  if (!clean) return [];
-  if (clean.startsWith('data:')) return [clean];
-
-  const candidates: string[] = [];
-
-  // Same-origin /uploads path resolves cleanly with zero CORS issues in preview or live site
-  if (clean.includes('/uploads/') && typeof window !== 'undefined') {
-    const uploadPath = clean.substring(clean.indexOf('/uploads/'));
-    candidates.push(`${window.location.origin}${uploadPath}`);
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.success || !data?.plan) {
+    throw new Error(
+      data?.error || `Failed to generate AI commercial script (HTTP ${response.status}).`
+    );
   }
-
-  candidates.push(clean);
-
-  // Guaranteed CORS-enabled image proxy fallback (handles .webp, .avif, and cross-origin URLs)
-  const lower = clean.toLowerCase().split('?')[0];
-  if (!lower.startsWith('data:')) {
-    const absUrl = clean.startsWith('/') ? `https://www.dbuystore.com${clean}` : clean;
-    candidates.push(`https://wsrv.nl/?url=${encodeURIComponent(absUrl)}&output=jpg&q=92`);
-  }
-
-  return Array.from(new Set(candidates));
+  return data.plan as CommercialVideoPlan;
 }
 
-async function loadImageBitmapClean(rawUrl: string): Promise<HTMLImageElement | ImageBitmap | null> {
-  const candidates = buildUrlCandidates(rawUrl);
-  for (const url of candidates) {
-    try {
-      const img = await new Promise<HTMLImageElement>((resolve, reject) => {
-        const el = new Image();
-        if (!url.startsWith('data:')) {
-          el.crossOrigin = 'anonymous';
-        }
-        el.onload = () => resolve(el);
-        el.onerror = () => reject(new Error(`Image load error for ${url}`));
-        el.src = url;
-      });
-      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-        return img;
-      }
-    } catch {
-      // Try next candidate
-    }
+// ============================================================================
+// Stage 3 Client Helper — Server-Side Gemini Studio English Voiceover (TTS)
+// ============================================================================
+export async function generateCommercialVoiceover(params: {
+  script: string;
+  voiceTone: CommercialVoiceTone;
+  accent: CommercialVoiceAccent;
+}): Promise<CommercialVoiceoverResult> {
+  const response = await fetch('/api/video-ad/voiceover', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      script: sanitizeCommercialCopy(params.script),
+      voiceTone: params.voiceTone,
+      accent: params.accent,
+    }),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data?.success || !data?.voiceover?.audioBase64) {
+    throw new Error(
+      data?.error || `Failed to synthesize English voiceover (HTTP ${response.status}).`
+    );
   }
-  return null;
+  return data.voiceover as CommercialVoiceoverResult;
 }
 
-async function loadAllSelectedImages(urls: string[]): Promise<Array<HTMLImageElement | ImageBitmap>> {
-  const loaded: Array<HTMLImageElement | ImageBitmap> = [];
-  for (const url of urls) {
-    const img = await loadImageBitmapClean(url);
-    if (img) loaded.push(img);
+async function safeParseJsonResponse(
+  resp: Response,
+  fallbackLabel: string
+): Promise<any> {
+  const rawText = await resp.text();
+  if (!rawText) {
+    return {
+      success: false,
+      error: `${fallbackLabel} returned an empty response (HTTP ${resp.status}).`,
+    };
   }
-  return loaded;
-}
-
-/**
- * Generates a vibrant, copyright-free synthesized stereo AudioBuffer tuned to the selected vibe.
- */
-async function synthesizePromoAudioTrack(
-  vibe: PromoVideoVibe,
-  durationSec: number
-): Promise<AudioBuffer | null> {
-  if (typeof OfflineAudioContext === 'undefined') return null;
-
   try {
-    const sampleCount = Math.floor(AUDIO_SAMPLE_RATE * durationSec);
-    const ctx = new OfflineAudioContext(2, sampleCount, AUDIO_SAMPLE_RATE);
-
-    const master = ctx.createGain();
-    master.gain.setValueAtTime(0.01, 0);
-    master.gain.linearRampToValueAtTime(0.75, 0.35);
-    master.gain.setValueAtTime(0.75, Math.max(0.5, durationSec - 0.8));
-    master.gain.linearRampToValueAtTime(0.001, durationSec);
-    master.connect(ctx.destination);
-
-    // Pre-generate short white-noise buffer for hi-hats / risers
-    const noiseLen = Math.floor(AUDIO_SAMPLE_RATE * 0.25);
-    const noiseBuf = ctx.createBuffer(1, noiseLen, AUDIO_SAMPLE_RATE);
-    const noiseData = noiseBuf.getChannelData(0);
-    for (let i = 0; i < noiseLen; i++) {
-      noiseData[i] = Math.random() * 2 - 1;
-    }
-
-    const triggerKick = (time: number, punchFreq = 140) => {
-      const osc = ctx.createOscillator();
-      const gain = ctx.createGain();
-      osc.type = 'sine';
-      osc.frequency.setValueAtTime(punchFreq, time);
-      osc.frequency.exponentialRampToValueAtTime(42, time + 0.14);
-      gain.gain.setValueAtTime(0.55, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
-      osc.connect(gain);
-      gain.connect(master);
-      osc.start(time);
-      osc.stop(time + 0.2);
-    };
-
-    const triggerHat = (time: number, vol = 0.12) => {
-      const src = ctx.createBufferSource();
-      src.buffer = noiseBuf;
-      const filter = ctx.createBiquadFilter();
-      filter.type = 'highpass';
-      filter.frequency.value = 6500;
-      const gain = ctx.createGain();
-      gain.gain.setValueAtTime(vol, time);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.05);
-      src.connect(filter);
-      filter.connect(gain);
-      gain.connect(master);
-      src.start(time);
-      src.stop(time + 0.06);
-    };
-
-    const triggerSynth = (
-      time: number,
-      freq: number,
-      dur: number,
-      type: OscillatorType,
-      vol: number,
-      cutoff = 2400
-    ) => {
-      const osc = ctx.createOscillator();
-      const filter = ctx.createBiquadFilter();
-      const gain = ctx.createGain();
-      osc.type = type;
-      osc.frequency.setValueAtTime(freq, time);
-      filter.type = 'lowpass';
-      filter.frequency.setValueAtTime(cutoff, time);
-      filter.frequency.exponentialRampToValueAtTime(Math.max(400, cutoff * 0.45), time + dur);
-      gain.gain.setValueAtTime(0.001, time);
-      gain.gain.linearRampToValueAtTime(vol, time + 0.018);
-      gain.gain.exponentialRampToValueAtTime(0.001, time + dur);
-      osc.connect(filter);
-      filter.connect(gain);
-      gain.connect(master);
-      osc.start(time);
-      osc.stop(time + dur + 0.02);
-    };
-
-    const bpm =
-      vibe === 'cyberpunk' ? 128 : vibe === 'upbeat' ? 124 : vibe === 'tech' ? 116 : 92;
-    const beatDur = 60 / bpm;
-    const stepDur = beatDur / 2; // 8th notes
-    const totalSteps = Math.floor(durationSec / stepDur);
-
-    const scales: Record<PromoVideoVibe, { bass: number[]; lead: number[] }> = {
-      upbeat: {
-        bass: [130.81, 146.83, 164.81, 196.0], // C3 D3 E3 G3
-        lead: [523.25, 659.25, 783.99, 1046.5, 783.99, 659.25, 587.33, 659.25],
-      },
-      tech: {
-        bass: [110.0, 110.0, 130.81, 146.83], // A2 C3 D3
-        lead: [440.0, 523.25, 659.25, 523.25, 880.0, 659.25, 587.33, 523.25],
-      },
-      cinematic: {
-        bass: [82.41, 98.0, 110.0, 73.42], // E2 G2 A2 D2
-        lead: [329.63, 392.0, 493.88, 587.33, 659.25, 587.33, 493.88, 392.0],
-      },
-      cyberpunk: {
-        bass: [98.0, 98.0, 116.54, 130.81], // G2 Bb2 C3
-        lead: [392.0, 466.16, 523.25, 622.25, 783.99, 622.25, 523.25, 466.16],
-      },
-    };
-
-    const palette = scales[vibe];
-
-    for (let s = 0; s < totalSteps; s++) {
-      const t = s * stepDur;
-      const barIdx = Math.floor(s / 8) % palette.bass.length;
-      const bassFreq = palette.bass[barIdx];
-      const leadFreq = palette.lead[s % palette.lead.length];
-
-      if (vibe === 'cinematic') {
-        if (s % 8 === 0) {
-          triggerKick(t, 105);
-          triggerSynth(t, bassFreq, stepDur * 7.5, 'sawtooth', 0.22, 900);
-          triggerSynth(t, bassFreq * 2, stepDur * 7.5, 'triangle', 0.14, 1400);
-        }
-        if (s % 2 === 0) {
-          triggerSynth(t, leadFreq, stepDur * 1.9, 'sine', 0.14, 2200);
-        }
-      } else if (vibe === 'cyberpunk') {
-        if (s % 2 === 0) triggerKick(t, 155);
-        if (s % 2 === 1) triggerHat(t, 0.16);
-        triggerSynth(t, bassFreq, stepDur * 0.85, 'sawtooth', 0.22, 1150);
-        triggerSynth(t, leadFreq, stepDur * 0.72, 'square', 0.11, 2600);
-      } else if (vibe === 'tech') {
-        if (s % 2 === 0) triggerKick(t, 130);
-        if (s % 2 === 1) triggerHat(t, 0.09);
-        if (s % 2 === 0) {
-          triggerSynth(t, bassFreq, stepDur * 1.5, 'triangle', 0.24, 950);
-        }
-        triggerSynth(t, leadFreq, stepDur * 0.65, 'sine', 0.14, 3000);
-      } else {
-        // upbeat
-        if (s % 2 === 0) triggerKick(t, 145);
-        triggerHat(t, s % 2 === 1 ? 0.14 : 0.06);
-        if (s % 2 === 0) {
-          triggerSynth(t, bassFreq, stepDur * 1.4, 'sawtooth', 0.19, 1100);
-        }
-        triggerSynth(t, leadFreq, stepDur * 0.78, 'triangle', 0.15, 2900);
-      }
-    }
-
-    // Subtle impact chime at major slide marks (3.0s, 6.0s, 9.0s)
-    [3.0, 6.0, 9.0].forEach((mark) => {
-      if (mark < durationSec - 0.5) {
-        triggerSynth(mark, 880, 0.45, 'sine', 0.14, 4200);
-      }
-    });
-
-    return await ctx.startRendering();
+    return JSON.parse(rawText);
   } catch {
-    return null;
+    const snippet = rawText.replace(/\s+/g, ' ').slice(0, 140);
+    return {
+      success: false,
+      error: `${fallbackLabel} returned a non-JSON payload (HTTP ${resp.status}): ${snippet}`,
+    };
   }
 }
 
-function drawRoundedRectPath(
+async function fetchActionVideoClipBlob(data: any): Promise<GeneratedActionVideoClip> {
+  const mimeType = String(data?.mimeType || 'video/mp4');
+  if (typeof data?.videoUrl === 'string' && data.videoUrl) {
+    const videoResp = await fetch(data.videoUrl);
+    if (!videoResp.ok) {
+      const errJson = await videoResp.json().catch(() => ({}));
+      throw new Error(
+        errJson?.error || `Failed to download rendered AI video clip (HTTP ${videoResp.status}).`
+      );
+    }
+    const contentType = (videoResp.headers.get('content-type') || mimeType).split(';')[0].trim();
+    if (contentType.includes('application/json') || contentType.includes('text/html')) {
+      throw new Error('Video download endpoint returned an unexpected non-video response.');
+    }
+    const blob = await videoResp.blob();
+    if (!blob || blob.size === 0) {
+      throw new Error('Downloaded AI video clip is empty.');
+    }
+    return {
+      blob: blob.type ? blob : new Blob([blob], { type: mimeType }),
+      mimeType: blob.type || mimeType,
+      videoUrl: data.videoUrl,
+    };
+  }
+
+  if (typeof data?.videoBase64 === 'string' && data.videoBase64) {
+    const buf = base64ToArrayBuffer(data.videoBase64);
+    return {
+      blob: new Blob([buf], { type: mimeType }),
+      mimeType,
+    };
+  }
+
+  throw new Error('Completed AI video job did not include a downloadable video stream.');
+}
+
+// ============================================================================
+// Stage 2B Client Helper — Reference-Guided Live-Action AI Video (Omni Flash)
+// ============================================================================
+export async function generateReferenceGuidedActionVideo(
+  params: {
+    product: Product;
+    referenceImages: string[];
+    scenes: CommercialScenePlan[];
+    combinedActionPrompt?: string;
+    visualTheme: CommercialVisualTheme;
+    aspectRatio: CommercialAspectRatio;
+  },
+  onProgress?: (progress: PromoVideoGenerationProgress) => void
+): Promise<GeneratedActionVideoClip> {
+  onProgress?.({
+    stage: 'video_ai',
+    progressPct: 16,
+    message: 'Generating Practical In-Use Action Video (AI)...',
+    detail: `Sending ${Math.min(4, params.referenceImages.length)} product reference image(s) to Gemini Omni Video`,
+  });
+
+  const startResp = await fetch('/api/video-ad/generate-video', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      product: {
+        id: params.product.id,
+        title: params.product.title,
+        description: params.product.description || '',
+        features: params.product.features || [],
+        category: params.product.category,
+      },
+      referenceImages: params.referenceImages.slice(0, 4),
+      scenes: params.scenes,
+      combinedActionPrompt: params.combinedActionPrompt,
+      visualTheme: params.visualTheme,
+      aspectRatio: params.aspectRatio,
+    }),
+  });
+
+  const startData = await safeParseJsonResponse(startResp, 'Start AI video generation');
+  if (!startResp.ok || !startData?.success) {
+    throw new Error(
+      startData?.error || `Failed to start reference-guided video generation (HTTP ${startResp.status}).`
+    );
+  }
+
+  if (startData.status === 'completed' && (startData.videoUrl || startData.videoBase64)) {
+    return fetchActionVideoClipBlob(startData);
+  }
+
+  const interactionId = String(startData.interactionId || '').trim();
+  if (!interactionId) {
+    throw new Error('Video generation did not return a valid interaction ID.');
+  }
+
+  const maxAttempts = 80; // ~4.5 minutes max polling
+  let transientNetworkErrors = 0;
+
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await new Promise((r) => setTimeout(r, 3200));
+
+    let pollResp: Response;
+    try {
+      pollResp = await fetch(
+        `/api/video-ad/generate-video?id=${encodeURIComponent(interactionId)}`
+      );
+      transientNetworkErrors = 0;
+    } catch (netErr: any) {
+      transientNetworkErrors++;
+      if (transientNetworkErrors <= 2) continue;
+      throw new Error(netErr?.message || 'Network error while polling AI video generation.');
+    }
+
+    const pollData = await safeParseJsonResponse(pollResp, 'Poll AI video generation');
+
+    if (!pollResp.ok || !pollData?.success) {
+      throw new Error(
+        pollData?.error || `AI video generation failed (HTTP ${pollResp.status}).`
+      );
+    }
+
+    if (pollData.status === 'completed' && (pollData.videoUrl || pollData.videoBase64)) {
+      onProgress?.({
+        stage: 'video_ai',
+        progressPct: 45,
+        message: 'Downloading Live-Action Product Video...',
+        detail: 'Preparing voiceover audio mix & commercial overlays...',
+      });
+      const clip = await fetchActionVideoClipBlob(pollData);
+      onProgress?.({
+        stage: 'video_ai',
+        progressPct: 48,
+        message: 'Live-Action Product Video Ready!',
+        detail: 'Preparing voiceover audio mix & commercial overlays...',
+      });
+      return clip;
+    }
+
+    const simulatedPct = Math.min(44, Math.round(18 + (attempt / maxAttempts) * 26));
+    onProgress?.({
+      stage: 'video_ai',
+      progressPct: simulatedPct,
+      message: 'Rendering Hands-On Product Action Video...',
+      detail: `Rendering real-world usage scenes for ${sanitizeCommercialCopy(params.product.title).slice(0, 40)} (${Math.round((attempt + 1) * 3.2)}s elapsed)`,
+    });
+  }
+
+  throw new Error('AI video generation timed out. Please try again.');
+}
+
+// ============================================================================
+// Utilities
+// ============================================================================
+function normalizeMusicMood(mood?: CommercialMusicMood, legacyVibe?: PromoVideoVibe): CommercialMusicMood {
+  const candidate = mood || legacyVibe;
+  if (
+    candidate === 'upbeat_tech' ||
+    candidate === 'modern_corporate' ||
+    candidate === 'chill_lofi' ||
+    candidate === 'luxury_ambient'
+  ) {
+    return candidate;
+  }
+  if (candidate === 'tech' || candidate === 'cyberpunk') return 'upbeat_tech';
+  if (candidate === 'cinematic') return 'luxury_ambient';
+  if (candidate === 'upbeat') return 'modern_corporate';
+  return 'upbeat_tech';
+}
+
+function getDimensionsForAspectRatio(aspectRatio: CommercialAspectRatio): { width: number; height: number } {
+  return aspectRatio === '16:9'
+    ? { width: 1280, height: 720 }
+    : { width: 720, height: 1280 };
+}
+
+function clamp(v: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, v));
+}
+
+function easeOutCubic(x: number): number {
+  const t = clamp(x, 0, 1);
+  return 1 - Math.pow(1 - t, 3);
+}
+
+function base64ToArrayBuffer(base64: string): ArrayBuffer {
+  const clean = base64.includes(',') ? base64.split(',')[1] : base64;
+  const binary = atob(clean);
+  const len = binary.length;
+  const bytes = new Uint8Array(len);
+  for (let i = 0; i < len; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+  return bytes.buffer;
+}
+
+function drawRoundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
@@ -337,7 +427,7 @@ function wrapTextLines(
   ctx: CanvasRenderingContext2D,
   text: string,
   maxWidth: number,
-  maxLines = 2
+  maxLines: number
 ): string[] {
   const words = (text || '').trim().split(/\s+/).filter(Boolean);
   if (words.length === 0) return [];
@@ -357,936 +447,1270 @@ function wrapTextLines(
   if (current && lines.length < maxLines) {
     lines.push(current);
   }
-  // Truncate final line cleanly if overflowing
   if (lines.length === maxLines) {
     let last = lines[maxLines - 1];
     while (ctx.measureText(last).width > maxWidth && last.length > 4) {
-      last = `${last.slice(0, -2)}…`;
+      last = last.slice(0, -2) + '…';
     }
     lines[maxLines - 1] = last;
   }
   return lines;
 }
 
-function drawContainCoverImageCard(
-  ctx: CanvasRenderingContext2D,
-  img: HTMLImageElement | ImageBitmap,
-  boxX: number,
-  boxY: number,
-  boxW: number,
-  boxH: number,
-  scale: number,
-  panX: number,
-  panY: number,
-  alpha: number
-) {
-  if (alpha <= 0.01) return;
-  const imgW = img instanceof HTMLImageElement ? img.naturalWidth : img.width;
-  const imgH = img instanceof HTMLImageElement ? img.naturalHeight : img.height;
-  if (!imgW || !imgH) return;
+function buildProductBoundDefaultScenes(
+  product: Product,
+  visualTheme: CommercialVisualTheme = 'minimalist_studio'
+): CommercialScenePlan[] {
+  const cleanTitle = sanitizeCommercialCopy(product.title || 'Featured Product');
+  const firstFeature = sanitizeCommercialCopy(
+    product.features?.[0] || product.description?.split(/[.!?]/)[0] || cleanTitle
+  ).slice(0, 80);
+  const secondFeature = sanitizeCommercialCopy(
+    product.features?.[1] || `Designed for effortless everyday use`
+  ).slice(0, 80);
 
-  ctx.save();
-  ctx.globalAlpha = clamp01(alpha);
-
-  // Glowing outer frame
-  ctx.shadowColor = 'rgba(25, 181, 254, 0.45)';
-  ctx.shadowBlur = 34;
-  drawRoundedRectPath(ctx, boxX, boxY, boxW, boxH, 36);
-  ctx.fillStyle = '#ffffff';
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  // Clip image inside crisp rounded white studio card
-  ctx.save();
-  drawRoundedRectPath(ctx, boxX + 4, boxY + 4, boxW - 8, boxH - 8, 32);
-  ctx.clip();
-  ctx.fillStyle = '#f8fafc';
-  ctx.fillRect(boxX, boxY, boxW, boxH);
-
-  // Fit inside box cleanly without cutting product details, then apply subtle Ken Burns zoom/pan
-  const innerPad = 24;
-  const availW = boxW - innerPad * 2;
-  const availH = boxH - innerPad * 2;
-  const baseRatio = Math.min(availW / imgW, availH / imgH);
-  const drawW = imgW * baseRatio * scale;
-  const drawH = imgH * baseRatio * scale;
-  const dx = boxX + (boxW - drawW) / 2 + panX;
-  const dy = boxY + (boxH - drawH) / 2 + panY;
-
-  ctx.drawImage(img, dx, dy, drawW, drawH);
-  ctx.restore();
-
-  // Neon cyan border accent
-  drawRoundedRectPath(ctx, boxX, boxY, boxW, boxH, 36);
-  ctx.lineWidth = 3;
-  const borderGrad = ctx.createLinearGradient(boxX, boxY, boxX + boxW, boxY + boxH);
-  borderGrad.addColorStop(0, '#25F4EE');
-  borderGrad.addColorStop(0.5, '#19B5FE');
-  borderGrad.addColorStop(1, '#F97316');
-  ctx.strokeStyle = borderGrad;
-  ctx.stroke();
-
-  ctx.restore();
+  return [
+    {
+      sceneNumber: 1,
+      role: 'hook',
+      roleLabel: 'Problem / Everyday Context',
+      durationSec: 3.5,
+      headline: cleanTitle.split(/\s+/).slice(0, 4).join(' '),
+      subheadline: firstFeature,
+      voiceoverLine: `Meet the ${cleanTitle}.`,
+      visualPrompt: optimizeCommercialVisualPrompt(
+        `Relatable modern desk problem where ${cleanTitle} is needed`,
+        visualTheme,
+        cleanTitle
+      ),
+      negativePrompt: ENFORCED_NEGATIVE_PROMPT,
+      cameraMotion: 'slow_zoom_in',
+    },
+    {
+      sceneNumber: 2,
+      role: 'showcase',
+      roleLabel: 'Hands-On Practical Action',
+      durationSec: 4.5,
+      headline: 'Effortless In-Use Control',
+      subheadline: secondFeature,
+      voiceoverLine: `Built with ${firstFeature.charAt(0).toLowerCase()}${firstFeature.slice(1)}.`,
+      visualPrompt: optimizeCommercialVisualPrompt(
+        `Natural human hands smoothly using ${cleanTitle} in a modern well-lit workspace`,
+        visualTheme,
+        cleanTitle
+      ),
+      negativePrompt: ENFORCED_NEGATIVE_PROMPT,
+      cameraMotion: 'smooth_pan_right',
+    },
+    {
+      sceneNumber: 3,
+      role: 'benefit',
+      roleLabel: 'Key Feature in Action',
+      durationSec: 4,
+      headline: 'Built For Daily Workflow',
+      subheadline: firstFeature,
+      voiceoverLine: `Enjoy ${secondFeature.charAt(0).toLowerCase()}${secondFeature.slice(1)}.`,
+      visualPrompt: optimizeCommercialVisualPrompt(
+        `Hands-on practical demonstration of ${cleanTitle} core feature in real time`,
+        visualTheme,
+        cleanTitle
+      ),
+      negativePrompt: ENFORCED_NEGATIVE_PROMPT,
+      cameraMotion: 'macro_reveal',
+    },
+    {
+      sceneNumber: 4,
+      role: 'cta',
+      roleLabel: 'Everyday Setting CTA',
+      durationSec: 3,
+      headline: 'Available at DBUY Store',
+      subheadline: `Get the ${cleanTitle.split(/\s+/).slice(0, 3).join(' ')} today`,
+      voiceoverLine: `Shop the ${cleanTitle} today at DBUY Store.`,
+      visualPrompt: optimizeCommercialVisualPrompt(
+        `Clean closing shot of ${cleanTitle} in its ideal everyday setup`,
+        visualTheme,
+        cleanTitle
+      ),
+      negativePrompt: ENFORCED_NEGATIVE_PROMPT,
+      cameraMotion: 'gentle_orbit',
+    },
+  ];
 }
 
-function drawDbuyBagLogo(ctx: CanvasRenderingContext2D, cx: number, cy: number, size: number) {
+// ============================================================================
+// Stage 3: Studio Music Synthesis + RMS Auto-Ducking Mixer (15-20% bed)
+// ============================================================================
+function renderMusicMoodIntoGraph(
+  ctx: OfflineAudioContext,
+  destination: AudioNode,
+  durationSec: number,
+  mood: CommercialMusicMood
+) {
+  const bpmMap: Record<CommercialMusicMood, number> = {
+    upbeat_tech: 118,
+    modern_corporate: 108,
+    chill_lofi: 86,
+    luxury_ambient: 76,
+  };
+  const bpm = bpmMap[mood];
+  const beatDur = 60 / bpm;
+  const barDur = beatDur * 4;
+
+  const chordSets: Record<CommercialMusicMood, number[][]> = {
+    upbeat_tech: [
+      [261.63, 329.63, 392.0, 493.88, 587.33],
+      [220.0, 261.63, 329.63, 392.0, 493.88],
+      [174.61, 220.0, 261.63, 329.63, 392.0],
+      [196.0, 246.94, 293.66, 329.63, 392.0],
+    ],
+    modern_corporate: [
+      [293.66, 369.99, 440.0, 554.37],
+      [246.94, 293.66, 369.99, 440.0],
+      [196.0, 246.94, 293.66, 369.99],
+      [220.0, 277.18, 329.63, 369.99],
+    ],
+    chill_lofi: [
+      [174.61, 220.0, 261.63, 329.63],
+      [164.81, 196.0, 246.94, 293.66],
+      [146.83, 174.61, 220.0, 261.63, 329.63],
+      [130.81, 164.81, 196.0, 246.94, 293.66],
+    ],
+    luxury_ambient: [
+      [155.56, 196.0, 233.08, 293.66, 349.23],
+      [130.81, 155.56, 196.0, 233.08, 293.66],
+      [207.65, 261.63, 311.13, 392.0],
+      [233.08, 293.66, 349.23, 392.0],
+    ],
+  };
+
+  const bassRoots: Record<CommercialMusicMood, number[]> = {
+    upbeat_tech: [65.41, 55.0, 43.65, 49.0],
+    modern_corporate: [73.42, 61.74, 49.0, 55.0],
+    chill_lofi: [87.31, 82.41, 73.42, 65.41],
+    luxury_ambient: [77.78, 65.41, 51.91, 58.27],
+  };
+
+  const musicBusFilter = ctx.createBiquadFilter();
+  musicBusFilter.type = 'lowpass';
+  musicBusFilter.frequency.value =
+    mood === 'chill_lofi' ? 2400 : mood === 'luxury_ambient' ? 3200 : 5200;
+  musicBusFilter.Q.value = 0.6;
+  musicBusFilter.connect(destination);
+
+  const noiseLen = Math.floor(SAMPLE_RATE * 0.08);
+  const noiseBuf = ctx.createBuffer(1, noiseLen, SAMPLE_RATE);
+  const noiseData = noiseBuf.getChannelData(0);
+  for (let i = 0; i < noiseLen; i++) {
+    noiseData[i] = (Math.random() * 2 - 1) * Math.exp(-i / (SAMPLE_RATE * 0.018));
+  }
+
+  const chords = chordSets[mood];
+  const roots = bassRoots[mood];
+  const totalBars = Math.ceil(durationSec / barDur) + 1;
+
+  for (let bar = 0; bar < totalBars; bar++) {
+    const barStart = bar * barDur;
+    if (barStart >= durationSec) break;
+    const chord = chords[bar % chords.length];
+    const rootFreq = roots[bar % roots.length];
+    const chordEnd = Math.min(durationSec + 0.15, barStart + barDur);
+
+    chord.forEach((freq, idx) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = mood === 'luxury_ambient' || mood === 'chill_lofi' ? 'sine' : 'triangle';
+      osc.frequency.setValueAtTime(freq, barStart);
+      osc.detune.setValueAtTime(idx % 2 === 0 ? -4 : 4, barStart);
+
+      const peak = mood === 'luxury_ambient' ? 0.068 : mood === 'chill_lofi' ? 0.072 : 0.055;
+      const attack = mood === 'luxury_ambient' ? 0.65 : mood === 'chill_lofi' ? 0.04 : 0.09;
+
+      gain.gain.setValueAtTime(0.0001, barStart);
+      gain.gain.linearRampToValueAtTime(peak, Math.min(barStart + attack, chordEnd));
+      gain.gain.exponentialRampToValueAtTime(
+        Math.max(0.0002, peak * 0.45),
+        Math.min(barStart + barDur * 0.85, chordEnd)
+      );
+      gain.gain.exponentialRampToValueAtTime(0.0001, chordEnd);
+
+      osc.connect(gain);
+      gain.connect(musicBusFilter);
+      osc.start(barStart);
+      osc.stop(chordEnd + 0.04);
+    });
+
+    const bassOsc = ctx.createOscillator();
+    const bassGain = ctx.createGain();
+    bassOsc.type = 'sine';
+    bassOsc.frequency.setValueAtTime(rootFreq, barStart);
+    bassGain.gain.setValueAtTime(0.0001, barStart);
+    bassGain.gain.linearRampToValueAtTime(mood === 'luxury_ambient' ? 0.16 : 0.19, barStart + 0.08);
+    bassGain.gain.exponentialRampToValueAtTime(0.06, Math.min(barStart + barDur * 0.9, chordEnd));
+    bassGain.gain.exponentialRampToValueAtTime(0.0001, chordEnd);
+    bassOsc.connect(bassGain);
+    bassGain.connect(musicBusFilter);
+    bassOsc.start(barStart);
+    bassOsc.stop(chordEnd + 0.05);
+
+    if (mood === 'upbeat_tech' || mood === 'modern_corporate') {
+      const stepsPerBar = mood === 'upbeat_tech' ? 8 : 4;
+      const stepDur = barDur / stepsPerBar;
+      for (let s = 0; s < stepsPerBar; s++) {
+        const t = barStart + s * stepDur;
+        if (t >= durationSec) break;
+        const note = chord[(s + bar) % chord.length] * (mood === 'upbeat_tech' && s % 4 === 3 ? 2 : 1);
+        const pOsc = ctx.createOscillator();
+        const pGain = ctx.createGain();
+        pOsc.type = 'triangle';
+        pOsc.frequency.setValueAtTime(note, t);
+        pGain.gain.setValueAtTime(0.0001, t);
+        pGain.gain.linearRampToValueAtTime(mood === 'upbeat_tech' ? 0.055 : 0.048, t + 0.012);
+        pGain.gain.exponentialRampToValueAtTime(0.0001, t + Math.min(0.28, stepDur * 0.9));
+        pOsc.connect(pGain);
+        pGain.connect(musicBusFilter);
+        pOsc.start(t);
+        pOsc.stop(t + 0.32);
+      }
+    } else if (mood === 'luxury_ambient') {
+      const bellTime = barStart + beatDur * 0.5;
+      if (bellTime < durationSec) {
+        const bellOsc = ctx.createOscillator();
+        const bellGain = ctx.createGain();
+        bellOsc.type = 'sine';
+        bellOsc.frequency.setValueAtTime(chord[chord.length - 1] * 2, bellTime);
+        bellGain.gain.setValueAtTime(0.0001, bellTime);
+        bellGain.gain.linearRampToValueAtTime(0.038, bellTime + 0.06);
+        bellGain.gain.exponentialRampToValueAtTime(0.0001, Math.min(durationSec, bellTime + 2.2));
+        bellOsc.connect(bellGain);
+        bellGain.connect(musicBusFilter);
+        bellOsc.start(bellTime);
+        bellOsc.stop(Math.min(durationSec + 0.05, bellTime + 2.3));
+      }
+    }
+
+    if (mood !== 'luxury_ambient') {
+      for (let beat = 0; beat < 4; beat++) {
+        const t = barStart + beat * beatDur;
+        if (t >= durationSec) break;
+
+        const kickTime = mood === 'chill_lofi' && beat === 2 ? t + beatDur * 0.5 : t;
+        if ((beat === 0 || beat === 2) && kickTime < durationSec) {
+          const kOsc = ctx.createOscillator();
+          const kGain = ctx.createGain();
+          kOsc.type = 'sine';
+          kOsc.frequency.setValueAtTime(mood === 'chill_lofi' ? 92 : 112, kickTime);
+          kOsc.frequency.exponentialRampToValueAtTime(42, kickTime + 0.09);
+          kGain.gain.setValueAtTime(mood === 'chill_lofi' ? 0.22 : 0.26, kickTime);
+          kGain.gain.exponentialRampToValueAtTime(0.0001, kickTime + 0.16);
+          kOsc.connect(kGain);
+          kGain.connect(musicBusFilter);
+          kOsc.start(kickTime);
+          kOsc.stop(kickTime + 0.18);
+        }
+
+        const shakerTime = t + beatDur * 0.5;
+        if (shakerTime < durationSec) {
+          const src = ctx.createBufferSource();
+          src.buffer = noiseBuf;
+          const hp = ctx.createBiquadFilter();
+          hp.type = 'highpass';
+          hp.frequency.value = mood === 'chill_lofi' ? 4500 : 6800;
+          const nGain = ctx.createGain();
+          nGain.gain.setValueAtTime(mood === 'chill_lofi' ? 0.032 : 0.042, shakerTime);
+          nGain.gain.exponentialRampToValueAtTime(0.0001, shakerTime + 0.055);
+          src.connect(hp);
+          hp.connect(nGain);
+          nGain.connect(musicBusFilter);
+          src.start(shakerTime);
+        }
+      }
+    }
+  }
+}
+
+function applyAutoDuckingEnvelope(
+  voiceBuffer: AudioBuffer,
+  voiceStartOffsetSec: number,
+  totalDurationSec: number,
+  musicDuckGain: GainNode
+) {
+  const sr = voiceBuffer.sampleRate;
+  const channelData = voiceBuffer.getChannelData(0);
+  const windowSec = 0.04;
+  const windowSamples = Math.max(1, Math.floor(sr * windowSec));
+  const numWindows = Math.ceil(channelData.length / windowSamples);
+
+  const rawActive: boolean[] = new Array(numWindows).fill(false);
+  const rmsThreshold = 0.014;
+
+  for (let w = 0; w < numWindows; w++) {
+    const start = w * windowSamples;
+    const end = Math.min(channelData.length, start + windowSamples);
+    let sumSq = 0;
+    for (let i = start; i < end; i++) {
+      const s = channelData[i];
+      sumSq += s * s;
+    }
+    const rms = Math.sqrt(sumSq / Math.max(1, end - start));
+    rawActive[w] = rms > rmsThreshold;
+  }
+
+  const holdWindows = 5;
+  const smoothedActive: boolean[] = new Array(numWindows).fill(false);
+  let holdCounter = 0;
+  for (let w = 0; w < numWindows; w++) {
+    if (rawActive[w]) {
+      holdCounter = holdWindows;
+      smoothedActive[w] = true;
+    } else if (holdCounter > 0) {
+      holdCounter--;
+      smoothedActive[w] = true;
+    }
+  }
+
+  const FULL_BED = 1.0;
+  const DUCKED_BED = 0.17;
+  const ATTACK_SEC = 0.12;
+  const RELEASE_SEC = 0.34;
+
+  musicDuckGain.gain.setValueAtTime(FULL_BED, 0);
+
+  let currentlyDucked = false;
+  for (let w = 0; w < numWindows; w++) {
+    const t = voiceStartOffsetSec + w * windowSec;
+    if (t >= totalDurationSec) break;
+    const shouldDuck = smoothedActive[w];
+    if (shouldDuck && !currentlyDucked) {
+      const rampStart = Math.max(0, t - 0.06);
+      musicDuckGain.gain.setValueAtTime(FULL_BED, rampStart);
+      musicDuckGain.gain.linearRampToValueAtTime(
+        DUCKED_BED,
+        Math.min(totalDurationSec, rampStart + ATTACK_SEC)
+      );
+      currentlyDucked = true;
+    } else if (!shouldDuck && currentlyDucked) {
+      musicDuckGain.gain.setValueAtTime(DUCKED_BED, t);
+      musicDuckGain.gain.linearRampToValueAtTime(
+        FULL_BED,
+        Math.min(totalDurationSec, t + RELEASE_SEC)
+      );
+      currentlyDucked = false;
+    }
+  }
+
+  if (currentlyDucked) {
+    const voiceEnd = Math.min(totalDurationSec - 0.05, voiceStartOffsetSec + voiceBuffer.duration);
+    musicDuckGain.gain.setValueAtTime(DUCKED_BED, Math.max(0, voiceEnd));
+    musicDuckGain.gain.linearRampToValueAtTime(
+      FULL_BED,
+      Math.min(totalDurationSec, voiceEnd + RELEASE_SEC)
+    );
+  }
+}
+
+async function renderCommercialAudioMix(params: {
+  musicMood: CommercialMusicMood;
+  requestedDurationSec: number;
+  voiceoverAudioBase64?: string;
+}): Promise<{
+  audioBuffer: AudioBuffer;
+  finalDurationSec: number;
+  hasVoiceover: boolean;
+  autoDucked: boolean;
+}> {
+  const OfflineCtx = window.OfflineAudioContext || (window as any).webkitOfflineAudioContext;
+  if (!OfflineCtx) {
+    throw new Error('Web Audio OfflineAudioContext is not supported in this browser.');
+  }
+
+  let decodedVoice: AudioBuffer | null = null;
+  if (params.voiceoverAudioBase64) {
+    try {
+      const wavArrayBuf = base64ToArrayBuffer(params.voiceoverAudioBase64);
+      const decodeCtx = new OfflineCtx(1, SAMPLE_RATE, SAMPLE_RATE);
+      decodedVoice = await decodeCtx.decodeAudioData(wavArrayBuf.slice(0));
+    } catch (err) {
+      console.warn('[VIDEO-AUDIO] Failed to decode voiceover WAV:', err);
+      decodedVoice = null;
+    }
+  }
+
+  const voiceStartOffsetSec = 0.45;
+  const finalDurationSec = decodedVoice
+    ? Math.max(15, Math.min(24, Math.ceil((voiceStartOffsetSec + decodedVoice.duration + 1.25) * 10) / 10))
+    : Math.max(15, Math.min(22, params.requestedDurationSec || 15));
+
+  const totalFrames = Math.ceil(SAMPLE_RATE * finalDurationSec);
+  const offline = new OfflineCtx(CHANNELS, totalFrames, SAMPLE_RATE);
+
+  const compressor = offline.createDynamicsCompressor();
+  compressor.threshold.value = -9;
+  compressor.knee.value = 14;
+  compressor.ratio.value = 3.5;
+  compressor.attack.value = 0.008;
+  compressor.release.value = 0.18;
+
+  const masterGain = offline.createGain();
+  masterGain.gain.setValueAtTime(0.0001, 0);
+  masterGain.gain.linearRampToValueAtTime(0.95, 0.25);
+  masterGain.gain.setValueAtTime(0.95, Math.max(0.3, finalDurationSec - 0.7));
+  masterGain.gain.linearRampToValueAtTime(0.0001, finalDurationSec);
+
+  compressor.connect(masterGain);
+  masterGain.connect(offline.destination);
+
+  const musicBaseGain = offline.createGain();
+  musicBaseGain.gain.value = decodedVoice ? 0.38 : 0.62;
+  const musicDuckGain = offline.createGain();
+  musicDuckGain.gain.value = 1.0;
+
+  musicBaseGain.connect(musicDuckGain);
+  musicDuckGain.connect(compressor);
+
+  renderMusicMoodIntoGraph(offline, musicBaseGain, finalDurationSec, params.musicMood);
+
+  let autoDucked = false;
+  if (decodedVoice) {
+    applyAutoDuckingEnvelope(decodedVoice, voiceStartOffsetSec, finalDurationSec, musicDuckGain);
+    autoDucked = true;
+
+    const voiceSource = offline.createBufferSource();
+    voiceSource.buffer = decodedVoice;
+
+    const voiceHighPass = offline.createBiquadFilter();
+    voiceHighPass.type = 'highpass';
+    voiceHighPass.frequency.value = 85;
+
+    const voicePresence = offline.createBiquadFilter();
+    voicePresence.type = 'peaking';
+    voicePresence.frequency.value = 3100;
+    voicePresence.Q.value = 0.9;
+    voicePresence.gain.value = 2.4;
+
+    const voiceGain = offline.createGain();
+    voiceGain.gain.value = 1.15;
+
+    voiceSource.connect(voiceHighPass);
+    voiceHighPass.connect(voicePresence);
+    voicePresence.connect(voiceGain);
+    voiceGain.connect(compressor);
+    voiceSource.start(voiceStartOffsetSec);
+  }
+
+  const rendered = await offline.startRendering();
+  return {
+    audioBuffer: rendered,
+    finalDurationSec,
+    hasVoiceover: Boolean(decodedVoice),
+    autoDucked,
+  };
+}
+
+// ============================================================================
+// Offscreen HTMLVideoElement Loader & Deterministic Frame Seeker
+// ============================================================================
+async function loadVideoElementFromBlob(
+  blob: Blob
+): Promise<{ video: HTMLVideoElement; objectUrl: string; durationSec: number }> {
+  const objectUrl = URL.createObjectURL(blob);
+
+  const video = document.createElement('video');
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.crossOrigin = 'anonymous';
+  video.src = objectUrl;
+
+  await new Promise<void>((resolve, reject) => {
+    const timer = window.setTimeout(
+      () => reject(new Error('Timed out loading generated AI action video.')),
+      20000
+    );
+    const cleanup = () => {
+      window.clearTimeout(timer);
+      video.removeEventListener('loadeddata', onReady);
+      video.removeEventListener('error', onError);
+    };
+    const onReady = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = () => {
+      cleanup();
+      reject(new Error('Failed to decode generated AI action video in browser.'));
+    };
+    video.addEventListener('loadeddata', onReady);
+    video.addEventListener('error', onError);
+    video.load();
+  });
+
+  const durationSec =
+    Number.isFinite(video.duration) && video.duration > 0.5 ? video.duration : 15;
+  return { video, objectUrl, durationSec };
+}
+
+async function seekVideoToTime(video: HTMLVideoElement, targetTimeSec: number): Promise<void> {
+  const clamped = Math.max(0, Math.min(Math.max(0.05, (video.duration || 15) - 0.04), targetTimeSec));
+  if (Math.abs(video.currentTime - clamped) < 0.008 && video.readyState >= 2) {
+    return;
+  }
+  await new Promise<void>((resolve) => {
+    let settled = false;
+    const done = () => {
+      if (settled) return;
+      settled = true;
+      video.removeEventListener('seeked', done);
+      window.clearTimeout(timer);
+      resolve();
+    };
+    const timer = window.setTimeout(done, 450);
+    video.addEventListener('seeked', done, { once: true });
+    video.currentTime = clamped;
+  });
+}
+
+// ============================================================================
+// Live-Action Video Compositor (Overlays Crisp Branding Over Real In-Use Video)
+// ============================================================================
+function renderLiveActionCommercialFrame(
+  ctx: CanvasRenderingContext2D,
+  video: HTMLVideoElement,
+  width: number,
+  height: number,
+  t: number,
+  totalDuration: number,
+  scenes: CommercialScenePlan[],
+  visualTheme: CommercialVisualTheme,
+  product: Product,
+  priceBannerText: string,
+  includeWebLinkOverlay: boolean
+) {
+  const isLandscape = width > height;
+
+  // 1. Draw full-bleed live-action AI video frame using cover-fit
+  const vw = Math.max(1, video.videoWidth || width);
+  const vh = Math.max(1, video.videoHeight || height);
+  const videoRatio = vw / vh;
+  const canvasRatio = width / height;
+
+  let drawW: number;
+  let drawH: number;
+  if (videoRatio > canvasRatio) {
+    drawH = height;
+    drawW = drawH * videoRatio;
+  } else {
+    drawW = width;
+    drawH = drawW / videoRatio;
+  }
+  const drawX = (width - drawW) / 2;
+  const drawY = (height - drawH) / 2;
+
+  ctx.fillStyle = '#090D16';
+  ctx.fillRect(0, 0, width, height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(video, drawX, drawY, drawW, drawH);
+
+  // 2. Clean top & bottom readability scrims (leaves center hands-on action 100% clear)
+  const topScrim = ctx.createLinearGradient(0, 0, 0, isLandscape ? 120 : 180);
+  topScrim.addColorStop(0, 'rgba(6, 10, 18, 0.72)');
+  topScrim.addColorStop(1, 'rgba(6, 10, 18, 0)');
+  ctx.fillStyle = topScrim;
+  ctx.fillRect(0, 0, width, isLandscape ? 120 : 180);
+
+  const bottomScrimH = isLandscape ? 235 : 370;
+  const bottomScrim = ctx.createLinearGradient(0, height - bottomScrimH, 0, height);
+  bottomScrim.addColorStop(0, 'rgba(6, 10, 18, 0)');
+  bottomScrim.addColorStop(0.35, 'rgba(6, 10, 18, 0.62)');
+  bottomScrim.addColorStop(1, 'rgba(6, 10, 18, 0.88)');
+  ctx.fillStyle = bottomScrim;
+  ctx.fillRect(0, height - bottomScrimH, width, bottomScrimH);
+
+  // Determine active scene
+  const totalPlanSec = Math.max(
+    1,
+    scenes.reduce((sum, s) => sum + Math.max(2, s.durationSec), 0)
+  );
+  const scaleFactor = totalDuration / totalPlanSec;
+
+  let cursor = 0;
+  let activeIdx = scenes.length - 1;
+  let sceneStart = 0;
+  let sceneDur = totalDuration;
+
+  for (let i = 0; i < scenes.length; i++) {
+    const dur = Math.max(2, scenes[i].durationSec) * scaleFactor;
+    if (t < cursor + dur || i === scenes.length - 1) {
+      activeIdx = i;
+      sceneStart = cursor;
+      sceneDur = dur;
+      break;
+    }
+    cursor += dur;
+  }
+
+  const scene = scenes[activeIdx];
+  const localTime = clamp(t - sceneStart, 0, sceneDur);
+  const sceneProgress = clamp(localTime / Math.max(0.01, sceneDur), 0, 1);
+
+  const enterAlpha = easeOutCubic(clamp(localTime / 0.38, 0, 1));
+  const exitAlpha =
+    activeIdx < scenes.length - 1
+      ? 1 - easeOutCubic(clamp((localTime - (sceneDur - 0.25)) / 0.25, 0, 1))
+      : 1;
+  const textAlpha = Math.min(enterAlpha, exitAlpha);
+
+  const accentHex =
+    visualTheme === 'lifestyle_home'
+      ? '#F59E0B'
+      : visualTheme === 'tech_modern'
+      ? '#38BDF8'
+      : '#60A5FA';
+
+  const padX = isLandscape ? 56 : 42;
+  const topBrandY = isLandscape ? 40 : 52;
+
+  // Top Minimal Header Bar
   ctx.save();
-  ctx.translate(cx, cy);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = `800 ${isLandscape ? 16 : 18}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.textAlign = 'left';
+  ctx.fillText('DBUY STORE', padX, topBrandY);
 
-  // Glowing outer ring
-  const r = size / 2;
-  const ringGrad = ctx.createLinearGradient(-r, -r, r, r);
-  ringGrad.addColorStop(0, '#25F4EE');
-  ringGrad.addColorStop(0.55, '#19B5FE');
-  ringGrad.addColorStop(1, '#F97316');
-
-  ctx.shadowColor = 'rgba(25, 181, 254, 0.55)';
-  ctx.shadowBlur = 28;
-  drawRoundedRectPath(ctx, -r, -r, size, size, size * 0.28);
-  ctx.fillStyle = '#07142b';
-  ctx.fill();
-  ctx.lineWidth = 4;
-  ctx.strokeStyle = ringGrad;
-  ctx.stroke();
-  ctx.shadowBlur = 0;
-
-  // Shopping bag silhouette inside emblem
-  const bagW = size * 0.46;
-  const bagH = size * 0.44;
-  const bagY = -bagH * 0.35;
-
-  // Handle arc
+  const brandW = ctx.measureText('DBUY STORE').width;
+  ctx.fillStyle = accentHex;
   ctx.beginPath();
-  ctx.arc(0, bagY, bagW * 0.26, Math.PI, 0, false);
-  ctx.lineWidth = 4.5;
-  ctx.strokeStyle = '#25F4EE';
-  ctx.stroke();
-
-  // Bag body
-  drawRoundedRectPath(ctx, -bagW / 2, bagY, bagW, bagH, 10);
-  const bagGrad = ctx.createLinearGradient(-bagW / 2, bagY, bagW / 2, bagY + bagH);
-  bagGrad.addColorStop(0, '#19B5FE');
-  bagGrad.addColorStop(1, '#0284c7');
-  ctx.fillStyle = bagGrad;
+  ctx.arc(padX + brandW + 12, topBrandY, 3.5, 0, Math.PI * 2);
   ctx.fill();
 
-  // Bold "DB" monogram
-  ctx.fillStyle = '#ffffff';
-  ctx.font = `900 ${Math.round(size * 0.22)}px system-ui, -apple-system, sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('DB', 0, bagY + bagH * 0.54);
-
+  const catLabel = sanitizeCommercialCopy(product.category || 'FEATURED').toUpperCase().slice(0, 26);
+  ctx.textAlign = 'right';
+  ctx.font = `600 ${isLandscape ? 13 : 14}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = 'rgba(241, 245, 249, 0.85)';
+  ctx.fillText(catLabel, width - padX, topBrandY);
   ctx.restore();
-}
 
-interface RenderSceneState {
-  images: Array<HTMLImageElement | ImageBitmap>;
-  titleOffer: string;
-  priceBanner: string;
-  priceNum: number;
-  origPriceNum: number;
-  highlights: string[];
-  includeWebLinkOverlay: boolean;
-}
-
-function renderPromoFrame(
-  ctx: CanvasRenderingContext2D,
-  frameIndex: number,
-  scene: RenderSceneState
-) {
-  const t = frameIndex / FPS; // seconds [0 .. 12)
-  const progress = t / TOTAL_DURATION_SEC;
-
-  // 1. Dynamic Dark Navy + Cyan + Subtle Orange Ambient Background
-  const bgGrad = ctx.createLinearGradient(0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
-  bgGrad.addColorStop(0, '#020611');
-  bgGrad.addColorStop(0.45, '#07142b');
-  bgGrad.addColorStop(1, '#030b1c');
-  ctx.fillStyle = bgGrad;
-  ctx.fillRect(0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
-
-  // Animated Neon Orbs
-  const orb1X = VIDEO_WIDTH * 0.2 + Math.sin(t * 0.9) * 80;
-  const orb1Y = VIDEO_HEIGHT * 0.24 + Math.cos(t * 0.7) * 55;
-  const rad1 = ctx.createRadialGradient(orb1X, orb1Y, 10, orb1X, orb1Y, 340);
-  rad1.addColorStop(0, 'rgba(37, 244, 238, 0.26)');
-  rad1.addColorStop(1, 'rgba(37, 244, 238, 0)');
-  ctx.fillStyle = rad1;
-  ctx.fillRect(0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
-
-  const orb2X = VIDEO_WIDTH * 0.8 + Math.cos(t * 0.8) * 70;
-  const orb2Y = VIDEO_HEIGHT * 0.76 + Math.sin(t * 1.1) * 60;
-  const rad2 = ctx.createRadialGradient(orb2X, orb2Y, 10, orb2X, orb2Y, 360);
-  rad2.addColorStop(0, 'rgba(249, 115, 22, 0.22)');
-  rad2.addColorStop(1, 'rgba(249, 115, 22, 0)');
-  ctx.fillStyle = rad2;
-  ctx.fillRect(0, 0, VIDEO_WIDTH, VIDEO_HEIGHT);
-
-  // Subtle Digital Tech Grid
+  // Lower-Third Editorial Caption & Price Lockup
+  const slideY = (1 - enterAlpha) * 16;
   ctx.save();
-  ctx.strokeStyle = 'rgba(25, 181, 254, 0.06)';
-  ctx.lineWidth = 1;
-  const gridOffset = (t * 24) % 48;
-  for (let x = 0; x <= VIDEO_WIDTH; x += 48) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, VIDEO_HEIGHT);
-    ctx.stroke();
-  }
-  for (let y = gridOffset; y <= VIDEO_HEIGHT; y += 48) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(VIDEO_WIDTH, y);
-    ctx.stroke();
-  }
-  ctx.restore();
+  ctx.globalAlpha = clamp(textAlpha, 0, 1);
 
-  // Floating Light Particles
-  ctx.save();
-  for (let i = 0; i < 18; i++) {
-    const px = ((i * 197 + t * (28 + (i % 4) * 10)) % (VIDEO_WIDTH + 40)) - 20;
-    const py =
-      VIDEO_HEIGHT - (((i * 263 + t * (55 + (i % 5) * 14)) % (VIDEO_HEIGHT + 60)) - 30);
-    const pr = 2 + (i % 3) * 1.4;
-    ctx.globalAlpha = 0.2 + ((Math.sin(t * 3 + i) + 1) / 2) * 0.45;
-    ctx.fillStyle = i % 3 === 0 ? '#F97316' : '#25F4EE';
-    ctx.beginPath();
-    ctx.arc(px, py, pr, 0, Math.PI * 2);
+  const contentW = isLandscape ? Math.round(width * 0.62) : width - padX * 2;
+  const baseBottomY = height - (isLandscape ? 78 : 112);
+
+  // Subheadline + Headline drawn bottom-up cleanly above footer
+  const cleanPriceBanner = sanitizeCommercialCopy(priceBannerText);
+  const showPriceBadge = scene.role === 'cta' && Boolean(cleanPriceBanner);
+
+  let priceBlockH = 0;
+  if (showPriceBadge) {
+    priceBlockH = isLandscape ? 58 : 64;
+    const badgeY = baseBottomY - (isLandscape ? 46 : 54) + slideY;
+    ctx.font = `800 ${isLandscape ? 23 : 26}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    const priceMetrics = ctx.measureText(cleanPriceBanner);
+    const hasOrigDiscount =
+      Number(product.origPrice) > Number(product.price) && Number(product.price) > 0;
+    const origText = hasOrigDiscount ? `$${Number(product.origPrice).toFixed(2)}` : '';
+    const origW = origText ? ctx.measureText(origText).width + 16 : 0;
+
+    const badgeW = priceMetrics.width + origW + 44;
+    const badgeH = isLandscape ? 46 : 52;
+    const badgeX = padX;
+
+    ctx.fillStyle = '#FFFFFF';
+    drawRoundedRect(ctx, badgeX, badgeY, badgeW, badgeH, 14);
     ctx.fill();
-  }
-  ctx.restore();
 
-  // Top Edge Progress Accent Bar
-  ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-  ctx.fillRect(0, 0, VIDEO_WIDTH, 6);
-  const topBarGrad = ctx.createLinearGradient(0, 0, VIDEO_WIDTH, 0);
-  topBarGrad.addColorStop(0, '#25F4EE');
-  topBarGrad.addColorStop(0.5, '#19B5FE');
-  topBarGrad.addColorStop(1, '#F97316');
-  ctx.fillStyle = topBarGrad;
-  ctx.fillRect(0, 0, VIDEO_WIDTH * progress, 6);
-
-  // Persistent Brand Header Pill (Safe Zone below TikTok top UI)
-  ctx.save();
-  drawRoundedRectPath(ctx, 180, 56, 360, 44, 22);
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.78)';
-  ctx.fill();
-  ctx.lineWidth = 1.5;
-  ctx.strokeStyle = 'rgba(37, 244, 238, 0.45)';
-  ctx.stroke();
-  ctx.fillStyle = '#e2e8f0';
-  ctx.font = '800 18px system-ui, -apple-system, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText('⚡ DBUY STORE · TECH FOR A BETTER YOU', VIDEO_WIDTH / 2, 79);
-  ctx.restore();
-
-  const imgs = scene.images;
-  const primaryImg = imgs[0] || null;
-
-  // ==========================================================
-  // SLIDE 1 (0.0s - 3.0s): High-Impact Hook + Main Image Zoom
-  // ==========================================================
-  if (t < 3.0) {
-    const localT = t / 3.0;
-    const entry = easeOutCubic(Math.min(1, t / 0.45));
-    const exitAlpha = t > 2.65 ? clamp01((3.0 - t) / 0.35) : 1;
-
-    // Headline hook
-    ctx.save();
-    ctx.globalAlpha = entry * exitAlpha;
-    const hookY = 165 - (1 - entry) * 28;
-    ctx.shadowColor = 'rgba(37, 244, 238, 0.5)';
-    ctx.shadowBlur = 18;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 44px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
+    ctx.fillStyle = '#0F172A';
+    ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    ctx.fillText('UPGRADE YOUR SETUP! 💻🔥', VIDEO_WIDTH / 2, hookY);
-    ctx.restore();
+    const px = badgeX + 22;
+    ctx.fillText(cleanPriceBanner, px, badgeY + badgeH / 2 + 1);
 
-    // Main Product Image with Ken Burns Zoom-In
-    if (primaryImg) {
-      const zoomScale = 1.0 + easeInOutQuad(localT) * 0.14;
-      drawContainCoverImageCard(
-        ctx,
-        primaryImg,
-        66,
-        240 + (1 - entry) * 30,
-        588,
-        590,
-        zoomScale,
-        0,
-        0,
-        entry * exitAlpha
-      );
-    }
-
-    // Trending Title Offer Banner
-    ctx.save();
-    ctx.globalAlpha = entry * exitAlpha;
-    drawRoundedRectPath(ctx, 56, 868, 608, 122, 24);
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(25, 181, 254, 0.5)';
-    ctx.stroke();
-
-    ctx.fillStyle = '#25F4EE';
-    ctx.font = '800 28px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const titleLines = wrapTextLines(ctx, scene.titleOffer, 560, 2);
-    if (titleLines.length === 1) {
-      ctx.fillText(titleLines[0], VIDEO_WIDTH / 2, 929);
-    } else if (titleLines.length >= 2) {
-      ctx.fillText(titleLines[0], VIDEO_WIDTH / 2, 908);
-      ctx.fillStyle = '#ffffff';
-      ctx.font = '800 25px system-ui, -apple-system, sans-serif';
-      ctx.fillText(titleLines[1], VIDEO_WIDTH / 2, 952);
-    }
-    ctx.restore();
-
-    // Glowing Price Teaser Pill
-    ctx.save();
-    ctx.globalAlpha = entry * exitAlpha;
-    drawRoundedRectPath(ctx, 180, 1018, 360, 66, 33);
-    const pillGrad = ctx.createLinearGradient(180, 1018, 540, 1084);
-    pillGrad.addColorStop(0, '#F97316');
-    pillGrad.addColorStop(1, '#ea580c');
-    ctx.shadowColor = 'rgba(249, 115, 22, 0.55)';
-    ctx.shadowBlur = 22;
-    ctx.fillStyle = pillGrad;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 30px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(scene.priceBanner || `Only $${formatPriceAmount(scene.priceNum)}!`, VIDEO_WIDTH / 2, 1052);
-    ctx.restore();
-  }
-
-  // ==========================================================
-  // SLIDES 2 & 3 (3.0s - 9.0s): Gallery Rotation + Features + Price
-  // ==========================================================
-  else if (t >= 3.0 && t < 9.0) {
-    const galleryWindow = t - 3.0; // [0 .. 6.0)
-    const galleryImgs = imgs.length > 1 ? imgs.slice(1) : imgs;
-    const totalSlides = Math.max(2, galleryImgs.length);
-    const slideDur = 6.0 / totalSlides;
-    const rawSlideIdx = Math.min(totalSlides - 1, Math.floor(galleryWindow / slideDur));
-    const slideImg = galleryImgs[rawSlideIdx % galleryImgs.length] || primaryImg;
-    const slideElapsed = galleryWindow - rawSlideIdx * slideDur;
-    const slideProgress = clamp01(slideElapsed / slideDur);
-    const slideFadeIn = easeOutCubic(Math.min(1, slideElapsed / 0.35));
-    const slideFadeOut = slideElapsed > slideDur - 0.3 ? clamp01((slideDur - slideElapsed) / 0.3) : 1;
-    const slideAlpha = slideFadeIn * slideFadeOut;
-
-    // Alternating Ken Burns Pan & Zoom
-    const dir = rawSlideIdx % 2 === 0 ? 1 : -1;
-    const kbScale = 1.03 + easeInOutQuad(slideProgress) * 0.12;
-    const kbPanX = dir * (slideProgress - 0.5) * 26;
-    const kbPanY = (0.5 - slideProgress) * 18;
-
-    // Top Feature Highlight Header
-    const highlightText =
-      scene.highlights[rawSlideIdx % Math.max(1, scene.highlights.length)] ||
-      'Engineered for Everyday Performance';
-    ctx.save();
-    ctx.globalAlpha = slideAlpha;
-    drawRoundedRectPath(ctx, 56, 134, 608, 92, 22);
-    ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(37, 244, 238, 0.55)';
-    ctx.stroke();
-
-    ctx.fillStyle = '#25F4EE';
-    ctx.font = '900 22px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    const hlLines = wrapTextLines(ctx, `✨ ${highlightText}`, 560, 2);
-    if (hlLines.length === 1) {
-      ctx.fillText(hlLines[0], VIDEO_WIDTH / 2, 180);
-    } else if (hlLines.length >= 2) {
-      ctx.fillText(hlLines[0], VIDEO_WIDTH / 2, 162);
-      ctx.fillStyle = '#e2e8f0';
-      ctx.font = '700 20px system-ui, -apple-system, sans-serif';
-      ctx.fillText(hlLines[1], VIDEO_WIDTH / 2, 198);
-    }
-    ctx.restore();
-
-    // Gallery Card
-    if (slideImg) {
-      drawContainCoverImageCard(
-        ctx,
-        slideImg,
-        66,
-        252,
-        588,
-        585,
-        kbScale,
-        kbPanX,
-        kbPanY,
-        slideAlpha
-      );
-    }
-
-    // Slide Indicator Dots
-    ctx.save();
-    const dotGap = 20;
-    const dotsStartX = VIDEO_WIDTH / 2 - ((totalSlides - 1) * dotGap) / 2;
-    for (let d = 0; d < totalSlides; d++) {
+    if (origText) {
+      ctx.font = `600 ${isLandscape ? 16 : 18}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      ctx.fillStyle = '#64748B';
+      const ox = px + priceMetrics.width + 14;
+      ctx.fillText(origText, ox, badgeY + badgeH / 2 + 1);
+      const ow = ctx.measureText(origText).width;
+      ctx.strokeStyle = '#64748B';
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(dotsStartX + d * dotGap, 864, d === rawSlideIdx ? 6 : 4, 0, Math.PI * 2);
-      ctx.fillStyle = d === rawSlideIdx ? '#25F4EE' : 'rgba(148, 163, 184, 0.45)';
+      ctx.moveTo(ox - 2, badgeY + badgeH / 2 + 1);
+      ctx.lineTo(ox + ow + 2, badgeY + badgeH / 2 + 1);
+      ctx.stroke();
+    }
+  }
+
+  const subFontSize = isLandscape ? 20 : 22;
+  ctx.font = `500 ${subFontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  const subLines = wrapTextLines(
+    ctx,
+    sanitizeCommercialCopy(scene.subheadline || ''),
+    contentW,
+    2
+  );
+  const subBlockH = subLines.length * (subFontSize * 1.32);
+
+  const headFontSize = isLandscape ? 38 : 40;
+  ctx.font = `800 ${headFontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  const headLines = wrapTextLines(
+    ctx,
+    sanitizeCommercialCopy(scene.headline || product.title),
+    contentW,
+    2
+  );
+  const headBlockH = headLines.length * (headFontSize * 1.15);
+
+  let yCursor = baseBottomY - priceBlockH - subBlockH - headBlockH - 36 + slideY;
+
+  // Small scene eyebrow chip
+  const roleTagMap: Record<CommercialScenePlan['role'], string> = {
+    hook: 'REAL-WORLD PROBLEM',
+    showcase: 'IN ACTION',
+    benefit: 'KEY FEATURE',
+    cta: 'SHOP ONLINE',
+  };
+  ctx.font = `700 ${isLandscape ? 11 : 12}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  const tagText = roleTagMap[scene.role] || 'FEATURED';
+  const tagW = ctx.measureText(tagText).width + 20;
+  const tagH = 24;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.16)';
+  drawRoundedRect(ctx, padX, yCursor, tagW, tagH, 12);
+  ctx.fill();
+  ctx.fillStyle = accentHex;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(tagText, padX + 10, yCursor + tagH / 2 + 0.5);
+  yCursor += tagH + 10;
+
+  // Headline
+  ctx.font = `800 ${headFontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.textBaseline = 'top';
+  for (const line of headLines) {
+    ctx.fillText(line, padX, yCursor);
+    yCursor += headFontSize * 1.15;
+  }
+
+  yCursor += 6;
+  // Subheadline
+  ctx.font = `500 ${subFontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = 'rgba(226, 232, 240, 0.92)';
+  for (const line of subLines) {
+    ctx.fillText(line, padX, yCursor);
+    yCursor += subFontSize * 1.32;
+  }
+
+  ctx.restore();
+
+  // Bottom Web URL Brand Footer & 4-Scene Progress Rail
+  const footerY = height - (isLandscape ? 42 : 60);
+  if (includeWebLinkOverlay) {
+    ctx.save();
+    ctx.textAlign = isLandscape ? 'right' : 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = `700 ${isLandscape ? 16 : 18}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+    ctx.fillText('www.dbuystore.com', isLandscape ? width - padX : width / 2, footerY);
+    ctx.restore();
+  }
+
+  // 4-segment commercial progress rail
+  const railY = height - (isLandscape ? 16 : 24);
+  const railTotalW = width - padX * 2;
+  const gap = 8;
+  const segCount = scenes.length;
+  const segW = (railTotalW - gap * (segCount - 1)) / segCount;
+
+  for (let i = 0; i < segCount; i++) {
+    const sx = padX + i * (segW + gap);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.22)';
+    drawRoundedRect(ctx, sx, railY, segW, 4, 2);
+    ctx.fill();
+
+    const fillRatio = i < activeIdx ? 1 : i === activeIdx ? sceneProgress : 0;
+    if (fillRatio > 0) {
+      ctx.fillStyle = accentHex;
+      drawRoundedRect(ctx, sx, railY, Math.max(4, segW * fillRatio), 4, 2);
       ctx.fill();
     }
-    ctx.restore();
-
-    // Glowing Price Banner Card: "GET IT FOR ONLY $[price]! 🚀"
-    const pulse = 1 + Math.sin(t * 5) * 0.02;
-    ctx.save();
-    ctx.translate(VIDEO_WIDTH / 2, 974);
-    ctx.scale(pulse, pulse);
-    drawRoundedRectPath(ctx, -304, -74, 608, 148, 28);
-    const offerGrad = ctx.createLinearGradient(-304, -74, 304, 74);
-    offerGrad.addColorStop(0, '#0f172a');
-    offerGrad.addColorStop(1, '#1e293b');
-    ctx.shadowColor = 'rgba(249, 115, 22, 0.45)';
-    ctx.shadowBlur = 28;
-    ctx.fillStyle = offerGrad;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = '#F97316';
-    ctx.stroke();
-
-    const formattedPrice = formatPriceAmount(scene.priceNum);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 36px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(`GET IT FOR ONLY $${formattedPrice}! 🚀`, 0, -14);
-
-    if (scene.origPriceNum > scene.priceNum && scene.priceNum > 0) {
-      const pct = Math.max(1, Math.round(((scene.origPriceNum - scene.priceNum) / scene.origPriceNum) * 100));
-      ctx.fillStyle = '#25F4EE';
-      ctx.font = '800 22px system-ui, -apple-system, sans-serif';
-      ctx.fillText(
-        `SAVE ${pct}% · REG. $${formatPriceAmount(scene.origPriceNum)} · TRACKED SHIPPING`,
-        0,
-        34
-      );
-    } else {
-      ctx.fillStyle = '#25F4EE';
-      ctx.font = '800 22px system-ui, -apple-system, sans-serif';
-      ctx.fillText(scene.priceBanner || '🌍 TRACKED WORLDWIDE SHIPPING', 0, 34);
-    }
-    ctx.restore();
   }
 
-  // ==========================================================
-  // SLIDE 4 (9.0s - 12.0s): Clear Call-To-Action + DBuy Bag Logo
-  // ==========================================================
-  else {
-    const ctaElapsed = t - 9.0; // [0 .. 3.0]
-    const entry = easeOutCubic(Math.min(1, ctaElapsed / 0.55));
-    const logoScale = 0.8 + entry * 0.2;
-
-    // Animated DBuy Bag & Logo Emblem fading in
-    ctx.save();
-    ctx.globalAlpha = entry;
-    ctx.translate(VIDEO_WIDTH / 2, 260);
-    ctx.scale(logoScale, logoScale);
-    drawDbuyBagLogo(ctx, 0, 0, 170);
-    ctx.restore();
-
-    // Small glowing product thumbnail preview card
-    if (primaryImg) {
-      drawContainCoverImageCard(
-        ctx,
-        primaryImg,
-        210,
-        390,
-        300,
-        290,
-        1.0 + Math.sin(ctaElapsed * 2) * 0.03,
-        0,
-        0,
-        entry
-      );
-    }
-
-    // Call to Action Headline
-    ctx.save();
-    ctx.globalAlpha = entry;
-    ctx.shadowColor = 'rgba(37, 244, 238, 0.55)';
-    ctx.shadowBlur = 22;
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '900 42px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('👉 TAP THE LINK TO SHOP', VIDEO_WIDTH / 2, 745);
-    ctx.restore();
-
-    // Bright Brand Store URL Button
-    const btnPulse = 1 + Math.sin(ctaElapsed * 5.5) * 0.025;
-    ctx.save();
-    ctx.globalAlpha = entry;
-    ctx.translate(VIDEO_WIDTH / 2, 855);
-    ctx.scale(btnPulse, btnPulse);
-    drawRoundedRectPath(ctx, -296, -54, 592, 108, 30);
-    const ctaGrad = ctx.createLinearGradient(-296, -54, 296, 54);
-    ctaGrad.addColorStop(0, '#25F4EE');
-    ctaGrad.addColorStop(0.5, '#19B5FE');
-    ctaGrad.addColorStop(1, '#F97316');
-    ctx.shadowColor = 'rgba(25, 181, 254, 0.55)';
-    ctx.shadowBlur = 28;
-    ctx.fillStyle = ctaGrad;
-    ctx.fill();
-    ctx.shadowBlur = 0;
-
-    ctx.fillStyle = '#020611';
-    ctx.font = '900 25px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('SHOP NOW AT: WWW.DBUYSTORE.COM', 0, -10);
-
-    ctx.fillStyle = '#07142b';
-    ctx.font = '800 20px system-ui, -apple-system, sans-serif';
-    ctx.fillText(
-      scene.priceBanner || `ONLY $${formatPriceAmount(scene.priceNum)} · LIMITED STOCK`,
-      0,
-      24
-    );
-    ctx.restore();
-  }
-
-  // Optional Bottom Web Link Overlay ('Shop at www.dbuystore.com')
-  if (scene.includeWebLinkOverlay) {
-    ctx.save();
-    drawRoundedRectPath(ctx, 130, 1126, 460, 56, 28);
-    ctx.fillStyle = 'rgba(2, 6, 17, 0.84)';
-    ctx.fill();
-    ctx.lineWidth = 2;
-    ctx.strokeStyle = 'rgba(37, 244, 238, 0.65)';
-    ctx.stroke();
-
-    ctx.fillStyle = '#ffffff';
-    ctx.font = '800 22px system-ui, -apple-system, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText('🛍️ Shop at www.dbuystore.com', VIDEO_WIDTH / 2, 1154);
-    ctx.restore();
+  const fadeInAlpha = clamp(t / 0.3, 0, 1);
+  if (fadeInAlpha < 1) {
+    ctx.fillStyle = `rgba(6,10,18,${1 - fadeInAlpha})`;
+    ctx.fillRect(0, 0, width, height);
   }
 }
 
-async function detectWebCodecsSupport(): Promise<{
-  videoCodec: string | null;
-  audioCodec: 'mp4a.40.2' | null;
-}> {
-  let videoCodec: string | null = null;
-  let audioCodec: 'mp4a.40.2' | null = null;
+// ============================================================================
+// WebCodecs H.264 + AAC MP4 Encoder (with MediaRecorder Fallback)
+// ============================================================================
+async function encodeLiveVideoWithWebCodecsMp4(
+  canvas: HTMLCanvasElement,
+  video: HTMLVideoElement,
+  videoNativeDuration: number,
+  width: number,
+  height: number,
+  totalDurationSec: number,
+  audioBuffer: AudioBuffer,
+  drawFrameAt: (timeSec: number) => void,
+  onProgress?: (pct: number, detail: string) => void
+): Promise<Blob> {
+  const VideoEncoderCtor = (window as any).VideoEncoder;
+  const VideoFrameCtor = (window as any).VideoFrame;
+  const AudioEncoderCtor = (window as any).AudioEncoder;
+  const AudioDataCtor = (window as any).AudioData;
 
-  if (typeof VideoEncoder !== 'undefined' && typeof VideoFrame !== 'undefined') {
-    const candidates = ['avc1.42001f', 'avc1.4d002a', 'avc1.42E01E', 'avc1.640028'];
-    for (const codec of candidates) {
-      try {
-        const res = await VideoEncoder.isConfigSupported({
-          codec,
-          width: VIDEO_WIDTH,
-          height: VIDEO_HEIGHT,
-          bitrate: 2_400_000,
-          framerate: FPS,
-        });
-        if (res.supported) {
-          videoCodec = codec;
-          break;
-        }
-      } catch {
-        // Try next codec profile
-      }
-    }
+  if (!VideoEncoderCtor || !VideoFrameCtor) {
+    throw new Error('WebCodecs VideoEncoder is not available.');
   }
 
-  if (typeof AudioEncoder !== 'undefined' && typeof AudioData !== 'undefined') {
+  const videoCodecs = ['avc1.640028', 'avc1.4d0028', 'avc1.420028', 'avc1.42001f'];
+  let chosenVideoCodec: string | null = null;
+  for (const codec of videoCodecs) {
     try {
-      const aRes = await AudioEncoder.isConfigSupported({
+      const support = await VideoEncoderCtor.isConfigSupported({
+        codec,
+        width,
+        height,
+        bitrate: width > 1000 ? 5_200_000 : 4_400_000,
+        framerate: FPS,
+      });
+      if (support?.supported) {
+        chosenVideoCodec = codec;
+        break;
+      }
+    } catch {}
+  }
+  if (!chosenVideoCodec) {
+    throw new Error('No supported H.264 codec found for WebCodecs.');
+  }
+
+  let canEncodeAac = false;
+  if (AudioEncoderCtor && AudioDataCtor) {
+    try {
+      const aacSupport = await AudioEncoderCtor.isConfigSupported({
         codec: 'mp4a.40.2',
-        numberOfChannels: 2,
-        sampleRate: AUDIO_SAMPLE_RATE,
+        sampleRate: SAMPLE_RATE,
+        numberOfChannels: CHANNELS,
         bitrate: 128_000,
       });
-      if (aRes.supported) {
-        audioCodec = 'mp4a.40.2';
-      }
+      canEncodeAac = Boolean(aacSupport?.supported);
     } catch {
-      audioCodec = null;
+      canEncodeAac = false;
     }
   }
 
-  return { videoCodec, audioCodec };
-}
-
-async function encodeViaWebCodecsMp4(
-  canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D,
-  scene: RenderSceneState,
-  audioBuffer: AudioBuffer | null,
-  videoCodec: string,
-  audioCodec: 'mp4a.40.2' | null,
-  onProgress?: (progress: PromoVideoGenerationProgress) => void
-): Promise<Blob> {
-  const includeAudio = Boolean(audioBuffer && audioCodec);
-
+  const target = new ArrayBufferTarget();
   const muxer = new Muxer({
-    target: new ArrayBufferTarget(),
-    video: {
-      codec: 'avc',
-      width: VIDEO_WIDTH,
-      height: VIDEO_HEIGHT,
-    },
-    ...(includeAudio
+    target,
+    video: { codec: 'avc', width, height },
+    ...(canEncodeAac
       ? {
-          audio: {
-            codec: 'aac',
-            numberOfChannels: 2,
-            sampleRate: AUDIO_SAMPLE_RATE,
-          },
+          audio: { codec: 'aac', sampleRate: SAMPLE_RATE, numberOfChannels: CHANNELS },
         }
       : {}),
     fastStart: 'in-memory',
-    firstTimestampBehavior: 'offset',
   });
 
-  let encoderError: Error | null = null;
-
-  const videoEncoder = new VideoEncoder({
-    output: (chunk, meta) => {
+  let videoError: Error | null = null;
+  const videoEncoder = new VideoEncoderCtor({
+    output: (chunk: any, meta: any) => {
       muxer.addVideoChunk(chunk, meta);
     },
-    error: (err) => {
-      encoderError = err instanceof Error ? err : new Error(String(err));
+    error: (err: any) => {
+      videoError = err instanceof Error ? err : new Error(String(err));
     },
   });
 
   videoEncoder.configure({
-    codec: videoCodec,
-    width: VIDEO_WIDTH,
-    height: VIDEO_HEIGHT,
-    bitrate: 2_400_000,
+    codec: chosenVideoCodec,
+    width,
+    height,
+    bitrate: width > 1000 ? 5_200_000 : 4_400_000,
     framerate: FPS,
-    latencyMode: 'quality',
+    avc: { format: 'avc' },
   });
 
-  let audioEncoder: AudioEncoder | null = null;
-  if (includeAudio && audioCodec) {
-    audioEncoder = new AudioEncoder({
-      output: (chunk, meta) => {
-        muxer.addAudioChunk(chunk, meta);
-      },
-      error: (err) => {
-        encoderError = err instanceof Error ? err : new Error(String(err));
-      },
+  const totalFrames = Math.ceil(totalDurationSec * FPS);
+  const frameDurationUs = Math.round(1_000_000 / FPS);
+  const safeMaxVideoT = Math.max(0.1, videoNativeDuration - 0.05);
+
+  for (let i = 0; i < totalFrames; i++) {
+    if (videoError) throw videoError;
+    const t = i / FPS;
+    // Map commercial timeline linearly across full live-action clip duration (never jerky)
+    const videoSeekTime = clamp((t / totalDurationSec) * safeMaxVideoT, 0, safeMaxVideoT);
+    await seekVideoToTime(video, videoSeekTime);
+
+    drawFrameAt(t);
+
+    const frame = new VideoFrameCtor(canvas, {
+      timestamp: i * frameDurationUs,
+      duration: frameDurationUs,
     });
-    audioEncoder.configure({
-      codec: audioCodec,
-      numberOfChannels: 2,
-      sampleRate: AUDIO_SAMPLE_RATE,
-      bitrate: 128_000,
-    });
+    videoEncoder.encode(frame, { keyFrame: i % (FPS * 2) === 0 });
+    frame.close();
+
+    if (i % 6 === 0) {
+      while (videoEncoder.encodeQueueSize > 12) {
+        await new Promise((r) => setTimeout(r, 8));
+      }
+      const pct = Math.round(55 + (i / totalFrames) * 30);
+      onProgress?.(pct, `Compositing frame ${i + 1} / ${totalFrames} (${width}×${height})`);
+      await new Promise((r) => setTimeout(r, 0));
+    }
   }
 
-  // Encode AudioBuffer frames if supported
-  if (audioEncoder && audioBuffer) {
-    const ch0 = audioBuffer.getChannelData(0);
-    const ch1 = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : ch0;
+  await videoEncoder.flush();
+  videoEncoder.close();
+  if (videoError) throw videoError;
+
+  if (canEncodeAac) {
+    onProgress?.(88, 'Encoding product-bound English voiceover + auto-ducked AAC audio...');
+    let audioError: Error | null = null;
+    const audioEncoder = new AudioEncoderCtor({
+      output: (chunk: any, meta: any) => {
+        muxer.addAudioChunk(chunk, meta);
+      },
+      error: (err: any) => {
+        audioError = err instanceof Error ? err : new Error(String(err));
+      },
+    });
+
+    audioEncoder.configure({
+      codec: 'mp4a.40.2',
+      sampleRate: SAMPLE_RATE,
+      numberOfChannels: CHANNELS,
+      bitrate: 128_000,
+    });
+
+    const left = audioBuffer.getChannelData(0);
+    const right = audioBuffer.numberOfChannels > 1 ? audioBuffer.getChannelData(1) : left;
+    const chunkFrames = 1024;
     const totalSamples = audioBuffer.length;
-    const chunkSamples = 4096;
 
-    for (let offset = 0; offset < totalSamples; offset += chunkSamples) {
-      if (encoderError) throw encoderError;
-      const frames = Math.min(chunkSamples, totalSamples - offset);
-      const planarData = new Float32Array(frames * 2);
-      planarData.set(ch0.subarray(offset, offset + frames), 0);
-      planarData.set(ch1.subarray(offset, offset + frames), frames);
+    for (let offset = 0; offset < totalSamples; offset += chunkFrames) {
+      if (audioError) throw audioError;
+      const count = Math.min(chunkFrames, totalSamples - offset);
+      const planar = new Float32Array(count * CHANNELS);
+      planar.set(left.subarray(offset, offset + count), 0);
+      planar.set(right.subarray(offset, offset + count), count);
 
-      const audioData = new AudioData({
+      const audioData = new AudioDataCtor({
         format: 'f32-planar',
-        sampleRate: AUDIO_SAMPLE_RATE,
-        numberOfFrames: frames,
-        numberOfChannels: 2,
-        timestamp: Math.round((offset / AUDIO_SAMPLE_RATE) * 1_000_000),
-        data: planarData,
+        sampleRate: SAMPLE_RATE,
+        numberOfFrames: count,
+        numberOfChannels: CHANNELS,
+        timestamp: Math.round((offset / SAMPLE_RATE) * 1_000_000),
+        data: planar,
       });
       audioEncoder.encode(audioData);
       audioData.close();
     }
-  }
 
-  // Render & encode all 360 video frames sequentially
-  for (let frameIdx = 0; frameIdx < TOTAL_FRAMES; frameIdx++) {
-    if (encoderError) throw encoderError;
-
-    renderPromoFrame(ctx, frameIdx, scene);
-
-    const timestampUs = Math.round((frameIdx / FPS) * 1_000_000);
-    const durationUs = Math.round((1 / FPS) * 1_000_000);
-    const videoFrame = new VideoFrame(canvas, {
-      timestamp: timestampUs,
-      duration: durationUs,
-    });
-
-    videoEncoder.encode(videoFrame, { keyFrame: frameIdx % 60 === 0 });
-    videoFrame.close();
-
-    // Keep UI responsive & report live progress
-    if (frameIdx % 10 === 0 || frameIdx === TOTAL_FRAMES - 1) {
-      const pct = 30 + Math.round((frameIdx / TOTAL_FRAMES) * 58);
-      onProgress?.({
-        stage: 'music_transitions',
-        progressPct: pct,
-        message: 'Applying Music & Transitions...',
-        detail: `Rendering 9:16 H.264 frame ${frameIdx + 1}/${TOTAL_FRAMES}`,
-      });
-      await new Promise((resolve) => setTimeout(resolve, 0));
-    }
-  }
-
-  onProgress?.({
-    stage: 'finalizing',
-    progressPct: 92,
-    message: 'Finalizing Video Render...',
-    detail: 'Muxing H.264 video & audio into MP4 container (<30MB)',
-  });
-
-  await videoEncoder.flush();
-  videoEncoder.close();
-
-  if (audioEncoder) {
     await audioEncoder.flush();
     audioEncoder.close();
+    if (audioError) throw audioError;
   }
 
-  if (encoderError) throw encoderError;
-
+  onProgress?.(96, 'Finalizing H.264 / AAC Commercial MP4...');
   muxer.finalize();
-  const { buffer } = muxer.target;
-  return new Blob([buffer], { type: 'video/mp4' });
+  return new Blob([target.buffer], { type: 'video/mp4' });
 }
 
-async function encodeViaMediaRecorderMp4(
+async function encodeLiveVideoWithMediaRecorderFallback(
   canvas: HTMLCanvasElement,
-  ctx: CanvasRenderingContext2D,
-  scene: RenderSceneState,
-  audioBuffer: AudioBuffer | null,
-  onProgress?: (progress: PromoVideoGenerationProgress) => void
+  video: HTMLVideoElement,
+  videoNativeDuration: number,
+  totalDurationSec: number,
+  audioBuffer: AudioBuffer,
+  drawFrameAt: (timeSec: number) => void,
+  onProgress?: (pct: number, detail: string) => void
 ): Promise<Blob> {
-  const mimeCandidates = [
-    'video/mp4;codecs=avc1,mp4a.40.2',
-    'video/mp4;codecs=avc1',
-    'video/mp4',
-  ];
-  const supportedMime =
-    typeof MediaRecorder !== 'undefined'
-      ? mimeCandidates.find((m) => MediaRecorder.isTypeSupported(m))
-      : undefined;
-
-  if (!supportedMime) {
-    throw new Error(
-      'This browser does not support client-side H.264 MP4 encoding. Please use Chrome, Edge, or Safari, or upload an MP4 file directly.'
-    );
-  }
-
   const stream = canvas.captureStream(FPS);
+  const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
   let audioCtx: AudioContext | null = null;
 
-  if (audioBuffer && typeof AudioContext !== 'undefined') {
-    try {
-      audioCtx = new AudioContext({ sampleRate: AUDIO_SAMPLE_RATE });
+  try {
+    if (AudioCtx) {
+      audioCtx = new AudioCtx({ sampleRate: SAMPLE_RATE });
       const dest = audioCtx.createMediaStreamDestination();
       const src = audioCtx.createBufferSource();
       src.buffer = audioBuffer;
       src.connect(dest);
-      src.start();
       dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
-    } catch {
-      // Proceed video-only if AudioContext is restricted
+      src.start();
     }
-  }
+  } catch {}
 
-  const chunks: BlobPart[] = [];
+  const mimeCandidates = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm',
+  ];
+  const chosenMime =
+    mimeCandidates.find((m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)) ||
+    'video/webm';
+
   const recorder = new MediaRecorder(stream, {
-    mimeType: supportedMime,
-    videoBitsPerSecond: 2_400_000,
+    mimeType: chosenMime,
+    videoBitsPerSecond: 4_200_000,
   });
 
+  const chunks: Blob[] = [];
   recorder.ondataavailable = (e) => {
     if (e.data && e.data.size > 0) chunks.push(e.data);
   };
 
-  const stoppedPromise = new Promise<Blob>((resolve, reject) => {
+  const stopped = new Promise<Blob>((resolve) => {
     recorder.onstop = () => {
-      resolve(new Blob(chunks, { type: 'video/mp4' }));
-    };
-    recorder.onerror = (ev: any) => {
-      reject(ev?.error || new Error('MediaRecorder failed while encoding MP4.'));
+      resolve(
+        new Blob(chunks, { type: chosenMime.startsWith('video/mp4') ? 'video/mp4' : 'video/webm' })
+      );
     };
   });
 
+  video.playbackRate = Math.max(0.5, Math.min(1.5, videoNativeDuration / totalDurationSec));
+  video.currentTime = 0;
+  await video.play().catch(() => {});
   recorder.start(250);
 
   const startMs = performance.now();
-  for (let frameIdx = 0; frameIdx < TOTAL_FRAMES; frameIdx++) {
-    renderPromoFrame(ctx, frameIdx, scene);
-    if (frameIdx % 10 === 0) {
-      const pct = 30 + Math.round((frameIdx / TOTAL_FRAMES) * 60);
-      onProgress?.({
-        stage: 'music_transitions',
-        progressPct: pct,
-        message: 'Applying Music & Transitions...',
-        detail: `Recording frame ${frameIdx + 1}/${TOTAL_FRAMES}`,
-      });
-    }
-    const targetElapsedMs = ((frameIdx + 1) / FPS) * 1000;
-    const waitMs = Math.max(0, startMs + targetElapsedMs - performance.now());
-    await new Promise((resolve) => setTimeout(resolve, waitMs));
-  }
-
-  onProgress?.({
-    stage: 'finalizing',
-    progressPct: 95,
-    message: 'Finalizing Video Render...',
+  await new Promise<void>((resolve) => {
+    const tick = () => {
+      const elapsedSec = (performance.now() - startMs) / 1000;
+      if (elapsedSec >= totalDurationSec) {
+        drawFrameAt(totalDurationSec);
+        resolve();
+        return;
+      }
+      drawFrameAt(elapsedSec);
+      const pct = Math.round(55 + (elapsedSec / totalDurationSec) * 38);
+      onProgress?.(pct, `Recording live-action commercial (${elapsedSec.toFixed(1)}s / ${totalDurationSec.toFixed(1)}s)`);
+      requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
   });
 
+  video.pause();
   recorder.stop();
-  const blob = await stoppedPromise;
+  const blob = await stopped;
   if (audioCtx) {
-    try {
-      await audioCtx.close();
-    } catch {
-      // Ignore cleanup error
-    }
+    audioCtx.close().catch(() => {});
   }
   return blob;
 }
 
-/**
- * Generates an optimal 9:16 (720x1280) 12-second H.264 MP4 TikTok promotional video
- * under 30MB using selected product imagery, title/offer, price banner, and vibe audio.
- */
+// ============================================================================
+// Main Export — Reference-Guided In-Use Commercial Video Compositor
+// ============================================================================
 export async function generateTikTokPromoVideo(
-  options: PromoVideoOptions,
+  options: PromoVideoGeneratorOptions,
   onProgress?: (progress: PromoVideoGenerationProgress) => void
-): Promise<GeneratedPromoVideoResult> {
-  const { product, selectedImages, titleOffer, priceBanner, musicVibe, includeWebLinkOverlay } =
-    options;
+): Promise<PromoVideoGenerationResult> {
+  const aspectRatio: CommercialAspectRatio = options.aspectRatio === '16:9' ? '16:9' : '9:16';
+  const visualTheme: CommercialVisualTheme =
+    options.visualTheme === 'lifestyle_home' || options.visualTheme === 'tech_modern'
+      ? options.visualTheme
+      : 'minimalist_studio';
+  const musicMood = normalizeMusicMood(options.musicMood, options.musicVibe);
+  const { width, height } = getDimensionsForAspectRatio(aspectRatio);
 
-  if (!selectedImages || selectedImages.length === 0) {
-    throw new Error('Please select at least 1 product image to generate your promo video.');
+  const scenes =
+    options.scenes && options.scenes.length > 0
+      ? options.scenes
+      : buildProductBoundDefaultScenes(options.product, visualTheme);
+
+  const referenceImages =
+    options.selectedImages && options.selectedImages.length > 0
+      ? options.selectedImages
+      : [options.product.image, ...(options.product.images || [])].filter(Boolean);
+
+  if (referenceImages.length === 0) {
+    throw new Error('At least one product image is required for reference-guided AI video generation.');
   }
 
-  onProgress?.({
-    stage: 'extracting',
-    progressPct: 8,
-    message: 'Extracting Images...',
-    detail: `Loading ${selectedImages.length} high-res product image(s)`,
-  });
-
-  const loadedImages = await loadAllSelectedImages(selectedImages);
-  if (loadedImages.length === 0) {
-    throw new Error(
-      'Unable to load selected product images for video rendering. Please select different images or upload an MP4 directly.'
-    );
+  // Strictly require live-action AI video (no static image panning slideshows!)
+  let actionVideoBlob: Blob | undefined = options.generatedVideoBlob;
+  if (!actionVideoBlob && options.generatedVideoBase64) {
+    const buf = base64ToArrayBuffer(options.generatedVideoBase64);
+    actionVideoBlob = new Blob([buf], { type: options.generatedVideoMimeType || 'video/mp4' });
   }
 
-  onProgress?.({
-    stage: 'extracting',
-    progressPct: 20,
-    message: 'Extracting Images...',
-    detail: `Synthesizing "${PROMO_VIBE_OPTIONS.find((v) => v.value === musicVibe)?.label || musicVibe}" track`,
-  });
+  if (!actionVideoBlob) {
+    const actionPrompt =
+      options.combinedActionPrompt ||
+      buildCombinedActionVideoPrompt({
+        product: {
+          title: options.product.title,
+          description: options.product.description,
+          features: options.product.features,
+          category: options.product.category,
+        },
+        scenes,
+        visualTheme,
+        aspectRatio,
+      });
 
-  const audioBuffer = await synthesizePromoAudioTrack(musicVibe, TOTAL_DURATION_SEC);
-
-  const canvas = document.createElement('canvas');
-  canvas.width = VIDEO_WIDTH;
-  canvas.height = VIDEO_HEIGHT;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) {
-    throw new Error('Canvas 2D context is unavailable in this browser.');
-  }
-
-  const priceNum = Math.max(0, Number(product.price) || 0);
-  const origPriceNum = Number(
-    product.origPrice ?? product.originalPrice ?? (product as any).original_price ?? 0
-  );
-  const highlights = extractTopProductHighlights(product, Boolean(options.isKa));
-
-  const scene: RenderSceneState = {
-    images: loadedImages,
-    titleOffer: (titleOffer || `🔥 Trending Tech: ${product.title}!`).trim(),
-    priceBanner: (priceBanner || `Only $${formatPriceAmount(priceNum)}!`).trim(),
-    priceNum,
-    origPriceNum,
-    highlights,
-    includeWebLinkOverlay,
-  };
-
-  onProgress?.({
-    stage: 'music_transitions',
-    progressPct: 28,
-    message: 'Applying Music & Transitions...',
-    detail: 'Initializing 9:16 H.264 encoder',
-  });
-
-  const support = await detectWebCodecsSupport();
-  let mp4Blob: Blob;
-  let rendererUsed: 'webcodecs-mp4' | 'mediarecorder-mp4' = 'webcodecs-mp4';
-  let hasAudio = false;
-
-  if (support.videoCodec) {
-    hasAudio = Boolean(audioBuffer && support.audioCodec);
-    mp4Blob = await encodeViaWebCodecsMp4(
-      canvas,
-      ctx,
-      scene,
-      audioBuffer,
-      support.videoCodec,
-      support.audioCodec,
+    const clip = await generateReferenceGuidedActionVideo(
+      {
+        product: options.product,
+        referenceImages,
+        scenes,
+        combinedActionPrompt: actionPrompt,
+        visualTheme,
+        aspectRatio,
+      },
       onProgress
     );
-  } else {
-    rendererUsed = 'mediarecorder-mp4';
-    hasAudio = Boolean(audioBuffer);
-    mp4Blob = await encodeViaMediaRecorderMp4(canvas, ctx, scene, audioBuffer, onProgress);
+    actionVideoBlob = clip.blob;
   }
 
-  const safeSlug = (product.customSlug || product.id || 'product')
-    .toLowerCase()
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .slice(0, 40);
-  const file = new File([mp4Blob], `dbuy-tiktok-promo-${safeSlug}.mp4`, {
-    type: 'video/mp4',
+  onProgress?.({
+    stage: 'audio',
+    progressPct: 50,
+    message: options.voiceoverAudioBase64
+      ? 'Mixing Product Voiceover & Auto-Ducked Music (15–20% bed)...'
+      : 'Composing Studio Background Music...',
+    detail: `Mood: ${musicMood.replace('_', ' ')}`,
+  });
+
+  const plannedDuration =
+    options.durationSec ||
+    scenes.reduce((sum, s) => sum + Math.max(2.5, Number(s.durationSec) || 3.75), 0);
+
+  const { audioBuffer, finalDurationSec, hasVoiceover, autoDucked } = await renderCommercialAudioMix({
+    musicMood,
+    requestedDurationSec: plannedDuration,
+    voiceoverAudioBase64: options.voiceoverAudioBase64,
+  });
+
+  const formattedDefaultPrice =
+    Number(options.product.price) > 0
+      ? `Only $${(Math.round(Number(options.product.price) * 100) / 100).toFixed(
+          Number.isInteger(Number(options.product.price)) ? 0 : 2
+        )}`
+      : '';
+  const priceBannerText = sanitizeCommercialCopy(options.priceBanner || formattedDefaultPrice);
+  const includeWebLink = options.includeWebLinkOverlay !== false;
+
+  onProgress?.({
+    stage: 'rendering',
+    progressPct: 54,
+    message: `Compositing ${aspectRatio} Live-Action Commercial...`,
+    detail: 'Decoding reference-guided AI video stream & preparing branding overlays',
+  });
+
+  const { video, objectUrl: actionVideoUrl, durationSec: nativeVideoDur } =
+    await loadVideoElementFromBlob(actionVideoBlob);
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d', { alpha: false });
+  if (!ctx) {
+    URL.revokeObjectURL(actionVideoUrl);
+    throw new Error('Failed to initialize 2D rendering context.');
+  }
+
+  const drawFrameAt = (timeSec: number) => {
+    renderLiveActionCommercialFrame(
+      ctx,
+      video,
+      width,
+      height,
+      timeSec,
+      finalDurationSec,
+      scenes,
+      visualTheme,
+      options.product,
+      priceBannerText,
+      includeWebLink
+    );
+  };
+
+  let blob: Blob;
+  let encoderUsed: 'webcodecs-mp4' | 'mediarecorder-fallback' = 'webcodecs-mp4';
+
+  try {
+    try {
+      blob = await encodeLiveVideoWithWebCodecsMp4(
+        canvas,
+        video,
+        nativeVideoDur,
+        width,
+        height,
+        finalDurationSec,
+        audioBuffer,
+        drawFrameAt,
+        (pct, detail) => {
+          onProgress?.({
+            stage: pct >= 86 ? 'encoding' : 'rendering',
+            progressPct: pct,
+            message:
+              pct >= 86
+                ? 'Encoding H.264 / AAC Commercial MP4...'
+                : `Compositing ${aspectRatio} In-Use Commercial...`,
+            detail,
+          });
+        }
+      );
+    } catch (webCodecsErr) {
+      console.warn('[VIDEO-ENCODER] WebCodecs unavailable, using MediaRecorder fallback:', webCodecsErr);
+      encoderUsed = 'mediarecorder-fallback';
+      blob = await encodeLiveVideoWithMediaRecorderFallback(
+        canvas,
+        video,
+        nativeVideoDur,
+        finalDurationSec,
+        audioBuffer,
+        drawFrameAt,
+        (pct, detail) => {
+          onProgress?.({
+            stage: 'rendering',
+            progressPct: pct,
+            message: `Recording ${aspectRatio} Live-Action Commercial...`,
+            detail,
+          });
+        }
+      );
+    }
+  } finally {
+    URL.revokeObjectURL(actionVideoUrl);
+  }
+
+  const safeSlug =
+    sanitizeCommercialCopy(options.product.title || 'product')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 40) || 'commercial';
+
+  const ext = blob.type.includes('webm') ? 'webm' : 'mp4';
+  const file = new File([blob], `dbuy-${safeSlug}-${aspectRatio.replace(':', 'x')}.${ext}`, {
+    type: blob.type || 'video/mp4',
   });
 
   onProgress?.({
-    stage: 'complete',
+    stage: 'done',
     progressPct: 100,
-    message: 'Promo Video Ready!',
-    detail: `${(file.size / (1024 * 1024)).toFixed(2)} MB · 9:16 H.264 MP4 (${TOTAL_DURATION_SEC}s)`,
+    message: `Live-Action Commercial Ready (${finalDurationSec.toFixed(1)}s ${aspectRatio})`,
+    detail: `${(file.size / (1024 * 1024)).toFixed(2)} MB · ${hasVoiceover ? 'Product-Bound Voiceover + Auto-Ducked Music' : 'Studio Music'}`,
   });
 
   return {
     file,
-    durationSec: TOTAL_DURATION_SEC,
-    width: VIDEO_WIDTH,
-    height: VIDEO_HEIGHT,
-    hasAudio,
-    rendererUsed,
+    durationSec: Math.round(finalDurationSec * 10) / 10,
+    width,
+    height,
+    aspectRatio,
+    encoderUsed,
+    hasVoiceover,
+    autoDucked,
   };
 }
