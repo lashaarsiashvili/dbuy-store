@@ -10,10 +10,10 @@ import {
   Monitor,
   Music,
   Palette,
-  RefreshCw,
   ShieldCheck,
   Smartphone,
   Sparkles,
+  Square,
   Volume2,
   Wand2,
 } from 'lucide-react';
@@ -32,21 +32,20 @@ import {
   CommercialVoiceAccent,
   CommercialVoiceoverResult,
   CommercialVoiceTone,
-  ENFORCED_NEGATIVE_PROMPT,
-  GeneratedActionVideoClip,
   generateCommercialVoiceover,
-  generateReferenceGuidedActionVideo,
   generateTikTokPromoVideo,
-  MANDATORY_STYLE_MODIFIERS,
+  isBrowserSpeechSynthesisSupported,
   planCommercialVideoAd,
   PromoVideoGenerationProgress,
   PromoVideoGenerationResult,
   sanitizeCommercialCopy,
+  speakWithBrowserSpeechSynthesis,
+  stopBrowserSpeechSynthesis,
 } from '../utils/tiktokVideoGenerator';
 import {
-  buildCombinedActionVideoPrompt,
   buildProductBoundInitialScript,
   countWords,
+  sanitizeSpokenVoiceoverScript,
 } from '../utils/videoPromptOptimizer';
 
 interface CommercialVideoStudioProps {
@@ -59,6 +58,13 @@ interface CommercialVideoStudioProps {
   onError?: (message: string) => void;
   onToast?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
 }
+
+const CAMERA_MOTION_LABELS: Record<CommercialScenePlan['cameraMotion'], string> = {
+  slow_zoom_in: 'Zoom + Parallax',
+  smooth_pan_right: 'Pan + Parallax',
+  macro_reveal: 'Detail Zoom',
+  gentle_orbit: 'Hero Parallax',
+};
 
 export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
   product,
@@ -75,50 +81,41 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
   const normalizedDefaultRatio: CommercialAspectRatio =
     defaultAspectRatio === '16:9' ? '16:9' : '9:16';
 
-  // Selected product reference photos (fed to Omni Flash video generator)
+  // Selected product photos used in the 4-scene Canvas motion renderer
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
-  // Stage 4 Admin Controls
+  // Commercial Controls
   const [aspectRatio, setAspectRatio] = useState<CommercialAspectRatio>(normalizedDefaultRatio);
   const [visualTheme, setVisualTheme] = useState<CommercialVisualTheme>('minimalist_studio');
-  const [voiceTone, setVoiceTone] = useState<CommercialVoiceTone>('energetic');
+  const [voiceTone, setVoiceTone] = useState<CommercialVoiceTone>('friendly');
   const [voiceAccent, setVoiceAccent] = useState<CommercialVoiceAccent>('us');
   const [musicMood, setMusicMood] = useState<CommercialMusicMood>('upbeat_tech');
   const [enableVoiceover, setEnableVoiceover] = useState<boolean>(true);
   const [priceBanner, setPriceBanner] = useState<string>('');
   const [includeWebLink, setIncludeWebLink] = useState<boolean>(true);
 
-  // Stage 1 & 2 Product-Bound Script + Practical In-Use Scene Plan
+  // Step 1: Product-Bound Script + 4-Scene Plan
   const [plan, setPlan] = useState<CommercialVideoPlan | null>(null);
   const [scenes, setScenes] = useState<CommercialScenePlan[]>([]);
   const [voiceoverScript, setVoiceoverScript] = useState<string>('');
-  const [customActionPrompt, setCustomActionPrompt] = useState<string>('');
   const [isPlanning, setIsPlanning] = useState<boolean>(false);
   const [showSceneInspector, setShowSceneInspector] = useState<boolean>(false);
   const planRequestIdRef = useRef<number>(0);
 
-  // Stage 2B Reference-Guided AI Live-Action Video Cache
-  const [aiVideoCache, setAiVideoCache] = useState<{
-    key: string;
-    clip: GeneratedActionVideoClip;
-    previewUrl: string;
-  } | null>(null);
-  const [isGeneratingActionVideo, setIsGeneratingActionVideo] = useState<boolean>(false);
-
-  // Stage 3 Voiceover Preview Cache
+  // Step 4: Voiceover Preview Cache (Gemini Free TTS + Browser SpeechSynthesis fallback)
   const [voiceoverCache, setVoiceoverCache] = useState<{
     key: string;
     result: CommercialVoiceoverResult;
     previewUrl: string;
   } | null>(null);
   const [isGeneratingVoice, setIsGeneratingVoice] = useState<boolean>(false);
+  const [isSpeakingBrowserVoice, setIsSpeakingBrowserVoice] = useState<boolean>(false);
 
   // Final Render State
   const [isRendering, setIsRendering] = useState<boolean>(false);
   const [renderProgress, setRenderProgress] = useState<PromoVideoGenerationProgress | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  // Keep latest settings ref for product-open auto-planning without re-triggering on every dropdown tweak
   const latestPrefsRef = useRef<{
     visualTheme: CommercialVisualTheme;
     aspectRatio: CommercialAspectRatio;
@@ -132,13 +129,12 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
   });
   latestPrefsRef.current = { visualTheme, aspectRatio, voiceTone, musicMood };
 
-  // Initialize exact product context & auto-plan 4 practical in-use scenes whenever product changes
+  // Initialize exact product context & auto-plan 4 practical scenes whenever product changes
   useEffect(() => {
     setSelectedImages(images.slice(0, 6));
     setAspectRatio(normalizedDefaultRatio);
     setPlan(null);
     setScenes([]);
-    setCustomActionPrompt('');
     setLocalError(null);
     setRenderProgress(null);
 
@@ -149,8 +145,6 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
           )}`
         : '';
     setPriceBanner(formattedPrice);
-
-    // Immediate zero-filler product-bound initial script (overwritten once AI plan returns)
     setVoiceoverScript(buildProductBoundInitialScript(product));
 
     const reqId = ++planRequestIdRef.current;
@@ -170,11 +164,10 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
         setPlan(nextPlan);
         setScenes(nextPlan.scenes);
         setVoiceoverScript(nextPlan.fullVoiceoverScript);
-        setCustomActionPrompt(nextPlan.combinedActionPrompt);
       })
       .catch((err: any) => {
         if (cancelled || planRequestIdRef.current !== reqId) return;
-        console.warn('[CommercialVideoStudio] Auto-plan failed:', err?.message || err);
+        console.warn('[CommercialVideoStudio] Auto-plan fallback active:', err?.message || err);
       })
       .finally(() => {
         if (!cancelled && planRequestIdRef.current === reqId) {
@@ -196,17 +189,15 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
     };
   }, [voiceoverCache]);
 
-  // Revoke AI action video blob URL on cache update/unmount
+  // Stop any browser speech synthesis on unmount
   useEffect(() => {
     return () => {
-      if (aiVideoCache?.previewUrl) {
-        URL.revokeObjectURL(aiVideoCache.previewUrl);
-      }
+      stopBrowserSpeechSynthesis();
     };
-  }, [aiVideoCache]);
+  }, []);
 
   const currentVoiceCacheKey = useMemo(() => {
-    return `${product.id}::${sanitizeCommercialCopy(voiceoverScript)}::${voiceTone}::${voiceAccent}`;
+    return `${product.id}::${sanitizeSpokenVoiceoverScript(voiceoverScript)}::${voiceTone}::${voiceAccent}`;
   }, [product.id, voiceoverScript, voiceTone, voiceAccent]);
 
   const activeVoiceoverPreviewUrl =
@@ -214,43 +205,39 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
       ? voiceoverCache.previewUrl
       : '';
 
-  const effectiveActionPrompt = useMemo(() => {
-    if (customActionPrompt.trim().length > 40) {
-      return customActionPrompt.trim();
-    }
-    return buildCombinedActionVideoPrompt({
-      product: {
-        title: product.title,
-        description: product.description,
-        features: product.features,
-        category: product.category,
-      },
-      scenes,
-      visualTheme,
-      aspectRatio,
-    });
-  }, [customActionPrompt, product, scenes, visualTheme, aspectRatio]);
-
-  const currentVideoCacheKey = useMemo(() => {
-    const refsKey = selectedImages.slice(0, 4).join('|');
-    return `${product.id}::${aspectRatio}::${visualTheme}::${refsKey}::${effectiveActionPrompt}`;
-  }, [product.id, aspectRatio, visualTheme, selectedImages, effectiveActionPrompt]);
-
-  const activeAiVideoClip =
-    aiVideoCache && aiVideoCache.key === currentVideoCacheKey
-      ? aiVideoCache.clip
-      : null;
-
-  const activeAiVideoPreviewUrl =
-    aiVideoCache && aiVideoCache.key === currentVideoCacheKey
-      ? aiVideoCache.previewUrl
-      : '';
-
   const wordCount = useMemo(() => countWords(voiceoverScript), [voiceoverScript]);
   const estimatedSpeechSec = useMemo(() => {
     if (wordCount === 0) return 0;
-    return Math.round((wordCount / 2.75) * 10) / 10;
+    return Math.round((wordCount / 2.6) * 10) / 10;
   }, [wordCount]);
+
+  // Pair the 4 scenes with selected product photos for visual preview
+  const scenePhotoPairs = useMemo(() => {
+    const pool = selectedImages.length > 0 ? selectedImages : images;
+    const defaultRoles: Array<{
+      sceneNumber: number;
+      label: string;
+      motion: CommercialScenePlan['cameraMotion'];
+    }> = [
+      { sceneNumber: 1, label: 'Hero Reveal', motion: 'slow_zoom_in' },
+      { sceneNumber: 2, label: 'Design & Texture', motion: 'smooth_pan_right' },
+      { sceneNumber: 3, label: 'Key Feature', motion: 'macro_reveal' },
+      { sceneNumber: 4, label: 'Product Showcase', motion: 'gentle_orbit' },
+    ];
+
+    return defaultRoles.map((def, idx) => {
+      const s = scenes[idx];
+      const photoIdx = idx === 3 && pool.length >= 4 ? 0 : pool.length > 0 ? idx % pool.length : 0;
+      return {
+        sceneNumber: def.sceneNumber,
+        label: s?.roleLabel || def.label,
+        headline: s?.headline || (idx === 3 ? 'Available at DBUY Store' : product.title),
+        motion: s?.cameraMotion || def.motion,
+        durationSec: s?.durationSec || (idx === 1 || idx === 2 ? 2.8 : 2.4),
+        imageUrl: pool[photoIdx] || '',
+      };
+    });
+  }, [scenes, selectedImages, images, product.title]);
 
   const toggleImage = (url: string) => {
     setSelectedImages((prev) => {
@@ -270,7 +257,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
     });
   };
 
-  // Stage 1 & 2: Generate Structured Product-Bound Script + Practical In-Use Scene Plan
+  // Step 1: Generate Product-Bound Script + 4-Scene Plan (Free Gemini Flash Text)
   const handleGeneratePlan = async () => {
     if (isPlanning || isRendering) return;
     const reqId = ++planRequestIdRef.current;
@@ -288,9 +275,8 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
       setPlan(nextPlan);
       setScenes(nextPlan.scenes);
       setVoiceoverScript(nextPlan.fullVoiceoverScript);
-      setCustomActionPrompt(nextPlan.combinedActionPrompt);
       setShowSceneInspector(true);
-      onToast?.('Product-bound script & hands-on 4-scene action plan generated.', 'success');
+      onToast?.('4-scene English script & motion storyboard generated (Free Tier).', 'success');
     } catch (err: any) {
       const msg = err?.message || 'Failed to generate AI commercial script plan.';
       setLocalError(msg);
@@ -303,67 +289,9 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
     }
   };
 
-  // Stage 2B: Generate or Reuse Reference-Guided Live-Action AI Video Clip
-  const ensureActionVideoClip = async (forceRegenerate = false): Promise<GeneratedActionVideoClip> => {
-    const chosenImages = selectedImages.length > 0 ? selectedImages : images.slice(0, 4);
-    if (chosenImages.length === 0) {
-      throw new Error('No product reference images selected for AI video generation.');
-    }
-
-    if (!forceRegenerate && activeAiVideoClip) {
-      return activeAiVideoClip;
-    }
-
-    const clip = await generateReferenceGuidedActionVideo(
-      {
-        product,
-        referenceImages: chosenImages,
-        scenes,
-        combinedActionPrompt: effectiveActionPrompt,
-        visualTheme,
-        aspectRatio,
-      },
-      (progress) => {
-        setRenderProgress(progress);
-      }
-    );
-
-    const previewUrl = URL.createObjectURL(clip.blob);
-
-    setAiVideoCache({
-      key: currentVideoCacheKey,
-      clip,
-      previewUrl,
-    });
-
-    return clip;
-  };
-
-  const handleGenerateActionFootageOnly = async (forceRegenerate = false) => {
-    if (isGeneratingActionVideo || isRendering || isPlanning) return;
-    setIsGeneratingActionVideo(true);
-    setLocalError(null);
-    try {
-      await ensureActionVideoClip(forceRegenerate);
-      onToast?.('Live-action product usage footage ready! Click Render MP4 to mix voiceover & captions.', 'success');
-    } catch (err: any) {
-      const msg = err?.message || 'Failed to generate live-action product video.';
-      setLocalError(msg);
-      setRenderProgress({
-        stage: 'error',
-        progressPct: 0,
-        message: msg,
-      });
-      onError?.(msg);
-      onToast?.(msg, 'error');
-    } finally {
-      setIsGeneratingActionVideo(false);
-    }
-  };
-
-  // Stage 3: Synthesize Studio English Voiceover (cached for reuse during final render)
+  // Step 4: Synthesize Studio Voiceover (with graceful browser SpeechSynthesis fallback)
   const ensureVoiceoverAudio = async (): Promise<CommercialVoiceoverResult | null> => {
-    const cleaned = sanitizeCommercialCopy(voiceoverScript);
+    const cleaned = sanitizeSpokenVoiceoverScript(voiceoverScript);
     if (!enableVoiceover || countWords(cleaned) < 3) {
       return null;
     }
@@ -394,18 +322,41 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
     return result;
   };
 
+  const handleBrowserVoiceToggle = () => {
+    if (isSpeakingBrowserVoice) {
+      stopBrowserSpeechSynthesis();
+      setIsSpeakingBrowserVoice(false);
+      return;
+    }
+    setIsSpeakingBrowserVoice(true);
+    const ok = speakWithBrowserSpeechSynthesis({
+      script: voiceoverScript,
+      voiceTone,
+      accent: voiceAccent,
+      onEnd: () => setIsSpeakingBrowserVoice(false),
+      onError: () => setIsSpeakingBrowserVoice(false),
+    });
+    if (!ok) {
+      setIsSpeakingBrowserVoice(false);
+      onToast?.('Browser SpeechSynthesis is unavailable in this browser.', 'warning');
+    }
+  };
+
   const handlePreviewVoiceover = async () => {
     if (isGeneratingVoice || isRendering) return;
     setIsGeneratingVoice(true);
     setLocalError(null);
     try {
       await ensureVoiceoverAudio();
-      onToast?.('Studio English voiceover synthesized and ready to preview.', 'success');
-    } catch (err: any) {
-      const msg = err?.message || 'Failed to synthesize English voiceover.';
-      setLocalError(msg);
-      onError?.(msg);
-      onToast?.(msg, 'error');
+      onToast?.('English studio voiceover ready to embed in MP4.', 'success');
+    } catch {
+      // Graceful free fallback to browser SpeechSynthesis
+      if (isBrowserSpeechSynthesisSupported()) {
+        handleBrowserVoiceToggle();
+        onToast?.('Playing voiceover preview via free browser SpeechSynthesis.', 'info');
+      } else {
+        onToast?.('TTS unavailable right now — video will render with studio music + synced captions.', 'warning');
+      }
     } finally {
       setIsGeneratingVoice(false);
     }
@@ -413,41 +364,27 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
 
   const updateSceneField = (
     idx: number,
-    field: 'headline' | 'subheadline' | 'visualPrompt',
+    field: 'headline' | 'subheadline' | 'voiceoverLine',
     value: string
   ) => {
-    setScenes((prev) => {
-      const updated = prev.map((scene, i) => (i === idx ? { ...scene, [field]: value } : scene));
-      if (field === 'visualPrompt') {
-        setCustomActionPrompt(
-          buildCombinedActionVideoPrompt({
-            product: {
-              title: product.title,
-              description: product.description,
-              features: product.features,
-              category: product.category,
-            },
-            scenes: updated,
-            visualTheme,
-            aspectRatio,
-          })
-        );
-      }
-      return updated;
-    });
+    setScenes((prev) =>
+      prev.map((scene, i) => (i === idx ? { ...scene, [field]: value } : scene))
+    );
   };
 
-  // Final Render Pipeline: Product-Bound Voiceover TTS + Reference-Guided Live-Action Clip + Auto-Ducked Music -> H.264 MP4
+  // Final Render: 30fps Canvas Ken Burns + Crossfades + Synced Captions + Auto-Ducked Audio -> MP4
   const handleRenderCommercial = async () => {
-    if (isRendering || isGeneratingActionVideo) return;
-    const chosenImages = selectedImages.length > 0 ? selectedImages : images.slice(0, 4);
+    if (isRendering) return;
+    const chosenImages = selectedImages.length > 0 ? selectedImages : images.slice(0, 6);
     if (chosenImages.length === 0) {
-      const msg = 'No product reference images available to generate the live-action video.';
+      const msg = 'No product photos selected to render the motion commercial.';
       setLocalError(msg);
       onError?.(msg);
       return;
     }
 
+    stopBrowserSpeechSynthesis();
+    setIsSpeakingBrowserVoice(false);
     setIsRendering(true);
     setLocalError(null);
 
@@ -457,13 +394,19 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
         setRenderProgress({
           stage: 'voiceover',
           progressPct: 8,
-          message: 'Synthesizing Product-Bound English Voiceover...',
+          message: 'Preparing English Voiceover Track...',
           detail: `${voiceAccent.toUpperCase()} English · ${voiceTone.replace('_', ' ')} tone`,
         });
-        voiceResult = await ensureVoiceoverAudio();
+        try {
+          voiceResult = await ensureVoiceoverAudio();
+        } catch (ttsErr: any) {
+          console.warn('[CommercialVideoStudio] TTS unavailable, continuing with music + captions:', ttsErr?.message || ttsErr);
+          onToast?.(
+            'Voiceover TTS limit reached — rendering MP4 with studio beat & synced English captions.',
+            'info'
+          );
+        }
       }
-
-      const clip = await ensureActionVideoClip(false);
 
       const result = await generateTikTokPromoVideo(
         {
@@ -476,12 +419,9 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
           includeWebLinkOverlay: includeWebLink,
           isKa,
           scenes: scenes.length > 0 ? scenes : undefined,
-          combinedActionPrompt: effectiveActionPrompt,
-          generatedVideoBlob: clip.blob,
-          generatedVideoMimeType: clip.mimeType,
           voiceoverAudioBase64: voiceResult?.audioBase64,
           voiceoverMimeType: voiceResult?.mimeType,
-          voiceoverScript: sanitizeCommercialCopy(voiceoverScript),
+          voiceoverScript: sanitizeSpokenVoiceoverScript(voiceoverScript),
         },
         (progress) => {
           setRenderProgress(progress);
@@ -490,7 +430,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
 
       onVideoGenerated(result);
     } catch (err: any) {
-      const msg = err?.message || 'Failed to render live-action commercial MP4 video.';
+      const msg = err?.message || 'Failed to render motion commercial MP4 video.';
       setLocalError(msg);
       setRenderProgress({
         stage: 'error',
@@ -535,10 +475,10 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
           </div>
           <div>
             <h4 className="text-xs sm:text-sm font-black text-white">
-              Commercial Video Ad Studio
+              Product Showcase Video Director
             </h4>
             <p className="text-[11px] text-slate-400">
-              Product-Bound Script · Reference-Guided Live-Action Usage · Auto-Ducked English Voiceover
+              Slow Zoom-In + Subtle Parallax · Soft Studio Lighting · Short Benefit-Led Narration
             </p>
           </div>
         </div>
@@ -549,14 +489,14 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
         </div>
       </div>
 
-      {/* Product Reference Images Selector Grid */}
+      {/* Product Photos Selector Grid */}
       <div className="space-y-2">
         <div className="flex items-center justify-between text-xs">
           <span className="font-bold text-slate-200">
-            Product Reference Images (Guided In-Use AI Video)
+            Product Scene Photos (Starring in 4-Scene Motion Reel)
           </span>
           <span className={`text-[11px] font-bold tabular-nums ${activeTextAccent}`}>
-            {selectedImages.length}/{images.length} selected (top 4 guide AI action)
+            {selectedImages.length}/{images.length} selected
           </span>
         </div>
         <div className="grid grid-cols-4 sm:grid-cols-6 gap-2">
@@ -595,7 +535,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
         </div>
       </div>
 
-      {/* Stage 4 Controls Row 1: Aspect Ratio & Visual Theme */}
+      {/* Controls Row 1: Aspect Ratio & Visual Theme */}
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
         <div className="sm:col-span-6 space-y-1.5">
           <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
@@ -637,7 +577,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
         <div className="sm:col-span-6 space-y-1.5">
           <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
             <Palette className={`w-3.5 h-3.5 ${activeTextAccent}`} />
-            <span>Visual Theme</span>
+            <span>Studio Backdrop Theme</span>
           </label>
           <select
             value={visualTheme}
@@ -653,7 +593,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
         </div>
       </div>
 
-      {/* Stage 4 Controls Row 2: Voice Tone, Accent & Music Mood */}
+      {/* Controls Row 2: Voice Tone, Accent & Music Mood */}
       <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
         <div className="sm:col-span-4 space-y-1.5">
           <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
@@ -695,7 +635,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
         <div className="sm:col-span-5 space-y-1.5">
           <label className="flex items-center gap-1.5 text-[11px] font-bold text-slate-300">
             <Music className={`w-3.5 h-3.5 ${activeTextAccent}`} />
-            <span>Background Music Mood</span>
+            <span>Background Music Beat</span>
           </label>
           <select
             value={musicMood}
@@ -711,7 +651,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
         </div>
       </div>
 
-      {/* Stage 1 & 2: AI Script & Scene Planner + Editable Voiceover Script */}
+      {/* Step 1: AI Script & 4-Scene Planner */}
       <div className="p-3.5 rounded-xl bg-slate-900/90 border border-slate-800 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
@@ -722,12 +662,12 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
                 onChange={(e) => setEnableVoiceover(e.target.checked)}
                 className="rounded border-slate-600 bg-slate-950 text-cyan-500 focus:ring-cyan-500"
               />
-              <span>English Studio Voiceover (Auto-Ducks Music to 15–20%)</span>
+              <span>English Voiceover &amp; Synced Subtitles (Auto-Ducks Beat to 17%)</span>
             </label>
           </div>
           <button
             type="button"
-            disabled={isPlanning || isRendering || isGeneratingActionVideo}
+            disabled={isPlanning || isRendering}
             onClick={handleGeneratePlan}
             className={`px-3 py-1.5 rounded-lg text-[11px] font-extrabold flex items-center gap-1.5 transition-all cursor-pointer disabled:opacity-50 ${
               isRed
@@ -738,12 +678,12 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
             {isPlanning ? (
               <>
                 <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Tailoring 4 In-Use Scenes...</span>
+                <span>Writing 4-Scene Script...</span>
               </>
             ) : (
               <>
                 <Wand2 className="w-3.5 h-3.5" />
-                <span>{plan ? 'Regenerate Product Script & Action Plan' : 'Generate AI Script & Action Plan'}</span>
+                <span>{plan ? 'Regenerate Script & Scenes' : 'Generate AI Script & Scenes'}</span>
               </>
             )}
           </button>
@@ -753,38 +693,43 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
           <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-slate-950/90 border border-slate-800 text-[11px] text-slate-300">
             <Loader2 className={`w-3.5 h-3.5 animate-spin shrink-0 ${activeTextAccent}`} />
             <span className="truncate">
-              Tailoring 4-scene script &amp; hands-on action plan for <strong className="text-white">{product.title}</strong>...
+              Tailoring 4-scene commercial script for <strong className="text-white">{product.title}</strong>...
             </span>
           </div>
         )}
 
-        {/* Editable English Voiceover Script Textarea */}
+        {/* Editable Short Voiceover Script Textarea (1–2 sentences, <15 words) */}
         <div className="space-y-1.5">
           <div className="flex items-center justify-between text-[11px]">
             <span className="font-semibold text-slate-300">
-              Product-Bound English Voiceover Script (Must name exact product)
+              Product Showcase Script (1–2 sentences, under 15 words)
             </span>
             <span
               className={`font-bold tabular-nums ${
-                wordCount >= 35 && wordCount <= 65 ? 'text-emerald-400' : 'text-amber-300'
+                wordCount > 0 && wordCount < 15 ? 'text-emerald-400' : 'text-amber-300'
               }`}
             >
-              {wordCount} words · ~{estimatedSpeechSec}s speech
+              {wordCount}/14 words · ~{estimatedSpeechSec}s speech
             </span>
           </div>
           <textarea
-            rows={3}
+            rows={2}
             value={voiceoverScript}
             onChange={(e) => setVoiceoverScript(e.target.value)}
             disabled={!enableVoiceover}
-            placeholder="Generating exact product-bound English commercial voiceover script..."
+            placeholder="Meet [Product Name] — [Main Benefit]. Get yours today."
             className={`w-full px-3 py-2 rounded-xl bg-slate-950 border border-slate-700 text-slate-100 text-xs leading-relaxed focus:ring-2 ${focusRing} focus:outline-hidden resize-y disabled:opacity-45`}
           />
+          {wordCount >= 15 && (
+            <p className="text-[10px] text-amber-300">
+              Keep under 15 words (1–2 sentences max) for crisp, high-converting showcase pacing.
+            </p>
+          )}
         </div>
 
-        {/* Inline Voiceover Preview Controls */}
+        {/* Voiceover Preview Controls (Free Gemini TTS + Browser SpeechSynthesis) */}
         {enableVoiceover && (
-          <div className="flex flex-wrap items-center gap-2.5">
+          <div className="flex flex-wrap items-center gap-2">
             <button
               type="button"
               disabled={isGeneratingVoice || isRendering || wordCount < 3}
@@ -799,10 +744,32 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
               ) : (
                 <>
                   <Volume2 className="w-3.5 h-3.5 text-emerald-400" />
-                  <span>{activeVoiceoverPreviewUrl ? 'Voiceover Ready' : 'Preview English Voiceover'}</span>
+                  <span>{activeVoiceoverPreviewUrl ? 'Studio Voice Ready' : 'Prepare Studio Voiceover'}</span>
                 </>
               )}
             </button>
+
+            {isBrowserSpeechSynthesisSupported() && (
+              <button
+                type="button"
+                disabled={isRendering || wordCount < 3}
+                onClick={handleBrowserVoiceToggle}
+                className="px-3 py-1.5 rounded-lg bg-slate-800/80 hover:bg-slate-700 border border-slate-700 text-slate-200 text-[11px] font-semibold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isSpeakingBrowserVoice ? (
+                  <>
+                    <Square className="w-3 h-3 text-rose-400 fill-rose-400" />
+                    <span>Stop Browser Voice</span>
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-3.5 h-3.5 text-cyan-400" />
+                    <span>Speak via Browser Voice (Free)</span>
+                  </>
+                )}
+              </button>
+            )}
+
             {activeVoiceoverPreviewUrl && (
               <audio
                 controls
@@ -813,7 +780,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
           </div>
         )}
 
-        {/* Collapsible Scene Breakdown & Stage 2 Visual Prompt Guardrails Inspector */}
+        {/* Collapsible 4-Scene Storyboard & Caption Editor */}
         {scenes.length > 0 && (
           <div className="pt-1 border-t border-slate-800">
             <button
@@ -824,7 +791,7 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
               <span className="flex items-center gap-1.5">
                 <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
                 <span>
-                  4-Scene Storyboard &amp; Visual Guardrails ({scenes.reduce((s, x) => s + x.durationSec, 0)}s plan)
+                  Edit 4-Scene Headlines &amp; Synced Subtitles ({scenes.reduce((s, x) => s + x.durationSec, 0).toFixed(1)}s)
                 </span>
               </span>
               {showSceneInspector ? (
@@ -835,160 +802,91 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
             </button>
 
             {showSceneInspector && (
-              <div className="mt-2 space-y-2.5">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  {scenes.map((scene, idx) => (
-                    <div
-                      key={`scene-${scene.sceneNumber}`}
-                      className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5"
-                    >
-                      <div className="flex items-center justify-between text-[10px] font-bold">
-                        <span className={activeTextAccent}>
-                          Scene {scene.sceneNumber} · {scene.roleLabel}
-                        </span>
-                        <span className="text-slate-400 tabular-nums">{scene.durationSec}s</span>
-                      </div>
-                      <input
-                        type="text"
-                        value={scene.headline}
-                        onChange={(e) => updateSceneField(idx, 'headline', e.target.value)}
-                        placeholder="On-screen headline"
-                        className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-white text-[11px] font-bold focus:outline-hidden"
-                      />
-                      <input
-                        type="text"
-                        value={scene.subheadline}
-                        onChange={(e) => updateSceneField(idx, 'subheadline', e.target.value)}
-                        placeholder="On-screen subheadline"
-                        className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-[10px] focus:outline-hidden"
-                      />
-                      <textarea
-                        rows={2}
-                        value={scene.visualPrompt}
-                        onChange={(e) => updateSceneField(idx, 'visualPrompt', e.target.value)}
-                        placeholder="Hands-on practical visual prompt"
-                        className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-[10px] leading-snug focus:outline-hidden resize-y"
-                      />
+              <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {scenes.map((scene, idx) => (
+                  <div
+                    key={`scene-${scene.sceneNumber}`}
+                    className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5"
+                  >
+                    <div className="flex items-center justify-between text-[10px] font-bold">
+                      <span className={activeTextAccent}>
+                        Scene {scene.sceneNumber} · {scene.roleLabel}
+                      </span>
+                      <span className="text-slate-400 tabular-nums">{scene.durationSec}s</span>
                     </div>
-                  ))}
-                </div>
-
-                {/* Combined Action Prompt Direction (editable before Omni Flash video generation) */}
-                <div className="space-y-1">
-                  <div className="flex items-center justify-between text-[10px] font-bold text-slate-300">
-                    <span>Reference-Guided Live-Action Video Direction Prompt</span>
-                    {customActionPrompt && (
-                      <button
-                        type="button"
-                        onClick={() => setCustomActionPrompt('')}
-                        className="text-slate-400 hover:text-white underline cursor-pointer"
-                      >
-                        Reset to Auto
-                      </button>
-                    )}
+                    <input
+                      type="text"
+                      value={scene.headline}
+                      onChange={(e) => updateSceneField(idx, 'headline', e.target.value)}
+                      placeholder="On-screen headline"
+                      className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-700 text-white text-[11px] font-bold focus:outline-hidden"
+                    />
+                    <input
+                      type="text"
+                      value={scene.subheadline}
+                      onChange={(e) => updateSceneField(idx, 'subheadline', e.target.value)}
+                      placeholder="On-screen subheadline"
+                      className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-300 text-[10px] focus:outline-hidden"
+                    />
+                    <textarea
+                      rows={2}
+                      value={scene.voiceoverLine}
+                      onChange={(e) => updateSceneField(idx, 'voiceoverLine', e.target.value)}
+                      placeholder="Synced English subtitle line"
+                      className="w-full px-2 py-1 rounded-lg bg-slate-900 border border-slate-800 text-slate-400 text-[10px] leading-snug focus:outline-hidden resize-y"
+                    />
                   </div>
-                  <textarea
-                    rows={3}
-                    value={effectiveActionPrompt}
-                    onChange={(e) => setCustomActionPrompt(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-slate-300 text-[10px] leading-relaxed focus:outline-hidden resize-y"
-                  />
-                </div>
-
-                {/* Stage 2 Guardrail Summary */}
-                <div className="p-2.5 rounded-lg bg-emerald-950/35 border border-emerald-500/25 text-[10px] text-emerald-200/90 space-y-1">
-                  <div>
-                    <strong className="text-emerald-300">Enforced Style Modifiers:</strong>{' '}
-                    {MANDATORY_STYLE_MODIFIERS}
-                  </div>
-                  <div>
-                    <strong className="text-emerald-300">Negative Prompt Guardrails:</strong>{' '}
-                    {ENFORCED_NEGATIVE_PROMPT}
-                  </div>
-                </div>
+                ))}
               </div>
             )}
           </div>
         )}
       </div>
 
-      {/* Stage 2B: Reference-Guided Live-Action AI Footage Cache & Preview */}
+      {/* Step 2 & 3 Preview: 4-Scene Ken Burns Motion Storyboard */}
       <div className="p-3 rounded-xl bg-slate-900/75 border border-slate-800 space-y-2.5">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <Clapperboard className={`w-4 h-4 ${activeTextAccent}`} />
             <div>
               <div className="text-xs font-bold text-white">
-                Reference-Guided Live-Action Product Footage (No Slideshows)
+                4-Scene Cinematic Motion Pipeline (Ken Burns + Crossfades)
               </div>
               <div className="text-[10px] text-slate-400">
-                Shows realistic hands-on usage anchored to your product images. Cached once generated.
+                Renders smoothly at 30fps directly in your browser using your product photos — zero paid video API needed.
               </div>
             </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {activeAiVideoPreviewUrl ? (
-              <button
-                type="button"
-                disabled={isGeneratingActionVideo || isRendering || isPlanning}
-                onClick={() => handleGenerateActionFootageOnly(true)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-100 text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {isGeneratingActionVideo ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Regenerating Footage...</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5 text-amber-300" />
-                    <span>Regenerate Footage</span>
-                  </>
-                )}
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={isGeneratingActionVideo || isRendering || isPlanning || selectedImages.length === 0}
-                onClick={() => handleGenerateActionFootageOnly(false)}
-                className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-100 text-[11px] font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
-              >
-                {isGeneratingActionVideo ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Generating AI Action Clip...</span>
-                  </>
-                ) : (
-                  <>
-                    <Clapperboard className="w-3.5 h-3.5 text-emerald-400" />
-                    <span>Pre-Generate AI Footage</span>
-                  </>
-                )}
-              </button>
-            )}
           </div>
         </div>
 
-        {activeAiVideoPreviewUrl && (
-          <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-950 border border-slate-800">
-            <video
-              controls
-              muted
-              playsInline
-              src={activeAiVideoPreviewUrl}
-              className="w-28 h-20 rounded-lg object-cover bg-black border border-slate-800 shrink-0"
-            />
-            <div className="text-[11px] space-y-1 min-w-0">
-              <div className="font-bold text-emerald-400 flex items-center gap-1.5">
-                <Check className="w-3.5 h-3.5 shrink-0" />
-                <span>Raw AI In-Use Action Clip Cached ({aspectRatio})</span>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {scenePhotoPairs.map((item) => (
+            <div
+              key={`pair-${item.sceneNumber}`}
+              className="rounded-xl bg-slate-950 border border-slate-800 overflow-hidden flex flex-col"
+            >
+              <div className="relative aspect-[4/3] bg-slate-900 overflow-hidden">
+                {item.imageUrl ? (
+                  <img
+                    src={item.imageUrl}
+                    alt={item.headline}
+                    className="w-full h-full object-cover"
+                  />
+                ) : null}
+                <span className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-slate-950/85 text-[9px] font-extrabold text-white">
+                  S{item.sceneNumber} · {item.durationSec}s
+                </span>
+                <span className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-slate-950/85 text-[9px] font-bold text-cyan-300">
+                  {CAMERA_MOTION_LABELS[item.motion]}
+                </span>
               </div>
-              <p className="text-slate-400 leading-snug">
-                Reuses this live-action clip automatically when compositing voiceover, music, or caption updates.
-              </p>
+              <div className="p-2 space-y-0.5">
+                <div className="text-[10px] font-bold text-white truncate">{item.headline}</div>
+                <div className="text-[9px] text-slate-400 truncate">{item.label}</div>
+              </div>
             </div>
-          </div>
-        )}
+          ))}
+        </div>
       </div>
 
       {/* Price Banner & Web URL Footer Overlay */}
@@ -1030,20 +928,20 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
       {/* Render Commercial MP4 CTA */}
       <button
         type="button"
-        disabled={isRendering || isGeneratingActionVideo || isPlanning || selectedImages.length === 0}
+        disabled={isRendering || isPlanning || selectedImages.length === 0}
         onClick={handleRenderCommercial}
         className={`w-full py-3 px-4 rounded-xl font-black text-xs sm:text-sm ${primaryBtnGradient} hover:brightness-110 active:scale-[0.99] transition-all flex items-center justify-center gap-2 shadow-lg cursor-pointer disabled:opacity-50`}
       >
-        {isRendering || isGeneratingActionVideo ? (
+        {isRendering ? (
           <>
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span>{renderProgress?.message || `Rendering ${aspectRatio} Live-Action Commercial MP4...`}</span>
+            <span>{renderProgress?.message || `Rendering ${aspectRatio} Motion Commercial MP4...`}</span>
           </>
         ) : (
           <>
             <Sparkles className="w-4 h-4" />
             <span>
-              Render {aspectRatio} Live-Action Commercial MP4
+              Render {aspectRatio} Motion Commercial MP4
               {enableVoiceover ? ' (Voiceover + Auto-Ducking)' : ''}
             </span>
           </>
@@ -1051,11 +949,11 @@ export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({
       </button>
 
       {/* Multi-Stage Progress Bar */}
-      {(isRendering || isGeneratingActionVideo || (renderProgress && renderProgress.stage !== 'error')) && renderProgress && (
+      {(isRendering || (renderProgress && renderProgress.stage !== 'error')) && renderProgress && (
         <div className="p-3 rounded-xl bg-slate-900 border border-slate-800 space-y-2">
           <div className="flex items-center justify-between text-xs font-bold">
             <span className={`flex items-center gap-2 ${isRed ? 'text-red-300' : 'text-cyan-300'}`}>
-              {isRendering || isGeneratingActionVideo ? (
+              {isRendering ? (
                 <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
               ) : (
                 <Check className="w-3.5 h-3.5 text-emerald-400 shrink-0" />

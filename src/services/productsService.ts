@@ -11,9 +11,9 @@ export const ProductsManager = {
   async getProducts(): Promise<Product[]> {
     // 1. Primary: fetch complete product catalog from /api/products
     try {
-      const response = await fetch(`${API_URL}?_t=${Date.now()}`, { 
+      const response = await fetch(API_URL, { 
         credentials: 'omit',
-        cache: 'no-store'
+        cache: 'default'
       });
       if (response.ok) {
         const data: any = await response.json();
@@ -28,9 +28,9 @@ export const ProductsManager = {
 
     // 2. Fallback: query /api/store/products
     try {
-      const storeRes = await fetch(`${API_BASE}/api/store/products?_t=${Date.now()}`, {
+      const storeRes = await fetch(`${API_BASE}/api/store/products`, {
         credentials: 'omit',
-        cache: 'no-store'
+        cache: 'default'
       });
       if (storeRes.ok) {
         const storeData: any = await storeRes.json();
@@ -45,9 +45,9 @@ export const ProductsManager = {
 
     // 3. Fallback: query /api/store/sync
     try {
-      const syncRes = await fetch(`${API_BASE}/api/store/sync?_t=${Date.now()}`, {
+      const syncRes = await fetch(`${API_BASE}/api/store/sync`, {
         credentials: 'omit',
-        cache: 'no-store'
+        cache: 'default'
       });
       if (syncRes.ok) {
         const syncData: any = await syncRes.json();

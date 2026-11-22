@@ -5,7 +5,7 @@ import {
   CommercialVoiceTone,
   countWords,
   ensureWavBase64,
-  sanitizeCommercialCopy,
+  sanitizeSpokenVoiceoverScript,
 } from '../../../src/utils/videoPromptOptimizer';
 
 const CORS_HEADERS = {
@@ -21,6 +21,7 @@ export async function onRequestOptions() {
 
 interface TtsAttempt {
   model: string;
+  useSpeechMetadata: boolean;
   includeSpeechConfig: boolean;
 }
 
@@ -39,32 +40,32 @@ export async function onRequestPost(context: any) {
     }
 
     const body = await context.request.json();
-    const cleanedScript = sanitizeCommercialCopy(String(body?.script || '')).slice(0, 900);
+    const cleanedScript = sanitizeSpokenVoiceoverScript(String(body?.script || '')).slice(0, 400);
     if (!cleanedScript || countWords(cleanedScript) < 3) {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'Please provide a valid English voiceover script (at least 3 words).',
+          error: 'Please provide a valid voiceover script (at least 3 words).',
         }),
         { status: 400, headers: CORS_HEADERS }
       );
     }
 
     const voiceTone: CommercialVoiceTone =
-      body?.voiceTone === 'calm_luxury' || body?.voiceTone === 'friendly'
+      body?.voiceTone === 'calm_luxury' || body?.voiceTone === 'energetic'
         ? body.voiceTone
-        : 'energetic';
+        : 'friendly';
 
     const accent: CommercialVoiceAccent = body?.accent === 'uk' ? 'uk' : 'us';
-    const { voiceName, promptText } = buildEnglishTtsPrompt(cleanedScript, voiceTone, accent);
+    const { voiceName, styleInstruction, promptText } = buildEnglishTtsPrompt(
+      cleanedScript,
+      voiceTone,
+      accent
+    );
 
-    // Explicitly target v1beta so Gemini Audio/TTS generation schema is supported
-    // and strictly avoid sending unsupported `speechMetadata` fields in parts.
     const ai = new GoogleGenAI({
       apiKey,
-      apiVersion: 'v1beta',
       httpOptions: {
-        apiVersion: 'v1beta',
         headers: {
           'User-Agent': 'aistudio-build',
         },
@@ -72,10 +73,10 @@ export async function onRequestPost(context: any) {
     });
 
     const attempts: TtsAttempt[] = [
-      { model: 'gemini-3.8-flash-lite-tts', includeSpeechConfig: true },
-      { model: 'gemini-2.5-flash-preview-tts', includeSpeechConfig: true },
-      { model: 'gemini-3.8-flash-lite-tts', includeSpeechConfig: false },
-      { model: 'gemini-2.5-flash-preview-tts', includeSpeechConfig: false },
+      { model: 'gemini-3.8-flash-lite-tts', useSpeechMetadata: true, includeSpeechConfig: true },
+      { model: 'gemini-3.8-flash-tts', useSpeechMetadata: true, includeSpeechConfig: true },
+      { model: 'gemini-3.8-flash-lite-tts', useSpeechMetadata: false, includeSpeechConfig: true },
+      { model: 'gemini-3.8-flash-lite-tts', useSpeechMetadata: false, includeSpeechConfig: false },
     ];
 
     let rawAudioBase64 = '';
@@ -95,19 +96,24 @@ export async function onRequestPost(context: any) {
           };
         }
 
+        const part: Record<string, any> = { text: promptText };
+        if (attempt.useSpeechMetadata) {
+          part.speechMetadata = { style: styleInstruction };
+        }
+
         const response = await ai.models.generateContent({
           model: attempt.model,
           contents: [
             {
               role: 'user',
-              parts: [{ text: promptText }],
+              parts: [part],
             },
           ],
           config,
         });
 
         const inlinePart = response.candidates?.[0]?.content?.parts?.find(
-          (part: any) => part?.inlineData?.data
+          (p: any) => p?.inlineData?.data
         );
         if (inlinePart?.inlineData?.data) {
           rawAudioBase64 = inlinePart.inlineData.data;
@@ -117,19 +123,21 @@ export async function onRequestPost(context: any) {
       } catch (attemptErr: any) {
         lastErrorMessage = attemptErr?.message || String(attemptErr);
         console.warn(
-          `[CF-VIDEO-AD-VOICEOVER] Attempt failed (${attempt.model}, speechConfig=${attempt.includeSpeechConfig}):`,
+          `[CF-VIDEO-AD-VOICEOVER] Attempt failed (${attempt.model}, meta=${attempt.useSpeechMetadata}, speechConfig=${attempt.includeSpeechConfig}):`,
           lastErrorMessage.slice(0, 220)
         );
       }
     }
 
     if (!rawAudioBase64) {
+      const isQuota = /RESOURCE_EXHAUSTED|429|quota/i.test(lastErrorMessage);
       return new Response(
         JSON.stringify({
           success: false,
+          quotaExhausted: isQuota,
           error: lastErrorMessage || 'Voiceover synthesis returned no audio data.',
         }),
-        { status: 502, headers: CORS_HEADERS }
+        { status: isQuota ? 429 : 502, headers: CORS_HEADERS }
       );
     }
 

@@ -11,15 +11,16 @@ const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Slug, x-admin-key',
-  'Cache-Control': 'no-cache, no-store, must-revalidate, max-age=0',
+  'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60',
 };
 
-function jsonResponse(data: any, status = 200) {
+function jsonResponse(data: any, status = 200, isGet = false) {
   return new Response(JSON.stringify(data), {
     status,
     headers: {
       'Content-Type': 'application/json',
-      ...CORS_HEADERS,
+      'Access-Control-Allow-Origin': '*',
+      'Cache-Control': isGet ? 'public, s-maxage=300, stale-while-revalidate=60' : 'no-store, no-cache, must-revalidate',
     },
   });
 }
@@ -45,6 +46,19 @@ async function getProductsTableColumns(db: any): Promise<Set<string>> {
   return cols;
 }
 
+async function ensureIndexes(db: any) {
+  try {
+    await db.exec(`
+      CREATE INDEX IF NOT EXISTS idx_products_slug ON products(slug);
+      CREATE INDEX IF NOT EXISTS idx_products_category ON products(category);
+      CREATE INDEX IF NOT EXISTS idx_products_created_at ON products(created_at);
+      CREATE INDEX IF NOT EXISTS idx_products_status ON products(status);
+    `);
+  } catch (e) {
+    // Non-blocking index creation
+  }
+}
+
 export const onRequest: PagesFunction<any> = async (context) => {
   const { request, env } = context;
 
@@ -57,16 +71,30 @@ export const onRequest: PagesFunction<any> = async (context) => {
       success: false,
       error: 'Cloudflare D1 database connection unavailable',
       products: [],
-    }, 500);
+    }, 500, false);
   }
 
+  // Ensure safe performance indexes exist
+  await ensureIndexes(env.DB);
+
   try {
-    // 1. GET: Fetch all products safely
+    // 1. GET: Fetch products safely with optional limit/pagination
     if (request.method === 'GET') {
+      const url = new URL(request.url);
+      const limitParam = url.searchParams.get('limit');
+      const offsetParam = url.searchParams.get('offset');
+      const limit = limitParam ? parseInt(limitParam, 10) : null;
+      const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
+
       let results: any[] = [];
       try {
-        const queryRes = await env.DB.prepare('SELECT * FROM products').all();
-        results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+        if (limit !== null && !isNaN(limit)) {
+          const queryRes = await env.DB.prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(limit, offset).all();
+          results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+        } else {
+          const queryRes = await env.DB.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+          results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+        }
       } catch (err) {
         console.error('[D1 GET Error]:', err);
       }
@@ -143,7 +171,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
         return tB - tA;
       });
 
-      return jsonResponse({ success: true, count: products.length, products, results: products });
+      return jsonResponse({ success: true, count: products.length, products, results: products }, 200, true);
     }
 
     // 2. POST / PUT: Add or Update a product safely without data destruction

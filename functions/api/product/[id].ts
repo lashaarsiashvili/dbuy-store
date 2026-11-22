@@ -130,7 +130,13 @@ export const onRequest = async (context: {
 
     return new Response(
       JSON.stringify({ success: true, product: enrichedProduct }),
-      { status: 200, headers: CORS_HEADERS }
+      {
+        status: 200,
+        headers: {
+          ...CORS_HEADERS,
+          'Cache-Control': 'public, s-maxage=300, stale-while-revalidate=60',
+        },
+      }
     );
   } catch (error: any) {
     console.error('[Cloudflare D1 /api/product] Query error:', error);

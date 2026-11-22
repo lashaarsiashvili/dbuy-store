@@ -10,10 +10,10 @@ import {
   CommercialVoiceTone,
   countWords,
   ENFORCED_NEGATIVE_PROMPT,
+  enforceShortVoiceoverScript,
   MANDATORY_STYLE_MODIFIERS,
   optimizeCommercialVisualPrompt,
   sanitizeCommercialCopy,
-  verifyVoiceoverBindsProduct,
 } from '../../../src/utils/videoPromptOptimizer';
 
 const CORS_HEADERS = {
@@ -28,10 +28,10 @@ export async function onRequestOptions() {
 }
 
 const ROLE_LABELS: Record<CommercialSceneRole, string> = {
-  hook: 'Problem / Everyday Context',
-  showcase: 'Hands-On Practical Action',
-  benefit: 'Key Feature in Action',
-  cta: 'Everyday Setting CTA',
+  hook: 'Hero Reveal',
+  showcase: 'Design & Texture',
+  benefit: 'Key Feature',
+  cta: 'Product Showcase',
 };
 
 const VALID_CAMERAS = new Set([
@@ -46,7 +46,7 @@ async function generatePlanWithRetry(
   prompt: string,
   schema: Record<string, any>
 ) {
-  const modelsToTry = ['gemini-4-hydrogen', 'gemini-4-hydrogen', 'gemini-3.1-flash-lite'];
+  const modelsToTry = ['gemini-4-hydrogen', 'gemini-3.1-flash-lite'];
   let lastError: any = null;
 
   for (let attempt = 0; attempt < modelsToTry.length; attempt++) {
@@ -62,11 +62,16 @@ async function generatePlanWithRetry(
     } catch (err: any) {
       lastError = err;
       const msg = String(err?.message || err || '');
-      const isTransient = msg.includes('503') || msg.includes('UNAVAILABLE') || msg.includes('429');
+      const isTransient =
+        msg.includes('503') ||
+        msg.includes('UNAVAILABLE') ||
+        msg.includes('429') ||
+        msg.includes('404') ||
+        msg.includes('NOT_FOUND');
       if (!isTransient || attempt === modelsToTry.length - 1) {
         throw err;
       }
-      await new Promise((r) => setTimeout(r, 900 * (attempt + 1)));
+      await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
     }
   }
   throw lastError;
@@ -96,9 +101,7 @@ export async function onRequestPost(context: any) {
           .filter(Boolean)
           .slice(0, 10)
       : [];
-    const price = Number(product.price) || 0;
-    const origPrice = Number(product.origPrice) || 0;
-    const category = sanitizeCommercialCopy(String(product.category || 'Everyday Essentials')).slice(0, 80);
+    const category = sanitizeCommercialCopy(String(product.category || 'Featured Product')).slice(0, 80);
 
     if (!title) {
       return new Response(
@@ -116,9 +119,9 @@ export async function onRequestPost(context: any) {
       body?.aspectRatio === '16:9' ? '16:9' : '9:16';
 
     const voiceTone: CommercialVoiceTone =
-      body?.voiceTone === 'calm_luxury' || body?.voiceTone === 'friendly'
+      body?.voiceTone === 'calm_luxury' || body?.voiceTone === 'energetic'
         ? body.voiceTone
-        : 'energetic';
+        : 'friendly';
 
     const musicMood: CommercialMusicMood =
       body?.musicMood === 'modern_corporate' ||
@@ -129,56 +132,40 @@ export async function onRequestPost(context: any) {
 
     const ai = new GoogleGenAI({
       apiKey,
-      apiVersion: 'v1beta',
       httpOptions: {
-        apiVersion: 'v1beta',
         headers: {
           'User-Agent': 'aistudio-build',
         },
       },
     });
 
-    const priceLine =
-      price > 0
-        ? origPrice > price
-          ? `$${price.toFixed(2)} (on sale from $${origPrice.toFixed(2)})`
-          : `$${price.toFixed(2)}`
-        : 'available now at DBUY Store';
+    const featuresText = features.length > 0 ? ` Key features: ${features.join('; ')}.` : '';
+    const rawDescriptionInput = `${description || title}.${featuresText}`.trim();
 
-    const featuresBlock =
-      features.length > 0
-        ? features.map((f, i) => `  ${i + 1}. ${f}`).join('\n')
-        : '  - Use only details explicitly supported by the product title and description above.';
+    const prompt = `# ROLE & OBJECTIVE
+You are an automated commercial video director. Your sole task is to plan a clean, dynamic, high-converting product showcase video based strictly on the product data provided below.
 
-    const prompt = `You are a senior commercial creative director writing a strict, product-accurate 15-second English video ad for DBUY Store (dbuystore.com).
+# VISUAL & MOTION DIRECTIVES
+- Use the uploaded product image(s) as the hero subject.
+- Apply smooth, cinematic camera motion: a slow zoom-in combined with subtle parallax movement to give depth and life to the product (never static).
+- Maintain clean, soft commercial studio lighting and a distraction-free background.
+- Focus exclusively on the product's design, texture, and key visual features across 4 clean showcase scenes (Aspect Ratio: ${aspectRatio}, Backdrop Theme: ${visualTheme}).
+- For each scene, provide a concise on-screen headline (2–4 words) and subheadline (3–7 words) highlighting the product's design, texture, or key visual feature.
 
-EXACT PRODUCT DATA (GROUND TRUTH — DO NOT INVENT OR SUBSTITUTE FEATURES):
-- Exact Product Title: "${title}"
-- Category: ${category}
-- Exact Price: ${priceLine}
-- Exact Description: ${description || 'No extra description provided — rely strictly on the exact title and features.'}
-- Verified Product Features:
-${featuresBlock}
+# AUDIO & VOICEOVER RULES
+- Generate a natural, warm, professional voiceover script ("fullVoiceoverScript") derived ONLY from the product's name and its single strongest benefit.
+- Keep the spoken script short: 1 to 2 sentences maximum, strictly under 15 words total (10 to 14 words max).
+- Example structure: "Meet [Product Name] — [Main Benefit]. Get yours today."
 
-CREATIVE SETTINGS:
-- Aspect Ratio: ${aspectRatio}
-- Visual Environment Theme: ${visualTheme}
-- Voiceover Tone: ${voiceTone}
-- Music Mood: ${musicMood}
+# STRICT NEGATIVE CONSTRAINTS (CRITICAL)
+- NEVER include meta-instructions, prompt rules, or style descriptions in fullVoiceoverScript or scene text.
+- NEVER mention accents, languages, or voice types (do NOT output words like "American English", "British English", "voiceover", "studio lighting", or "commercial").
+- NEVER include technical codes, SKUs, model numbers, dimensions, shipping terms, or raw bullet points in fullVoiceoverScript.
+- Do NOT add any introductory or concluding commentary.
 
-STRICT CONTEXT-BINDING & ANTI-HALLUCINATION RULES:
-1. STRICTLY ENGLISH ONLY across every field. Never output Georgian or non-English words.
-2. MANDATORY EXACT PRODUCT NAMING: The English voiceover script MUST explicitly speak the exact product name ("${title}") in Scene 1 or Scene 2, and MUST describe concrete, real-world features explicitly listed in the Verified Product Features / Description above.
-3. BAN GENERIC FILLER: NEVER write generic openers like "Upgrade your everyday routine", "Elevate your lifestyle", or vague claims that could apply to any product. Every sentence must be unmistakably about "${title}".
-4. VOICEOVER LENGTH: Total 40 to 56 words across the 4 scenes (natural spoken commercial English, NO emojis, NO hashtags, NO URLs with https://, say "DBUY Store" cleanly in Scene 4).
-5. BAN STATIC SLIDESHOWS — PLAN PRACTICAL "IN-USE" ACTION SCENES:
-   Each scene's visualPrompt must describe dynamic real-world live action showing "${title}" being actively used (never panning or zooming over static product photos):
-   - Scene 1 (role: "hook", ~3.5s): Relatable everyday problem/context where "${title}" is genuinely needed (e.g., cluttered desk, juggling devices, or specific daily challenge tied to this exact product).
-   - Scene 2 (role: "showcase", ~4.5s): Hands-on practical action — natural human hands actively interacting with and using the exact "${title}" in real time in a well-lit modern home or office setup (no close-up human faces).
-   - Scene 3 (role: "benefit", ~4s): Visual proof of the product's primary practical feature in motion (e.g., switching devices smoothly, quiet tactile operation, portable carry, or exact feature from the list above).
-   - Scene 4 (role: "cta", ~3s): Clean closing live-action shot of "${title}" in its ideal everyday workspace/lifestyle setting (no baked-in text overlays).
-6. VISUAL GUARDRAILS: Never include close-up human faces, portraits, or deformed/extra-finger hands. Keep framing below shoulder level focused on natural hand interaction and the product itself.
-7. ON-SCREEN COPY: Clean, punchy headlines (2 to 5 words max) and subheadlines (4 to 9 words), no emojis, no hashtags.`;
+# PRODUCT INPUT DATA
+Product Title: ${title}
+Product Description: ${rawDescriptionInput}`;
 
     const responseSchema = {
       type: Type.OBJECT,
@@ -193,7 +180,6 @@ STRICT CONTEXT-BINDING & ANTI-HALLUCINATION RULES:
               durationSec: { type: Type.NUMBER },
               headline: { type: Type.STRING },
               subheadline: { type: Type.STRING },
-              voiceoverLine: { type: Type.STRING },
               visualPrompt: { type: Type.STRING },
               cameraMotion: { type: Type.STRING },
             },
@@ -203,7 +189,6 @@ STRICT CONTEXT-BINDING & ANTI-HALLUCINATION RULES:
               'durationSec',
               'headline',
               'subheadline',
-              'voiceoverLine',
               'visualPrompt',
               'cameraMotion',
             ],
@@ -227,19 +212,32 @@ STRICT CONTEXT-BINDING & ANTI-HALLUCINATION RULES:
     const rawScenes = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
     const expectedRoles: CommercialSceneRole[] = ['hook', 'showcase', 'benefit', 'cta'];
 
+    const fullVoiceoverScript = enforceShortVoiceoverScript(
+      String(parsed?.fullVoiceoverScript || ''),
+      { title, description, features }
+    );
+
+    const scriptSentences = fullVoiceoverScript
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
     const normalizedScenes: CommercialScenePlan[] = expectedRoles.map((expectedRole, idx) => {
       const src = rawScenes[idx] || {};
-      const durationSec = idx === 1 ? 4.5 : idx === 2 ? 4 : idx === 0 ? 3.5 : 3;
+      const durationSec = idx === 1 || idx === 2 ? 2.8 : 2.4;
       const rawCamera = String(src.cameraMotion || '');
-      const defaultCameras: CommercialScenePlan['cameraMotion'][] = [
-        'slow_zoom_in',
-        'smooth_pan_right',
-        'macro_reveal',
-        'gentle_orbit',
-      ];
       const cameraMotion = VALID_CAMERAS.has(rawCamera)
         ? (rawCamera as CommercialScenePlan['cameraMotion'])
-        : defaultCameras[idx];
+        : 'slow_zoom_in';
+
+      const syncedLine =
+        idx === 0
+          ? scriptSentences[0] || fullVoiceoverScript
+          : idx === 1
+          ? scriptSentences[1] || ''
+          : idx === 3
+          ? scriptSentences[1] || scriptSentences[0] || ''
+          : '';
 
       return {
         sceneNumber: idx + 1,
@@ -247,10 +245,10 @@ STRICT CONTEXT-BINDING & ANTI-HALLUCINATION RULES:
         roleLabel: ROLE_LABELS[expectedRole],
         durationSec,
         headline:
-          sanitizeCommercialCopy(String(src.headline || '')).slice(0, 60) ||
+          sanitizeCommercialCopy(String(src.headline || '')).slice(0, 48) ||
           ROLE_LABELS[expectedRole],
-        subheadline: sanitizeCommercialCopy(String(src.subheadline || '')).slice(0, 110),
-        voiceoverLine: sanitizeCommercialCopy(String(src.voiceoverLine || '')).slice(0, 260),
+        subheadline: sanitizeCommercialCopy(String(src.subheadline || '')).slice(0, 80),
+        voiceoverLine: syncedLine,
         visualPrompt: optimizeCommercialVisualPrompt(
           String(src.visualPrompt || ''),
           visualTheme,
@@ -261,31 +259,13 @@ STRICT CONTEXT-BINDING & ANTI-HALLUCINATION RULES:
       };
     });
 
-    let joinedScript = sanitizeCommercialCopy(
-      normalizedScenes.map((s) => s.voiceoverLine).filter(Boolean).join(' ')
-    );
-    if (!joinedScript) {
-      joinedScript = sanitizeCommercialCopy(String(parsed?.fullVoiceoverScript || ''));
-    }
-
-    // Enforce product context grounding check: guarantee exact product name appears
-    if (!verifyVoiceoverBindsProduct(joinedScript, title)) {
-      const anchoredLine = sanitizeCommercialCopy(
-        `Meet the ${title}. ${normalizedScenes[1]?.voiceoverLine || ''}`
-      );
-      normalizedScenes[1].voiceoverLine = anchoredLine;
-      joinedScript = sanitizeCommercialCopy(
-        normalizedScenes.map((s) => s.voiceoverLine).filter(Boolean).join(' ')
-      );
-    }
-
-    const fullVoiceoverScript = joinedScript;
     const estimatedDurationSec = normalizedScenes.reduce((sum, s) => sum + s.durationSec, 0);
     const combinedActionPrompt = buildCombinedActionVideoPrompt({
       product: { title, description, features, category },
       scenes: normalizedScenes,
       visualTheme,
       aspectRatio,
+      durationSec: estimatedDurationSec,
     });
 
     const plan: CommercialVideoPlan = {
