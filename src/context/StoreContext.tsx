@@ -101,8 +101,13 @@ interface StoreContextType {
   formatPrice: (amountInUSD: number) => string;
   convertPrice: (amountInUSD: number) => number;
 
-  // Products
+  // Products & Pagination
   products: Product[];
+  productPage: number;
+  setProductPage: (page: number) => void;
+  pageSize: number;
+  totalProducts: number;
+  totalPages: number;
   selectedCategory: Category;
   setSelectedCategory: (cat: Category) => void;
   searchQuery: string;
@@ -1049,6 +1054,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setBillboardIntervalSecondsState(seconds);
   };
 
+  const [productPage, setProductPage] = useState<number>(1);
+  const pageSize = 24;
+  const [totalProducts, setTotalProducts] = useState<number>(initialProducts.length);
+  const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
+
   const [products, setProducts] = useState<Product[]>(() => {
     try {
       const cached = localStorage.getItem('dbuy_products');
@@ -1071,27 +1081,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     let isMounted = true;
-    const fetchAllProducts = async () => {
+    const fetchPaginatedProducts = async () => {
       try {
-        const fetched = await ProductsManager.getProducts();
-        if (isMounted && Array.isArray(fetched) && fetched.length > 0) {
-          const merged = sanitizeProducts(fetched);
+        const offset = (productPage - 1) * pageSize;
+        const res = await ProductsManager.getProducts(pageSize, offset);
+        if (isMounted && res && Array.isArray(res.products)) {
+          const merged = sanitizeProducts(res.products);
           setProducts(merged);
+          if (typeof res.total === 'number' && res.total > 0) {
+            setTotalProducts(res.total);
+          }
           try {
             localStorage.setItem('dbuy_products', JSON.stringify(merged));
           } catch (e) {
-            console.warn('Could not cache all products in localStorage:', e);
+            console.warn('Could not cache products in localStorage:', e);
           }
         }
       } catch (err) {
-        console.warn('Failed to load all products from D1:', err);
+        console.warn('Failed to load paginated products from D1:', err);
       }
     };
-    fetchAllProducts();
+    fetchPaginatedProducts();
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [productPage]);
 
   useEffect(() => {
     if (Array.isArray(products) && products.length > 0) {
@@ -2391,7 +2405,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         visitorGeoSource: visitorGeo.source,
         setVisitorCountry,
         currency, setCurrency, formatPrice, convertPrice,
-        products, selectedCategory, setSelectedCategory,
+        products, productPage, setProductPage, pageSize, totalProducts, totalPages,
+        selectedCategory, setSelectedCategory,
         searchQuery, setSearchQuery, sortOption, setSortOption,
         addProduct, bulkImportProducts, updateProduct, publishProductGlobally,
         deleteProduct, clearAllProducts, resetProductsDatabase, incrementProductViews,

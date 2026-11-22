@@ -8,18 +8,27 @@ const API_URL = `${API_BASE}/api/products`;
 
 export const ProductsManager = {
   // Fetch all products without pagination or artificial item limits
-  async getProducts(): Promise<Product[]> {
-    // 1. Primary: fetch complete product catalog from /api/products
+  async getProducts(limit?: number, offset?: number): Promise<{ products: Product[]; total: number }> {
+    // 1. Primary: fetch product catalog with optional limit & offset from /api/products
     try {
-      const response = await fetch(API_URL, { 
+      const queryParams = new URLSearchParams();
+      if (limit !== undefined && limit !== null) queryParams.set('limit', String(limit));
+      if (offset !== undefined && offset !== null) queryParams.set('offset', String(offset));
+      const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
+
+      const response = await fetch(`${API_URL}${queryString}`, { 
         credentials: 'omit',
         cache: 'default'
       });
       if (response.ok) {
         const data: any = await response.json();
         const list = Array.isArray(data) ? data : (data?.products || data?.results || []);
-        if (Array.isArray(list) && list.length > 0) {
-          return list.map(normalizeProductArrays);
+        const total = typeof data?.total === 'number' ? data.total : (Array.isArray(list) ? list.length : 0);
+        if (Array.isArray(list)) {
+          return {
+            products: list.map(normalizeProductArrays),
+            total
+          };
         }
       }
     } catch (error) {
@@ -35,8 +44,10 @@ export const ProductsManager = {
       if (storeRes.ok) {
         const storeData: any = await storeRes.json();
         const list = Array.isArray(storeData) ? storeData : (storeData?.products || storeData?.results || []);
-        if (Array.isArray(list) && list.length > 0) {
-          return list.map(normalizeProductArrays);
+        if (Array.isArray(list)) {
+          const normalized = list.map(normalizeProductArrays);
+          const sliced = (limit !== undefined && limit !== null) ? normalized.slice(offset || 0, (offset || 0) + limit) : normalized;
+          return { products: sliced, total: normalized.length };
         }
       }
     } catch (err) {
@@ -52,15 +63,17 @@ export const ProductsManager = {
       if (syncRes.ok) {
         const syncData: any = await syncRes.json();
         const list = syncData?.data?.products || syncData?.products || [];
-        if (Array.isArray(list) && list.length > 0) {
-          return list.map(normalizeProductArrays);
+        if (Array.isArray(list)) {
+          const normalized = list.map(normalizeProductArrays);
+          const sliced = (limit !== undefined && limit !== null) ? normalized.slice(offset || 0, (offset || 0) + limit) : normalized;
+          return { products: sliced, total: normalized.length };
         }
       }
     } catch (err) {
       console.warn('Sync endpoint products fetch warning:', err);
     }
 
-    return [];
+    return { products: [], total: 0 };
   },
 
   // ახალი პროდუქტის დამატება D1 ბაზაში

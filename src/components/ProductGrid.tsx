@@ -12,6 +12,8 @@ import {
   Headphones,
   Leaf,
   X,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react';
 
 type FeaturedTab = 'new' | 'featured' | 'bestsellers' | 'top-rated';
@@ -30,6 +32,11 @@ export const ProductGrid: React.FC = () => {
     homepageCategories,
     activeHomepageCategory,
     setActiveHomepageCategory,
+    productPage,
+    setProductPage,
+    totalPages,
+    totalProducts,
+    pageSize,
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<FeaturedTab>('new');
@@ -412,15 +419,84 @@ export const ProductGrid: React.FC = () => {
             </div>
           </div>
 
-          {/* 6-Column Product Cards Grid showing ALL matching real catalog products */}
+          {/* 6-Column Product Cards Grid and Pagination */}
           {filteredList.length > 0 ? (
-            <div
-              id="product-grid-container"
-              className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 lg:gap-4 w-full"
-            >
-              {filteredList.map((product, idx) => (
-                <ProductCard key={product.id} product={product} index={idx} />
-              ))}
+            <div className="space-y-6">
+              <div
+                id="product-grid-container"
+                className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 lg:gap-4 w-full"
+              >
+                {filteredList.map((product, idx) => (
+                  <ProductCard key={product.id} product={product} index={idx} />
+                ))}
+              </div>
+
+              {/* Clean Frontend & Backend Pagination Controls */}
+              {totalProducts > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-8 pt-6 border-t border-slate-200/60 dark:border-slate-800">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Showing page <span className="font-bold text-slate-700 dark:text-slate-200">{productPage}</span> of <span className="font-bold text-slate-700 dark:text-slate-200">{Math.max(1, totalPages)}</span> ({totalProducts} total catalog products)
+                  </p>
+
+                  <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                    <button
+                      type="button"
+                      disabled={productPage <= 1}
+                      onClick={() => {
+                        setProductPage(Math.max(1, productPage - 1));
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      className="inline-flex items-center gap-1 px-3.5 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                      <span>Previous</span>
+                    </button>
+
+                    {Array.from({ length: Math.min(7, Math.max(1, totalPages)) }, (_, i) => {
+                      let pNum = i + 1;
+                      const maxPages = Math.max(1, totalPages);
+                      if (maxPages > 7) {
+                        if (productPage > 4 && productPage < maxPages - 3) {
+                          pNum = productPage - 3 + i;
+                        } else if (productPage >= maxPages - 3) {
+                          pNum = maxPages - 6 + i;
+                        }
+                      }
+                      const isCurrent = productPage === pNum;
+                      return (
+                        <button
+                          key={pNum}
+                          type="button"
+                          onClick={() => {
+                            setProductPage(pNum);
+                            window.scrollTo({ top: 400, behavior: 'smooth' });
+                          }}
+                          className={`w-9 h-9 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                            isCurrent
+                              ? 'bg-[#2563EB] text-white shadow-sm'
+                              : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {pNum}
+                        </button>
+                      );
+                    })}
+
+                    <button
+                      type="button"
+                      disabled={productPage >= Math.max(1, totalPages)}
+                      onClick={() => {
+                        setProductPage(Math.min(Math.max(1, totalPages), productPage + 1));
+                        window.scrollTo({ top: 400, behavior: 'smooth' });
+                      }}
+                      className="inline-flex items-center gap-1 px-3.5 py-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all"
+                    >
+                      <span>Next</span>
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="bg-white dark:bg-slate-900 rounded-[20px] p-12 text-center border border-slate-200/60 dark:border-slate-800">

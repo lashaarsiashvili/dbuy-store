@@ -99,6 +99,14 @@ export const onRequest: PagesFunction<any> = async (context) => {
         console.error('[D1 GET Error]:', err);
       }
 
+      let total = 0;
+      try {
+        const countRes = await env.DB.prepare('SELECT COUNT(*) as total FROM products').first();
+        total = countRes?.total ?? results.length;
+      } catch {
+        total = results.length;
+      }
+
       // Fallback: If products relational table returned empty, check store_kv
       if (results.length === 0) {
         try {
@@ -107,6 +115,10 @@ export const onRequest: PagesFunction<any> = async (context) => {
             const parsed = typeof kvRes.value === 'string' ? JSON.parse(kvRes.value) : kvRes.value;
             if (Array.isArray(parsed) && parsed.length > 0) {
               results = parsed;
+              total = results.length;
+              if (limit !== null && !isNaN(limit)) {
+                results = results.slice(offset, offset + limit);
+              }
             }
           }
         } catch (e) {}
@@ -171,7 +183,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
         return tB - tA;
       });
 
-      return jsonResponse({ success: true, count: products.length, products, results: products }, 200, true);
+      return jsonResponse({ success: true, count: products.length, total, products, results: products }, 200, true);
     }
 
     // 2. POST / PUT: Add or Update a product safely without data destruction

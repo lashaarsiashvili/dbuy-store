@@ -5608,7 +5608,28 @@ app.post('/api/products', (req, res) => {
 });
 
 app.get('/api/products', (req, res) => {
-  res.json({ success: true, products: storeDb.products });
+  try {
+    const limitParam = req.query.limit as string;
+    const offsetParam = req.query.offset as string;
+    const limit = limitParam !== undefined && limitParam !== null ? parseInt(limitParam, 10) : null;
+    const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
+
+    let items = Array.isArray(storeDb.products) ? [...storeDb.products] : [];
+    items.sort((a: any, b: any) => {
+      const tA = new Date(a.createdAt || a.created_at || 0).getTime();
+      const tB = new Date(b.createdAt || b.created_at || 0).getTime();
+      return tB - tA;
+    });
+
+    const total = items.length;
+    if (limit !== null && !isNaN(limit) && limit > 0) {
+      items = items.slice(offset, offset + limit);
+    }
+
+    res.json({ success: true, count: items.length, total, products: items, results: items });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err?.message || 'Failed to fetch products' });
+  }
 });
 
 app.delete('/api/products', (req, res) => {
