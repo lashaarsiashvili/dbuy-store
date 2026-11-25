@@ -131,6 +131,64 @@ function extractProductIdFromPath(path?: string | null): string {
   return match && match[1] ? decodeURIComponent(match[1]) : '';
 }
 
+const CLIENT_ANALYTICS_CACHE_TTL_MS = 60_000;
+const clientAnalyticsCache = new Map<string, { expiresAt: number; data: any }>();
+
+function sanitizeThumbnailUrl(raw?: unknown): string {
+  if (typeof raw !== 'string') return '';
+  let url = raw.trim();
+  if (!url) return '';
+  const lower = url.toLowerCase();
+  if (lower.startsWith('javascript:') || lower.startsWith('vbscript:') || lower.startsWith('data:text/')) {
+    return '';
+  }
+  url = url.replace(/^https?:\/\/ais-(?:dev|pre)-[^/]+(\/uploads\/)/i, '$1');
+  if (url.startsWith('/') || url.startsWith('https://') || url.startsWith('http://') || url.startsWith('data:image/')) {
+    return url;
+  }
+  return '';
+}
+
+function getPrimaryProductImage(product: any): string {
+  if (!product || typeof product !== 'object') return '';
+  const direct = sanitizeThumbnailUrl(product.image || product.imageUrl || product.image_path);
+  if (direct) return direct;
+  if (Array.isArray(product.images) && product.images.length > 0) {
+    for (const item of product.images) {
+      const candidate = sanitizeThumbnailUrl(typeof item === 'string' ? item : item?.url);
+      if (candidate) return candidate;
+    }
+  }
+  return '';
+}
+
+const TrendingProductThumbnail: React.FC<{ src?: string; name: string }> = ({ src, name }) => {
+  const safeSrc = sanitizeThumbnailUrl(src);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    setFailed(false);
+  }, [safeSrc]);
+
+  if (!safeSrc || failed) {
+    return (
+      <div className="w-10 h-10 rounded-lg bg-[#1a2234] border border-slate-700/60 flex items-center justify-center text-slate-300 shrink-0">
+        <Box className="w-5 h-5" />
+      </div>
+    );
+  }
+
+  return (
+    <img
+      src={safeSrc}
+      alt={name}
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="w-10 h-10 rounded-lg object-cover border border-slate-700/60 bg-[#1a2234] shrink-0"
+    />
+  );
+};
+
 const CustomChartTooltip = ({ active, payload, label }: any) => {
   if (!active || !payload || !payload.length) return null;
 
@@ -304,7 +362,26 @@ export default function PremiumDashboard() {
   }, [dateFilter, customStartDate, customEndDate]);
 
   const fetchDashboardStats = useCallback(
-    async (silent = false) => {
+    async (silent = false, forceRefresh = false) => {
+      const cacheKey = `${dateFilter}|${customStartDate}|${customEndDate}`;
+
+      if (!forceRefresh) {
+        const cached = clientAnalyticsCache.get(cacheKey);
+        if (cached && Date.now() < cached.expiresAt) {
+          const data = cached.data;
+          setHasApiData(true);
+          setTelemetrySource(data.telemetrySource || 'd1');
+          setRealStats(data.stats || null);
+          setApiChartData(Array.isArray(data.chartData) ? data.chartData : []);
+          setApiProducts(Array.isArray(data.topProducts) ? data.topProducts : []);
+          setApiCountries(Array.isArray(data.topCountries) ? data.topCountries : []);
+          setApiSources(Array.isArray(data.topSources) ? data.topSources : []);
+          setIsLoading(false);
+          setIsRefreshing(false);
+          return;
+        }
+      }
+
       if (!silent) {
         setIsLoading(true);
       }
@@ -313,18 +390,23 @@ export default function PremiumDashboard() {
 
       try {
         const slugToSend = adminSecretSlug || 'lasha-admin-x98';
-        const queryUrl = `/api/admin/dashboard-stats?dateRange=${encodeURIComponent(dateFilter)}&startDate=${encodeURIComponent(customStartDate)}&endDate=${encodeURIComponent(customEndDate)}&adminSlug=${encodeURIComponent(slugToSend)}&_t=${Date.now()}`;
+        const refreshQuery = forceRefresh ? `&refresh=true&_t=${Date.now()}` : '';
+        const queryUrl = `/api/admin/dashboard-stats?dateRange=${encodeURIComponent(dateFilter)}&startDate=${encodeURIComponent(customStartDate)}&endDate=${encodeURIComponent(customEndDate)}&adminSlug=${encodeURIComponent(slugToSend)}${refreshQuery}`;
         const response = await fetch(queryUrl, {
           headers: {
             'X-Admin-Slug': slugToSend,
             'x-admin-slug': slugToSend,
           },
-          cache: 'no-store',
+          cache: forceRefresh ? 'no-store' : 'default',
         });
 
         if (response.ok) {
           const data = await response.json();
           if (data.success) {
+            clientAnalyticsCache.set(cacheKey, {
+              expiresAt: Date.now() + CLIENT_ANALYTICS_CACHE_TTL_MS,
+              data,
+            });
             setHasApiData(true);
             setTelemetrySource(data.telemetrySource || 'd1');
             setRealStats(data.stats || null);
@@ -345,18 +427,17 @@ export default function PremiumDashboard() {
     [dateFilter, customStartDate, customEndDate, adminSecretSlug]
   );
 
-  // Initial fetch + live 10-second polling + instant DOM event listener
+  // Initial fetch + 60-second refresh aligned with server cache + local event listener
   useEffect(() => {
-    fetchDashboardStats(false);
+    fetchDashboardStats(false, false);
 
     const pollInterval = setInterval(() => {
-      fetchDashboardStats(true);
-    }, 10000);
+      fetchDashboardStats(true, false);
+    }, CLIENT_ANALYTICS_CACHE_TTL_MS);
 
     const handleLiveEvent = () => {
       setLocalPhEvents(loadLocalPostHogEvents());
       setLastSyncedAt(new Date().toLocaleTimeString());
-      fetchDashboardStats(true);
     };
 
     window.addEventListener('posthog-live-update', handleLiveEvent);
@@ -407,14 +488,15 @@ export default function PremiumDashboard() {
     setTimeout(() => setPingSent(false), 2500);
   };
 
-  // Canonical catalog lookup for matching product_id / sku / slug / title consistently
+  // Canonical in-memory catalog lookup for matching product_id / sku / slug / title + primary thumbnail
   const catalogLookup = useMemo(() => {
-    const map = new Map<string, { id: string; name: string }>();
+    const map = new Map<string, { id: string; name: string; image: string }>();
     for (const p of storeProducts as any[]) {
       const id = String(p.id || '').trim();
       if (!id) continue;
       const name = String(p.title || p.name || p.titleKa || id).trim();
-      const canonical = { id, name };
+      const image = getPrimaryProductImage(p);
+      const canonical = { id, name, image };
       for (const alias of [id, p.customSlug, p.slug, p.sku, p.title, p.name]) {
         const key = String(alias || '').trim().toLowerCase();
         if (key && !map.has(key)) {
@@ -426,10 +508,24 @@ export default function PremiumDashboard() {
   }, [storeProducts]);
 
   const resolveProduct = useCallback(
-    (rawKey: string, fallbackName?: string) => {
+    (rawKey: string, fallbackName?: string, fallbackImage?: string) => {
       const clean = String(rawKey || '').trim();
-      const hit = catalogLookup.get(clean.toLowerCase());
-      return hit || { id: clean, name: fallbackName || clean };
+      const hit =
+        catalogLookup.get(clean.toLowerCase()) ||
+        (fallbackName ? catalogLookup.get(String(fallbackName).trim().toLowerCase()) : undefined);
+      const safeApiImage = sanitizeThumbnailUrl(fallbackImage);
+      if (hit) {
+        return {
+          id: hit.id,
+          name: hit.name,
+          image: safeApiImage || hit.image,
+        };
+      }
+      return {
+        id: clean,
+        name: fallbackName || clean,
+        image: safeApiImage,
+      };
     },
     [catalogLookup]
   );
@@ -563,19 +659,22 @@ export default function PremiumDashboard() {
   const displayTopProducts = useMemo(() => {
     const productStatsMap: Record<
       string,
-      { id: string; name: string; views: number; carts: number; purchases: number }
+      { id: string; name: string; image: string; views: number; carts: number; purchases: number }
     > = {};
 
-    const ensureEntry = (rawKey: string, fallbackName?: string) => {
-      const resolved = resolveProduct(rawKey, fallbackName);
+    const ensureEntry = (rawKey: string, fallbackName?: string, fallbackImage?: string) => {
+      const resolved = resolveProduct(rawKey, fallbackName, fallbackImage);
       if (!productStatsMap[resolved.id]) {
         productStatsMap[resolved.id] = {
           id: resolved.id,
           name: resolved.name,
+          image: resolved.image || '',
           views: 0,
           carts: 0,
           purchases: 0,
         };
+      } else if (!productStatsMap[resolved.id].image && resolved.image) {
+        productStatsMap[resolved.id].image = resolved.image;
       }
       return productStatsMap[resolved.id];
     };
@@ -584,7 +683,13 @@ export default function PremiumDashboard() {
       apiProducts.forEach((ap: any) => {
         const rawKey = String(ap.item_id || ap.id || '').trim();
         if (!rawKey) return;
-        const entry = ensureEntry(rawKey, ap.name);
+        const apiImg =
+          typeof ap.image === 'string' && ap.image.trim()
+            ? ap.image
+            : Array.isArray(ap.images) && ap.images[0]
+              ? ap.images[0]
+              : '';
+        const entry = ensureEntry(rawKey, ap.name, apiImg);
         entry.views += Number(ap.views) || 0;
         entry.carts += Number(ap.carts) || 0;
         entry.purchases += Number(ap.purchases) || 0;
@@ -607,7 +712,7 @@ export default function PremiumDashboard() {
               item.productId || item.product_id || item.id || item.sku || item.title || ''
             ).trim();
             if (!rawKey) return;
-            ensureEntry(rawKey, item.title).purchases += Math.max(1, Number(item.quantity) || 1);
+            ensureEntry(rawKey, item.title, item.image).purchases += Math.max(1, Number(item.quantity) || 1);
           });
         }
       });
@@ -759,9 +864,9 @@ export default function PremiumDashboard() {
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => fetchDashboardStats(false)}
+              onClick={() => fetchDashboardStats(false, true)}
               className="flex items-center gap-2 px-3.5 py-2.5 bg-[#141926] hover:bg-[#1b2234] border border-slate-700/80 rounded-xl text-xs font-semibold text-slate-300 hover:text-white transition-all cursor-pointer"
-              title="Refresh live PostHog & D1 numbers"
+              title="Refresh live PostHog & D1 numbers (bypasses cache)"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-cyan-400 ${isRefreshing ? 'animate-spin' : ''}`} />
               <span>Sync Now</span>
@@ -1055,10 +1160,8 @@ export default function PremiumDashboard() {
                     key={product.id}
                     className="bg-[#121826] border border-slate-800/80 hover:border-slate-700/80 rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition-all"
                   >
-                    <div className="flex items-center gap-4 min-w-0">
-                      <div className="w-11 h-11 rounded-xl bg-[#1a2234] border border-slate-700/60 flex items-center justify-center text-slate-300 shrink-0">
-                        <Box className="w-5 h-5" />
-                      </div>
+                    <div className="flex items-center gap-3.5 min-w-0">
+                      <TrendingProductThumbnail src={product.image} name={product.name} />
                       <span className="font-semibold text-white text-base truncate">
                         {product.name}
                       </span>

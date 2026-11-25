@@ -9,27 +9,23 @@ export async function onRequestOptions() {
   return new Response(null, { headers: CORS_HEADERS });
 }
 
+let analyticsVisitsIndexed = false;
+
 export async function onRequestGet(context: any) {
   try {
     const db = context.env?.DB;
+    const url = new URL(context.request.url);
+    const bypassCache = url.searchParams.get('refresh') === 'true' || url.searchParams.get('nocache') === '1';
 
     if (db) {
-      // Ensure schema tables/columns exist safely
-      try {
-        await db.exec(`
-          CREATE TABLE IF NOT EXISTS analytics_visits (
-            id TEXT PRIMARY KEY,
-            path TEXT,
-            user_agent TEXT,
-            ip_address TEXT,
-            timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-      } catch (e) {}
-
-      try {
-        await db.exec('ALTER TABLE products ADD COLUMN views INTEGER DEFAULT 0;');
-      } catch (e) {}
+      if (!analyticsVisitsIndexed) {
+        analyticsVisitsIndexed = true;
+        try {
+          await db.exec(`
+            CREATE INDEX IF NOT EXISTS idx_analytics_visits_timestamp ON analytics_visits(timestamp);
+          `);
+        } catch {}
+      }
 
       // 1. Total Page Views
       const totalViewsRes = await db.prepare('SELECT COUNT(*) as count FROM analytics_visits').first();
@@ -74,7 +70,10 @@ export async function onRequestGet(context: any) {
         topProducts,
         product_views: productViewsMap,
       }), {
-        headers: CORS_HEADERS
+        headers: {
+          ...CORS_HEADERS,
+          'Cache-Control': bypassCache ? 'no-store' : 'private, max-age=60',
+        }
       });
     }
 

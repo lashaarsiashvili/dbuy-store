@@ -55,7 +55,9 @@ const PORT = process.env.NODE_ENV === 'production' && process.env.PORT ? Number(
 // High-Trust Security Headers to maximize ScamAdviser and SSL Labs trust ratings
 app.use((req, res, next) => {
   res.header('X-Content-Type-Options', 'nosniff');
-  res.header('X-Frame-Options', 'SAMEORIGIN');
+  if (process.env.NODE_ENV === 'production') {
+    res.header('X-Frame-Options', 'SAMEORIGIN');
+  }
   res.header('X-XSS-Protection', '1; mode=block');
   res.header('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
@@ -595,11 +597,17 @@ app.post('/api/event', (req, res) => {
   }
 });
 
+const devDashboardStatsCache = new Map<string, { expiresAt: number; payload: any }>();
+
 app.get('/api/admin/dashboard-stats', (req, res) => {
   try {
     const range = String(req.query.dateRange || 'last7d');
     const startDate = req.query.startDate as string | undefined;
     const endDate = req.query.endDate as string | undefined;
+    const bypassCache =
+      req.query.refresh === 'true' ||
+      req.query.nocache === '1' ||
+      req.query.force === 'true';
     const now = new Date();
     const dayMs = 86400000;
     const startOfTodayMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0);
@@ -669,16 +677,32 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
         maxTime = startOfTodayMs + dayMs;
     }
 
+    const cacheKey = `${range}|${minTime}|${maxTime}`;
+    if (!bypassCache) {
+      const cached = devDashboardStatsCache.get(cacheKey);
+      if (cached && Date.now() < cached.expiresAt) {
+        res.setHeader('Cache-Control', 'private, max-age=60');
+        res.setHeader('X-Analytics-Cache', 'HIT');
+        res.json(cached.payload);
+        return;
+      }
+    }
+
     const paidStatuses = new Set(['paid', 'completed', 'processing', 'shipped', 'delivered']);
     const abandonedStatuses = new Set(['abandoned', 'cancelled', 'canceled', 'failed']);
 
     const catalogProducts = Array.isArray(storeDb.products) ? storeDb.products : [];
-    const productLookup = new Map<string, { id: string; name: string }>();
+    const productLookup = new Map<string, { id: string; name: string; image: string }>();
     for (const p of catalogProducts as any[]) {
       const id = String(p.id || '').trim();
       if (!id) continue;
       const name = String(p.title || p.name || p.titleKa || id).trim();
-      const entry = { id, name };
+      const firstImage = String(
+        p.image ||
+          p.imageUrl ||
+          (Array.isArray(p.images) && p.images[0] ? p.images[0] : '')
+      ).trim();
+      const entry = { id, name, image: firstImage };
       for (const alias of [id, p.customSlug, p.slug, p.sku, p.title, p.name]) {
         const key = String(alias || '').trim().toLowerCase();
         if (key && !productLookup.has(key)) productLookup.set(key, entry);
@@ -688,7 +712,7 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
     const resolveProd = (rawKey: string, fallbackName?: string) => {
       const clean = String(rawKey || '').trim();
       const match = productLookup.get(clean.toLowerCase());
-      return match || { id: clean, name: fallbackName || clean };
+      return match || { id: clean, name: fallbackName || clean, image: '' };
     };
 
     const groupedByBucket: Record<string, { time: string; views: number; carts: number; purchases: number }> = {};
@@ -742,7 +766,7 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
 
     const productStatsMap: Record<
       string,
-      { item_id: string; name: string; views: number; carts: number; purchases: number }
+      { item_id: string; name: string; image: string; views: number; carts: number; purchases: number }
     > = {};
 
     const ensureProdStat = (rawKey: string, fallbackName?: string) => {
@@ -751,6 +775,7 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
         productStatsMap[resolved.id] = {
           item_id: resolved.id,
           name: resolved.name,
+          image: resolved.image || '',
           views: 0,
           carts: 0,
           purchases: 0,
@@ -848,7 +873,7 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
       )
       .slice(0, 50);
 
-    res.json({
+    const payload = {
       success: true,
       timestamp: new Date().toISOString(),
       telemetrySource: 'd1',
@@ -878,7 +903,17 @@ app.get('/api/admin/dashboard-stats', (req, res) => {
       topProducts,
       topCountries,
       topSources,
-    });
+    };
+
+    if (devDashboardStatsCache.size >= 50) {
+      const oldestKey = devDashboardStatsCache.keys().next().value;
+      if (oldestKey) devDashboardStatsCache.delete(oldestKey);
+    }
+    devDashboardStatsCache.set(cacheKey, { expiresAt: Date.now() + 60_000, payload });
+
+    res.setHeader('Cache-Control', bypassCache ? 'no-store' : 'private, max-age=60');
+    res.setHeader('X-Analytics-Cache', bypassCache ? 'BYPASS' : 'MISS');
+    res.json(payload);
   } catch (err: any) {
     res.status(500).json({ success: false, error: err?.message || 'Failed to compute dashboard stats' });
   }

@@ -29,16 +29,33 @@ export const onRequestOptions = async () => {
   });
 };
 
+let eventIndexesEnsured = false;
+
+function toSqlUtcEvent(ms: number): string {
+  return new Date(ms).toISOString().slice(0, 19).replace('T', ' ');
+}
+
 export const onRequestGet: PagesFunction<Env> = async (context) => {
   try {
     const url = new URL(context.request.url);
     const dateParam = url.searchParams.get('date');
-    const daysParam = Math.max(1, parseInt(url.searchParams.get('days') || '7', 10) || 7);
+    const daysParam = Math.min(90, Math.max(1, parseInt(url.searchParams.get('days') || '7', 10) || 7));
+    const bypassCache = url.searchParams.get('refresh') === 'true' || url.searchParams.get('nocache') === '1';
 
-    const safeDateParam = dateParam ? dateParam.replace(/[^0-9-]/g, '') : null;
-    const baseFilter = safeDateParam
-      ? `date(datetime(created_at)) = date('${safeDateParam}')`
-      : `datetime(created_at) >= datetime('now', '-${daysParam} days')`;
+    let startSql: string;
+    let endSql: string;
+    const cleanDate = dateParam ? dateParam.trim().slice(0, 10) : null;
+    if (cleanDate && /^\d{4}-\d{2}-\d{2}$/.test(cleanDate)) {
+      const dayStart = Date.parse(`${cleanDate}T00:00:00.000Z`);
+      startSql = toSqlUtcEvent(dayStart);
+      endSql = toSqlUtcEvent(dayStart + 86400000);
+    } else {
+      const nowMs = Date.now();
+      startSql = toSqlUtcEvent(nowMs - daysParam * 86400000);
+      endSql = toSqlUtcEvent(nowMs + 86400000);
+    }
+
+    const baseFilter = `created_at >= ? AND created_at < ?`;
 
     const cleanFilter = `${baseFilter}
       AND COALESCE(LOWER(page_path), '') NOT LIKE '%/admin%'
@@ -97,28 +114,22 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
     let countriesRes: any = { results: [] };
 
     if (context.env?.DB) {
-      try {
-        await context.env.DB.exec(`
-          CREATE TABLE IF NOT EXISTS store_events (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            event_type TEXT,
-            session_id TEXT,
-            page_path TEXT,
-            device_type TEXT,
-            item_id TEXT,
-            referrer TEXT,
-            country TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-          );
-        `);
-      } catch {}
+      if (!eventIndexesEnsured) {
+        eventIndexesEnsured = true;
+        try {
+          await context.env.DB.exec(`
+            CREATE INDEX IF NOT EXISTS idx_store_events_created_at ON store_events(created_at);
+            CREATE INDEX IF NOT EXISTS idx_store_events_created_event_session ON store_events(created_at, event_type, session_id);
+          `);
+        } catch {}
+      }
 
       const [sRes, oRes, pRes, srcRes, cRes] = await Promise.all([
-        context.env.DB.prepare(statsQuery).first().catch(() => null),
-        context.env.DB.prepare(paidOrdersQuery).first().catch(() => null),
-        context.env.DB.prepare(topProductsQuery).all().catch(() => ({ results: [] })),
-        context.env.DB.prepare(topSourcesQuery).all().catch(() => ({ results: [] })),
-        context.env.DB.prepare(topCountriesQuery).all().catch(() => ({ results: [] })),
+        context.env.DB.prepare(statsQuery).bind(startSql, endSql).first().catch(() => null),
+        context.env.DB.prepare(paidOrdersQuery).bind(startSql, endSql).first().catch(() => null),
+        context.env.DB.prepare(topProductsQuery).bind(startSql, endSql).all().catch(() => ({ results: [] })),
+        context.env.DB.prepare(topSourcesQuery).bind(startSql, endSql).all().catch(() => ({ results: [] })),
+        context.env.DB.prepare(topCountriesQuery).bind(startSql, endSql).all().catch(() => ({ results: [] })),
       ]);
 
       statsRes = sRes;
@@ -147,6 +158,7 @@ export const onRequestGet: PagesFunction<Env> = async (context) => {
         headers: {
           'Content-Type': 'application/json',
           'Access-Control-Allow-Origin': '*',
+          'Cache-Control': bypassCache ? 'no-store' : 'private, max-age=60',
         },
       }
     );
