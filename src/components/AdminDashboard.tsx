@@ -87,7 +87,9 @@ import {
   Share2,
   Megaphone,
   Instagram,
-  Bot
+  Bot,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { SocialShareModal } from './SocialShareModal';
 import { YouTubeShortsModal } from './YouTubeShortsModal';
@@ -98,6 +100,7 @@ import { InstagramOriginalLogo } from './InstagramLogo';
 export const AdminDashboard: React.FC = () => {
   const {
     products,
+    totalProducts,
     addProduct,
     bulkImportProducts,
     updateProduct,
@@ -617,6 +620,10 @@ export const AdminDashboard: React.FC = () => {
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock'>('all');
   const [productSort, setProductSort] = useState<'default' | 'price_asc' | 'price_desc' | 'stock_desc' | 'stock_asc' | 'title_asc' | 'views_desc'>('default');
 
+  // Admin Products Catalog Pagination (strictly 15 products per page)
+  const ADMIN_PRODUCTS_PER_PAGE = 15;
+  const [adminProductPage, setAdminProductPage] = useState<number>(1);
+
   // Orders table search & status filter
   const [orderSearch, setOrderSearch] = useState('');
   const [orderStatusFilter, setOrderStatusFilter] = useState<'all' | Order['status']>('all');
@@ -927,7 +934,7 @@ export const AdminDashboard: React.FC = () => {
   // Calculate Metrics
   const totalRevenueUSD = orders.reduce((sum, o) => sum + o.total, 0);
   const totalOrdersCount = orders.length;
-  const totalProductsCount = products.length;
+  const totalProductsCount = Math.max(totalProducts || 0, products.length);
   const registeredCustomersCount = 1 + orders.length;
 
   const handlePinSubmit = (e: React.FormEvent) => {
@@ -1927,6 +1934,19 @@ export const AdminDashboard: React.FC = () => {
     return 0;
   });
 
+  // Reset pagination to page 1 whenever filters or search query changes
+  useEffect(() => {
+    setAdminProductPage(1);
+  }, [productSearch, categoryFilter, stockFilter, productSort]);
+
+  const totalAdminPages = Math.max(1, Math.ceil(filteredProducts.length / ADMIN_PRODUCTS_PER_PAGE));
+
+  const paginatedAdminProducts = React.useMemo(() => {
+    const safePage = Math.min(Math.max(1, adminProductPage), totalAdminPages);
+    const start = (safePage - 1) * ADMIN_PRODUCTS_PER_PAGE;
+    return filteredProducts.slice(start, start + ADMIN_PRODUCTS_PER_PAGE);
+  }, [filteredProducts, adminProductPage, totalAdminPages]);
+
   // Filtered orders in admin table
   const filteredOrders = orders.filter(o => {
     if (orderStatusFilter !== 'all' && o.status !== orderStatusFilter) return false;
@@ -2250,7 +2270,7 @@ export const AdminDashboard: React.FC = () => {
             <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
               activeTab === 'products' ? 'bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
             }`}>
-              {products.length}
+              {totalProductsCount}
             </span>
           </button>
 
@@ -2390,7 +2410,7 @@ export const AdminDashboard: React.FC = () => {
                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">
                     {isKa ? 'სულ პროდუქტი' : 'Total Listed'}
                   </span>
-                  <p className="text-lg font-black text-slate-900 dark:text-white leading-tight">{products.length}</p>
+                  <p className="text-lg font-black text-slate-900 dark:text-white leading-tight">{totalProductsCount}</p>
                 </div>
                 <div className="p-2 rounded-xl bg-blue-50 text-blue-600">
                   <Package className="w-4 h-4" />
@@ -2572,7 +2592,7 @@ export const AdminDashboard: React.FC = () => {
                         </td>
                       </tr>
                     ) : (
-                      filteredProducts.map(prod => (
+                      paginatedAdminProducts.map(prod => (
                         <tr key={prod.id} className="bg-white dark:bg-slate-900 odd:bg-white even:bg-slate-50/40 dark:odd:bg-slate-900 dark:even:bg-slate-800/60 hover:bg-slate-50/80 dark:hover:bg-slate-800 transition-colors">
                           <td className="p-4">
                             <div className="relative group/thumb w-12 h-12 rounded-xl overflow-hidden bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
@@ -2759,6 +2779,74 @@ export const AdminDashboard: React.FC = () => {
                   </tbody>
                 </table>
               </div>
+
+              {/* Clean Admin Pagination Controls - Strictly 15 Products Per Page */}
+              {filteredProducts.length > 0 && (
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {isKa ? 'ნაჩვენებია გვერდი' : 'Showing page'}{' '}
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{adminProductPage}</span>{' '}
+                    {isKa ? '-დან' : 'of'}{' '}
+                    <span className="font-bold text-slate-800 dark:text-slate-200">{totalAdminPages}</span>{' '}
+                    ({filteredProducts.length} {isKa ? 'პროდუქტი' : 'products'}
+                    {filteredProducts.length !== totalProductsCount ? ` ${isKa ? 'გაფილტრული' : 'filtered'} / ${totalProductsCount} ${isKa ? 'სულ' : 'total'}` : ''})
+                  </p>
+
+                  {totalAdminPages > 1 && (
+                    <div className="flex items-center gap-1.5 flex-wrap justify-center">
+                      <button
+                        type="button"
+                        disabled={adminProductPage <= 1}
+                        onClick={() => {
+                          setAdminProductPage(prev => Math.max(1, prev - 1));
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all"
+                      >
+                        <ChevronLeft className="w-3.5 h-3.5" />
+                        <span>{isKa ? 'წინა' : 'Previous'}</span>
+                      </button>
+
+                      {Array.from({ length: Math.min(7, totalAdminPages) }, (_, i) => {
+                        let pNum = i + 1;
+                        if (totalAdminPages > 7) {
+                          if (adminProductPage > 4 && adminProductPage < totalAdminPages - 3) {
+                            pNum = adminProductPage - 3 + i;
+                          } else if (adminProductPage >= totalAdminPages - 3) {
+                            pNum = totalAdminPages - 6 + i;
+                          }
+                        }
+                        const isCurrent = adminProductPage === pNum;
+                        return (
+                          <button
+                            key={pNum}
+                            type="button"
+                            onClick={() => setAdminProductPage(pNum)}
+                            className={`w-8 h-8 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                              isCurrent
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                            }`}
+                          >
+                            {pNum}
+                          </button>
+                        );
+                      })}
+
+                      <button
+                        type="button"
+                        disabled={adminProductPage >= totalAdminPages}
+                        onClick={() => {
+                          setAdminProductPage(prev => Math.min(totalAdminPages, prev + 1));
+                        }}
+                        className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer transition-all"
+                      >
+                        <span>{isKa ? 'შემდეგი' : 'Next'}</span>
+                        <ChevronRight className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}

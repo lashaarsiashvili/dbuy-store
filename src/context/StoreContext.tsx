@@ -1056,7 +1056,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [productPage, setProductPage] = useState<number>(1);
   const pageSize = 24;
-  const [totalProducts, setTotalProducts] = useState<number>(initialProducts.length);
+  const [totalProducts, setTotalProducts] = useState<number>(() => {
+    try {
+      const cached = localStorage.getItem('dbuy_products');
+      if (cached) {
+        const parsed: Product[] = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed.length;
+      }
+    } catch (e) {}
+    return initialProducts.length;
+  });
   const totalPages = Math.max(1, Math.ceil(totalProducts / pageSize));
 
   const [products, setProducts] = useState<Product[]>(() => {
@@ -1075,37 +1084,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const resetProductsDatabase = async (): Promise<void> => {
     const fresh: Product[] = sanitizeProducts(initialProducts);
     setProducts(fresh);
+    setTotalProducts(fresh.length);
     localStorage.setItem('dbuy_products', JSON.stringify(fresh));
     addToast(language === 'ka' ? 'მონაცემთა ბაზა განახლდა!' : 'Database reset successfully!', 'success');
   };
 
+  const refreshProducts = async () => {
+    try {
+      // Fetch ALL real products from Cloudflare D1 without artificial pagination caps
+      const res = await ProductsManager.getProducts();
+      if (res && Array.isArray(res.products) && res.products.length > 0) {
+        const merged = sanitizeProducts(res.products);
+        setProducts(merged);
+        const trueTotal = typeof res.total === 'number' && res.total > 0 ? res.total : merged.length;
+        setTotalProducts(trueTotal);
+        try {
+          localStorage.setItem('dbuy_products', JSON.stringify(merged));
+        } catch (e) {
+          console.warn('Could not cache products in localStorage:', e);
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to load products from D1:', err);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
-    const fetchPaginatedProducts = async () => {
-      try {
-        const offset = (productPage - 1) * pageSize;
-        const res = await ProductsManager.getProducts(pageSize, offset);
-        if (isMounted && res && Array.isArray(res.products)) {
-          const merged = sanitizeProducts(res.products);
-          setProducts(merged);
-          if (typeof res.total === 'number' && res.total > 0) {
-            setTotalProducts(res.total);
-          }
-          try {
-            localStorage.setItem('dbuy_products', JSON.stringify(merged));
-          } catch (e) {
-            console.warn('Could not cache products in localStorage:', e);
-          }
-        }
-      } catch (err) {
-        console.warn('Failed to load paginated products from D1:', err);
-      }
-    };
-    fetchPaginatedProducts();
+    refreshProducts();
     return () => {
       isMounted = false;
     };
-  }, [productPage]);
+  }, []);
 
   useEffect(() => {
     if (Array.isArray(products) && products.length > 0) {
@@ -1250,7 +1260,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const [promoDiscountPercent, setPromoDiscountPercent] = useState(0);
   const [lastPlacedOrder, setLastPlacedOrder] = useState<Order | null>(null);
 
-  const refreshServerStore = async (force?: boolean) => {};
+  const refreshServerStore = async (force?: boolean) => {
+    await refreshProducts();
+  };
   const syncWithRemoteStore = async (remoteUrl: string) => ({ success: true, message: 'Synced' });
   const exportFullDatabase = () => {};
   const importFullDatabase = async (jsonContent: string) => ({ success: true, message: 'Imported' });

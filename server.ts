@@ -5646,7 +5646,7 @@ app.get('/api/products', (req, res) => {
   try {
     const limitParam = req.query.limit as string;
     const offsetParam = req.query.offset as string;
-    const limit = limitParam !== undefined && limitParam !== null ? parseInt(limitParam, 10) : null;
+    const limit = (limitParam !== undefined && limitParam !== null && limitParam !== 'all' && limitParam !== '0' && limitParam !== '-1') ? parseInt(limitParam, 10) : null;
     const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
 
     let items = Array.isArray(storeDb.products) ? [...storeDb.products] : [];

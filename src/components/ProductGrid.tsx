@@ -341,6 +341,11 @@ export const ProductGrid: React.FC = () => {
     setActiveTab(tab);
   };
 
+  const paginatedGridProducts = useMemo(() => {
+    const start = (productPage - 1) * pageSize;
+    return filteredList.slice(start, start + pageSize);
+  }, [filteredList, productPage, pageSize]);
+
   return (
     <div className="w-full bg-[#F7F8FA] dark:bg-slate-950 text-[#0F172A] dark:text-slate-100">
       {/* =========================================================
@@ -426,7 +431,7 @@ export const ProductGrid: React.FC = () => {
                 id="product-grid-container"
                 className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5 lg:gap-4 w-full"
               >
-                {filteredList.map((product, idx) => (
+                {paginatedGridProducts.map((product, idx) => (
                   <ProductCard key={product.id} product={product} index={idx} />
                 ))}
               </div>

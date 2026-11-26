@@ -7,13 +7,13 @@ const API_BASE = (typeof import.meta !== 'undefined' && import.meta.env?.VITE_AP
 const API_URL = `${API_BASE}/api/products`;
 
 export const ProductsManager = {
-  // Fetch all products without pagination or artificial item limits
+  // Fetch all products without pagination or artificial item limits (or pass limit/offset for pagination)
   async getProducts(limit?: number, offset?: number): Promise<{ products: Product[]; total: number }> {
     // 1. Primary: fetch product catalog with optional limit & offset from /api/products
     try {
       const queryParams = new URLSearchParams();
-      if (limit !== undefined && limit !== null) queryParams.set('limit', String(limit));
-      if (offset !== undefined && offset !== null) queryParams.set('offset', String(offset));
+      if (typeof limit === 'number' && limit > 0) queryParams.set('limit', String(limit));
+      if (typeof offset === 'number' && offset > 0) queryParams.set('offset', String(offset));
       const queryString = queryParams.toString() ? `?${queryParams.toString()}` : '';
 
       const response = await fetch(`${API_URL}${queryString}`, { 

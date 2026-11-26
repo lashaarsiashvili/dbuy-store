@@ -83,12 +83,12 @@ export const onRequest: PagesFunction<any> = async (context) => {
       const url = new URL(request.url);
       const limitParam = url.searchParams.get('limit');
       const offsetParam = url.searchParams.get('offset');
-      const limit = limitParam ? parseInt(limitParam, 10) : null;
+      const limit = (limitParam && limitParam !== 'all' && limitParam !== '0' && limitParam !== '-1') ? parseInt(limitParam, 10) : null;
       const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
 
       let results: any[] = [];
       try {
-        if (limit !== null && !isNaN(limit)) {
+        if (limit !== null && !isNaN(limit) && limit > 0) {
           const queryRes = await env.DB.prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(limit, offset).all();
           results = Array.isArray(queryRes?.results) ? queryRes.results : [];
         } else {
@@ -102,7 +102,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
       let total = 0;
       try {
         const countRes = await env.DB.prepare('SELECT COUNT(*) as total FROM products').first();
-        total = countRes?.total ?? results.length;
+        total = typeof countRes?.total === 'number' ? countRes.total : (countRes?.total ? Number(countRes.total) : results.length);
       } catch {
         total = results.length;
       }
