@@ -15,7 +15,7 @@ import { PayhipImportModal } from './PayhipImportModal';
 import { ThemeCustomizer } from './ThemeCustomizer';
 import { ProductUrlImporter } from './ProductUrlImporter';
 import { AdminHomepageManager } from './AdminHomepageManager';
-import { ScrapedProductData } from '../utils/productScraper';
+import { ScrapedProductData, stripAlibabaSuffix } from '../utils/productScraper';
 import { ADMIN_PRODUCT_CATEGORIES, normalizeProductCategory, matchesCategory } from '../data/categoryNavigationData';
 
 import { ensurePersistentAbsoluteUrl, compressImageFile } from '../utils/imageUtils';
@@ -1383,11 +1383,13 @@ export const AdminDashboard: React.FC = () => {
         ? data.marketplace
         : detectSourcePlatform({ sourceUrl: data.sourceUrl });
 
+    const cleanTitle = stripAlibabaSuffix(data.title);
+
     setProdForm({
-      title: data.title,
+      title: cleanTitle,
       titleKa: '', // Strict rule 3: English only!
-      customSlug: generateProductSlug(data.title),
-      category: normalizeProductCategory(data.category, data.title) as Product['category'],
+      customSlug: generateProductSlug(cleanTitle),
+      category: normalizeProductCategory(data.category, cleanTitle) as Product['category'],
       price: data.price || 49.99,
       origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
       stock: 25,
@@ -1427,8 +1429,9 @@ export const AdminDashboard: React.FC = () => {
     const coverImg = normImages[0] || '';
     const featuresList = (data.features || []).filter(Boolean);
 
+    const cleanTitle = stripAlibabaSuffix(data.title);
     const generatedId = `prod-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
-    const finalSlug = generateProductSlug(data.title);
+    const finalSlug = generateProductSlug(cleanTitle);
     const detectedPlatform =
       data.marketplace && data.marketplace !== 'unknown'
         ? data.marketplace
@@ -1462,7 +1465,7 @@ export const AdminDashboard: React.FC = () => {
       (rawVariants.length === 0 || rawVariants.every((v) => !v.imageUrl));
     if (needsAutoVision) {
       try {
-        const autoDetected = await autoDetectColorVariantsFromImages(normImages, data.title);
+        const autoDetected = await autoDetectColorVariantsFromImages(normImages, cleanTitle);
         if (autoDetected.length > 0) {
           finalVariants = mergeDetectedColorVariants(rawVariants, autoDetected);
         }
@@ -1473,12 +1476,12 @@ export const AdminDashboard: React.FC = () => {
 
     const productPayload: Product = {
       id: generatedId,
-      title: data.title,
+      title: cleanTitle,
       titleKa: '',
-      title_en: data.title,
+      title_en: cleanTitle,
       title_ka: '',
       customSlug: finalSlug,
-      category: normalizeProductCategory(data.category, data.title) as Product['category'],
+      category: normalizeProductCategory(data.category, cleanTitle) as Product['category'],
       price: data.price || 49.99,
       origPrice: data.origPrice || (data.price ? Math.round(data.price * 1.25 * 100) / 100 : undefined),
       stock: 50, // Increased default stock for imported items
@@ -1630,7 +1633,7 @@ export const AdminDashboard: React.FC = () => {
 
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
-    const effectiveTitle = (prodForm.title || prodForm.titleKa || '').trim();
+    const effectiveTitle = stripAlibabaSuffix((prodForm.title || prodForm.titleKa || '').trim());
     if (!effectiveTitle) {
       addToast(isKa ? 'პროდუქტის სათაური აუცილებელია' : 'Product title is required', 'warning');
       return;

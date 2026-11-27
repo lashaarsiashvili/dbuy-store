@@ -2086,6 +2086,20 @@ export function parseEbayProductHtml(rawHtml: string, sourceUrl: string = ''): S
  * productBasicProperties, and USD pricing.
  * ============================================================================
  */
+export const ALIBABA_TITLE_SUFFIX_REGEX = /\s*[-|–—]?\s*Buy Product on Alibaba\.com(?:\s*\(Copy\))?\s*$/i;
+
+/**
+ * Automatically strips "\s*[-|–—]?\s*Buy Product on Alibaba\.com\s*$" (case-insensitive)
+ * and trailing Alibaba markers from product titles before saving or displaying.
+ */
+export function stripAlibabaSuffix(title: string): string {
+  if (!title || typeof title !== 'string') return '';
+  return title
+    .replace(ALIBABA_TITLE_SUFFIX_REGEX, '')
+    .replace(/\s*[-|–—]?\s*Alibaba\.com\s*$/i, '')
+    .trim();
+}
+
 export function normalizeAlibabaImageUrl(rawUrl: string): string {
   if (!rawUrl || typeof rawUrl !== 'string') return '';
   let url = rawUrl.trim();
@@ -2159,7 +2173,7 @@ export function parseAlibabaProductHtml(rawHtml: string, sourceUrl: string = '')
 
   // 1. Parse JSON-LD
   for (const ld of extractJsonLdProducts(html)) {
-    if (!title && ld.name) title = cleanHtmlText(String(ld.name));
+    if (!title && ld.name) title = stripAlibabaSuffix(cleanHtmlText(String(ld.name)));
     if (!rawDesc && ld.description) rawDesc = cleanHtmlText(String(ld.description));
     if (ld.image) {
       const imgs = Array.isArray(ld.image) ? ld.image : [ld.image];
@@ -2193,9 +2207,12 @@ export function parseAlibabaProductHtml(rawHtml: string, sourceUrl: string = '')
     if (!title) {
       const foundTitles = deepFindByKey(state, new Set(['subject', 'productTitle', 'title']), 6);
       for (const t of foundTitles) {
-        if (typeof t.value === 'string' && t.value.trim().length > 5 && !t.value.includes('Alibaba.com')) {
-          title = cleanHtmlText(t.value);
-          break;
+        if (typeof t.value === 'string' && t.value.trim().length > 5) {
+          const stripped = stripAlibabaSuffix(cleanHtmlText(t.value));
+          if (stripped.length > 5 && !stripped.includes('Alibaba.com')) {
+            title = stripped;
+            break;
+          }
         }
       }
     }
@@ -2316,7 +2333,7 @@ export function parseAlibabaProductHtml(rawHtml: string, sourceUrl: string = '')
                    html.match(/<meta\s+property=["']og:title["']\s+content=["']([^"']*)["']/i) ||
                    html.match(/<title>([\s\S]*?)<\/title>/i);
     if (tMatch) {
-      title = cleanHtmlText(tMatch[1]).replace(/\s*[-|]\s*Alibaba\.com.*$/i, '').trim();
+      title = stripAlibabaSuffix(cleanHtmlText(tMatch[1]));
     }
   }
 
@@ -2353,8 +2370,10 @@ export function parseAlibabaProductHtml(rawHtml: string, sourceUrl: string = '')
     ...extractJsonLdReviews(html),
   ]);
 
+  const cleanTitle = stripAlibabaSuffix(title) || 'Imported Product';
+
   return {
-    title: title || 'Imported Product',
+    title: cleanTitle,
     category: inferStoreCategory(title + ' ' + finalDescription),
     price,
     origPrice: origPrice && origPrice > price ? origPrice : (price > 0 ? Math.round(price * 1.3 * 100) / 100 : undefined),
@@ -2910,18 +2929,28 @@ export function parseTemuProductHtml(rawHtml: string, sourceUrl: string = ''): S
  * Explicit platform dispatcher for the 5-platform selector architecture.
  */
 export function parsePlatformHtml(platform: ImporterPlatform, html: string, url: string = ''): ScrapedProductData {
+  let scraped: ScrapedProductData;
   switch (platform) {
     case 'amazon':
-      return parseAmazonProductHtml(html, url);
+      scraped = parseAmazonProductHtml(html, url);
+      break;
     case 'ebay':
-      return parseEbayProductHtml(html, url);
+      scraped = parseEbayProductHtml(html, url);
+      break;
     case 'alibaba':
-      return parseAlibabaProductHtml(html, url);
+      scraped = parseAlibabaProductHtml(html, url);
+      break;
     case 'aliexpress':
-      return parseAliExpressProductHtml(html, url);
+      scraped = parseAliExpressProductHtml(html, url);
+      break;
     case 'temu':
-      return parseTemuProductHtml(html, url);
+      scraped = parseTemuProductHtml(html, url);
+      break;
   }
+  if (scraped && scraped.title) {
+    scraped.title = stripAlibabaSuffix(scraped.title);
+  }
+  return scraped;
 }
 
 /**
@@ -2976,7 +3005,7 @@ export function parseProductHtml(html: string, url: string = ''): ScrapedProduct
   // Fallback generic parser
   const titleMatch = html.match(/<meta property=["']og:title["'] content=["']([^"']*)["']/i) ||
                      html.match(/<title>([\s\S]*?)<\/title>/i);
-  const title = titleMatch ? cleanHtmlText(titleMatch[1]) : 'Imported Product';
+  const title = titleMatch ? stripAlibabaSuffix(cleanHtmlText(titleMatch[1])) : 'Imported Product';
 
   const descMatch = html.match(/<meta property=["']og:description["'] content=["']([^"']*)["']/i) ||
                     html.match(/<meta name=["']description["'] content=["']([^"']*)["']/i);
@@ -2985,7 +3014,7 @@ export function parseProductHtml(html: string, url: string = ''): ScrapedProduct
   const fallbackReviews = finalizeExtractedReviews(extractJsonLdReviews(html));
 
   return {
-    title,
+    title: stripAlibabaSuffix(title),
     category: inferStoreCategory(title + ' ' + description),
     price: 49.99,
     description,

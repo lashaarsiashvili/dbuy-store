@@ -21,6 +21,14 @@ export type CommercialMusicMood =
 
 export type CommercialSceneRole = 'hook' | 'showcase' | 'benefit' | 'cta';
 
+export type CommercialMotionStyle =
+  | 'whip_pan'
+  | 'tilt_3d'
+  | 'zoom_punch'
+  | 'light_sweep';
+
+export type CommercialResolutionPreset = '1080p' | '720p';
+
 export interface CommercialScenePlan {
   sceneNumber: number;
   role: CommercialSceneRole;
@@ -28,10 +36,18 @@ export interface CommercialScenePlan {
   durationSec: number;
   headline: string;
   subheadline: string;
+  calloutBadge?: string;
+  highlightWord?: string;
   voiceoverLine: string;
   visualPrompt: string;
   negativePrompt: string;
-  cameraMotion: 'slow_zoom_in' | 'smooth_pan_right' | 'gentle_orbit' | 'macro_reveal';
+  motionStyle?: CommercialMotionStyle;
+  cameraMotion:
+    | CommercialMotionStyle
+    | 'slow_zoom_in'
+    | 'smooth_pan_right'
+    | 'gentle_orbit'
+    | 'macro_reveal';
 }
 
 export interface CommercialVideoPlan {
@@ -46,6 +62,8 @@ export interface CommercialVideoPlan {
   musicMood: CommercialMusicMood;
   mandatoryStyleModifiers: string;
   negativePrompt: string;
+  modelUsed?: string;
+  accentColorHex?: string;
 }
 
 export interface CommercialVoiceoverResult {
@@ -57,11 +75,84 @@ export interface CommercialVoiceoverResult {
   wordCount: number;
 }
 
+export const COMMERCIAL_MOTION_STYLE_OPTIONS: Array<{
+  value: CommercialMotionStyle;
+  label: string;
+  shortLabel: string;
+  description: string;
+}> = [
+  {
+    value: 'zoom_punch',
+    label: 'Fast Zoom-Punch',
+    shortLabel: 'Zoom-Punch',
+    description: 'High-impact cubic-bezier spring punch-in with beat shockwave',
+  },
+  {
+    value: 'whip_pan',
+    label: 'Whip-Pan Snap',
+    shortLabel: 'Whip-Pan',
+    description: 'Snappy directional whip-slide with velocity motion streaks',
+  },
+  {
+    value: 'tilt_3d',
+    label: '3D Perspective Tilt',
+    shortLabel: '3D Tilt',
+    description: 'Floating 2.5D card tilt with dynamic depth shadow & rim light',
+  },
+  {
+    value: 'light_sweep',
+    label: 'Studio Light Sweep',
+    shortLabel: 'Light Sweep',
+    description: 'Volumetric specular light beam gliding across product finish',
+  },
+];
+
+export const COMMERCIAL_RESOLUTION_OPTIONS: Array<{
+  value: CommercialResolutionPreset;
+  label: string;
+  shortLabel: string;
+  verticalDims: string;
+  landscapeDims: string;
+}> = [
+  {
+    value: '1080p',
+    label: '1080p Full HD · 60fps',
+    shortLabel: '1080p · 60fps',
+    verticalDims: '1080×1920',
+    landscapeDims: '1920×1080',
+  },
+  {
+    value: '720p',
+    label: '720p Fast HD · 60fps',
+    shortLabel: '720p · 60fps',
+    verticalDims: '720×1280',
+    landscapeDims: '1280×720',
+  },
+];
+
+export function normalizeMotionStyle(
+  raw?: string,
+  sceneIndex = 0
+): CommercialMotionStyle {
+  const val = (raw || '').trim().toLowerCase();
+  if (val === 'whip_pan' || val === 'smooth_pan_right') return 'whip_pan';
+  if (val === 'tilt_3d' || val === 'gentle_orbit') return 'tilt_3d';
+  if (val === 'zoom_punch' || val === 'slow_zoom_in') return 'zoom_punch';
+  if (val === 'light_sweep' || val === 'macro_reveal') return 'light_sweep';
+  const cycle: CommercialMotionStyle[] = [
+    'zoom_punch',
+    'whip_pan',
+    'tilt_3d',
+    'light_sweep',
+  ];
+  return cycle[sceneIndex % cycle.length];
+}
+
 export const MANDATORY_STYLE_MODIFIERS =
-  'clean soft commercial studio lighting, distraction-free background, smooth slow zoom-in with subtle parallax depth, focus exclusively on product design, texture, and key visual features, 4k photorealistic product showcase';
+  'high-converting social ad motion graphics, cubic-bezier whip-pan and 3D perspective tilt choreography, volumetric studio light sweep, crisp product silhouette preserved faithfully, 60fps ultra-smooth commercial finish';
 
 export const ENFORCED_NEGATIVE_PROMPT =
-  'cluttered background, static image, harsh shadows, distorted geometry, glitch, morphing, erratic movement, blurry, low quality, text artifacts, watermarks';
+  'static slideshow, slow linear zoom, frozen still frame, distorted product geometry, cluttered background, blurry, low quality';
 
 export const COMMERCIAL_ASPECT_RATIO_OPTIONS: Array<{
   value: CommercialAspectRatio;
@@ -75,17 +166,17 @@ export const COMMERCIAL_ASPECT_RATIO_OPTIONS: Array<{
     value: '9:16',
     label: '9:16 Vertical (Reels / TikTok / Shorts)',
     shortLabel: '9:16 Vertical',
-    dimensions: '720×1280',
-    width: 720,
-    height: 1280,
+    dimensions: '1080×1920',
+    width: 1080,
+    height: 1920,
   },
   {
     value: '16:9',
     label: '16:9 Widescreen (YouTube / Website)',
     shortLabel: '16:9 Landscape',
-    dimensions: '1280×720',
-    width: 1280,
-    height: 720,
+    dimensions: '1920×1080',
+    width: 1920,
+    height: 1080,
   },
 ];
 
@@ -271,23 +362,30 @@ export function extractProductDistinctiveKeywords(title: string): string[] {
 
 export function verifyVoiceoverBindsProduct(
   script: string,
-  productTitle: string
+  productTitle: string,
+  productContext = ''
 ): boolean {
   const lowerScript = sanitizeCommercialCopy(script).toLowerCase();
   const cleanTitle = sanitizeCommercialCopy(productTitle).toLowerCase();
   if (!lowerScript || !cleanTitle) return false;
   if (lowerScript.includes(cleanTitle)) return true;
 
-  const keywords = extractProductDistinctiveKeywords(productTitle);
-  if (keywords.length === 0) return true;
-  const matchedCount = keywords.filter((kw) => lowerScript.includes(kw)).length;
-  return matchedCount >= Math.min(2, keywords.length);
+  const titleKeywords = extractProductDistinctiveKeywords(productTitle);
+  if (titleKeywords.length === 0) return true;
+  if (titleKeywords.some((kw) => lowerScript.includes(kw))) return true;
+
+  if (productContext) {
+    const contextKeywords = extractProductDistinctiveKeywords(productContext);
+    const contextMatches = contextKeywords.filter((kw) => lowerScript.includes(kw)).length;
+    if (contextMatches >= 2) return true;
+  }
+
+  return false;
 }
 
 /**
- * Builds a concise, natural, warm commercial voiceover script (1–2 sentences, <15 words)
- * derived strictly from the product name and its single strongest benefit.
- * Example structure: "Meet [Product Name] — [Main Benefit]. Get yours today."
+ * Builds a punchy, high-converting 10–15 second commercial voiceover script
+ * (Hook -> Value/Demo -> Call to Action, ~22–32 words) derived strictly from the product.
  */
 export function buildProductBoundInitialScript(product: {
   title?: string;
@@ -303,33 +401,44 @@ export function buildProductBoundInitialScript(product: {
     String(product.description || '').split(/[.!?]/)[0] || ''
   );
 
-  const rawBenefit = rawFeatures[0] || descSentence || 'effortless everyday performance';
-  const nameWords = shortName.split(/\s+/).filter(Boolean);
-  // Reserve 4 words: "Meet" (1) + "Get yours today." (3) => max 14 total words
-  const maxBenefitWords = Math.max(3, 14 - 4 - nameWords.length);
-  const benefitWords = rawBenefit
+  const primaryBenefit = (rawFeatures[0] || descSentence || 'effortless everyday performance')
     .replace(/^[-–—:\s]+/, '')
     .split(/\s+/)
     .filter(Boolean)
-    .slice(0, maxBenefitWords);
-  const benefitPhrase = benefitWords.join(' ').replace(/[.,;:!?]+$/, '');
-  const loweredBenefit = benefitPhrase
-    ? `${benefitPhrase.charAt(0).toLowerCase()}${benefitPhrase.slice(1)}`
+    .slice(0, 9)
+    .join(' ')
+    .replace(/[.,;:!?]+$/, '');
+
+  const secondaryBenefit = (rawFeatures[1] || 'sleek modern design built for daily life')
+    .replace(/^[-–—:\s]+/, '')
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 8)
+    .join(' ')
+    .replace(/[.,;:!?]+$/, '');
+
+  const lowerPrimary = primaryBenefit
+    ? `${primaryBenefit.charAt(0).toLowerCase()}${primaryBenefit.slice(1)}`
     : 'effortless everyday performance';
+  const lowerSecondary = secondaryBenefit
+    ? `${secondaryBenefit.charAt(0).toLowerCase()}${secondaryBenefit.slice(1)}`
+    : 'sleek modern design built for daily life';
 
   const candidate = sanitizeSpokenVoiceoverScript(
-    `Meet ${shortName} — ${loweredBenefit}. Get yours today.`
+    `Ready to upgrade with ${shortName}? Experience ${lowerPrimary}, paired with ${lowerSecondary}. Order yours today at DBuy Store.`
   );
-  if (countWords(candidate) <= 14) {
+  if (countWords(candidate) <= 40) {
     return candidate;
   }
-  return sanitizeSpokenVoiceoverScript(`Meet ${shortName} — built for effortless performance. Get yours today.`);
+  return sanitizeSpokenVoiceoverScript(
+    `Meet ${shortName}. Built for ${lowerPrimary} and effortless daily performance. Order yours today at DBuy Store.`
+  );
 }
 
 /**
- * Enforces the strict voiceover output rules:
+ * Enforces clean 10–15 second commercial voiceover rules:
  * - Sanitized of all meta-instructions, accents, SKUs, dimensions, shipping terms
- * - Maximum 2 sentences and strictly under 15 words total (<= 14 words)
+ * - 2 to 4 punchy sentences (12 to 44 words total, ideal for 10–15s pacing)
  */
 export function enforceShortVoiceoverScript(
   rawScript: string,
@@ -340,32 +449,37 @@ export function enforceShortVoiceoverScript(
     return buildProductBoundInitialScript(product);
   }
 
-  // Keep at most 2 sentences
+  // Keep up to 4 crisp sentences for Hook -> Value/Demo -> CTA pacing
   const sentences = cleaned
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
     .filter(Boolean)
-    .slice(0, 2);
+    .slice(0, 4);
 
   let joined = sentences.join(' ').trim();
 
-  if (countWords(joined) >= 15) {
-    const firstTokens = (sentences[0] || '')
+  if (countWords(joined) > 44) {
+    const tokens = joined
       .split(/\s+/)
       .filter((t) => Boolean(t) && !/^[—–-]+$/.test(t));
-    const trailingStop = new Set(['for', 'and', 'or', 'with', 'the', 'a', 'an', 'to', 'of', 'in', 'on', 'all-day']);
-
-    // Reserve 3 words for "Get yours today." => max 11 words in sentence 1
-    let kept = firstTokens.slice(0, 11);
-    while (kept.length > 4 && trailingStop.has(kept[kept.length - 1].toLowerCase().replace(/[.,;:!?]+$/, ''))) {
+    const trailingStop = new Set(['for', 'and', 'or', 'with', 'the', 'a', 'an', 'to', 'of', 'in', 'on']);
+    let kept = tokens.slice(0, 36);
+    while (
+      kept.length > 10 &&
+      trailingStop.has(kept[kept.length - 1].toLowerCase().replace(/[.,;:!?]+$/, ''))
+    ) {
       kept.pop();
     }
-
-    const firstClean = kept.join(' ').replace(/[,.;:!?—–-]+$/, '');
-    joined = firstClean ? `${firstClean}. Get yours today.` : buildProductBoundInitialScript(product);
+    const trimmed = kept.join(' ').replace(/[,.;:!?—–-]+$/, '');
+    joined = trimmed ? `${trimmed}. Order yours today at DBuy Store.` : buildProductBoundInitialScript(product);
   }
 
-  if (countWords(joined) < 3 || !verifyVoiceoverBindsProduct(joined, product.title || '')) {
+  const productContext = [
+    product.description || '',
+    ...(Array.isArray(product.features) ? product.features : []),
+  ].join(' ');
+
+  if (countWords(joined) < 6 || !verifyVoiceoverBindsProduct(joined, product.title || '', productContext)) {
     return buildProductBoundInitialScript(product);
   }
 
@@ -373,11 +487,10 @@ export function enforceShortVoiceoverScript(
 }
 
 /**
- * Visual Prompt Optimizer for Product Showcase Motion:
- * - Uses product image(s) as the hero subject
- * - Smooth slow zoom-in + subtle parallax depth
- * - Clean, soft commercial studio lighting and distraction-free background
- * - Focuses exclusively on product design, texture, and key visual features
+ * Visual Prompt Optimizer for Google Veo Image-to-Video Commercial Generation:
+ * - Transforms static product photography into live-action cinematic motion
+ * - Realistic physics, sweeping commercial studio lighting, lifestyle dynamics
+ * - Strictly avoids static Ken Burns zoom/slideshow appearance
  */
 export function optimizeCommercialVisualPrompt(
   rawPrompt: string,
@@ -387,10 +500,10 @@ export function optimizeCommercialVisualPrompt(
   let cleaned = sanitizeCommercialCopy(rawPrompt || '');
 
   const blockedPatterns: Array<[RegExp, string]> = [
-    [/(?<!\bno\s)(?<!\bzero\s)(?<!\bavoid\s)\bclose[-\s]?up\s+(of\s+)?(a\s+)?(human\s+)?(face|faces|eyes|mouth|smiling\s+person|headshot)\b/gi, 'macro close-up of product texture and finish'],
-    [/(?<!\bno\s)(?<!\bzero\s)(?<!\bavoid\s)\b(portrait|selfie|facial\s+expression|talking\s+head|human\s+face|human\s+faces)\b/gi, 'hero product framing'],
+    [/(?<!\bno\s)(?<!\bzero\s)(?<!\bavoid\s)\bclose[-\s]?up\s+(of\s+)?(a\s+)?(human\s+)?(face|faces|eyes|mouth|smiling\s+person|headshot)\b/gi, 'cinematic macro tracking shot across product materials and finish'],
+    [/(?<!\bno\s)(?<!\bzero\s)(?<!\bavoid\s)\b(portrait|selfie|facial\s+expression|talking\s+head|human\s+face|human\s+faces)\b/gi, 'dynamic hero product framing'],
     [/(?<!\bno\s)(?<!\bzero\s)(?<!\bavoid\s)\b(deformed\s+hands?|extra\s+fingers?|creepy)\b/gi, 'clean product contour'],
-    [/(?<!\bno\s)(?<!\bnever\s)\bstatic\s+(product\s+)?(photo|image|slideshow|still)\b/gi, 'slow zoom-in with subtle parallax depth'],
+    [/(?<!\bno\s)(?<!\bnever\s)\b(static\s+(product\s+)?(photo|image|slideshow|still)|slow\s+zoom[-\s]?in\s+with\s+subtle\s+parallax)\b/gi, 'cinematic 3D camera orbit with dynamic moving studio key lights and real physical motion'],
   ];
 
   for (const [pattern, replacement] of blockedPatterns) {
@@ -401,28 +514,25 @@ export function optimizeCommercialVisualPrompt(
 
   const themeDirection: Record<CommercialVisualTheme, string> = {
     minimalist_studio:
-      'clean soft commercial studio lighting, distraction-free alabaster backdrop',
+      'luxury minimalist studio cyclorama with sweeping volumetric softbox reflections gliding across the surface',
     lifestyle_home:
-      'warm diffused studio lighting, soft distraction-free neutral backdrop',
+      'sunlit modern architectural lifestyle interior with natural moving light shafts and warm ambient depth',
     tech_modern:
-      'sleek dark studio lighting with subtle soft rim highlights, distraction-free backdrop',
+      'sleek obsidian flagship tech studio with dramatic moving neon rim lights, reflective dark glass surface, and subtle atmospheric light particles',
   };
 
   if (!cleaned) {
     const subject = sanitizeCommercialCopy(productTitle || 'the hero product');
-    cleaned = `Smooth slow zoom-in and subtle parallax showcase of ${subject} highlighting design, texture, and key visual features`;
+    cleaned = `Cinematic live-action commercial shot bringing ${subject} to life with a smooth 3D gimbal arc, dynamic reflections sweeping across its texture, and natural ambient motion`;
   }
 
   const lower = cleaned.toLowerCase();
   const additions: string[] = [];
 
-  if (!lower.includes('backdrop') && !lower.includes('background')) {
+  if (!lower.includes('lighting') && !lower.includes('studio') && !lower.includes('sunlit')) {
     additions.push(themeDirection[visualTheme]);
   }
-  if (!lower.includes('parallax')) {
-    additions.push('smooth slow zoom-in with subtle parallax depth');
-  }
-  if (!lower.includes('commercial studio lighting')) {
+  if (!lower.includes('4k') && !lower.includes('cinematic')) {
     additions.push(MANDATORY_STYLE_MODIFIERS);
   }
 
@@ -430,8 +540,9 @@ export function optimizeCommercialVisualPrompt(
 }
 
 /**
- * Builds the cohesive reference-guided product showcase video prompt
- * focused exclusively on the product's design, texture, and key visual features.
+ * Builds the cohesive Google Veo Image-to-Video master commercial motion prompt
+ * so the Hero product photo comes alive with dynamic camera movement, realistic lighting,
+ * and commercial lifestyle action (NEVER static zooming).
  */
 export function buildCombinedActionVideoPrompt(params: {
   product: {
@@ -452,29 +563,28 @@ export function buildCombinedActionVideoPrompt(params: {
     .slice(0, 3)
     .join('; ');
 
-  const totalSec = Math.max(8, Math.min(12, Math.round(params.durationSec || 10)));
-  const sceneDirections = params.scenes
-    .slice(0, 4)
-    .map((s) => `Shot ${s.sceneNumber}: ${s.visualPrompt}`)
-    .join('\n');
-
   const themeLook: Record<CommercialVisualTheme, string> = {
-    minimalist_studio: 'clean soft commercial studio lighting with a distraction-free light backdrop',
-    lifestyle_home: 'warm diffused studio lighting with a clean distraction-free neutral backdrop',
-    tech_modern: 'sleek architectural studio lighting with soft rim highlights on a clean dark backdrop',
+    minimalist_studio:
+      'bright flagship studio cyclorama with animated softbox light sweeps and crisp glossy surface reflections',
+    lifestyle_home:
+      'modern sunlit lifestyle environment with gentle natural motion, soft shadows, and authentic real-world depth',
+    tech_modern:
+      'dark flagship tech studio with sweeping cobalt-blue and crisp white rim lights across a reflective slate surface',
   };
 
-  return `Generate a clean, dynamic product showcase video (${params.aspectRatio}) using the attached product image(s) as the hero subject: "${cleanTitle}".
-${topFeatures ? `Highlight design, texture, and key visual features: ${topFeatures}.` : ''}
+  const leadSceneMotion = params.scenes
+    .slice(0, 3)
+    .map((s) => s.visualPrompt)
+    .filter(Boolean)
+    .join(' Then transition smoothly: ');
 
-VISUAL & MOTION DIRECTION:
-1. Keep the hero product's exact design, materials, texture, proportions, and color faithful to the attached image(s).
-2. Apply smooth cinematic camera motion: slow zoom-in combined with subtle parallax movement for depth and life (never static).
-3. Maintain ${themeLook[params.visualTheme]}.
-4. Focus exclusively on the product's design, texture, and key visual features with zero clutter, watermarks, or text artifacts.
-
-SHOT BREAKDOWN (~${totalSec}s):
-${sceneDirections}`;
+  return `Cinematic commercial product film (${params.aspectRatio}) bringing the exact hero product "${cleanTitle}" from the input image to life. ${
+    topFeatures ? `Visually showcase ${topFeatures}. ` : ''
+  }Environment: ${themeLook[params.visualTheme]}. ${
+    leadSceneMotion
+      ? `Motion choreography: ${leadSceneMotion}. `
+      : 'Begin with a fluid low-angle 3D gimbal reveal, sweep dramatic commercial studio key lights across the product finish and materials, and glide smoothly into a crisp hero showcase angle. '
+  }Preserve the product's exact shape, proportions, colors, and details faithfully. Real physical lighting shifts, subtle atmospheric depth, zero static slideshow zooming, zero on-screen text or watermarks.`;
 }
 
 export function getVoiceStylePrompt(
@@ -652,3 +762,132 @@ export function generateFallbackSpeechWav(script: string): string {
   }
   return btoa(outBinary);
 }
+
+/**
+ * Generates clean, product-bound 4-scene kinetic callout & motion storyboard defaults
+ * (~9.6s main + 2.5s DBuy Outro = ~12.1s total) before or alongside Gemini Director planning.
+ */
+export function buildDirectorFallbackScenes(
+  product: {
+    title?: string;
+    description?: string;
+    features?: string[];
+    price?: number;
+  },
+  visualTheme: CommercialVisualTheme = 'minimalist_studio'
+): CommercialScenePlan[] {
+  const cleanTitle = sanitizeCommercialCopy(product.title || 'Featured Tech');
+  const shortName = extractSpeakableProductName(cleanTitle);
+  const cleanedFeatures = (product.features || [])
+    .map((f) => sanitizeSpokenVoiceoverScript(String(f || '')))
+    .filter(Boolean);
+
+  const badge1 = (cleanedFeatures[0] || 'Next-Gen Upgrade')
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(' ');
+  const badge2 = (cleanedFeatures[1] || 'Built For Daily Life')
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(' ');
+  const badge3 = (cleanedFeatures[2] || 'Smart Everyday Essential')
+    .split(/\s+/)
+    .slice(0, 4)
+    .join(' ');
+
+  const script = buildProductBoundInitialScript(product);
+  const sentences = script
+    .split(/(?<=[.!?])\s+/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+
+  const priceTag =
+    Number(product.price) > 0
+      ? `Only $${(Math.round(Number(product.price) * 100) / 100).toFixed(
+          Number.isInteger(Number(product.price)) ? 0 : 2
+        )}`
+      : 'Limited Stock';
+
+  return [
+    {
+      sceneNumber: 1,
+      role: 'hook',
+      roleLabel: 'Hook & Reveal',
+      durationSec: 2.3,
+      headline: shortName.toUpperCase(),
+      subheadline: badge1,
+      calloutBadge: badge1,
+      highlightWord: shortName.split(/\s+/)[0] || 'UPGRADE',
+      voiceoverLine: sentences[0] || `Ready to upgrade with ${shortName}?`,
+      visualPrompt: optimizeCommercialVisualPrompt(
+        `Fast zoom-punch hero reveal of ${cleanTitle}`,
+        visualTheme,
+        cleanTitle
+      ),
+      negativePrompt: ENFORCED_NEGATIVE_PROMPT,
+      motionStyle: 'zoom_punch',
+      cameraMotion: 'zoom_punch',
+    },
+    {
+      sceneNumber: 2,
+      role: 'showcase',
+      roleLabel: 'Key Benefit',
+      durationSec: 2.5,
+      headline: badge1.toUpperCase(),
+      subheadline: badge2,
+      calloutBadge: badge2,
+      highlightWord: badge1.split(/\s+/)[0] || 'SMART',
+      voiceoverLine:
+        sentences[1] || `Designed with ${badge1.toLowerCase()} for effortless performance.`,
+      visualPrompt: optimizeCommercialVisualPrompt(
+        `Whip-pan showcase highlighting ${badge1} on ${cleanTitle}`,
+        visualTheme,
+        cleanTitle
+      ),
+      negativePrompt: ENFORCED_NEGATIVE_PROMPT,
+      motionStyle: 'whip_pan',
+      cameraMotion: 'whip_pan',
+    },
+    {
+      sceneNumber: 3,
+      role: 'benefit',
+      roleLabel: 'Feature Proof',
+      durationSec: 2.5,
+      headline: badge2.toUpperCase(),
+      subheadline: badge3,
+      calloutBadge: badge3,
+      highlightWord: badge2.split(/\s+/)[0] || 'PREMIUM',
+      voiceoverLine:
+        sentences[2] || `Built with ${badge2.toLowerCase()} wherever you go.`,
+      visualPrompt: optimizeCommercialVisualPrompt(
+        `3D perspective tilt revealing sleek craftsmanship of ${cleanTitle}`,
+        visualTheme,
+        cleanTitle
+      ),
+      negativePrompt: ENFORCED_NEGATIVE_PROMPT,
+      motionStyle: 'tilt_3d',
+      cameraMotion: 'tilt_3d',
+    },
+    {
+      sceneNumber: 4,
+      role: 'cta',
+      roleLabel: 'Urgency CTA',
+      durationSec: 2.3,
+      headline: 'SHOP NOW AT DBUY',
+      subheadline: `${priceTag} · Fast Worldwide Dispatch`,
+      calloutBadge: priceTag,
+      highlightWord: 'TODAY',
+      voiceoverLine:
+        sentences[sentences.length - 1] || 'Order yours today at DBuy Store.',
+      visualPrompt: optimizeCommercialVisualPrompt(
+        `Studio light sweep closing hero shot of ${cleanTitle}`,
+        visualTheme,
+        cleanTitle
+      ),
+      negativePrompt: ENFORCED_NEGATIVE_PROMPT,
+      motionStyle: 'light_sweep',
+      cameraMotion: 'light_sweep',
+    },
+  ];
+}
+

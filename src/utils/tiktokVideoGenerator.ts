@@ -4,12 +4,16 @@ import {
   buildCombinedActionVideoPrompt,
   buildProductBoundInitialScript,
   COMMERCIAL_ASPECT_RATIO_OPTIONS,
+  COMMERCIAL_MOTION_STYLE_OPTIONS,
   COMMERCIAL_MUSIC_MOOD_OPTIONS,
+  COMMERCIAL_RESOLUTION_OPTIONS,
   COMMERCIAL_VISUAL_THEME_OPTIONS,
   COMMERCIAL_VOICE_ACCENT_OPTIONS,
   COMMERCIAL_VOICE_TONE_OPTIONS,
   CommercialAspectRatio,
+  CommercialMotionStyle,
   CommercialMusicMood,
+  CommercialResolutionPreset,
   CommercialScenePlan,
   CommercialVideoPlan,
   CommercialVisualTheme,
@@ -18,6 +22,7 @@ import {
   CommercialVoiceTone,
   ENFORCED_NEGATIVE_PROMPT,
   MANDATORY_STYLE_MODIFIERS,
+  normalizeMotionStyle,
   optimizeCommercialVisualPrompt,
   sanitizeCommercialCopy,
   sanitizeSpokenVoiceoverScript,
@@ -25,19 +30,24 @@ import {
 
 export {
   COMMERCIAL_ASPECT_RATIO_OPTIONS,
+  COMMERCIAL_MOTION_STYLE_OPTIONS,
   COMMERCIAL_MUSIC_MOOD_OPTIONS,
+  COMMERCIAL_RESOLUTION_OPTIONS,
   COMMERCIAL_VISUAL_THEME_OPTIONS,
   COMMERCIAL_VOICE_ACCENT_OPTIONS,
   COMMERCIAL_VOICE_TONE_OPTIONS,
   ENFORCED_NEGATIVE_PROMPT,
   MANDATORY_STYLE_MODIFIERS,
+  normalizeMotionStyle,
   optimizeCommercialVisualPrompt,
   sanitizeCommercialCopy,
 };
 
 export type {
   CommercialAspectRatio,
+  CommercialMotionStyle,
   CommercialMusicMood,
+  CommercialResolutionPreset,
   CommercialScenePlan,
   CommercialVideoPlan,
   CommercialVisualTheme,
@@ -88,6 +98,7 @@ export interface PromoVideoGenerationProgress {
   stage:
     | 'planning'
     | 'voiceover'
+    | 'veo'
     | 'visuals'
     | 'audio'
     | 'rendering'
@@ -108,6 +119,10 @@ export interface PromoVideoGenerationResult {
   encoderUsed: 'webcodecs-mp4' | 'mediarecorder-fallback';
   hasVoiceover: boolean;
   autoDucked: boolean;
+  engineUsed?: 'gemini-director-motion' | 'google-veo' | 'canvas-fallback';
+  modelUsed?: string;
+  fps?: number;
+  hasBrandedOutro?: boolean;
 }
 
 export const PROMO_VIBE_OPTIONS: Array<{
@@ -127,7 +142,7 @@ const CHANNELS = 2;
 const CROSSFADE_SEC = 0.55;
 
 // ============================================================================
-// Step 1 Client Helper — Free-Tier Gemini Flash Script & Scene Planner
+// Step 1 Client Helper — Multimodal Gemini Director Script & Veo Motion Planner
 // ============================================================================
 export async function planCommercialVideoAd(params: {
   product: Product;
@@ -135,6 +150,7 @@ export async function planCommercialVideoAd(params: {
   aspectRatio: CommercialAspectRatio;
   voiceTone: CommercialVoiceTone;
   musicMood: CommercialMusicMood;
+  productImages?: Array<{ base64: string; mimeType: string }>;
 }): Promise<CommercialVideoPlan> {
   const response = await fetch('/api/video-ad/plan', {
     method: 'POST',
@@ -150,6 +166,7 @@ export async function planCommercialVideoAd(params: {
         category: params.product.category,
         images: [params.product.image, ...(params.product.images || [])].filter(Boolean).slice(0, 6),
       },
+      productImages: params.productImages || [],
       visualTheme: params.visualTheme,
       aspectRatio: params.aspectRatio,
       voiceTone: params.voiceTone,
@@ -904,13 +921,16 @@ function applyAutoDuckingEnvelope(
   }
 }
 
-async function renderCommercialAudioMix(params: {
+export async function renderCommercialAudioMix(params: {
   musicMood: CommercialMusicMood;
   requestedDurationSec: number;
   voiceoverAudioBase64?: string;
+  exactDurationSec?: number;
+  outroDurationSec?: number;
 }): Promise<{
   audioBuffer: AudioBuffer;
   finalDurationSec: number;
+  voiceDurationSec: number;
   hasVoiceover: boolean;
   autoDucked: boolean;
 }> {
@@ -932,9 +952,19 @@ async function renderCommercialAudioMix(params: {
   }
 
   const voiceStartOffsetSec = 0.4;
-  const finalDurationSec = decodedVoice
-    ? Math.max(8.5, Math.min(14, Math.ceil((voiceStartOffsetSec + decodedVoice.duration + 1.8) * 10) / 10))
-    : Math.max(9.5, Math.min(12, params.requestedDurationSec || 10.4));
+  const outroSec = params.outroDurationSec ?? 0;
+  const voiceDurationSec = decodedVoice ? decodedVoice.duration : 0;
+  const computedDurationSec = decodedVoice
+    ? Math.max(
+        params.requestedDurationSec || 10.5,
+        Math.min(18, Math.ceil((voiceStartOffsetSec + decodedVoice.duration + Math.max(1.8, outroSec + 0.4)) * 10) / 10)
+      )
+    : Math.max(9.5, Math.min(16, params.requestedDurationSec || 10.5));
+
+  const finalDurationSec =
+    typeof params.exactDurationSec === 'number' && params.exactDurationSec > 2
+      ? params.exactDurationSec
+      : computedDurationSec;
 
   const totalFrames = Math.ceil(SAMPLE_RATE * finalDurationSec);
   const offline = new OfflineCtx(CHANNELS, totalFrames, SAMPLE_RATE);
@@ -997,6 +1027,7 @@ async function renderCommercialAudioMix(params: {
   return {
     audioBuffer: rendered,
     finalDurationSec,
+    voiceDurationSec,
     hasVoiceover: Boolean(decodedVoice),
     autoDucked,
   };

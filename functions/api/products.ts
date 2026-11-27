@@ -59,6 +59,68 @@ async function ensureIndexes(db: any) {
   }
 }
 
+const ALIBABA_TITLE_SUFFIX_REGEX = /\s*[-|–—]?\s*Buy Product on Alibaba\.com(?:\s*\(Copy\))?\s*$/i;
+
+function stripAlibabaSuffix(title: string): string {
+  if (!title || typeof title !== 'string') return '';
+  return title
+    .replace(ALIBABA_TITLE_SUFFIX_REGEX, '')
+    .replace(/\s*[-|–—]?\s*Alibaba\.com\s*$/i, '')
+    .replace(/[\s\-|–—]+$/, '')
+    .trim();
+}
+
+let hasCleanedAlibabaTitles = false;
+async function cleanAlibabaTitlesInD1(db: any) {
+  if (hasCleanedAlibabaTitles) return;
+  try {
+    await db.prepare(`
+      UPDATE products
+      SET 
+        title = TRIM(
+          REPLACE(
+            REPLACE(
+              REPLACE(
+                REPLACE(
+                  REPLACE(title, ' - Buy Product on Alibaba.com (Copy)', ''),
+                  ' - Buy Product on Alibaba.com', ''
+                ),
+                ' - Buy product on Alibaba.com', ''
+              ),
+              'Buy Product on Alibaba.com', ''
+            ),
+            'Buy product on Alibaba.com', ''
+          ),
+          ' -|–—	'
+        ),
+        name = CASE 
+          WHEN name LIKE '%Alibaba.com%' THEN 
+            TRIM(
+              REPLACE(
+                REPLACE(
+                  REPLACE(
+                    REPLACE(
+                      REPLACE(name, ' - Buy Product on Alibaba.com (Copy)', ''),
+                      ' - Buy Product on Alibaba.com', ''
+                    ),
+                    ' - Buy product on Alibaba.com', ''
+                  ),
+                  'Buy Product on Alibaba.com', ''
+                ),
+                'Buy product on Alibaba.com', ''
+              ),
+              ' -|–—	'
+            )
+          ELSE name 
+        END
+      WHERE title LIKE '%Alibaba.com%' OR name LIKE '%Alibaba.com%';
+    `).run();
+    hasCleanedAlibabaTitles = true;
+  } catch (e) {
+    // Non-blocking cleanup
+  }
+}
+
 export const onRequest: PagesFunction<any> = async (context) => {
   const { request, env } = context;
 
@@ -76,6 +138,8 @@ export const onRequest: PagesFunction<any> = async (context) => {
 
   // Ensure safe performance indexes exist
   await ensureIndexes(env.DB);
+  // Ensure titles in D1 are cleaned of Alibaba trailing suffixes safely
+  await cleanAlibabaTitlesInD1(env.DB);
 
   try {
     // 1. GET: Fetch products safely with optional limit/pagination
@@ -139,8 +203,8 @@ export const onRequest: PagesFunction<any> = async (context) => {
         }
 
         const primaryImg = p.imageUrl || p.image || p.image_path || imagesArr[0] || '';
-        const titleFallback = p.title || p.name || 'Product';
-        const nameFallback = p.name || p.title || 'Product';
+        const titleFallback = stripAlibabaSuffix(p.title || p.name || 'Product');
+        const nameFallback = stripAlibabaSuffix(p.name || p.title || 'Product');
 
         let variantsArr: any[] = [];
         if (p.variants) {
@@ -157,7 +221,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
           id: String(p.id),
           name: nameFallback,
           title: titleFallback,
-          titleKa: p.title_ka || p.name_ka || titleFallback,
+          titleKa: stripAlibabaSuffix(p.title_ka || p.name_ka || titleFallback),
           customSlug: p.slug || p.customSlug || String(p.id),
           description: p.description || p.description_en || '',
           descriptionKa: p.description_ka || '',
@@ -206,9 +270,9 @@ export const onRequest: PagesFunction<any> = async (context) => {
 
         // Critical Fix for NOT NULL constraint on products.name:
         // Always provide a fallback for name from title, titleKa, or 'Product'
-        const titleVal = String(product.title || product.name || product.titleKa || 'Product').trim();
-        const nameVal = String(product.name || product.title || product.titleKa || 'Product').trim();
-        const titleKaVal = String(product.titleKa || product.title_ka || titleVal).trim();
+        const titleVal = stripAlibabaSuffix(String(product.title || product.name || product.titleKa || 'Product').trim());
+        const nameVal = stripAlibabaSuffix(String(product.name || product.title || product.titleKa || 'Product').trim());
+        const titleKaVal = stripAlibabaSuffix(String(product.titleKa || product.title_ka || titleVal).trim());
 
         const descriptionVal = String(product.description || product.description_en || '').trim();
         const descriptionKaVal = String(product.descriptionKa || product.description_ka || '').trim();

@@ -8,6 +8,7 @@ import {
   polishEbayFeatures,
   ScrapedProductData,
   ImporterPlatform,
+  stripAlibabaSuffix,
 } from '../../src/utils/productScraper';
 
 const DESKTOP_HEADERS: Record<string, string> = {
@@ -126,7 +127,7 @@ export async function onRequestPost(context: any) {
       const platform = marketplace as ImporterPlatform;
       const baseData: ScrapedProductData = preParsed && typeof preParsed === 'object'
         ? {
-            title: String(preParsed.title || 'Imported Product'),
+            title: stripAlibabaSuffix(String(preParsed.title || 'Imported Product')),
             category: String(preParsed.category || 'Electronics'),
             price: Number(preParsed.price) || 0,
             origPrice: preParsed.origPrice ? Number(preParsed.origPrice) : undefined,
@@ -143,6 +144,8 @@ export async function onRequestPost(context: any) {
             reviews: Array.isArray(preParsed.reviews) ? preParsed.reviews : [],
           }
         : parsePlatformHtml(platform, htmlContent, targetUrl);
+
+      baseData.title = stripAlibabaSuffix(baseData.title);
 
       if (baseData.currency && baseData.currency.toUpperCase() !== 'USD' && baseData.price > 0) {
         baseData.price = convertToUsd(baseData.price, baseData.currency);
@@ -244,7 +247,7 @@ Context: ${contextText.slice(0, 4000)}`;
 
           const parsedAi = JSON.parse((aiRes.text || '{}').trim());
           if (parsedAi.title && typeof parsedAi.title === 'string') {
-            baseData.title = parsedAi.title.trim();
+            baseData.title = stripAlibabaSuffix(parsedAi.title.trim());
           }
           if (parsedAi.category && typeof parsedAi.category === 'string') {
             baseData.category = parsedAi.category.trim();
@@ -363,6 +366,7 @@ Context: ${contextText.slice(0, 4000)}`;
     }
 
     const scraped = parseProductHtml(htmlContent, targetUrl);
+    scraped.title = stripAlibabaSuffix(scraped.title);
 
     if (!scraped.title || scraped.title === 'Imported Product') {
       return new Response(

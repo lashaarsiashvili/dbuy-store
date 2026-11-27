@@ -28,12 +28,12 @@ interface TtsAttempt {
 export async function onRequestPost(context: any) {
   try {
     const env = context.env || {};
-    const apiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY;
-    if (!apiKey) {
+    const apiKey = env.GEMINI_API_KEY;
+    if (!apiKey || apiKey === 'MY_GEMINI_API_KEY') {
       return new Response(
         JSON.stringify({
           success: false,
-          error: 'GEMINI_API_KEY is not configured on the server.',
+          error: 'GEMINI_API_KEY is not configured on Cloudflare Pages secrets.',
         }),
         { status: 500, headers: CORS_HEADERS }
       );
@@ -65,6 +65,7 @@ export async function onRequestPost(context: any) {
 
     const ai = new GoogleGenAI({
       apiKey,
+      apiVersion: 'v1beta',
       httpOptions: {
         headers: {
           'User-Agent': 'aistudio-build',
@@ -74,9 +75,9 @@ export async function onRequestPost(context: any) {
 
     const attempts: TtsAttempt[] = [
       { model: 'gemini-3.8-flash-lite-tts', useSpeechMetadata: true, includeSpeechConfig: true },
-      { model: 'gemini-3.8-flash-tts', useSpeechMetadata: true, includeSpeechConfig: true },
       { model: 'gemini-3.8-flash-lite-tts', useSpeechMetadata: false, includeSpeechConfig: true },
-      { model: 'gemini-3.8-flash-lite-tts', useSpeechMetadata: false, includeSpeechConfig: false },
+      { model: 'gemini-2.5-flash-preview-tts', useSpeechMetadata: false, includeSpeechConfig: true },
+      { model: 'gemini-3.8-flash-tts', useSpeechMetadata: true, includeSpeechConfig: true },
     ];
 
     let rawAudioBase64 = '';

@@ -54,6 +54,17 @@ const DEFAULT_THEME = {
   logoStyle: 'bag-cart',
 };
 
+const ALIBABA_TITLE_SUFFIX_REGEX = /\s*[-|–—]?\s*Buy Product on Alibaba\.com(?:\s*\(Copy\))?\s*$/i;
+
+function stripAlibabaSuffix(title: string): string {
+  if (!title || typeof title !== 'string') return '';
+  return title
+    .replace(ALIBABA_TITLE_SUFFIX_REGEX, '')
+    .replace(/\s*[-|–—]?\s*Alibaba\.com\s*$/i, '')
+    .replace(/[\s\-|–—]+$/, '')
+    .trim();
+}
+
 // Helper: Response formatting
 function jsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -293,6 +304,53 @@ async function ensureSchema(db: D1Database): Promise<void> {
       }
     }
   }
+
+  // Safe targeted SQL update to clean Alibaba suffixes in D1 without touching other fields
+  try {
+    await db.exec(`
+      UPDATE products
+      SET 
+        title = TRIM(
+          REPLACE(
+            REPLACE(
+              REPLACE(
+                REPLACE(
+                  REPLACE(title, ' - Buy Product on Alibaba.com (Copy)', ''),
+                  ' - Buy Product on Alibaba.com', ''
+                ),
+                ' - Buy product on Alibaba.com', ''
+              ),
+              'Buy Product on Alibaba.com', ''
+            ),
+            'Buy product on Alibaba.com', ''
+          ),
+          ' -|–—	'
+        ),
+        name = CASE 
+          WHEN name LIKE '%Alibaba.com%' THEN 
+            TRIM(
+              REPLACE(
+                REPLACE(
+                  REPLACE(
+                    REPLACE(
+                      REPLACE(name, ' - Buy Product on Alibaba.com (Copy)', ''),
+                      ' - Buy Product on Alibaba.com', ''
+                    ),
+                    ' - Buy product on Alibaba.com', ''
+                  ),
+                  'Buy Product on Alibaba.com', ''
+                ),
+                'Buy product on Alibaba.com', ''
+              ),
+              ' -|–—	'
+            )
+          ELSE name 
+        END
+      WHERE title LIKE '%Alibaba.com%' OR name LIKE '%Alibaba.com%';
+    `);
+  } catch (cleanErr) {
+    // Non-blocking cleanup
+  }
 }
 
 /**
@@ -300,9 +358,11 @@ async function ensureSchema(db: D1Database): Promise<void> {
  */
 async function upsertProductRelational(db: D1Database, p: any, tableColumns: Set<string>): Promise<void> {
   const id = String(p.id);
-  const title = String(p.title_en || p.title || p.name || 'Product').trim();
-  const name = String(p.name || p.title || p.title_en || 'Product').trim();
-  const titleKa = String(p.title_ka || p.titleKa || p.name_ka || title).trim();
+  const rawTitle = String(p.title_en || p.title || p.name || 'Product').trim();
+  const rawName = String(p.name || p.title || p.title_en || 'Product').trim();
+  const title = stripAlibabaSuffix(rawTitle);
+  const name = stripAlibabaSuffix(rawName);
+  const titleKa = stripAlibabaSuffix(String(p.title_ka || p.titleKa || p.name_ka || title).trim());
   const descEn = String(p.description_en || p.description || '').trim();
   const descKa = String(p.description_ka || p.descriptionKa || '').trim();
   const description = descEn || descKa;

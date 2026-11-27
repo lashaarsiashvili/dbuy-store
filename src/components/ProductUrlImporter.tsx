@@ -40,6 +40,7 @@ import {
   parseProductHtml,
   parsePlatformHtml,
   sanitizeMarketplaceHtml,
+  stripAlibabaSuffix,
 } from '../utils/productScraper';
 import { normalizeProductCategory } from '../data/categoryNavigationData';
 import { smartApiFetch } from '../lib/api';
@@ -263,11 +264,13 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
     item.images = cleanImgs;
     const cleanRevs = Array.isArray(item.reviews) ? item.reviews : [];
     const cleanVars = Array.isArray(item.variants) ? item.variants : [];
+    const cleanTitle = stripAlibabaSuffix(item.title);
+    item.title = cleanTitle;
     setExtractedData(item);
-    setEditTitle(item.title);
+    setEditTitle(cleanTitle);
     setEditPrice(item.price || 49.99);
     setEditOrigPrice(item.origPrice);
-    setEditCategory(normalizeProductCategory(item.category, item.title));
+    setEditCategory(normalizeProductCategory(item.category, cleanTitle));
     setGalleryImages(cleanImgs);
     latestVariantsRef.current = cleanVars;
     setVariants(cleanVars);
@@ -322,6 +325,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
             : htmlToUse
             ? parseAmazonVariantsFromHtml(htmlToUse)
             : [];
+        item.title = stripAlibabaSuffix(item.title);
         setExtractedData(item);
         setEditTitle(item.title);
         setEditPrice(item.price || 49.99);
@@ -553,7 +557,7 @@ export const ProductUrlImporter: React.FC<ProductUrlImporterProps> = ({
       }),
       marketplace: resolvedMarketplace,
       sourceUrl: extractedData?.sourceUrl || activeUrl || undefined,
-      title: editTitle.trim() || extractedData?.title || 'Imported Product',
+      title: stripAlibabaSuffix(editTitle.trim() || extractedData?.title || 'Imported Product'),
       price: editPrice || 49.99,
       origPrice: editOrigPrice,
       category: editCategory,

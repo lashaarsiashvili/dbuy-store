@@ -91,6 +91,10 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
     aspectRatio: '9:16' | '16:9';
     hasVoiceover: boolean;
     durationSec: number;
+    engineUsed?: 'gemini-director-motion' | 'google-veo' | 'canvas-fallback';
+    modelUsed?: string;
+    fps?: number;
+    hasBrandedOutro?: boolean;
   } | null>(null);
 
   // YouTube Shorts Metadata
@@ -314,18 +318,30 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
       aspectRatio: result.aspectRatio,
       hasVoiceover: result.hasVoiceover,
       durationSec: result.durationSec,
+      engineUsed: result.engineUsed,
+      modelUsed: result.modelUsed,
+      fps: result.fps,
+      hasBrandedOutro: result.hasBrandedOutro,
     });
     setUploadProgress(null);
+    const engineLabel =
+      result.engineUsed === 'gemini-director-motion'
+        ? `Gemini AI Director · ${result.fps || 60}fps`
+        : result.engineUsed === 'google-veo'
+        ? 'Google Veo AI'
+        : 'AI';
+    const outroSuffix = result.hasBrandedOutro ? ' + 2.5s DBuy Outro' : '';
+    const formatExt = result.file.type.includes('webm') ? 'WebM' : 'MP4';
     setStatusAlert({
       type: 'success',
       message: isKa
-        ? `${result.aspectRatio} კომერციული ვიდეო მზადაა (${(result.file.size / (1024 * 1024)).toFixed(2)} MB)! დააჭირეთ „YouTube Shorts-ზე ატვირთვა“.`
-        : `${result.aspectRatio} Commercial Video ready (${(result.file.size / (1024 * 1024)).toFixed(2)} MB, ${result.durationSec}s MP4${result.hasVoiceover ? ' · English Voiceover + Auto-Ducked Music' : ''})! Click "Publish Short to YouTube" below.`,
+        ? `${result.aspectRatio} ${engineLabel} კომერციული ვიდეო მზადაა (${(result.file.size / (1024 * 1024)).toFixed(2)} MB)! დააჭირეთ „YouTube Shorts-ზე ატვირთვა“.`
+        : `${result.aspectRatio} ${engineLabel} Commercial ready (${(result.file.size / (1024 * 1024)).toFixed(2)} MB, ${result.durationSec}s ${formatExt}${result.hasVoiceover ? ' · Voiceover + 17% Ducked Beat' : ''}${outroSuffix})! Click "Publish Short to YouTube" below.`,
     });
     addToast(
       isKa
-        ? `🎬 ${result.aspectRatio} კომერციული ვიდეო შეიქმნა!`
-        : `🎬 ${result.aspectRatio} Commercial Ad Video ready!`,
+        ? `🎬 ${result.aspectRatio} ${engineLabel} კომერციული ვიდეო შეიქმნა!`
+        : `🎬 ${result.aspectRatio} ${engineLabel} Commercial Ad Video ready!`,
       'success'
     );
   };
@@ -718,8 +734,14 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
                     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-red-500/15 text-red-600 dark:text-red-300 border border-red-500/30 text-[10px] font-extrabold">
                       <Sparkles className="w-3 h-3" />
                       <span>
-                        AI Commercial {generatedMeta?.aspectRatio || '9:16'}
-                        {generatedMeta?.hasVoiceover ? ' · Voiceover + Auto-Ducking' : ''}
+                        {generatedMeta?.engineUsed === 'gemini-director-motion'
+                          ? `Gemini AI Director · ${generatedMeta.fps || 60}fps`
+                          : generatedMeta?.engineUsed === 'google-veo'
+                          ? 'Google Veo AI Commercial'
+                          : 'AI Commercial'}{' '}
+                        {generatedMeta?.aspectRatio || '9:16'}
+                        {generatedMeta?.hasVoiceover ? ' · Voiceover (17% Duck)' : ''}
+                        {generatedMeta?.hasBrandedOutro ? ' + 2.5s DBuy Outro' : ''}
                       </span>
                     </span>
                   )}
