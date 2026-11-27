@@ -90,7 +90,7 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
     }
   }, [products, selectedProduct]);
 
-  // Selected Images for Ken Burns motion
+  // Selected Images for commercial motion graphics
   const [selectedImages, setSelectedImages] = useState<string[]>([]);
 
   useEffect(() => {
@@ -290,14 +290,12 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                 <h2 className="text-xl font-black text-white tracking-tight flex items-center gap-2">
                   <span>YouTube Video Studio</span>
                   <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-red-500/20 text-red-400 border border-red-500/30">
-                    Free AI Commercials
+                    60 FPS Pro Motion Graphics
                   </span>
                 </h2>
               </div>
               <p className="text-xs text-slate-400 mt-1 max-w-2xl leading-relaxed">
-                Generate high-converting 15–20s YouTube promotional ads using Gemini 2.5 Pro scriptwriting,
-                cinematic Ken Burns camera motion, dark glassmorphism price tags, and in-browser Canvas
-                rendering with zero server video costs.
+                Generate true 60 FPS studio-grade commercial ads powered by Gemini Multimodal Vision (Gemini 2.5 Pro with automatic fallback to Gemini 2.5 Flash on the free tier). Features dynamic gradient mesh backdrop, 3D glowing pedestal, floating parallax tilt, specular light sweeps, and beat-synced voiceover.
               </p>
             </div>
           </div>
@@ -519,7 +517,7 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                   </span>
                 </div>
 
-                {/* Product Photos to Animate (Ken Burns) */}
+                {/* Product Photos for Motion Engine */}
                 <div>
                   <div className="flex items-center justify-between text-[11px] text-slate-400 mb-1.5">
                     <span className="font-semibold">
@@ -621,10 +619,10 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                 </div>
                 <div className="text-sm font-black text-white">YouTube Shorts</div>
                 <div className="text-xs font-mono text-red-400 font-bold mt-0.5">
-                  9:16 (1080 × 1920)
+                  9:16 (1080 × 1920 @ 60 FPS)
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">
-                  Vertical format optimized for YouTube Shorts, Instagram Reels, and mobile discovery.
+                  Vertical 60 FPS motion-graphics commercial optimized for YouTube Shorts, Reels, and mobile feeds.
                 </p>
                 {aspectRatio === '9:16' && (
                   <div className="absolute top-3 right-3 w-4 h-4 rounded-full bg-red-500 flex items-center justify-center">
@@ -653,10 +651,10 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                 </div>
                 <div className="text-sm font-black text-white">Standard YouTube</div>
                 <div className="text-xs font-mono text-blue-400 font-bold mt-0.5">
-                  16:9 (1920 × 1080)
+                  16:9 (1920 × 1080 @ 60 FPS)
                 </div>
                 <p className="text-[11px] text-slate-400 mt-1.5 leading-snug">
-                  Horizontal commercial ad optimized for YouTube channel uploads, desktop, and TV feeds.
+                  Widescreen 60 FPS commercial ad optimized for YouTube channel uploads, desktop, and TV feeds.
                 </p>
                 {aspectRatio === '16:9' && (
                   <div className="absolute top-3 right-3 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center">
@@ -778,17 +776,17 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
               {isGenerating ? (
                 <>
                   <Loader2 className="w-5 h-5 animate-spin" />
-                  <span>{progress?.message || 'Rendering YouTube Commercial...'}</span>
+                  <span>{progress?.message || 'Rendering 60 FPS Pro Commercial...'}</span>
                 </>
               ) : remainingQuota === 0 ? (
                 <>
                   <AlertTriangle className="w-5 h-5 text-amber-500" />
-                  <span>Daily Free Quota Reached (0/5 Left)</span>
+                  <span>Daily Free Quota Reached (0 / {quota.maxDaily} Left)</span>
                 </>
               ) : (
                 <>
                   <Sparkles className="w-5 h-5 text-yellow-300" />
-                  <span>Generate Ad Video ({remainingQuota} Free Left Today)</span>
+                  <span>Generate Pro Ad ({remainingQuota} / {quota.maxDaily} Free Generations Left Today)</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -935,19 +933,110 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
           </div>
 
           {/* AI 4-Scene Storyboard Breakdown */}
+          {/* Gemini Multimodal Vision Director & 4-Scene Storyboard Breakdown */}
           {activePlan && (
-            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-lg space-y-3">
+            <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-lg space-y-4">
               <div className="flex items-center justify-between">
                 <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                  <Layers className="w-3.5 h-3.5 text-blue-400" />
-                  <span>4-Scene Storyboard</span>
+                  <Sparkles className="w-3.5 h-3.5 text-yellow-400" />
+                  <span>Gemini Multimodal Vision Director</span>
                 </h4>
-                <span className="text-[10px] font-mono text-slate-400">
-                  Total: {activePlan.estimatedDurationSec}s
+                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-400 border border-blue-500/30">
+                  {activePlan.modelUsed === 'gemini-2.5-pro'
+                    ? 'Gemini 2.5 Pro Vision'
+                    : activePlan.modelUsed === 'gemini-2.5-flash'
+                    ? 'Gemini 2.5 Flash Vision'
+                    : 'Multimodal Vision'}
                 </span>
               </div>
 
+              {/* Visual Hook & Extracted Specs Banner */}
+              {activePlan.visualHook && (
+                <div className="p-3 bg-gradient-to-r from-blue-950/40 via-purple-950/30 to-slate-950 rounded-xl border border-blue-800/40 space-y-1">
+                  <div className="text-[10px] uppercase font-bold text-blue-400 tracking-wider">
+                    Visual Hook & Direction
+                  </div>
+                  <div className="text-xs text-slate-200 font-medium italic">
+                    &ldquo;{activePlan.visualHook}&rdquo;
+                  </div>
+                </div>
+              )}
+
+              {/* Extracted Dominant Colors & Kinetic Badges */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-[11px]">
+                {/* Extracted Colors */}
+                {activePlan.dominantColors && (
+                  <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800/80 space-y-1.5">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                      Extracted Palette
+                    </span>
+                    <div className="flex items-center space-x-2">
+                      <div className="flex items-center space-x-1" title="Primary Accent">
+                        <span
+                          className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm"
+                          style={{ backgroundColor: activePlan.dominantColors.primaryAccent }}
+                        />
+                        <span className="text-[10px] font-mono text-slate-300">
+                          {activePlan.dominantColors.primaryAccent}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-1" title="Secondary Glow">
+                        <span
+                          className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm"
+                          style={{ backgroundColor: activePlan.dominantColors.secondaryGlow }}
+                        />
+                        <span className="text-[10px] font-mono text-slate-300">
+                          {activePlan.dominantColors.secondaryGlow}
+                        </span>
+                      </div>
+                      <div className="flex items-center space-x-1" title="Pedestal Color">
+                        <span
+                          className="w-3.5 h-3.5 rounded-full border border-white/20 shadow-sm"
+                          style={{ backgroundColor: activePlan.dominantColors.pedestalColor }}
+                        />
+                        <span className="text-[10px] font-mono text-slate-300">
+                          {activePlan.dominantColors.pedestalColor}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Kinetic Badges */}
+                <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800/80 space-y-1.5">
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Kinetic Commercial Badges
+                  </span>
+                  <div className="flex items-center space-x-2">
+                    {activePlan.discountTag && (
+                      <span className="px-2 py-0.5 rounded-md bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-bold">
+                        {activePlan.discountTag}
+                      </span>
+                    )}
+                    {activePlan.ratingScore && (
+                      <span className="px-2 py-0.5 rounded-md bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-bold flex items-center gap-1">
+                        ★ {activePlan.ratingScore.toFixed(1)}
+                        <span className="text-slate-400 font-normal">
+                          ({activePlan.ratingReviewCount || '1.2k+'})
+                        </span>
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Storyboard Scenes */}
               <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] text-slate-400 font-semibold">
+                  <span className="flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-blue-400" />
+                    <span>60 FPS Motion Storyboard ({activePlan.scenes.length} Scenes)</span>
+                  </span>
+                  <span className="font-mono text-[10px] text-slate-500">
+                    {activePlan.estimatedDurationSec}s runtime
+                  </span>
+                </div>
+
                 {activePlan.scenes.map((scene, i) => (
                   <div
                     key={i}
@@ -957,12 +1046,17 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                       <span className="font-black text-blue-400 text-[11px]">
                         Scene {scene.sceneNumber}: {scene.roleLabel}
                       </span>
-                      <span className="text-[10px] font-mono text-slate-500">
+                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-purple-300">
                         {scene.durationSec}s · {scene.cameraMotion.replace('_', ' ')}
                       </span>
                     </div>
                     <div className="font-extrabold text-white text-xs">{scene.headline}</div>
                     <div className="text-[11px] text-slate-400">{scene.subheadline}</div>
+                    {scene.calloutBadge && (
+                      <div className="inline-block mt-0.5 px-2 py-0.5 rounded bg-blue-900/40 text-blue-300 border border-blue-700/40 text-[10px] font-medium">
+                        Badge: {scene.calloutBadge}
+                      </div>
+                    )}
                     {scene.voiceoverLine && (
                       <div className="text-[10px] text-slate-500 italic flex items-center gap-1 mt-1">
                         <Mic className="w-2.5 h-2.5 text-purple-400 shrink-0" />

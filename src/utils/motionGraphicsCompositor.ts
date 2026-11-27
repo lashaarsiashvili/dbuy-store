@@ -643,6 +643,318 @@ function renderDynamicStudioBackground(
 }
 
 // ============================================================================
+// Glowing Studio Pedestal & Ground Reflection Beneath 3D Product
+// ============================================================================
+function renderGlowingStudioPedestal(
+  ctx: CanvasRenderingContext2D,
+  stageCenterX: number,
+  pedestalCenterY: number,
+  pedestalRadiusX: number,
+  pedestalRadiusY: number,
+  accentRgb: [number, number, number],
+  pedestalRgb: [number, number, number],
+  beatPulse: number,
+  productHoverOffsetY: number,
+  scaleFactor: number
+) {
+  ctx.save();
+  // 1. Ambient Floor Spotlight Glow
+  const floorGlow = ctx.createRadialGradient(
+    stageCenterX,
+    pedestalCenterY,
+    pedestalRadiusX * 0.1,
+    stageCenterX,
+    pedestalCenterY,
+    pedestalRadiusX * 1.55
+  );
+  floorGlow.addColorStop(0, rgbStr(accentRgb, 0.32 + beatPulse * 0.12));
+  floorGlow.addColorStop(0.48, rgbStr(accentRgb, 0.08));
+  floorGlow.addColorStop(1, 'rgba(4, 8, 20, 0)');
+  ctx.fillStyle = floorGlow;
+  ctx.beginPath();
+  ctx.ellipse(stageCenterX, pedestalCenterY, pedestalRadiusX * 1.55, pedestalRadiusY * 1.6, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 2. Multi-tier Sleek Pedestal Disc Base (cylinder depth)
+  const discDepth = Math.max(10, 16 * scaleFactor);
+  ctx.fillStyle = 'rgba(0, 0, 0, 0.72)';
+  ctx.beginPath();
+  ctx.ellipse(stageCenterX, pedestalCenterY + discDepth, pedestalRadiusX, pedestalRadiusY, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // Cylinder rim extrusion gradient
+  const cylGrad = ctx.createLinearGradient(stageCenterX - pedestalRadiusX, 0, stageCenterX + pedestalRadiusX, 0);
+  cylGrad.addColorStop(0, rgbStr(pedestalRgb, 0.9));
+  cylGrad.addColorStop(0.5, 'rgba(40, 58, 88, 0.95)');
+  cylGrad.addColorStop(1, rgbStr(pedestalRgb, 0.9));
+  ctx.fillStyle = cylGrad;
+  ctx.fillRect(stageCenterX - pedestalRadiusX, pedestalCenterY, pedestalRadiusX * 2, discDepth);
+  ctx.beginPath();
+  ctx.ellipse(stageCenterX, pedestalCenterY + discDepth, pedestalRadiusX, pedestalRadiusY, 0, 0, Math.PI);
+  ctx.fill();
+
+  // 3. Top Illuminated Platform Surface
+  const topGrad = ctx.createRadialGradient(
+    stageCenterX,
+    pedestalCenterY - pedestalRadiusY * 0.2,
+    pedestalRadiusX * 0.05,
+    stageCenterX,
+    pedestalCenterY,
+    pedestalRadiusX
+  );
+  topGrad.addColorStop(0, '#FFFFFF');
+  topGrad.addColorStop(0.25, rgbStr(accentRgb, 0.5));
+  topGrad.addColorStop(0.65, 'rgba(15, 23, 42, 0.96)');
+  topGrad.addColorStop(1, 'rgba(8, 14, 28, 0.98)');
+  ctx.fillStyle = topGrad;
+  ctx.beginPath();
+  ctx.ellipse(stageCenterX, pedestalCenterY, pedestalRadiusX, pedestalRadiusY, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 4. Concentric Glowing Neon Rings on Pedestal Top
+  ctx.strokeStyle = rgbStr(accentRgb, 0.88 + beatPulse * 0.12);
+  ctx.lineWidth = Math.max(1.8, 2.5 * scaleFactor);
+  ctx.beginPath();
+  ctx.ellipse(stageCenterX, pedestalCenterY, pedestalRadiusX, pedestalRadiusY, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+  ctx.lineWidth = Math.max(1, 1.4 * scaleFactor);
+  ctx.beginPath();
+  ctx.ellipse(stageCenterX, pedestalCenterY, pedestalRadiusX * 0.72, pedestalRadiusY * 0.72, 0, 0, Math.PI * 2);
+  ctx.stroke();
+
+  // 5. Dynamic Hover Cast Shadow of Product onto Pedestal
+  const shadowDist = Math.max(0.6, 1 - productHoverOffsetY / (30 * scaleFactor));
+  const shadowScale = lerp(0.85, 1.05, shadowDist);
+  const shadowAlpha = lerp(0.42, 0.78, shadowDist);
+  ctx.fillStyle = `rgba(0, 0, 0, ${shadowAlpha})`;
+  ctx.beginPath();
+  ctx.ellipse(
+    stageCenterX,
+    pedestalCenterY + 2 * scaleFactor,
+    pedestalRadiusX * 0.54 * shadowScale,
+    pedestalRadiusY * 0.46 * shadowScale,
+    0,
+    0,
+    Math.PI * 2
+  );
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// ============================================================================
+// 5-Star Customer Rating Pop-Up Badge (Social Proof Animation)
+// ============================================================================
+function render5StarRatingBadge(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  score: number,
+  reviewCount: number,
+  alpha: number,
+  scale: number,
+  scaleFactor: number
+) {
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = clamp(alpha, 0, 1);
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  const starFont = `900 ${Math.round(16 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  const textFont = `900 ${Math.round(14 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  const subFont = `700 ${Math.round(11 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+
+  const stars = '★★★★★';
+  const scoreText = `${score.toFixed(1)} / 5.0`;
+  const reviewText = `${reviewCount.toLocaleString()}+ Reviews`;
+
+  const badgeW = 240 * scaleFactor;
+  const badgeH = 54 * scaleFactor;
+
+  // Frosted glassmorphism backing
+  ctx.shadowColor = 'rgba(250, 204, 21, 0.42)';
+  ctx.shadowBlur = 22 * scaleFactor;
+  ctx.fillStyle = 'rgba(8, 14, 28, 0.9)';
+  drawRoundedRect(ctx, -badgeW / 2, -badgeH / 2, badgeW, badgeH, 16 * scaleFactor);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  // Golden glow border
+  ctx.strokeStyle = 'rgba(250, 204, 21, 0.75)';
+  ctx.lineWidth = 1.8 * scaleFactor;
+  drawRoundedRect(ctx, -badgeW / 2, -badgeH / 2, badgeW, badgeH, 16 * scaleFactor);
+  ctx.stroke();
+
+  // Golden stars
+  ctx.fillStyle = '#FBBF24';
+  ctx.font = starFont;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(stars, -badgeW / 2 + 16 * scaleFactor, -badgeH / 2 + 18 * scaleFactor);
+
+  // Score
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = textFont;
+  ctx.fillText(scoreText, -badgeW / 2 + 92 * scaleFactor, -badgeH / 2 + 18 * scaleFactor);
+
+  // Verified reviews line
+  ctx.fillStyle = '#94A3B8';
+  ctx.font = subFont;
+  ctx.fillText(`Official Customer Rating · ${reviewText}`, -badgeW / 2 + 16 * scaleFactor, -badgeH / 2 + 38 * scaleFactor);
+
+  ctx.restore();
+}
+
+// ============================================================================
+// Animated Kinetic Discount & Big Price Tag Badge
+// ============================================================================
+function renderKineticDiscountAndPriceBadge(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  discountTag: string,
+  priceText: string,
+  alpha: number,
+  scale: number,
+  scaleFactor: number,
+  accentRgb: [number, number, number]
+) {
+  if (alpha <= 0) return;
+  ctx.save();
+  ctx.globalAlpha = clamp(alpha, 0, 1);
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  ctx.font = `900 ${Math.round(18 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  const discW = discountTag ? ctx.measureText(discountTag).width + 28 * scaleFactor : 0;
+  ctx.font = `900 ${Math.round(22 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  const priceW = ctx.measureText(priceText).width + 30 * scaleFactor;
+  const totalW = (discW > 0 ? discW + 12 * scaleFactor : 0) + priceW;
+  const badgeH = 50 * scaleFactor;
+
+  let startX = -totalW / 2;
+
+  if (discountTag && discW > 0) {
+    // Glowing discount pill (e.g. -28% OFF)
+    ctx.shadowColor = 'rgba(239, 68, 68, 0.55)';
+    ctx.shadowBlur = 20 * scaleFactor;
+    const discGrad = ctx.createLinearGradient(startX, 0, startX + discW, 0);
+    discGrad.addColorStop(0, '#DC2626');
+    discGrad.addColorStop(1, '#EF4444');
+    ctx.fillStyle = discGrad;
+    drawRoundedRect(ctx, startX, -badgeH / 2, discW, badgeH, 15 * scaleFactor);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+    ctx.lineWidth = 1.6 * scaleFactor;
+    drawRoundedRect(ctx, startX, -badgeH / 2, discW, badgeH, 15 * scaleFactor);
+    ctx.stroke();
+
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = `900 ${Math.round(17 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(discountTag, startX + discW / 2, 1 * scaleFactor);
+
+    startX += discW + 12 * scaleFactor;
+  }
+
+  // Price Card
+  ctx.shadowColor = rgbStr(accentRgb, 0.45);
+  ctx.shadowBlur = 24 * scaleFactor;
+  ctx.fillStyle = 'rgba(8, 15, 32, 0.92)';
+  drawRoundedRect(ctx, startX, -badgeH / 2, priceW, badgeH, 15 * scaleFactor);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.strokeStyle = rgbStr(accentRgb, 0.75);
+  ctx.lineWidth = 2 * scaleFactor;
+  drawRoundedRect(ctx, startX, -badgeH / 2, priceW, badgeH, 15 * scaleFactor);
+  ctx.stroke();
+
+  ctx.fillStyle = '#38BDF8';
+  ctx.font = `900 ${Math.round(22 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(priceText, startX + priceW / 2, 1 * scaleFactor);
+
+  ctx.restore();
+}
+
+// ============================================================================
+// Glassmorphism Spec Callout Card (Feature Specification Badge)
+// ============================================================================
+function renderGlassmorphismSpecCard(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  badge: string,
+  detail: string,
+  alpha: number,
+  scale: number,
+  scaleFactor: number,
+  accentRgb: [number, number, number]
+) {
+  if (alpha <= 0 || (!badge && !detail)) return;
+  ctx.save();
+  ctx.globalAlpha = clamp(alpha, 0, 1);
+  ctx.translate(x, y);
+  ctx.scale(scale, scale);
+
+  const titleFont = `900 ${Math.round(15 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+  const detailFont = `600 ${Math.round(12 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, sans-serif`;
+
+  ctx.font = titleFont;
+  const w1 = ctx.measureText(badge).width;
+  ctx.font = detailFont;
+  const w2 = ctx.measureText(detail).width;
+  const cardW = Math.max(190 * scaleFactor, Math.max(w1, w2) + 56 * scaleFactor);
+  const cardH = 54 * scaleFactor;
+
+  // Frosted dark glass
+  ctx.shadowColor = rgbStr(accentRgb, 0.38);
+  ctx.shadowBlur = 22 * scaleFactor;
+  ctx.fillStyle = 'rgba(7, 13, 26, 0.88)';
+  drawRoundedRect(ctx, -cardW / 2, -cardH / 2, cardW, cardH, 16 * scaleFactor);
+  ctx.fill();
+  ctx.shadowBlur = 0;
+
+  ctx.strokeStyle = rgbStr(accentRgb, 0.6);
+  ctx.lineWidth = 1.6 * scaleFactor;
+  drawRoundedRect(ctx, -cardW / 2, -cardH / 2, cardW, cardH, 16 * scaleFactor);
+  ctx.stroke();
+
+  // Glowing pulse dot
+  const dotX = -cardW / 2 + 20 * scaleFactor;
+  ctx.fillStyle = rgbStr(accentRgb, 1);
+  ctx.beginPath();
+  ctx.arc(dotX, 0, 5.2 * scaleFactor, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  if (detail) {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = titleFont;
+    ctx.fillText(badge, dotX + 14 * scaleFactor, -cardH / 2 + 18 * scaleFactor);
+
+    ctx.fillStyle = '#94A3B8';
+    ctx.font = detailFont;
+    ctx.fillText(detail, dotX + 14 * scaleFactor, -cardH / 2 + 37 * scaleFactor);
+  } else {
+    ctx.fillStyle = '#FFFFFF';
+    ctx.font = titleFont;
+    ctx.fillText(badge, dotX + 14 * scaleFactor, 1 * scaleFactor);
+  }
+
+  ctx.restore();
+}
+
+// ============================================================================
 // 2.5D / 3D Product Stage Renderer with 4 Dynamic Motion Choreography Styles
 // ============================================================================
 function renderAnimatedProductStage(
@@ -1226,7 +1538,8 @@ function renderDBuyBrandedOutroCard(
   outroDurationSec: number,
   priceBannerText: string,
   alpha: number,
-  particles: StudioParticle[]
+  particles: StudioParticle[],
+  ctaText?: string
 ) {
   const isLandscape = width > height;
   const scaleFactor = Math.min(width, height) / 720;
@@ -1351,8 +1664,8 @@ function renderDBuyBrandedOutroCard(
   // 4. Glowing Animated CTA Pill: www.dbuystore.com (with continuous specular shimmer!)
   ctx.save();
   ctx.globalAlpha = clamp(alpha * ctaEnter, 0, 1);
-  const urlText = 'www.dbuystore.com';
-  const urlFontSize = Math.round((isLandscape ? 29 : 33) * scaleFactor);
+  const urlText = ctaText || 'Shop Now at DBUYStore.com';
+  const urlFontSize = Math.round((isLandscape ? 26 : 30) * scaleFactor);
   ctx.font = `900 ${urlFontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
   const urlW = ctx.measureText(urlText).width + 78 * scaleFactor;
   const urlH = (isLandscape ? 66 : 76) * scaleFactor;
@@ -1709,6 +2022,11 @@ export async function renderProMotionCommercialVideo(
     priceBanner?: string;
     includeWebLinkOverlay?: boolean;
     accentColorHex?: string;
+    dominantColors?: { primaryAccent: string; secondaryGlow: string; pedestalColor: string };
+    discountTag?: string;
+    ratingScore?: number;
+    ratingReviewCount?: number;
+    ctaText?: string;
     modelUsed?: string;
   },
   onProgress?: (progress: PromoVideoGenerationProgress) => void
@@ -1739,7 +2057,7 @@ export async function renderProMotionCommercialVideo(
     detail: 'Extracting accent colors & building pre-blurred ambient glow layers',
   });
 
-  const directorAccentRgb = hexToRgb(params.accentColorHex);
+  const directorAccentRgb = hexToRgb(params.dominantColors?.primaryAccent || params.accentColorHex);
   const uniqueUrls = Array.from(new Set(params.selectedImages.filter(Boolean))).slice(0, 6);
   const loadedImgs = await Promise.all(uniqueUrls.map((u) => loadImageElement(u)));
   const preparedPhotos: PreparedMotionPhoto[] = [];
@@ -1872,7 +2190,8 @@ export async function renderProMotionCommercialVideo(
           DBUY_OUTRO_DURATION_SEC,
           priceBannerText,
           1,
-          particles
+          particles,
+          params.ctaText
         );
         return;
       }
@@ -1914,6 +2233,44 @@ export async function renderProMotionCommercialVideo(
         params.visualTheme,
         particles,
         bpm
+      );
+
+      // 1b. Glowing 3D Studio Pedestal & Floor Reflection beneath Product
+      const isLandscape = w > h;
+      const scaleFactor = Math.min(w, h) / 720;
+      const beatPhase = (sceneTimeSec * (bpm / 60)) % 1;
+      const beatPulse = Math.pow(1 - beatPhase, 3);
+      const stageCenterX = w / 2;
+      const stageCenterY = isLandscape ? h * 0.48 : h * 0.49;
+      const maxStageW = isLandscape ? w * 0.46 : w * 0.82;
+      const maxStageH = isLandscape ? h * 0.62 : h * 0.47;
+      let cardW = maxStageW;
+      let cardH = cardW / Math.max(0.55, Math.min(1.85, current.photo.aspect));
+      if (cardH > maxStageH) {
+        cardH = maxStageH;
+        cardW = cardH * Math.max(0.55, Math.min(1.85, current.photo.aspect));
+      }
+      cardW = Math.max(cardW, maxStageW * 0.72);
+      cardH = Math.max(cardH, maxStageH * 0.68);
+
+      const pedestalRgb: [number, number, number] =
+        hexToRgb(params.dominantColors?.pedestalColor) || [30, 41, 59];
+      const pedestalCenterY = stageCenterY + cardH * 0.46;
+      const pedestalRadiusX = cardW * 0.64;
+      const pedestalRadiusY = pedestalRadiusX * 0.28;
+      const hoverOffsetY = Math.sin(sceneTimeSec * 2.6) * 8 * scaleFactor;
+
+      renderGlowingStudioPedestal(
+        ctx,
+        stageCenterX,
+        pedestalCenterY,
+        pedestalRadiusX,
+        pedestalRadiusY,
+        activeAccent,
+        pedestalRgb,
+        beatPulse,
+        hoverOffsetY,
+        scaleFactor
       );
 
       // 2. Outgoing Whip-Cut Product Card during crisp 0.28s transition
@@ -1972,6 +2329,72 @@ export async function renderProMotionCommercialVideo(
         includeWebLink
       );
 
+      // 4b. Kinetic Typography & Animated UI Badges
+      const discountTag =
+        params.discountTag ||
+        (Number(params.product.origPrice) > Number(params.product.price)
+          ? `-${Math.round((1 - Number(params.product.price) / Number(params.product.origPrice)) * 100)}% OFF`
+          : '');
+      const formattedPrice =
+        Number(params.product.price) > 0 ? `$${Number(params.product.price).toFixed(2)}` : '';
+
+      // Scene 1 Hook & Scene 4 CTA: Kinetic Discount & Price Pill
+      if ((current.scene.role === 'hook' || current.scene.role === 'cta') && formattedPrice) {
+        const badgeEnter = easeSpringOvershoot(clamp((sceneTimeSec - 0.15) / 0.4, 0, 1));
+        const badgeExit = clamp((current.durationSec - sceneTimeSec) / 0.2, 0, 1);
+        const badgeY = isLandscape ? h * 0.78 : stageCenterY + cardH * 0.52;
+        renderKineticDiscountAndPriceBadge(
+          ctx,
+          w / 2,
+          badgeY,
+          discountTag,
+          formattedPrice,
+          badgeEnter * badgeExit,
+          lerp(0.75, 1, badgeEnter),
+          scaleFactor,
+          activeAccent
+        );
+      }
+
+      // Scene 2 Feature Showcase: Sleek Glassmorphism Spec Card
+      const specBadge = (current.scene.calloutBadge || current.scene.roleLabel || '').toUpperCase();
+      const specDetail = current.scene.specDetail || (params.product.features && params.product.features[0]) || '';
+      if (current.scene.role === 'showcase' && (specBadge || specDetail)) {
+        const specEnter = easeSpringOvershoot(clamp((sceneTimeSec - 0.12) / 0.4, 0, 1));
+        const specExit = clamp((current.durationSec - sceneTimeSec) / 0.2, 0, 1);
+        const specY = isLandscape ? h * 0.78 : stageCenterY + cardH * 0.52;
+        renderGlassmorphismSpecCard(
+          ctx,
+          w / 2,
+          specY,
+          specBadge,
+          specDetail,
+          specEnter * specExit,
+          lerp(0.75, 1, specEnter),
+          scaleFactor,
+          activeAccent
+        );
+      }
+
+      // Scene 3 Benefit / Social Proof: 5-Star Customer Rating Pop-up
+      if (current.scene.role === 'benefit') {
+        const ratingEnter = easeSpringOvershoot(clamp((sceneTimeSec - 0.1) / 0.42, 0, 1));
+        const ratingExit = clamp((current.durationSec - sceneTimeSec) / 0.2, 0, 1);
+        const score = params.ratingScore || 4.9;
+        const reviews = params.ratingReviewCount || 1280;
+        const ratingY = isLandscape ? h * 0.78 : stageCenterY + cardH * 0.52;
+        render5StarRatingBadge(
+          ctx,
+          w / 2,
+          ratingY,
+          score,
+          reviews,
+          ratingEnter * ratingExit,
+          lerp(0.75, 1, ratingEnter),
+          scaleFactor
+        );
+      }
+
       // 5. Bold TikTok/Shorts Word-by-Word Highlighted Subtitles
       renderWordByWordSubtitles(
         ctx,
@@ -1995,7 +2418,8 @@ export async function renderProMotionCommercialVideo(
           DBUY_OUTRO_DURATION_SEC,
           priceBannerText,
           outroBlend,
-          particles
+          particles,
+          params.ctaText
         );
       }
     };

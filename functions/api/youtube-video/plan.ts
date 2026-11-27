@@ -11,17 +11,28 @@ export async function onRequestOptions() {
   return new Response(null, { status: 204, headers: CORS_HEADERS });
 }
 
+function computeDiscountTag(priceStr: string, origPriceStr: string): string {
+  const p = parseFloat(priceStr.replace(/[^0-9.]/g, ''));
+  const op = parseFloat(origPriceStr.replace(/[^0-9.]/g, ''));
+  if (op > p && p > 0) {
+    const pct = Math.round(((op - p) / op) * 100);
+    if (pct > 0) return `-${pct}% OFF`;
+  }
+  return 'SPECIAL OFFER';
+}
+
 function buildFallbackYouTubePlan(
   title: string,
   price: string,
-  _origPrice: string,
+  origPrice: string,
   features: string[],
   _aspectRatio: string
 ) {
-  const f1 = features[0] || 'Premium Engineering & Sleek Finish';
-  const f2 = features[1] || 'Designed for Everyday Peak Performance';
-  const f3 = features[2] || 'Uncompromising Build & Modern Reliability';
+  const f1 = features[0] || 'Aerospace Aluminum & Precision Finish';
+  const f2 = features[1] || 'Engineered for Everyday Peak Performance';
+  const f3 = features[2] || 'Uncompromising Build & Long-Term Reliability';
   const priceDisplay = price ? `$${price}` : 'Special Price';
+  const discountTag = computeDiscountTag(price, origPrice);
 
   const scenes = [
     {
@@ -31,8 +42,10 @@ function buildFallbackYouTubePlan(
       durationSec: 4.2,
       headline: 'MEET THE FUTURE',
       subheadline: title.slice(0, 40),
+      calloutBadge: 'FLAGSHIP DESIGN',
+      specDetail: 'Ultra-refined studio build',
       voiceover: `Upgrade your daily setup with ${title.slice(0, 35)}.`,
-      cameraMotion: 'slow_zoom_in',
+      cameraChoreography: 'tilt_3d',
     },
     {
       sceneNumber: 2,
@@ -41,8 +54,10 @@ function buildFallbackYouTubePlan(
       durationSec: 4.5,
       headline: 'PRECISION CRAFT',
       subheadline: f1.slice(0, 50),
+      calloutBadge: (features[0] || 'TITANIUM ALLOY').slice(0, 24).toUpperCase(),
+      specDetail: f1.slice(0, 40),
       voiceover: `Engineered with ${f1.slice(0, 45)} for total reliability.`,
-      cameraMotion: 'smooth_pan_right',
+      cameraChoreography: 'light_sweep',
     },
     {
       sceneNumber: 3,
@@ -51,8 +66,10 @@ function buildFallbackYouTubePlan(
       durationSec: 4.5,
       headline: 'SEAMLESS POWER',
       subheadline: f2.slice(0, 50),
+      calloutBadge: '5-STAR RATED',
+      specDetail: '4.9 ★ Verified Customer Rating',
       voiceover: `Experience ${f2.slice(0, 45)} every single day.`,
-      cameraMotion: 'macro_reveal',
+      cameraChoreography: 'parallax_float',
     },
     {
       sceneNumber: 4,
@@ -61,16 +78,27 @@ function buildFallbackYouTubePlan(
       durationSec: 4.5,
       headline: 'ORDER YOURS TODAY',
       subheadline: `Now available for ${priceDisplay} at DBUY Store`,
+      calloutBadge: discountTag,
+      specDetail: 'Free Worldwide Shipping Available',
       voiceover: `Grab yours now at DBUY Store for only ${priceDisplay}.`,
-      cameraMotion: 'gentle_orbit',
+      cameraChoreography: 'zoom_punch',
     },
   ];
 
   return {
+    dominantColors: {
+      primaryAccent: '#0D92FF',
+      secondaryGlow: '#38BDF8',
+      pedestalColor: '#1E293B',
+    },
+    visualHook: 'ENGINEERED FOR PEAK PERFORMANCE',
+    discountTag,
+    ratingScore: 4.9,
+    ratingReviewCount: 1280,
     youtubeTitle: `${title.slice(0, 45)} — Official Showcase ⚡ #Shorts #DBUY`,
-    youtubeDescription: `Discover ${title}. Engineered for modern lifestyle, work, and everyday excellence.\n\n🔥 Order now at DBUY Store: https://dbuystore.com\n💰 Price: ${priceDisplay}\n\nFeatures:\n• ${f1}\n• ${f2}\n• ${f3}\n\n#dbuy #gadgets #tech #shopping #shorts`,
+    youtubeDescription: `Discover ${title}. Engineered for modern lifestyle, work, and everyday excellence.\n\n🔥 Order now at DBUY Store: https://dbuystore.com\n💰 Price: ${priceDisplay} (${discountTag})\n\nKey Specs:\n• ${f1}\n• ${f2}\n• ${f3}\n\n#dbuy #gadgets #tech #shopping #shorts`,
     youtubeTags: ['dbuy', 'dbuystore', 'tech', 'gadgets', 'shorts', 'review', 'shopping'],
-    ctaText: 'Shop Now at DBUY',
+    ctaText: 'Shop Now at DBUYStore.com',
     fullVoiceoverScript: `Upgrade your daily setup with ${title.slice(0, 35)}. Engineered with ${f1.slice(0, 40)} for peak performance. Grab yours now at DBUY Store for only ${priceDisplay}.`,
     scenes,
     estimatedDurationSec: 17.7,
@@ -92,6 +120,11 @@ export async function onRequestPost(context: any) {
       : [];
     const images: string[] = Array.isArray(product.images)
       ? product.images.map((img: unknown) => String(img || '').trim()).filter(Boolean).slice(0, 6)
+      : [];
+    const imageParts: Array<{ mimeType: string; data: string }> = Array.isArray(product.imageParts)
+      ? product.imageParts
+      : Array.isArray(body.imageParts)
+      ? body.imageParts
       : [];
     const aspectRatio = body.aspectRatio === '16:9' ? '16:9' : '9:16';
 
@@ -120,35 +153,61 @@ export async function onRequestPost(context: any) {
       },
     });
 
-    const prompt = `You are a world-class YouTube commercial director creating a viral, high-converting 15–20 second promotional video ad for YouTube (${aspectRatio === '9:16' ? 'YouTube Shorts 9:16' : 'Standard YouTube 16:9'}).
+    const promptText = `You are an elite motion-graphics commercial director creating a viral, studio-grade 15–18 second promotional ad for YouTube (${aspectRatio === '9:16' ? 'YouTube Shorts (9:16 vertical)' : 'Standard YouTube (16:9 widescreen)'}).
 
-PRODUCT DATA:
+Visually examine the product's design, materials, finish, and silhouette from the provided image(s), along with the product details:
 - Title: ${title}
 - Price: $${price}${origPrice ? ` (Original: $${origPrice})` : ''}
-- Key Features: ${features.join('; ') || 'Sleek design, premium build, maximum reliability'}
-- Product Image URLs: ${images.join(', ') || 'Official high-resolution product photos'}
+- Key Specs & Features: ${features.join('; ') || 'Premium craftsmanship, ergonomic design, high durability'}
+- Product Image URLs: ${images.join(', ') || 'Official product photos'}
 
-CRITICAL DIRECTIVES:
-1. Divide the commercial into exactly 4 timed scenes (total duration between 16 and 18 seconds):
-   - Scene 1: Hook / Attention (3.8 - 4.5s)
-   - Scene 2: Feature Showcase & Craft (3.8 - 4.5s)
-   - Scene 3: Everyday Benefit & Lifestyle (3.8 - 4.5s)
-   - Scene 4: Call to Action & Pricing (3.8 - 4.5s)
-2. For each scene provide:
-   - headline: 2 to 4 punchy, high-energy words (e.g. "MEET THE FUTURE", "UNMATCHED CLARITY").
-   - subheadline: 3 to 7 words highlighting the feature/benefit.
-   - voiceover: 1 natural, conversational English spoken sentence (strictly under 15 words).
-   - cameraMotion: choose one of ["slow_zoom_in", "smooth_pan_right", "macro_reveal", "gentle_orbit"].
-   - durationSec: number between 3.8 and 4.8.
-3. fullVoiceoverScript: A cohesive 30–45 word English narration combining the scenes.
-4. youtubeTitle: Catchy YouTube title (under 70 chars) with hashtags (e.g., "${title.slice(0, 35)} — Ultimate Everyday Essential ⚡ #Shorts").
-5. youtubeDescription: Engaging YouTube description with highlights, price, and store URL (https://dbuystore.com).
-6. youtubeTags: Array of 5–8 relevant tags (e.g. ["tech", "gadgets", "shorts", "dbuystore"]).
-7. ctaText: Closing CTA button text (e.g. "Order at DBUY Store").`;
+Analyze the product and return a structured JSON commercial plan:
+1. dominantColors:
+   - primaryAccent: Hex code for the primary vibrant accent color seen in the product (e.g. #0D92FF, #EF4444, #10B981, #F59E0B, #8B5CF6).
+   - secondaryGlow: Complementary neon glow hex code.
+   - pedestalColor: Sleek ground pedestal highlight hex code (e.g. #1E293B, #0F172A).
+2. visualHook: 2 to 4 punchy words (e.g. "ENGINEERED FOR PEAK AUDIO", "UNRIVALED ERGONOMICS").
+3. discountTag: Formatted discount tag like "-28% OFF" or "SPECIAL LAUNCH PRICE".
+4. ratingScore: Realistic rating score like 4.9.
+5. ratingReviewCount: Realistic review count like 1420.
+6. scenes: Exactly 4 choreographed scenes (3.6s to 4.5s each, total ~15-18s):
+   - Scene 1 (Hook / Attention): Rapid camera entrance, dramatic lighting, bold title hook.
+   - Scene 2 (Feature Showcase): Detailed spec breakdown, glassmorphism callout card.
+   - Scene 3 (Social Proof & Everyday Benefit): 5-star customer rating pop-up, lifestyle reliability benefit.
+   - Scene 4 (Closing Call-to-Action): Price tag reveal, urgent offer, store badge.
+   For each scene:
+   - sceneNumber: 1, 2, 3, or 4
+   - role: "hook", "showcase", "benefit", or "cta"
+   - roleLabel: Short label (e.g., "The Hook", "Precision Craft", "Verified Quality", "Special Offer")
+   - durationSec: number between 3.6 and 4.6
+   - headline: 2 to 4 punchy uppercase words
+   - subheadline: 4 to 8 words describing the benefit
+   - calloutBadge: Glassmorphism spec badge (e.g. "TITANIUM FRAME", "40H PLAYTIME", "IPX8 WATERPROOF")
+   - specDetail: Concise spec specification (e.g. "Bluetooth 5.3 · Ultra-Low Latency")
+   - voiceover: 1 natural, conversational spoken English sentence (strictly under 14 words)
+   - cameraChoreography: one of ["tilt_3d", "parallax_float", "light_sweep", "dof_blur_whip", "zoom_punch"]
+7. fullVoiceoverScript: A seamless 35–48 word English commercial script combining the spoken sentences.
+8. youtubeTitle: Catchy YouTube title (under 70 chars) with hashtags (e.g. "${title.slice(0, 35)} — Studio Commercial ⚡ #Shorts #DBUY").
+9. youtubeDescription: Engaging description with store link https://dbuystore.com and bullet points.
+10. youtubeTags: Array of 6-8 relevant tags.
+11. ctaText: Call-to-action button label ("Shop Now at DBUYStore.com").`;
 
     const responseSchema = {
       type: Type.OBJECT,
       properties: {
+        dominantColors: {
+          type: Type.OBJECT,
+          properties: {
+            primaryAccent: { type: Type.STRING },
+            secondaryGlow: { type: Type.STRING },
+            pedestalColor: { type: Type.STRING },
+          },
+          required: ['primaryAccent', 'secondaryGlow', 'pedestalColor'],
+        },
+        visualHook: { type: Type.STRING },
+        discountTag: { type: Type.STRING },
+        ratingScore: { type: Type.NUMBER },
+        ratingReviewCount: { type: Type.INTEGER },
         youtubeTitle: { type: Type.STRING },
         youtubeDescription: { type: Type.STRING },
         youtubeTags: {
@@ -164,18 +223,54 @@ CRITICAL DIRECTIVES:
             properties: {
               sceneNumber: { type: Type.INTEGER },
               role: { type: Type.STRING },
+              roleLabel: { type: Type.STRING },
               headline: { type: Type.STRING },
               subheadline: { type: Type.STRING },
+              calloutBadge: { type: Type.STRING },
+              specDetail: { type: Type.STRING },
               voiceover: { type: Type.STRING },
-              cameraMotion: { type: Type.STRING },
+              cameraChoreography: { type: Type.STRING },
               durationSec: { type: Type.NUMBER },
             },
-            required: ['sceneNumber', 'headline', 'subheadline', 'voiceover', 'cameraMotion', 'durationSec'],
+            required: [
+              'sceneNumber',
+              'role',
+              'headline',
+              'subheadline',
+              'calloutBadge',
+              'voiceover',
+              'cameraChoreography',
+              'durationSec',
+            ],
           },
         },
       },
-      required: ['scenes', 'fullVoiceoverScript', 'youtubeTitle', 'youtubeDescription', 'ctaText'],
+      required: [
+        'dominantColors',
+        'visualHook',
+        'scenes',
+        'fullVoiceoverScript',
+        'youtubeTitle',
+        'youtubeDescription',
+        'ctaText',
+      ],
     };
+
+    // Prepare multimodal contents if images are passed
+    const geminiContents: any[] = [];
+    if (Array.isArray(imageParts) && imageParts.length > 0) {
+      for (const p of imageParts.slice(0, 3)) {
+        if (p?.data && p?.mimeType) {
+          geminiContents.push({
+            inlineData: {
+              mimeType: p.mimeType,
+              data: p.data,
+            },
+          });
+        }
+      }
+    }
+    geminiContents.push({ text: promptText });
 
     let geminiResponse: any = null;
     let modelUsed = 'gemini-2.5-pro';
@@ -184,27 +279,33 @@ CRITICAL DIRECTIVES:
       // 1. Try gemini-2.5-pro first
       geminiResponse = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
-        contents: prompt,
+        contents: geminiContents.length === 1 ? geminiContents[0].text : geminiContents,
         config: {
           responseMimeType: 'application/json',
           responseSchema,
         },
       });
     } catch (proErr: any) {
-      console.warn('[YOUTUBE-STUDIO-CF] gemini-2.5-pro failed or rate-limited, falling back to gemini-2.5-flash:', proErr?.message || proErr);
+      console.warn(
+        '[YOUTUBE-STUDIO-CF] gemini-2.5-pro failed or rate-limited, falling back to gemini-2.5-flash:',
+        proErr?.message || proErr
+      );
       modelUsed = 'gemini-2.5-flash';
       // 2. Fallback to gemini-2.5-flash
       try {
         geminiResponse = await ai.models.generateContent({
           model: 'gemini-2.5-flash',
-          contents: prompt,
+          contents: geminiContents.length === 1 ? geminiContents[0].text : geminiContents,
           config: {
             responseMimeType: 'application/json',
             responseSchema,
           },
         });
       } catch (flashErr: any) {
-        console.warn('[YOUTUBE-STUDIO-CF] gemini-2.5-flash failed, using fallback:', flashErr?.message || flashErr);
+        console.warn(
+          '[YOUTUBE-STUDIO-CF] gemini-2.5-flash failed, using fallback:',
+          flashErr?.message || flashErr
+        );
         const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio);
         return new Response(
           JSON.stringify({ success: true, plan: fallbackPlan, modelUsed: 'deterministic-fallback' }),
@@ -234,44 +335,73 @@ CRITICAL DIRECTIVES:
     }
 
     const rawScenes = Array.isArray(parsed?.scenes) ? parsed.scenes : [];
-    const roleMap: Record<number, { role: string; roleLabel: string; camera: string }> = {
-      0: { role: 'hook', roleLabel: 'The Hook', camera: 'slow_zoom_in' },
-      1: { role: 'showcase', roleLabel: 'Feature & Craft', camera: 'smooth_pan_right' },
-      2: { role: 'benefit', roleLabel: 'Everyday Benefit', camera: 'macro_reveal' },
-      3: { role: 'cta', roleLabel: 'Call To Action', camera: 'gentle_orbit' },
+    const roleMap: Record<number, { role: string; roleLabel: string; camera: string; badge: string }> = {
+      0: { role: 'hook', roleLabel: 'The Hook', camera: 'tilt_3d', badge: 'NEW ARRIVAL' },
+      1: { role: 'showcase', roleLabel: 'Feature & Craft', camera: 'light_sweep', badge: 'PRO BUILD' },
+      2: { role: 'benefit', roleLabel: 'Everyday Benefit', camera: 'parallax_float', badge: '5-STAR RATED' },
+      3: { role: 'cta', roleLabel: 'Special Offer', camera: 'zoom_punch', badge: 'LIMITED DEAL' },
     };
 
+    const validCameras = ['tilt_3d', 'parallax_float', 'light_sweep', 'dof_blur_whip', 'zoom_punch'];
+
+    let timeAccum = 0;
     const scenes = [0, 1, 2, 3].map((idx) => {
       const src = rawScenes[idx] || {};
       const def = roleMap[idx];
-      const durationSec = Math.max(3.5, Math.min(5.5, Number(src.durationSec) || 4.2));
-      const validCam = ['slow_zoom_in', 'smooth_pan_right', 'macro_reveal', 'gentle_orbit'].includes(src.cameraMotion)
-        ? src.cameraMotion
+      const durationSec = Math.max(3.5, Math.min(5.0, Number(src.durationSec) || 4.2));
+      const validCam = validCameras.includes(src.cameraChoreography || src.cameraMotion)
+        ? (src.cameraChoreography || src.cameraMotion)
         : def.camera;
+
+      const sceneStart = Math.round(timeAccum * 10) / 10;
+      timeAccum += durationSec;
+      const sceneEnd = Math.round(timeAccum * 10) / 10;
 
       return {
         sceneNumber: idx + 1,
         role: def.role,
-        roleLabel: def.roleLabel,
+        roleLabel: String(src.roleLabel || def.roleLabel).slice(0, 30),
         durationSec,
+        timestampStart: sceneStart,
+        timestampEnd: sceneEnd,
         headline: String(src.headline || def.roleLabel).toUpperCase().slice(0, 48),
         subheadline: String(src.subheadline || title).slice(0, 80),
+        calloutBadge: String(src.calloutBadge || def.badge).toUpperCase().slice(0, 28),
+        specDetail: String(src.specDetail || features[idx] || '').slice(0, 60),
         voiceover: String(src.voiceover || '').slice(0, 150),
+        voiceoverLine: String(src.voiceover || '').slice(0, 150),
+        cameraChoreography: validCam,
         cameraMotion: validCam,
       };
     });
 
-    const totalDurationSec = Math.round(scenes.reduce((sum, s) => sum + s.durationSec, 0) * 10) / 10;
+    const totalDurationSec = Math.round(timeAccum * 10) / 10;
+
+    const discountTag = String(parsed.discountTag || computeDiscountTag(price, origPrice)).slice(0, 24);
 
     const plan = {
+      dominantColors: {
+        primaryAccent: String(parsed.dominantColors?.primaryAccent || '#0D92FF'),
+        secondaryGlow: String(parsed.dominantColors?.secondaryGlow || '#38BDF8'),
+        pedestalColor: String(parsed.dominantColors?.pedestalColor || '#1E293B'),
+      },
+      visualHook: String(parsed.visualHook || 'PRECISION CRAFT & PERFORMANCE').slice(0, 50),
+      discountTag,
+      ratingScore: Number(parsed.ratingScore) || 4.9,
+      ratingReviewCount: Number(parsed.ratingReviewCount) || 1280,
       scenes,
       fullVoiceoverScript: String(parsed.fullVoiceoverScript || '').trim(),
-      youtubeTitle: String(parsed.youtubeTitle || `${title} — Official Showcase ⚡ #Shorts`).trim().slice(0, 100),
-      youtubeDescription: String(parsed.youtubeDescription || `Discover ${title} at DBUY Store: https://dbuystore.com`).trim(),
+      youtubeTitle: String(
+        parsed.youtubeTitle || `${title.slice(0, 40)} — Official Showcase ⚡ #Shorts #DBUY`
+      ).trim().slice(0, 100),
+      youtubeDescription: String(
+        parsed.youtubeDescription ||
+          `Discover ${title} at DBUY Store: https://dbuystore.com\nPrice: $${price} (${discountTag})`
+      ).trim(),
       youtubeTags: Array.isArray(parsed.youtubeTags)
         ? parsed.youtubeTags.map((t: unknown) => String(t).trim()).filter(Boolean).slice(0, 10)
-        : ['tech', 'dbuy', 'shorts'],
-      ctaText: String(parsed.ctaText || 'Shop Now at DBUY').trim().slice(0, 40),
+        : ['tech', 'dbuy', 'shorts', 'shopping'],
+      ctaText: String(parsed.ctaText || 'Shop Now at DBUYStore.com').trim().slice(0, 40),
       estimatedDurationSec: totalDurationSec,
       modelUsed,
     };

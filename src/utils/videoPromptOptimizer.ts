@@ -37,17 +37,22 @@ export interface CommercialScenePlan {
   headline: string;
   subheadline: string;
   calloutBadge?: string;
+  specDetail?: string;
   highlightWord?: string;
   voiceoverLine: string;
+  voiceover?: string;
   visualPrompt: string;
   negativePrompt: string;
   motionStyle?: CommercialMotionStyle;
+  cameraChoreography?: string;
   cameraMotion:
     | CommercialMotionStyle
     | 'slow_zoom_in'
     | 'smooth_pan_right'
     | 'gentle_orbit'
-    | 'macro_reveal';
+    | 'macro_reveal'
+    | 'parallax_float'
+    | 'dof_blur_whip';
 }
 
 export interface CommercialVideoPlan {
@@ -135,8 +140,8 @@ export function normalizeMotionStyle(
   sceneIndex = 0
 ): CommercialMotionStyle {
   const val = (raw || '').trim().toLowerCase();
-  if (val === 'whip_pan' || val === 'smooth_pan_right') return 'whip_pan';
-  if (val === 'tilt_3d' || val === 'gentle_orbit') return 'tilt_3d';
+  if (val === 'whip_pan' || val === 'smooth_pan_right' || val === 'dof_blur_whip') return 'whip_pan';
+  if (val === 'tilt_3d' || val === 'gentle_orbit' || val === 'parallax_float') return 'tilt_3d';
   if (val === 'zoom_punch' || val === 'slow_zoom_in') return 'zoom_punch';
   if (val === 'light_sweep' || val === 'macro_reveal') return 'light_sweep';
   const cycle: CommercialMotionStyle[] = [
