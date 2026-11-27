@@ -96,6 +96,7 @@ import { YouTubeShortsModal } from './YouTubeShortsModal';
 import { YouTubeShortsLogo } from './YouTubeLogo';
 import { formatInstagramUrl, getInstagramHandle } from '../utils/instagram';
 import { InstagramOriginalLogo } from './InstagramLogo';
+import { YouTubeVideoStudio } from './YouTubeVideoStudio';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -219,7 +220,7 @@ export const AdminDashboard: React.FC = () => {
   }, [inspectingUser?.email]);
 
   // Tabs
-  const [activeTab, setActiveTab] = useState<'homepage' | 'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security' | 'messages' | 'reviews'>('homepage');
+  const [activeTab, setActiveTab] = useState<'homepage' | 'analytics' | 'products' | 'billboards' | 'theme' | 'orders' | 'users' | 'security' | 'messages' | 'reviews' | 'youtube_studio'>('homepage');
 
   // Contact Messages & SMTP State
   const [contactMessages, setContactMessages] = useState<Array<{
@@ -2382,7 +2383,27 @@ export const AdminDashboard: React.FC = () => {
               {reviewService.getAllReviews().length}
             </span>
           </button>
+
+          <button
+            onClick={() => setActiveTab('youtube_studio')}
+            className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center space-x-2 shrink-0 ${
+              activeTab === 'youtube_studio'
+                ? 'bg-white dark:bg-slate-800 text-red-600 dark:text-red-400 shadow-sm border border-slate-200/80 dark:border-slate-700'
+                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:text-white dark:hover:text-slate-100 hover:bg-white/50 dark:hover:bg-slate-800/50'
+            }`}
+          >
+            <Film className="w-4 h-4 text-red-500" />
+            <span>{isKa ? 'YouTube ვიდეო სტუდია' : 'YouTube Video Studio'}</span>
+            <span className={`px-1.5 py-0.5 rounded-full text-[10px] font-extrabold ${
+              activeTab === 'youtube_studio' ? 'bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300' : 'bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400'
+            }`}>
+              FREE
+            </span>
+          </button>
         </div>
+
+        {/* TAB: YOUTUBE VIDEO STUDIO */}
+        {activeTab === 'youtube_studio' && <YouTubeVideoStudio />}
 
         {/* TAB: HOMEPAGE (HERO SLIDER & FEATURED CATEGORIES) */}
         {activeTab === 'homepage' && <AdminHomepageManager />}
