@@ -151,8 +151,10 @@ export function normalizeProductArrays(product: Product): Product {
       )
     );
 
+  const directViews = Number(rawAny.views ?? rawAny.view_count ?? rawAny.viewCount ?? 0);
   const normalized: Product = {
     ...product,
+    views: !isNaN(directViews) && directViews >= 0 ? directViews : 0,
     images: parseImages(rawAny.images),
     variants: normalizedVariants,
     videos: parseVideos(rawAny.videos),

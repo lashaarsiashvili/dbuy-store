@@ -40,26 +40,69 @@ export async function onRequestGet(context: any) {
       const rawActive = Number(activeVisitorsRes?.count) || 0;
       const activeVisitors = rawActive;
 
-      // 4. Most Viewed Products (ORDER BY views DESC)
-      const productsRes = await db.prepare('SELECT id, name, name_ka, category, price, COALESCE(views, 0) as views, image, images FROM products ORDER BY COALESCE(views, 0) DESC LIMIT 50').all();
-      
-      const topProducts = (productsRes?.results || []).map((row: any) => ({
-        id: String(row.id),
-        name: row.name || row.title || 'Product',
-        name_ka: row.name_ka || row.title_ka || '',
-        title: row.name || row.title || 'Product',
-        titleKa: row.name_ka || row.title_ka || '',
-        category: row.category || 'tech',
-        price: Number(row.price) || 0,
-        views: Number(row.views) || 0,
-        image: row.image || '',
-      }));
-
-      // Product views key-value map
+      // 4. Most Viewed Products & Complete Views Map
+      // Aggregate real views from store_events
       const productViewsMap: Record<string, number> = {};
-      topProducts.forEach((p: any) => {
-        productViewsMap[p.id] = p.views;
+      try {
+        const evRes = await db.prepare(`
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(item_id), ''),
+              CASE 
+                WHEN LOWER(page_path) LIKE '/product/%' THEN 
+                  RTRIM(
+                    CASE 
+                      WHEN instr(substr(page_path, 10), '?') > 0 
+                        THEN substr(substr(page_path, 10), 1, instr(substr(page_path, 10), '?') - 1)
+                      ELSE substr(page_path, 10)
+                    END,
+                    '/'
+                  )
+                ELSE ''
+              END
+            ) AS product_key,
+            COUNT(*) AS views_count
+          FROM store_events
+          WHERE LOWER(TRIM(COALESCE(event_type, ''))) IN ('page_view', '$pageview')
+          GROUP BY product_key
+        `).all();
+        if (Array.isArray(evRes?.results)) {
+          for (const row of evRes.results) {
+            if (row && row.product_key) {
+              const k = String(row.product_key).trim();
+              const c = Number(row.views_count) || 0;
+              if (k && c > 0) productViewsMap[k] = (productViewsMap[k] || 0) + c;
+            }
+          }
+        }
+      } catch (e) {}
+
+      // Query products table for direct view counts across all products
+      const productsRes = await db.prepare('SELECT id, name, name_ka, category, price, COALESCE(views, view_count, 0) as views, image, images FROM products').all().catch(() => ({ results: [] }));
+      
+      const allProductsWithViews = (productsRes?.results || []).map((row: any) => {
+        const id = String(row.id);
+        const directViews = Number(row.views) || 0;
+        const eventViews = productViewsMap[id] || 0;
+        const totalViews = Math.max(directViews, eventViews);
+        if (totalViews > 0) {
+          productViewsMap[id] = totalViews;
+        }
+        return {
+          id,
+          name: row.name || row.title || 'Product',
+          name_ka: row.name_ka || row.title_ka || '',
+          title: row.name || row.title || 'Product',
+          titleKa: row.name_ka || row.title_ka || '',
+          category: row.category || 'tech',
+          price: Number(row.price) || 0,
+          views: totalViews,
+          image: row.image || '',
+        };
       });
+
+      allProductsWithViews.sort((a: any, b: any) => b.views - a.views);
+      const topProducts = allProductsWithViews.slice(0, 50);
 
       return new Response(JSON.stringify({
         success: true,

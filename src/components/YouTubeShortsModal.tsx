@@ -16,6 +16,7 @@ import {
   Download,
   Copy,
   Tag,
+  Info,
 } from 'lucide-react';
 import { YouTubeShortsLogo } from './YouTubeLogo';
 import { CommercialVideoStudio } from './CommercialVideoStudio';
@@ -851,8 +852,19 @@ export const YouTubeShortsModal: React.FC<YouTubeShortsModalProps> = ({
                 value={ytDescription}
                 maxLength={MAX_YOUTUBE_DESCRIPTION_LENGTH}
                 onChange={(e) => setYtDescription(e.target.value)}
-                className="w-full p-3 h-28 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs sm:text-sm focus:ring-2 focus:ring-red-500 focus:outline-hidden resize-none"
+                className="w-full p-3 h-28 rounded-xl bg-white dark:bg-slate-900 border border-slate-300 dark:border-slate-700 text-slate-800 dark:text-slate-200 text-xs sm:text-sm font-mono focus:ring-2 focus:ring-red-500 focus:outline-hidden resize-none"
               />
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[11px] text-amber-800 dark:text-amber-300 leading-relaxed flex items-start gap-2">
+                <Info className="w-4 h-4 text-amber-500 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold">
+                    {isKa ? 'YouTube Shorts რჩევა: ' : 'YouTube Shorts Tip: '}
+                  </span>
+                  {isKa
+                    ? 'YouTube Shorts აღწერებში გარე ბმულები დაწკაპებადი არ არის. მიაბით ჩვეულებრივი YouTube „Related Video“ (დაკავშირებული ვიდეო), რომელიც შეიცავს ამ აღწერას, რათა მაყურებელმა პირდაპირ შეძლოს პროდუქტის ბმულზე გადასვლა.'
+                    : 'For YouTube Shorts (where YouTube disables external links in descriptions), attach a standard YouTube Related Video that contains this description so viewers can click straight through to the product page.'}
+                </div>
+              </div>
             </div>
 
             {/* Tags & Privacy Status */}

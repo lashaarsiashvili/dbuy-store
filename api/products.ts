@@ -57,8 +57,12 @@ export async function getProductsFromD1(env: Env): Promise<any[]> {
         formattedImages = product.images.map(normalizeImageUrl);
       }
 
+      const directViews = Number(product.views ?? product.view_count ?? product.viewCount ?? product.visits) || 0;
       return {
         ...product,
+        views: directViews,
+        view_count: directViews,
+        viewCount: directViews,
         image: normalizeImageUrl(product.image),
         images: formattedImages,
       };

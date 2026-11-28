@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { useStore, generateProductSlug } from '../context/StoreContext';
 import { GeminiChat } from './GeminiChat';
 import { smartApiFetch } from '../lib/api';
@@ -621,9 +621,93 @@ export const AdminDashboard: React.FC = () => {
   const [stockFilter, setStockFilter] = useState<'all' | 'in_stock' | 'low_stock' | 'out_of_stock'>('all');
   const [productSort, setProductSort] = useState<'default' | 'price_asc' | 'price_desc' | 'stock_desc' | 'stock_asc' | 'title_asc' | 'views_desc'>('default');
 
-  // Admin Products Catalog Pagination (strictly 15 products per page)
-  const ADMIN_PRODUCTS_PER_PAGE = 15;
+  // Admin Products Catalog Pagination (strictly 24 products per page across 174 total products)
+  const ADMIN_PRODUCTS_PER_PAGE = 24;
   const [adminProductPage, setAdminProductPage] = useState<number>(1);
+
+  // Real product views map synchronized across all pages & endpoints
+  const [productViewsMap, setProductViewsMap] = useState<Record<string, number>>(() => {
+    try {
+      const cached = localStorage.getItem('dbuy_product_views_map');
+      if (cached) return JSON.parse(cached);
+    } catch {}
+    return {};
+  });
+
+  const fetchProductViews = useCallback(async () => {
+    try {
+      const res = await fetch('/api/analytics');
+      if (res.ok) {
+        const data = await res.json();
+        const map: Record<string, number> = {};
+        if (data?.product_views && typeof data.product_views === 'object') {
+          Object.assign(map, data.product_views);
+        }
+        if (data?.productViews && typeof data.productViews === 'object') {
+          Object.assign(map, data.productViews);
+        }
+        if (Array.isArray(data?.topProducts)) {
+          data.topProducts.forEach((tp: any) => {
+            if (tp.id && typeof tp.views === 'number') {
+              map[tp.id] = Math.max(map[tp.id] || 0, tp.views);
+            }
+          });
+        }
+        if (Object.keys(map).length > 0) {
+          setProductViewsMap(prev => {
+            const next = { ...prev, ...map };
+            try {
+              localStorage.setItem('dbuy_product_views_map', JSON.stringify(next));
+            } catch {}
+            return next;
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch product views map:', e);
+    }
+  }, []);
+
+  // Fetch product views on mount and when navigating pagination or switching tabs
+  useEffect(() => {
+    fetchProductViews();
+  }, [fetchProductViews, adminProductPage]);
+
+  // Sync known view counts from products array into productViewsMap
+  useEffect(() => {
+    if (Array.isArray(products) && products.length > 0) {
+      setProductViewsMap(prev => {
+        let changed = false;
+        const next = { ...prev };
+        products.forEach(p => {
+          const direct = Number(p.views ?? (p as any).view_count ?? (p as any).viewCount ?? 0);
+          if (direct > 0 && (next[p.id] === undefined || direct > next[p.id])) {
+            next[p.id] = direct;
+            changed = true;
+          }
+        });
+        if (changed) {
+          try {
+            localStorage.setItem('dbuy_product_views_map', JSON.stringify(next));
+          } catch {}
+          return next;
+        }
+        return prev;
+      });
+    }
+  }, [products]);
+
+  const getProductViews = useCallback((prod: Product | any): number => {
+    if (!prod) return 0;
+    const id = String(prod.id || '');
+    const slug = String(prod.customSlug || prod.slug || '');
+    const fromMap = productViewsMap[id] ?? (slug ? productViewsMap[slug] : undefined);
+    const direct = Number(prod.views ?? prod.view_count ?? prod.viewCount ?? 0);
+    if (typeof fromMap === 'number' && fromMap > 0) {
+      return Math.max(fromMap, direct);
+    }
+    return direct;
+  }, [productViewsMap]);
 
   // Orders table search & status filter
   const [orderSearch, setOrderSearch] = useState('');
@@ -1934,7 +2018,7 @@ export const AdminDashboard: React.FC = () => {
     if (productSort === 'stock_desc') return b.stock - a.stock;
     if (productSort === 'stock_asc') return a.stock - b.stock;
     if (productSort === 'title_asc') return a.title.localeCompare(b.title);
-    if (productSort === 'views_desc') return (b.views || 0) - (a.views || 0);
+    if (productSort === 'views_desc') return getProductViews(b) - getProductViews(a);
     return 0;
   });
 
@@ -2724,7 +2808,7 @@ export const AdminDashboard: React.FC = () => {
                           <td className="p-4 font-bold text-slate-800 dark:text-gray-100">
                             <div className="flex items-center space-x-1">
                               <Eye className="w-3.5 h-3.5 text-slate-400 dark:text-gray-400 shrink-0" />
-                              <span>{prod.views || 0}</span>
+                              <span>{getProductViews(prod)}</span>
                             </div>
                           </td>
                           <td className="p-4 text-right space-x-1">
@@ -2804,7 +2888,7 @@ export const AdminDashboard: React.FC = () => {
                 </table>
               </div>
 
-              {/* Clean Admin Pagination Controls - Strictly 15 Products Per Page */}
+              {/* Clean Admin Pagination Controls - Strictly 24 Products Per Page */}
               {filteredProducts.length > 0 && (
                 <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-900/60">
                   <p className="text-xs text-slate-500 dark:text-slate-400">

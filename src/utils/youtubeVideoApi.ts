@@ -36,6 +36,7 @@ export interface GenerateYouTubeVideoOptions {
   product: Product;
   selectedImages: string[];
   aspectRatio: '9:16' | '16:9';
+  generationMode?: 'mode1_card' | 'mode2_cinematic';
   musicMood: CommercialMusicMood;
   enableVoiceover: boolean;
   voiceTone?: 'friendly' | 'energetic' | 'calm_luxury';
@@ -50,6 +51,7 @@ export interface YouTubeVideoGenerationSuccess {
   videoUrl: string;
   plan: YouTubeAdPlan;
   aspectRatio: '9:16' | '16:9';
+  generationMode: 'mode1_card' | 'mode2_cinematic';
 }
 
 function computeDiscountTag(priceStr: any, origPriceStr: any): string {
@@ -60,6 +62,40 @@ function computeDiscountTag(priceStr: any, origPriceStr: any): string {
     if (pct > 0) return `-${pct}% OFF`;
   }
   return 'SPECIAL OFFER';
+}
+
+/**
+ * Concise, YouTuber-Style Description & Clickable Product Link Generator
+ * Outputs strictly 5 clean lines (no walls of text, no robotic paragraphs):
+ * Line 1: Attention-grabbing 1-sentence YouTuber hook + emoji
+ * Line 2: Direct Call-To-Action (👉 Get yours here:)
+ * Line 3: Exact direct product URL on its own empty line with NO punctuation touching it
+ * Line 4: 2–3 ultra-short bullet highlights (price/discount + top feature)
+ * Line 5: 3–5 targeted YouTube/Shorts hashtags
+ */
+export function buildYouTuberProductDescription(
+  product: Product,
+  hookLine?: string,
+  discountTag?: string
+): string {
+  const cleanTitle = (product.title || 'Upgrade').slice(0, 50).trim();
+  const hook =
+    hookLine?.trim() ||
+    `The ultimate ${cleanTitle} is finally here! 🔥`;
+
+  const ctaLine = `👉 Get yours here:`;
+  const productUrl = `https://www.dbuystore.com/product/${product.id}`;
+
+  const priceNum = Number(product.price) > 0 ? `$${Number(product.price).toFixed(2)}` : 'Special Price';
+  const tag = discountTag || computeDiscountTag(product.price, product.origPrice);
+  const f1 = (product.features?.[0] || 'Studio-Grade Build').slice(0, 32);
+  const f2 = (product.features?.[1] || 'Worldwide Shipping').slice(0, 32);
+  const highlightLine = `⚡ Only ${priceNum} (${tag}) • ${f1} • ${f2}`;
+
+  const categoryTag = (product.category || 'tech').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tagsLine = `#${categoryTag} #gadgets #dbuystore #shorts`;
+
+  return `${hook}\n${ctaLine}\n${productUrl}\n${highlightLine}\n${tagsLine}`;
 }
 
 /**
@@ -110,6 +146,7 @@ export async function requestYouTubeAdPlan(
 
   const payload = {
     product: {
+      id: product.id,
       title: product.title,
       price: product.price,
       origPrice: product.origPrice,
@@ -130,6 +167,14 @@ export async function requestYouTubeAdPlan(
     const data = await res.json().catch(() => ({}));
     if (res.ok && data?.success && data?.plan) {
       const plan = data.plan;
+      const discountTag = plan.discountTag || computeDiscountTag(product.price, product.origPrice);
+      const youtubeDescription =
+        typeof plan.youtubeDescription === 'string' &&
+        plan.youtubeDescription.includes('👉 Get yours here:') &&
+        plan.youtubeDescription.includes(`https://www.dbuystore.com/product/${product.id}`)
+          ? plan.youtubeDescription
+          : buildYouTuberProductDescription(product, plan.visualHook || product.title, discountTag);
+
       return {
         dominantColors: {
           primaryAccent: plan.dominantColors?.primaryAccent || '#0D92FF',
@@ -137,13 +182,13 @@ export async function requestYouTubeAdPlan(
           pedestalColor: plan.dominantColors?.pedestalColor || '#1E293B',
         },
         visualHook: plan.visualHook || 'PRECISION CRAFT & PERFORMANCE',
-        discountTag: plan.discountTag || computeDiscountTag(product.price, product.origPrice),
+        discountTag,
         ratingScore: Number(plan.ratingScore) || 4.9,
         ratingReviewCount: Number(plan.ratingReviewCount) || 1280,
         scenes: Array.isArray(plan.scenes) ? plan.scenes : [],
         fullVoiceoverScript: plan.fullVoiceoverScript || '',
         youtubeTitle: plan.youtubeTitle || `${product.title} — Official Commercial ⚡ #Shorts`,
-        youtubeDescription: plan.youtubeDescription || `Shop now at https://dbuystore.com`,
+        youtubeDescription,
         youtubeTags: Array.isArray(plan.youtubeTags) ? plan.youtubeTags : ['dbuy', 'shorts', 'tech'],
         ctaText: plan.ctaText || 'Shop Now at DBUYStore.com',
         estimatedDurationSec: Number(plan.estimatedDurationSec) || 16.8,
@@ -172,7 +217,11 @@ export async function requestYouTubeAdPlan(
     ratingScore: 4.9,
     ratingReviewCount: 1280,
     youtubeTitle: `${product.title.slice(0, 45)} — Official Showcase ⚡ #Shorts #DBUY`,
-    youtubeDescription: `Discover ${product.title}. Engineered for modern lifestyle, work, and everyday excellence.\n\n🔥 Order now at DBUY Store: https://dbuystore.com\n💰 Price: ${priceDisplay} (${discountTag})\n\nFeatures:\n• ${f1}\n• ${f2}\n• ${f3}\n\n#dbuy #gadgets #tech #shopping #shorts`,
+    youtubeDescription: buildYouTuberProductDescription(
+      product,
+      'The cleanest setup upgrade of the season is finally here! 🔥',
+      discountTag
+    ),
     youtubeTags: ['dbuy', 'dbuystore', 'tech', 'gadgets', 'shorts', 'review', 'shopping'],
     ctaText: 'Shop Now at DBUYStore.com',
     fullVoiceoverScript: `Upgrade your daily setup with ${product.title.slice(0, 35)}. Engineered with ${f1.slice(0, 40)} for peak performance. Grab yours now at DBUY Store for only ${priceDisplay}.`,
@@ -250,6 +299,7 @@ export async function generateYouTubePromotionalVideo(
     product,
     selectedImages,
     aspectRatio,
+    generationMode = 'mode1_card',
     musicMood,
     enableVoiceover,
     voiceTone = 'friendly',
@@ -331,12 +381,16 @@ export async function generateYouTubePromotionalVideo(
       product,
       selectedImages,
       aspectRatio,
+      generationMode,
       resolution: '1080p',
       visualTheme: 'tech_modern',
       musicMood,
       scenes,
       voiceoverScript: plan.fullVoiceoverScript,
       voiceoverAudioBase64,
+      enableVoiceover,
+      voiceTone,
+      voiceAccent,
       priceBanner,
       dominantColors: plan.dominantColors,
       accentColorHex: plan.dominantColors.primaryAccent,
@@ -359,5 +413,6 @@ export async function generateYouTubePromotionalVideo(
     videoUrl,
     plan,
     aspectRatio,
+    generationMode,
   };
 }

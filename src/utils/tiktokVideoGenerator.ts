@@ -251,10 +251,37 @@ export function pickBestEnglishVoice(accent: CommercialVoiceAccent): SpeechSynth
   return pool[0];
 }
 
+export interface SpeechBoundaryEvent {
+  charIndex: number;
+  charLength?: number;
+  name?: string;
+  elapsedMs: number;
+}
+
+export interface SceneSpeechSegment {
+  sceneIndex: number;
+  text: string;
+}
+
+export interface SpeakScenesSyncOptions {
+  scenes: SceneSpeechSegment[];
+  voiceTone: CommercialVoiceTone;
+  accent: CommercialVoiceAccent;
+  bufferMs?: number; // 300ms visual buffer
+  onAnchorStart?: (startMs: number) => void;
+  onSceneStart?: (sceneIndex: number, startMs: number) => void;
+  onWordBoundary?: (sceneIndex: number, charIndex: number, charLength?: number) => void;
+  onSceneEnd?: (sceneIndex: number, endMs: number) => void;
+  onAllCompleted?: (totalDurationMs: number) => void;
+  onError?: (msg: string) => void;
+}
+
 export function speakWithBrowserSpeechSynthesis(params: {
   script: string;
   voiceTone: CommercialVoiceTone;
   accent: CommercialVoiceAccent;
+  onStart?: (startMs: number) => void;
+  onBoundary?: (event: SpeechBoundaryEvent) => void;
   onEnd?: () => void;
   onError?: (msg: string) => void;
 }): boolean {
@@ -286,6 +313,19 @@ export function speakWithBrowserSpeechSynthesis(params: {
       utterance.pitch = 1.01;
     }
 
+    utterance.onstart = () => {
+      params.onStart?.(performance.now());
+    };
+
+    utterance.onboundary = (event) => {
+      params.onBoundary?.({
+        charIndex: event.charIndex,
+        charLength: (event as any).charLength,
+        name: event.name,
+        elapsedMs: performance.now(),
+      });
+    };
+
     utterance.onend = () => params.onEnd?.();
     utterance.onerror = () => params.onError?.('Browser voice playback interrupted.');
     window.speechSynthesis.speak(utterance);
@@ -313,6 +353,138 @@ export function speakWithBrowserSpeechSynthesis(params: {
   }
 
   return true;
+}
+
+/**
+ * Real-Time Audio-Synced Storyboard Voiceover Runner
+ * Speaks scenes sequentially, hooked into utterance.onstart, utterance.onboundary,
+ * and advances to the next scene precisely when utterance.onend fires + a brief 300ms visual buffer!
+ */
+export function speakCommercialScenesWithBoundarySync(options: SpeakScenesSyncOptions): () => void {
+  let isCancelled = false;
+  let activeUtterance: SpeechSynthesisUtterance | null = null;
+  let bufferTimeoutId: number | null = null;
+  const bufferMs = options.bufferMs ?? 300;
+  let anchorTimeMs: number | null = null;
+
+  if (!isBrowserSpeechSynthesisSupported()) {
+    options.onError?.('SpeechSynthesis not supported');
+    return () => {};
+  }
+
+  stopBrowserSpeechSynthesis();
+
+  const playScene = (idx: number) => {
+    if (isCancelled) return;
+
+    if (idx >= options.scenes.length) {
+      const totalDur = anchorTimeMs ? performance.now() - anchorTimeMs : 0;
+      options.onAllCompleted?.(totalDur);
+      return;
+    }
+
+    const currentScene = options.scenes[idx];
+    const rawText = sanitizeSpokenVoiceoverScript(currentScene.text || '');
+    if (!rawText) {
+      // Scene without speech: wait 1.8s + buffer then advance
+      const now = performance.now();
+      if (anchorTimeMs === null) {
+        anchorTimeMs = now;
+        options.onAnchorStart?.(now);
+      }
+      options.onSceneStart?.(idx, now);
+      bufferTimeoutId = window.setTimeout(() => {
+        if (isCancelled) return;
+        options.onSceneEnd?.(idx, performance.now());
+        playScene(idx + 1);
+      }, 1800 + bufferMs);
+      return;
+    }
+
+    const utterance = new SpeechSynthesisUtterance(rawText);
+    activeUtterance = utterance;
+    utterance.lang = options.accent === 'uk' ? 'en-GB' : 'en-US';
+    const selectedVoice = pickBestEnglishVoice(options.accent);
+    if (selectedVoice) utterance.voice = selectedVoice;
+
+    if (options.voiceTone === 'energetic') {
+      utterance.rate = 1.07;
+      utterance.pitch = 1.04;
+    } else if (options.voiceTone === 'calm_luxury') {
+      utterance.rate = 0.93;
+      utterance.pitch = 0.96;
+    } else {
+      utterance.rate = 1.0;
+      utterance.pitch = 1.01;
+    }
+
+    // Single Master Clock anchor on first spoken word
+    utterance.onstart = () => {
+      if (isCancelled) return;
+      const now = performance.now();
+      if (anchorTimeMs === null) {
+        anchorTimeMs = now;
+        options.onAnchorStart?.(now);
+      }
+      options.onSceneStart?.(idx, now);
+    };
+
+    // Real-Time Word / Phrase boundary tracking
+    utterance.onboundary = (e) => {
+      if (isCancelled) return;
+      if (e.name === 'word' || typeof e.charIndex === 'number') {
+        options.onWordBoundary?.(idx, e.charIndex, (e as any).charLength);
+      }
+    };
+
+    // Dynamic scene completion: advance ONLY when speech ends + 300ms visual buffer
+    utterance.onend = () => {
+      if (isCancelled) return;
+      bufferTimeoutId = window.setTimeout(() => {
+        if (isCancelled) return;
+        options.onSceneEnd?.(idx, performance.now());
+        playScene(idx + 1);
+      }, bufferMs);
+    };
+
+    utterance.onerror = () => {
+      if (isCancelled) return;
+      bufferTimeoutId = window.setTimeout(() => {
+        if (isCancelled) return;
+        options.onSceneEnd?.(idx, performance.now());
+        playScene(idx + 1);
+      }, bufferMs);
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const voices = window.speechSynthesis.getVoices();
+  if (voices.length === 0) {
+    let triggered = false;
+    const handleVoices = () => {
+      if (triggered) return;
+      triggered = true;
+      window.speechSynthesis.removeEventListener('voiceschanged', handleVoices);
+      playScene(0);
+    };
+    window.speechSynthesis.addEventListener('voiceschanged', handleVoices);
+    window.setTimeout(() => {
+      if (!triggered) {
+        triggered = true;
+        window.speechSynthesis.removeEventListener('voiceschanged', handleVoices);
+        playScene(0);
+      }
+    }, 350);
+  } else {
+    playScene(0);
+  }
+
+  return () => {
+    isCancelled = true;
+    if (bufferTimeoutId) clearTimeout(bufferTimeoutId);
+    stopBrowserSpeechSynthesis();
+  };
 }
 
 // ============================================================================

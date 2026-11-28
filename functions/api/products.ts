@@ -142,7 +142,7 @@ export const onRequest: PagesFunction<any> = async (context) => {
   await cleanAlibabaTitlesInD1(env.DB);
 
   try {
-    // 1. GET: Fetch products safely with optional limit/pagination
+    // 1. GET: Fetch products safely with optional limit/pagination and restored real view counts
     if (request.method === 'GET') {
       const url = new URL(request.url);
       const limitParam = url.searchParams.get('limit');
@@ -150,14 +150,147 @@ export const onRequest: PagesFunction<any> = async (context) => {
       const limit = (limitParam && limitParam !== 'all' && limitParam !== '0' && limitParam !== '-1') ? parseInt(limitParam, 10) : null;
       const offset = offsetParam ? parseInt(offsetParam, 10) : 0;
 
+      // Aggregate views from store_events and analytics_visits
+      const viewsMap: Record<string, number> = {};
+      try {
+        const evRes = await env.DB.prepare(`
+          SELECT 
+            COALESCE(
+              NULLIF(TRIM(item_id), ''),
+              CASE 
+                WHEN LOWER(page_path) LIKE '/product/%' THEN 
+                  RTRIM(
+                    CASE 
+                      WHEN instr(substr(page_path, 10), '?') > 0 
+                        THEN substr(substr(page_path, 10), 1, instr(substr(page_path, 10), '?') - 1)
+                      ELSE substr(page_path, 10)
+                    END,
+                    '/'
+                  )
+                ELSE ''
+              END
+            ) AS product_key,
+            COUNT(*) AS views_count
+          FROM store_events
+          WHERE LOWER(TRIM(COALESCE(event_type, ''))) IN ('page_view', '$pageview')
+          GROUP BY product_key
+        `).all();
+        if (Array.isArray(evRes?.results)) {
+          for (const row of evRes.results) {
+            if (row && row.product_key) {
+              const k = String(row.product_key).trim();
+              const c = Number(row.views_count) || 0;
+              if (k && c > 0) viewsMap[k] = (viewsMap[k] || 0) + c;
+            }
+          }
+        }
+      } catch (e) {}
+
+      try {
+        const visRes = await env.DB.prepare(`
+          SELECT 
+            RTRIM(
+              CASE 
+                WHEN instr(substr(path, 10), '?') > 0 
+                  THEN substr(substr(path, 10), 1, instr(substr(path, 10), '?') - 1)
+                ELSE substr(path, 10)
+              END,
+              '/'
+            ) AS product_key,
+            COUNT(*) AS views_count
+          FROM analytics_visits
+          WHERE LOWER(path) LIKE '/product/%'
+          GROUP BY product_key
+        `).all();
+        if (Array.isArray(visRes?.results)) {
+          for (const row of visRes.results) {
+            if (row && row.product_key) {
+              const k = String(row.product_key).trim();
+              const c = Number(row.views_count) || 0;
+              if (k && c > 0) viewsMap[k] = (viewsMap[k] || 0) + c;
+            }
+          }
+        }
+      } catch (e) {}
+
       let results: any[] = [];
       try {
+        // Attempt LEFT JOIN with store_events for single-query aggregated views
         if (limit !== null && !isNaN(limit) && limit > 0) {
-          const queryRes = await env.DB.prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(limit, offset).all();
-          results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+          try {
+            const joinRes = await env.DB.prepare(`
+              SELECT 
+                p.*,
+                COALESCE(p.views, p.view_count, 0) AS direct_views,
+                COALESCE(ev.event_views, 0) AS event_views
+              FROM products p
+              LEFT JOIN (
+                SELECT 
+                  COALESCE(
+                    NULLIF(TRIM(item_id), ''),
+                    CASE 
+                      WHEN LOWER(page_path) LIKE '/product/%' THEN 
+                        RTRIM(
+                          CASE 
+                            WHEN instr(substr(page_path, 10), '?') > 0 
+                              THEN substr(substr(page_path, 10), 1, instr(substr(page_path, 10), '?') - 1)
+                            ELSE substr(page_path, 10)
+                          END,
+                          '/'
+                        )
+                      ELSE ''
+                    END
+                  ) AS matched_id,
+                  COUNT(*) AS event_views
+                FROM store_events
+                WHERE LOWER(TRIM(COALESCE(event_type, ''))) IN ('page_view', '$pageview')
+                GROUP BY matched_id
+              ) ev ON (ev.matched_id = p.id OR (p.slug IS NOT NULL AND ev.matched_id = p.slug))
+              ORDER BY p.created_at DESC
+              LIMIT ? OFFSET ?
+            `).bind(limit, offset).all();
+            results = Array.isArray(joinRes?.results) ? joinRes.results : [];
+          } catch (joinErr) {
+            const queryRes = await env.DB.prepare('SELECT * FROM products ORDER BY created_at DESC LIMIT ? OFFSET ?').bind(limit, offset).all();
+            results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+          }
         } else {
-          const queryRes = await env.DB.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
-          results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+          try {
+            const joinRes = await env.DB.prepare(`
+              SELECT 
+                p.*,
+                COALESCE(p.views, p.view_count, 0) AS direct_views,
+                COALESCE(ev.event_views, 0) AS event_views
+              FROM products p
+              LEFT JOIN (
+                SELECT 
+                  COALESCE(
+                    NULLIF(TRIM(item_id), ''),
+                    CASE 
+                      WHEN LOWER(page_path) LIKE '/product/%' THEN 
+                        RTRIM(
+                          CASE 
+                            WHEN instr(substr(page_path, 10), '?') > 0 
+                              THEN substr(substr(page_path, 10), 1, instr(substr(page_path, 10), '?') - 1)
+                            ELSE substr(page_path, 10)
+                          END,
+                          '/'
+                        )
+                      ELSE ''
+                    END
+                  ) AS matched_id,
+                  COUNT(*) AS event_views
+                FROM store_events
+                WHERE LOWER(TRIM(COALESCE(event_type, ''))) IN ('page_view', '$pageview')
+                GROUP BY matched_id
+              ) ev ON (ev.matched_id = p.id OR (p.slug IS NOT NULL AND ev.matched_id = p.slug))
+              ORDER BY p.created_at DESC
+            `).all();
+            results = Array.isArray(joinRes?.results) ? joinRes.results : [];
+          } catch (joinErr) {
+            const queryRes = await env.DB.prepare('SELECT * FROM products ORDER BY created_at DESC').all();
+            results = Array.isArray(queryRes?.results) ? queryRes.results : [];
+          }
         }
       } catch (err) {
         console.error('[D1 GET Error]:', err);
@@ -216,6 +349,19 @@ export const onRequest: PagesFunction<any> = async (context) => {
         }
         if (!Array.isArray(variantsArr)) variantsArr = [];
 
+        // Accurate real view count calculation:
+        // Checks direct table columns (views, view_count, visits), SQL event_views, and aggregated viewsMap
+        const directViews = Number(p.direct_views ?? p.views ?? p.view_count ?? p.viewCount ?? p.visits) || 0;
+        const sqlEventViews = Number(p.event_views) || 0;
+        const mappedViews = (viewsMap[String(p.id)] || 0) + (p.slug ? (viewsMap[String(p.slug)] || 0) : 0);
+        const resolvedViews = Math.max(directViews, sqlEventViews, mappedViews);
+
+        // Keep viewsMap populated with known views for every product
+        if (resolvedViews > 0) {
+          viewsMap[String(p.id)] = resolvedViews;
+          if (p.slug) viewsMap[String(p.slug)] = resolvedViews;
+        }
+
         return {
           ...p,
           id: String(p.id),
@@ -229,7 +375,9 @@ export const onRequest: PagesFunction<any> = async (context) => {
           origPrice: Number(p.orig_price ?? p.original_price ?? 0),
           category: p.category || 'general',
           stock: p.stock !== undefined ? Number(p.stock) : 0,
-          views: Number(p.views) || 0,
+          views: resolvedViews,
+          view_count: resolvedViews,
+          viewCount: resolvedViews,
           badge: p.badge || '',
           image: primaryImg,
           imageUrl: primaryImg,
@@ -247,7 +395,14 @@ export const onRequest: PagesFunction<any> = async (context) => {
         return tB - tA;
       });
 
-      return jsonResponse({ success: true, count: products.length, total, products, results: products }, 200, true);
+      return jsonResponse({
+        success: true,
+        count: products.length,
+        total,
+        products,
+        results: products,
+        product_views: viewsMap,
+      }, 200, true);
     }
 
     // 2. POST / PUT: Add or Update a product safely without data destruction

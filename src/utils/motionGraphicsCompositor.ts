@@ -11,11 +11,17 @@ import {
   normalizeMotionStyle,
   sanitizeCommercialCopy,
   sanitizeSpokenVoiceoverScript,
+  countWords,
+  CommercialVoiceTone,
+  CommercialVoiceAccent,
 } from './videoPromptOptimizer';
 import {
   PromoVideoGenerationProgress,
   PromoVideoGenerationResult,
   renderCommercialAudioMix,
+  pickBestEnglishVoice,
+  isBrowserSpeechSynthesisSupported,
+  stopBrowserSpeechSynthesis,
 } from './tiktokVideoGenerator';
 
 export const DBUY_OUTRO_DURATION_SEC = 2.5;
@@ -112,6 +118,8 @@ interface PreparedMotionPhoto {
   accentRgb: [number, number, number];
   secondaryRgb: [number, number, number];
   blurredBackdrop: HTMLCanvasElement;
+  cutoutCanvas?: HTMLCanvasElement;
+  rimSilhouetteCanvas?: HTMLCanvasElement;
 }
 
 function resolveCanvasSafeUrl(rawUrl: string): string {
@@ -240,6 +248,117 @@ function createPreblurredBackdrop(img: HTMLImageElement): HTMLCanvasElement {
   return c;
 }
 
+function createCutoutProductCanvas(
+  img: HTMLImageElement,
+  accentRgb: [number, number, number]
+): {
+  cutoutCanvas: HTMLCanvasElement;
+  rimSilhouetteCanvas: HTMLCanvasElement;
+  hasRemovedBg: boolean;
+} {
+  const w = img.naturalWidth || img.width || 400;
+  const h = img.naturalHeight || img.height || 400;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  if (!ctx) {
+    return { cutoutCanvas: c, rimSilhouetteCanvas: c, hasRemovedBg: false };
+  }
+
+  ctx.drawImage(img, 0, 0, w, h);
+
+  let hasRemovedBg = false;
+  try {
+    const imgData = ctx.getImageData(0, 0, w, h);
+    const data = imgData.data;
+
+    // Sample corner pixels to check background color
+    const cornerIndices = [
+      0, // top-left
+      Math.max(0, (w - 2) * 4), // top-right
+      Math.max(0, ((h - 2) * w) * 4), // bottom-left
+      Math.max(0, ((h - 2) * w + (w - 2)) * 4), // bottom-right
+      Math.max(0, Math.floor(w / 2) * 4), // top-center edge
+    ];
+
+    let cornerR = 0;
+    let cornerG = 0;
+    let cornerB = 0;
+    let validCount = 0;
+
+    for (const idx of cornerIndices) {
+      if (idx >= 0 && idx + 3 < data.length) {
+        cornerR += data[idx];
+        cornerG += data[idx + 1];
+        cornerB += data[idx + 2];
+        validCount++;
+      }
+    }
+
+    cornerR = validCount > 0 ? cornerR / validCount : 255;
+    cornerG = validCount > 0 ? cornerG / validCount : 255;
+    cornerB = validCount > 0 ? cornerB / validCount : 255;
+    const cornerBrightness = 0.299 * cornerR + 0.587 * cornerG + 0.114 * cornerB;
+
+    // Detect white, off-white, or pale studio background (typical e-commerce photos)
+    if (cornerBrightness >= 208) {
+      hasRemovedBg = true;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        const a = data[i + 3];
+
+        if (a === 0) continue;
+
+        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+        const colorDiff = Math.max(
+          Math.abs(r - cornerR),
+          Math.abs(g - cornerG),
+          Math.abs(b - cornerB)
+        );
+
+        if (lum >= 244 && colorDiff <= 22) {
+          // Pure / near-white background: make completely transparent
+          data[i + 3] = 0;
+        } else if (lum >= 218 && colorDiff <= 44) {
+          // Soft edge feathering between product and white backdrop
+          const feather = clamp((244 - lum) / 26, 0, 1);
+          data[i + 3] = Math.round(a * feather);
+        } else if (data[i + 3] > 0 && lum > 215) {
+          // Defringe bright edge halo
+          const factor = clamp((lum - 215) / 40, 0, 0.4);
+          data[i] = Math.round(r * (1 - factor * 0.25));
+          data[i + 1] = Math.round(g * (1 - factor * 0.25));
+          data[i + 2] = Math.round(b * (1 - factor * 0.25));
+        }
+      }
+      ctx.putImageData(imgData, 0, 0);
+    }
+  } catch (err) {
+    // Cross-origin fallback
+  }
+
+  // Generate rim silhouette canvas in accent color for dramatic rim lighting
+  const rimCanvas = document.createElement('canvas');
+  rimCanvas.width = Math.min(640, w);
+  rimCanvas.height = Math.min(640, h);
+  const rimCtx = rimCanvas.getContext('2d');
+  if (rimCtx) {
+    rimCtx.drawImage(c, 0, 0, rimCanvas.width, rimCanvas.height);
+    rimCtx.globalCompositeOperation = 'source-in';
+    rimCtx.fillStyle = rgbStr(accentRgb, 1);
+    rimCtx.fillRect(0, 0, rimCanvas.width, rimCanvas.height);
+  }
+
+  return {
+    cutoutCanvas: c,
+    rimSilhouetteCanvas: rimCanvas,
+    hasRemovedBg,
+  };
+}
+
 function analyzePhotoForMotion(
   img: HTMLImageElement,
   url: string,
@@ -320,14 +439,18 @@ function analyzePhotoForMotion(
     // Graceful fallback
   }
 
+  const cutout = createCutoutProductCanvas(img, accentRgb);
+
   return {
     img,
     url,
     aspect,
-    isBrightStudioBg,
+    isBrightStudioBg: isBrightStudioBg || cutout.hasRemovedBg,
     accentRgb,
     secondaryRgb,
     blurredBackdrop: createPreblurredBackdrop(img),
+    cutoutCanvas: cutout.cutoutCanvas,
+    rimSilhouetteCanvas: cutout.rimSilhouetteCanvas,
   };
 }
 
@@ -1444,92 +1567,203 @@ function renderKineticCalloutsAndHud(
  * Displays punchy 3-4 word phrases where the actively spoken word dynamically pops
  * inside a glowing accent pill!
  */
-function renderWordByWordSubtitles(
-  ctx: CanvasRenderingContext2D,
+// ============================================================================
+// Zero-Lag Pre-Calculated Subtitle Metrics (No ctx.measureText in 60 FPS loop!)
+// ============================================================================
+export interface PrecalcWordMetric {
+  word: string;
+  charStart: number;
+  charEnd: number;
+  width: number;
+  xOffsetInRow: number;
+  rowIdx: number;
+  chunkIdx: number;
+  localIdxInChunk: number;
+}
+
+export interface PrecalcRowMetric {
+  words: PrecalcWordMetric[];
+  rowWidth: number;
+  spaceW: number;
+}
+
+export interface PrecalcChunkMetric {
+  chunkIndex: number;
+  startWordIdx: number;
+  endWordIdx: number;
+  rows: PrecalcRowMetric[];
+  lineH: number;
+  totalBlockH: number;
+  anchorY: number;
+}
+
+export interface PrecalcSceneSubtitleLayout {
+  sceneIndex: number;
+  cleanText: string;
+  words: PrecalcWordMetric[];
+  chunks: PrecalcChunkMetric[];
+  fontSize: number;
+  scaleFactor: number;
+  isLandscape: boolean;
+}
+
+/**
+ * Pre-calculates text wrapping and subtitle box metrics before recording starts
+ * so the 60 FPS Canvas loop draws captions immediately without frame drops or stuttering.
+ */
+export function precalculateSceneSubtitleLayout(
+  measureCtx: CanvasRenderingContext2D,
   width: number,
   height: number,
   text: string,
-  sceneTimeSec: number,
-  sceneDurationSec: number,
-  accentRgb: [number, number, number]
-) {
-  const clean = sanitizeCommercialCopy(text);
-  if (!clean) return;
-
-  const words = clean.split(/\s+/).filter(Boolean);
-  if (words.length === 0) return;
-
+  sceneIndex: number
+): PrecalcSceneSubtitleLayout {
+  const clean = sanitizeCommercialCopy(text || '');
   const isLandscape = width > height;
   const scaleFactor = Math.min(width, height) / 720;
-
-  // Weight each word's speaking window by character length so highlights match speech cadence
-  const weights = words.map((w) => Math.max(2.5, w.length + 1));
-  const totalWeight = weights.reduce((a, b) => a + b, 0);
-  const speakStart = 0.08;
-  const speakEnd = Math.max(speakStart + 0.5, sceneDurationSec - 0.1);
-  const progress = clamp((sceneTimeSec - speakStart) / (speakEnd - speakStart), 0, 0.9999);
-
-  let activeWordIdx = 0;
-  let accum = 0;
-  let activeWordLocalProgress = 0;
-  for (let i = 0; i < words.length; i++) {
-    const segStart = accum / totalWeight;
-    accum += weights[i];
-    const segEnd = accum / totalWeight;
-    if (progress >= segStart && progress <= segEnd) {
-      activeWordIdx = i;
-      activeWordLocalProgress = clamp((progress - segStart) / Math.max(0.01, segEnd - segStart), 0, 1);
-      break;
-    }
-  }
-
-  // Group into viral short-form chunks of 4 words max per caption card
-  const chunkSize = isLandscape ? 6 : 4;
-  const chunkIndex = Math.floor(activeWordIdx / chunkSize);
-  const chunkStart = chunkIndex * chunkSize;
-  const chunkWords = words.slice(chunkStart, chunkStart + chunkSize);
-  const localActiveIdx = activeWordIdx - chunkStart;
-
   const fontSize = Math.round((isLandscape ? 30 : 35) * scaleFactor);
-  ctx.save();
-  ctx.font = `900 ${fontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
-  ctx.textBaseline = 'middle';
 
+  measureCtx.save();
+  measureCtx.font = `900 ${fontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  const spaceW = measureCtx.measureText(' ').width * 1.25;
   const padX = (isLandscape ? 56 : 36) * scaleFactor;
   const maxRowW = width - padX * 2 - 24 * scaleFactor;
-  const spaceW = ctx.measureText(' ').width * 1.25;
 
-  // Split chunk into 1 or 2 balanced rows if needed
-  const rows: Array<Array<{ word: string; idx: number; w: number }>> = [[]];
-  let currentRowW = 0;
-  chunkWords.forEach((word, i) => {
-    const w = ctx.measureText(word).width;
-    if (rows[rows.length - 1].length > 0 && currentRowW + spaceW + w > maxRowW && rows.length < 2) {
-      rows.push([{ word, idx: i, w }]);
-      currentRowW = w;
-    } else {
-      rows[rows.length - 1].push({ word, idx: i, w });
-      currentRowW += (rows[rows.length - 1].length > 1 ? spaceW : 0) + w;
-    }
-  });
+  const regex = /\S+/g;
+  let match: RegExpExecArray | null;
+  const rawWords: Array<{ word: string; charStart: number; charEnd: number; width: number }> = [];
 
+  while ((match = regex.exec(clean)) !== null) {
+    const word = match[0];
+    const w = measureCtx.measureText(word).width;
+    rawWords.push({
+      word,
+      charStart: match.index,
+      charEnd: match.index + word.length,
+      width: w,
+    });
+  }
+  measureCtx.restore();
+
+  const chunkSize = isLandscape ? 6 : 4;
+  const chunks: PrecalcChunkMetric[] = [];
+  const allWordMetrics: PrecalcWordMetric[] = [];
+
+  const totalChunks = Math.max(1, Math.ceil(rawWords.length / chunkSize));
   const lineH = fontSize * 1.44;
-  const totalBlockH = rows.length * lineH;
-  const anchorY = height - (isLandscape ? 110 : 178) * scaleFactor - totalBlockH / 2;
 
-  const exitFade = clamp((sceneDurationSec - sceneTimeSec) / 0.16, 0, 1);
-  ctx.globalAlpha = exitFade;
+  for (let cIdx = 0; cIdx < totalChunks; cIdx++) {
+    const chunkStart = cIdx * chunkSize;
+    const chunkRawWords = rawWords.slice(chunkStart, chunkStart + chunkSize);
 
-  rows.forEach((row, rIdx) => {
-    const rowW =
-      row.reduce((sum, item) => sum + item.w, 0) + Math.max(0, row.length - 1) * spaceW;
-    let x = width / 2 - rowW / 2;
-    const y = anchorY + rIdx * lineH + lineH / 2;
+    const rows: PrecalcRowMetric[] = [];
+    let currentRowWords: PrecalcWordMetric[] = [];
+    let currentRowWidth = 0;
 
-    for (const item of row) {
-      const isSpoken = item.idx === localActiveIdx;
-      const isAlreadySpoken = item.idx < localActiveIdx;
-      const wordCenterX = x + item.w / 2;
+    chunkRawWords.forEach((item, localIdx) => {
+      if (
+        currentRowWords.length > 0 &&
+        currentRowWidth + spaceW + item.width > maxRowW &&
+        rows.length < 1
+      ) {
+        rows.push({
+          words: currentRowWords,
+          rowWidth: currentRowWidth,
+          spaceW,
+        });
+        currentRowWords = [];
+        currentRowWidth = 0;
+      }
+
+      const xOffset = currentRowWords.length > 0 ? currentRowWidth + spaceW : 0;
+      currentRowWidth = xOffset + item.width;
+
+      const wordMetric: PrecalcWordMetric = {
+        word: item.word,
+        charStart: item.charStart,
+        charEnd: item.charEnd,
+        width: item.width,
+        xOffsetInRow: xOffset,
+        rowIdx: rows.length,
+        chunkIdx: cIdx,
+        localIdxInChunk: localIdx,
+      };
+
+      currentRowWords.push(wordMetric);
+      allWordMetrics.push(wordMetric);
+    });
+
+    if (currentRowWords.length > 0) {
+      rows.push({
+        words: currentRowWords,
+        rowWidth: currentRowWidth,
+        spaceW,
+      });
+    }
+
+    const totalBlockH = Math.max(1, rows.length) * lineH;
+    const anchorY = height - (isLandscape ? 110 : 178) * scaleFactor - totalBlockH / 2;
+
+    chunks.push({
+      chunkIndex: cIdx,
+      startWordIdx: chunkStart,
+      endWordIdx: chunkStart + chunkRawWords.length - 1,
+      rows,
+      lineH,
+      totalBlockH,
+      anchorY,
+    });
+  }
+
+  return {
+    sceneIndex,
+    cleanText: clean,
+    words: allWordMetrics,
+    chunks,
+    fontSize,
+    scaleFactor,
+    isLandscape,
+  };
+}
+
+/**
+ * Ultra-Fast Zero-Lag Subtitle Renderer.
+ * Consumes pre-calculated layout data with ZERO measuring, string allocations, or regex matching.
+ */
+export function renderZeroLagWordByWordSubtitles(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  layout: PrecalcSceneSubtitleLayout | undefined,
+  activeWordIdx: number,
+  activeWordLocalProgress: number,
+  exitAlpha: number,
+  accentRgb: [number, number, number]
+) {
+  if (!layout || layout.words.length === 0 || layout.chunks.length === 0) return;
+
+  const boundedWordIdx = clamp(activeWordIdx, 0, layout.words.length - 1);
+  const activeWord = layout.words[boundedWordIdx];
+  const chunk = layout.chunks[activeWord.chunkIdx] || layout.chunks[0];
+  const localActiveIdx = activeWord.localIdxInChunk;
+
+  ctx.save();
+  ctx.font = `900 ${layout.fontSize}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.textBaseline = 'middle';
+  ctx.globalAlpha = clamp(exitAlpha, 0, 1);
+
+  const scaleFactor = layout.scaleFactor;
+  const fontSize = layout.fontSize;
+  const lineH = chunk.lineH;
+
+  chunk.rows.forEach((row, rIdx) => {
+    const rowStartX = width / 2 - row.rowWidth / 2;
+    const y = chunk.anchorY + rIdx * lineH + lineH / 2;
+
+    for (const item of row.words) {
+      const isSpoken = item.localIdxInChunk === localActiveIdx;
+      const isAlreadySpoken = item.localIdxInChunk < localActiveIdx;
+      const wordCenterX = rowStartX + item.xOffsetInRow + item.width / 2;
 
       ctx.save();
       ctx.translate(wordCenterX, y);
@@ -1538,10 +1772,9 @@ function renderWordByWordSubtitles(
         const pop = 1 + Math.sin(Math.min(1, activeWordLocalProgress * 3.5) * Math.PI) * 0.11;
         ctx.scale(pop, pop);
 
-        // Glowing highlight pill behind actively spoken word
         const pillPadX = 14 * scaleFactor;
         const pillH = fontSize * 1.22;
-        const pillW = item.w + pillPadX * 2;
+        const pillW = item.width + pillPadX * 2;
         const pillGrad = ctx.createLinearGradient(-pillW / 2, -pillH / 2, pillW / 2, pillH / 2);
         pillGrad.addColorStop(0, '#0066FF');
         pillGrad.addColorStop(0.6, '#0D92FF');
@@ -1569,11 +1802,80 @@ function renderWordByWordSubtitles(
       }
 
       ctx.restore();
-      x += item.w + spaceW;
     }
   });
 
   ctx.restore();
+}
+
+// Global LRU metric cache for zero-lag fallback in legacy calls
+const subtitleLayoutCache = new Map<string, PrecalcSceneSubtitleLayout>();
+
+function getOrCreateSubtitleLayout(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  text: string
+): PrecalcSceneSubtitleLayout {
+  const cacheKey = `${width}x${height}:${text}`;
+  let layout = subtitleLayoutCache.get(cacheKey);
+  if (!layout) {
+    layout = precalculateSceneSubtitleLayout(ctx, width, height, text, 0);
+    if (subtitleLayoutCache.size > 80) subtitleLayoutCache.clear();
+    subtitleLayoutCache.set(cacheKey, layout);
+  }
+  return layout;
+}
+
+/**
+ * Backward-compatible helper utilizing zero-lag pre-calculated metrics.
+ */
+function renderWordByWordSubtitles(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  text: string,
+  sceneTimeSec: number,
+  sceneDurationSec: number,
+  accentRgb: [number, number, number]
+) {
+  const clean = sanitizeCommercialCopy(text);
+  if (!clean) return;
+
+  const layout = getOrCreateSubtitleLayout(ctx, width, height, clean);
+  if (!layout || layout.words.length === 0) return;
+
+  const weights = layout.words.map((w) => Math.max(2.5, w.word.length + 1));
+  const totalWeight = weights.reduce((a, b) => a + b, 0);
+  const speakStart = 0.08;
+  const speakEnd = Math.max(speakStart + 0.5, sceneDurationSec - 0.1);
+  const progress = clamp((sceneTimeSec - speakStart) / (speakEnd - speakStart), 0, 0.9999);
+
+  let activeWordIdx = 0;
+  let accum = 0;
+  let activeWordLocalProgress = 0;
+  for (let i = 0; i < layout.words.length; i++) {
+    const segStart = accum / totalWeight;
+    accum += weights[i];
+    const segEnd = accum / totalWeight;
+    if (progress >= segStart && progress <= segEnd) {
+      activeWordIdx = i;
+      activeWordLocalProgress = clamp((progress - segStart) / Math.max(0.01, segEnd - segStart), 0, 1);
+      break;
+    }
+  }
+
+  const exitFade = clamp((sceneDurationSec - sceneTimeSec) / 0.16, 0, 1);
+  renderZeroLagWordByWordSubtitles(
+    ctx,
+    width,
+    height,
+    layout,
+    activeWordIdx,
+    activeWordLocalProgress,
+    exitFade,
+    accentRgb
+  );
 }
 
 // ============================================================================
@@ -1773,6 +2075,344 @@ function renderDBuyBrandedOutroCard(
   }
 
   ctx.restore();
+}
+
+// ============================================================================
+// Mode 2: Full-Bleed 3D Volumetric Studio Commercial Scene
+// ============================================================================
+function renderCinematicStudioScene(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+  activeIdx: number,
+  sceneTimeSec: number,
+  sceneDurationSec: number,
+  masterElapsedSec: number,
+  activeWordIdx: number,
+  localWordProgress: number,
+  current: ScheduledScene,
+  prev: ScheduledScene | null,
+  inTransition: boolean,
+  transProgress: number,
+  dominantColors: { primaryAccent: string; secondaryGlow: string; pedestalColor: string } | undefined,
+  activeAccent: [number, number, number],
+  activeSecondary: [number, number, number],
+  particles: StudioParticle[],
+  ratingScore: number,
+  ratingReviewCount: number,
+  priceBannerText: string,
+  layout: PrecalcSceneSubtitleLayout | undefined
+) {
+  const isLandscape = width > height;
+  const scaleFactor = Math.min(width, height) / 720;
+  const sceneProgress = clamp(sceneTimeSec / Math.max(0.1, sceneDurationSec), 0, 1);
+
+  // 1. Dark Volumetric Studio Backdrop (Deep obsidian-navy, volumetric lighting cone)
+  const bgGrad = ctx.createLinearGradient(0, 0, 0, height);
+  bgGrad.addColorStop(0, '#040711');
+  bgGrad.addColorStop(0.42, '#091325');
+  bgGrad.addColorStop(0.70, '#060B18');
+  bgGrad.addColorStop(1, '#020408');
+  ctx.fillStyle = bgGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Overhead Volumetric Softbox Spotlight Cone
+  const coneOriginX = width / 2;
+  const coneOriginY = -height * 0.08;
+  const coneRadius = Math.max(width, height) * 0.72;
+  const coneGrad = ctx.createRadialGradient(coneOriginX, coneOriginY, 20, coneOriginX, coneOriginY, coneRadius);
+  coneGrad.addColorStop(0, rgbStr(activeAccent, 0.28));
+  coneGrad.addColorStop(0.35, rgbStr(activeSecondary, 0.12));
+  coneGrad.addColorStop(0.7, 'rgba(9, 19, 37, 0.05)');
+  coneGrad.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = coneGrad;
+  ctx.fillRect(0, 0, width, height);
+
+  // Volumetric angled light shafts descending across studio
+  ctx.save();
+  ctx.globalAlpha = 0.08;
+  const beamAngle = Math.sin(sceneTimeSec * 0.6) * 0.08;
+  ctx.translate(width / 2, 0);
+  ctx.rotate(beamAngle);
+  const beamGrad = ctx.createLinearGradient(-width * 0.3, 0, width * 0.3, height);
+  beamGrad.addColorStop(0, '#FFFFFF');
+  beamGrad.addColorStop(0.5, rgbStr(activeAccent, 0.6));
+  beamGrad.addColorStop(1, 'rgba(0,0,0,0)');
+  ctx.fillStyle = beamGrad;
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.15, 0);
+  ctx.lineTo(width * 0.15, 0);
+  ctx.lineTo(width * 0.45, height);
+  ctx.lineTo(-width * 0.45, height);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Floating volumetric dust particles
+  ctx.save();
+  for (let i = 0; i < Math.min(24, particles.length); i++) {
+    const p = particles[i];
+    const px = ((p.x + masterElapsedSec * p.driftX * 0.6) % 1 + 1) % 1;
+    const py = ((p.y - masterElapsedSec * p.speedY * 0.8) % 1 + 1) % 1;
+    ctx.globalAlpha = p.alpha * 0.45;
+    ctx.fillStyle = i % 2 === 0 ? rgbStr(activeAccent, 0.8) : '#E2E8F0';
+    ctx.beginPath();
+    ctx.arc(px * width, py * height, p.radius * scaleFactor * 0.9, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.restore();
+
+  // 2. Glossy Reflective Dark Studio Floor Plane
+  const floorY = height * (isLandscape ? 0.72 : 0.69);
+  const floorH = height - floorY;
+
+  const floorGrad = ctx.createLinearGradient(0, floorY, 0, height);
+  floorGrad.addColorStop(0, 'rgba(12, 22, 42, 0.85)');
+  floorGrad.addColorStop(0.2, 'rgba(6, 11, 22, 0.96)');
+  floorGrad.addColorStop(1, '#020306');
+  ctx.fillStyle = floorGrad;
+  ctx.fillRect(0, floorY, width, floorH);
+
+  // Horizon line neon sheen
+  const horizGrad = ctx.createLinearGradient(0, floorY - 1, width, floorY - 1);
+  horizGrad.addColorStop(0, 'rgba(13, 146, 255, 0)');
+  horizGrad.addColorStop(0.3, rgbStr(activeAccent, 0.25));
+  horizGrad.addColorStop(0.5, rgbStr(activeSecondary, 0.5));
+  horizGrad.addColorStop(0.7, rgbStr(activeAccent, 0.25));
+  horizGrad.addColorStop(1, 'rgba(13, 146, 255, 0)');
+  ctx.fillStyle = horizGrad;
+  ctx.fillRect(0, floorY - 1, width, 2);
+
+  // 3. 3D Glowing Elliptical Studio Pedestal Disc
+  const pedCenterX = width / 2;
+  const pedCenterY = floorY + 14 * scaleFactor;
+  const pedRadiusX = isLandscape ? width * 0.24 : width * 0.38;
+  const pedRadiusY = pedRadiusX * 0.28;
+
+  // Outer ambient glow of pedestal
+  ctx.save();
+  ctx.beginPath();
+  ctx.ellipse(pedCenterX, pedCenterY, pedRadiusX * 1.25, pedRadiusY * 1.25, 0, 0, Math.PI * 2);
+  const pedAura = ctx.createRadialGradient(pedCenterX, pedCenterY, pedRadiusX * 0.1, pedCenterX, pedCenterY, pedRadiusX * 1.25);
+  pedAura.addColorStop(0, rgbStr(activeAccent, 0.32));
+  pedAura.addColorStop(0.6, rgbStr(activeSecondary, 0.1));
+  pedAura.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = pedAura;
+  ctx.fill();
+
+  // Sleek metallic disc
+  ctx.beginPath();
+  ctx.ellipse(pedCenterX, pedCenterY, pedRadiusX, pedRadiusY, 0, 0, Math.PI * 2);
+  const discGrad = ctx.createLinearGradient(pedCenterX - pedRadiusX, pedCenterY, pedCenterX + pedRadiusX, pedCenterY);
+  discGrad.addColorStop(0, '#0F172A');
+  discGrad.addColorStop(0.5, '#1E293B');
+  discGrad.addColorStop(1, '#0A0F1D');
+  ctx.fillStyle = discGrad;
+  ctx.fill();
+
+  // Neon glowing rim ring
+  ctx.beginPath();
+  ctx.ellipse(pedCenterX, pedCenterY, pedRadiusX, pedRadiusY, 0, 0, Math.PI * 2);
+  ctx.strokeStyle = rgbStr(activeAccent, 0.9);
+  ctx.lineWidth = 2.5 * scaleFactor;
+  ctx.shadowColor = rgbStr(activeAccent, 1);
+  ctx.shadowBlur = 18 * scaleFactor;
+  ctx.stroke();
+  ctx.restore();
+
+  // 4. Floating 3D Product Choreography & Camera Push-In
+  const photo = current.photo;
+  const cutoutCanvas = photo.cutoutCanvas || photo.img;
+  const rimCanvas = photo.rimSilhouetteCanvas || cutoutCanvas;
+  const imgW = cutoutCanvas.width || 400;
+  const imgH = cutoutCanvas.height || 400;
+
+  // Smooth camera push-in (starts ~0.94 and slowly pushes to 1.09 over scene duration)
+  const pushIn = lerp(0.94, 1.09, easeOutQuart(sceneProgress));
+  const maxW = isLandscape ? width * 0.44 : width * 0.74;
+  const maxH = isLandscape ? height * 0.52 : height * 0.46;
+  const fitScale = Math.min(maxW / imgW, maxH / imgH);
+  const targetScale = fitScale * pushIn;
+
+  // Floating harmonic levitation (smooth bobbing)
+  const levitationY = Math.sin(sceneTimeSec * 1.8 + activeIdx) * (10 * scaleFactor);
+  const stageCenterY = isLandscape ? height * 0.44 : height * 0.40;
+  const prodCenterY = stageCenterY + levitationY;
+
+  // 3D Perspective Tilt & Camera Motion
+  let rotRad = 0;
+  let skewX = 0;
+  let skewY = 0;
+  let driftX = 0;
+  const motionStyle = current.motionStyle || 'tilt_3d';
+
+  if (motionStyle === 'tilt_3d') {
+    const tiltWave = Math.sin(sceneProgress * Math.PI * 1.3 - 0.4);
+    rotRad = tiltWave * 0.04;
+    skewY = tiltWave * 0.05;
+    driftX = tiltWave * 12 * scaleFactor;
+  } else if (motionStyle === 'light_sweep') {
+    rotRad = Math.sin(sceneProgress * Math.PI) * 0.02;
+  } else if (motionStyle === 'parallax_float') {
+    driftX = Math.sin(sceneTimeSec * 1.4) * 14 * scaleFactor;
+    rotRad = Math.cos(sceneTimeSec * 1.2) * 0.025;
+  } else if (motionStyle === 'zoom_punch') {
+    const punchT = clamp(sceneTimeSec / 0.45, 0, 1);
+    rotRad = lerp(-0.04, 0.01, easeSpringOvershoot(punchT));
+  }
+
+  // 5. Real Inverted Mirror Reflection on Glossy Floor
+  ctx.save();
+  ctx.translate(pedCenterX + driftX, pedCenterY);
+  ctx.scale(targetScale, -targetScale * 0.42); // vertical compression for perspective
+  ctx.globalAlpha = 0.24;
+  ctx.drawImage(cutoutCanvas, -imgW / 2, -(pedCenterY - prodCenterY));
+
+  // Reflection gradient fade
+  ctx.globalCompositeOperation = 'destination-out';
+  const reflFade = ctx.createLinearGradient(0, 0, 0, imgH);
+  reflFade.addColorStop(0, 'rgba(0,0,0,0)');
+  reflFade.addColorStop(0.5, 'rgba(0,0,0,0.6)');
+  reflFade.addColorStop(1, 'rgba(0,0,0,1)');
+  ctx.fillStyle = reflFade;
+  ctx.fillRect(-imgW, 0, imgW * 2, imgH * 2);
+  ctx.restore();
+
+  // 6. The Floating 3D Product with Dramatic Rim Lighting & Specular Light Sweep
+  ctx.save();
+  ctx.translate(pedCenterX + driftX, prodCenterY);
+  ctx.rotate(rotRad);
+  ctx.transform(1, skewY, skewX, 1, 0, 0);
+  ctx.scale(targetScale, targetScale);
+
+  // A. Dramatic Rim Light Glow (Rendered behind the product)
+  ctx.save();
+  ctx.shadowColor = rgbStr(activeAccent, 0.95);
+  ctx.shadowBlur = 36 * scaleFactor;
+  ctx.globalAlpha = 0.85;
+  ctx.drawImage(rimCanvas, -imgW / 2, -imgH / 2, imgW, imgH);
+  ctx.restore();
+
+  // B. The Clean Cut-Out Product
+  ctx.drawImage(cutoutCanvas, -imgW / 2, -imgH / 2, imgW, imgH);
+
+  // C. Dynamic Specular Light Sweep across Product Surface
+  const sweepProg = clamp((sceneTimeSec / sceneDurationSec) * 2.2 - 0.4, -0.4, 1.4);
+  if (sweepProg >= 0 && sweepProg <= 1) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop'; // Restrict sweep strictly to product pixels!
+    const sweepX = lerp(-imgW * 0.8, imgW * 0.8, sweepProg);
+    const sweepGrad = ctx.createLinearGradient(sweepX - 70, -imgH, sweepX + 70, imgH);
+    sweepGrad.addColorStop(0, 'rgba(255, 255, 255, 0)');
+    sweepGrad.addColorStop(0.5, 'rgba(255, 255, 255, 0.48)');
+    sweepGrad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = sweepGrad;
+    ctx.fillRect(-imgW / 2, -imgH / 2, imgW, imgH);
+    ctx.restore();
+  }
+
+  ctx.restore();
+
+  // 7. Cinematic Commercial Badges & Typography
+  const transAlpha = inTransition ? clamp(transProgress * 1.5, 0, 1) : 1;
+  const exitAlpha = clamp((sceneDurationSec - sceneTimeSec) / 0.22, 0, 1);
+  const uiAlpha = clamp(transAlpha * exitAlpha, 0, 1);
+
+  ctx.save();
+  ctx.globalAlpha = uiAlpha;
+
+  // Top Tracking Studio Tag
+  const topTagY = isLandscape ? 38 * scaleFactor : 58 * scaleFactor;
+  ctx.font = `800 ${Math.round(11 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = rgbStr(activeAccent, 0.9);
+  ctx.textAlign = 'center';
+  ctx.fillText('DBUY OFFICIAL COMMERCIAL ⚡ 4K 60FPS', width / 2, topTagY);
+
+  // Spec Callout Badge (Upper Third)
+  const badgeText = current.scene.calloutBadge || 'PRO SPEC';
+  const badgeY = topTagY + (isLandscape ? 26 : 30) * scaleFactor;
+  ctx.font = `900 ${Math.round(12 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  const badgeW = ctx.measureText(badgeText).width + 32 * scaleFactor;
+  const badgeH = 26 * scaleFactor;
+
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.75)';
+  drawRoundedRect(ctx, width / 2 - badgeW / 2, badgeY, badgeW, badgeH, 13 * scaleFactor);
+  ctx.fill();
+  ctx.strokeStyle = rgbStr(activeAccent, 0.8);
+  ctx.lineWidth = 1.4 * scaleFactor;
+  ctx.stroke();
+
+  ctx.fillStyle = '#FFFFFF';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(badgeText, width / 2, badgeY + badgeH / 2);
+
+  // Bold Headline & Subheadline
+  const headY = badgeY + badgeH + (isLandscape ? 22 : 28) * scaleFactor;
+  ctx.font = `900 ${Math.round((isLandscape ? 32 : 36) * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.shadowColor = 'rgba(0, 0, 0, 0.85)';
+  ctx.shadowBlur = 14 * scaleFactor;
+  ctx.fillText(current.scene.headline, width / 2, headY);
+  ctx.shadowBlur = 0;
+
+  if (current.scene.subheadline) {
+    const subY = headY + (isLandscape ? 24 : 28) * scaleFactor;
+    ctx.font = `600 ${Math.round((isLandscape ? 14 : 16) * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.fillStyle = '#94A3B8';
+    ctx.fillText(current.scene.subheadline, width / 2, subY);
+  }
+
+  // Scene 3: 5-Star Social Proof Rating Badge
+  if (current.scene.role === 'benefit' || current.index === 2) {
+    const starY = floorY - 34 * scaleFactor;
+    render5StarRatingBadge(
+      ctx,
+      width / 2,
+      starY,
+      ratingScore || 4.9,
+      ratingReviewCount || 1280,
+      uiAlpha,
+      1,
+      scaleFactor
+    );
+  }
+
+  // Scene 4: Closing Urgent Offer / Price Tag Pill
+  if (current.scene.role === 'cta' || current.index === 3) {
+    const offerY = floorY - 38 * scaleFactor;
+    const cleanOffer = sanitizeCommercialCopy(priceBannerText);
+    if (cleanOffer) {
+      ctx.font = `900 ${Math.round(18 * scaleFactor)}px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+      const oW = ctx.measureText(cleanOffer).width + 36 * scaleFactor;
+      const oH = 34 * scaleFactor;
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.25)';
+      drawRoundedRect(ctx, width / 2 - oW / 2, offerY, oW, oH, 10 * scaleFactor);
+      ctx.fill();
+      ctx.strokeStyle = '#EF4444';
+      ctx.lineWidth = 1.5 * scaleFactor;
+      ctx.stroke();
+
+      ctx.fillStyle = '#FEE2E2';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(cleanOffer, width / 2, offerY + oH / 2);
+    }
+  }
+
+  ctx.restore();
+
+  // 8. Zero-Lag Word-by-Word Highlighted Subtitles
+  if (layout) {
+    renderZeroLagWordByWordSubtitles(
+      ctx,
+      width,
+      height,
+      layout,
+      activeWordIdx,
+      localWordProgress,
+      exitAlpha,
+      activeAccent
+    );
+  }
 }
 
 // ============================================================================
@@ -2044,6 +2684,328 @@ async function encode60fpsWithMediaRecorder(
   return blob;
 }
 
+/**
+ * Single Master Clock Audio-Synced 60fps MediaRecorder Video Capturer.
+ * 
+ * REQUIRED TECHNICAL FIXES:
+ * 1. Single Master Clock: Anchored strictly to utterance.onstart (or AudioContext start).
+ * 2. Real-Time Word/Phrase Boundary Tracking: Hooked into utterance.onboundary with
+ *    character-progress fallback based on actual elapsed speech duration.
+ * 3. Dynamic Scene Duration: Advances scene and subtitle block only when utterance.onend
+ *    fires plus a brief 300ms visual buffer.
+ * 4. Zero-Lag Canvas Subtitle Rendering: Directly consumes pre-calculated metrics without
+ *    any ctx.measureText or layout thrashing during the 60 FPS recording loop.
+ */
+async function encodeAudioSynced60fpsWithMediaRecorder(
+  canvas: HTMLCanvasElement,
+  fps: number,
+  scheduledScenes: ScheduledScene[],
+  precalculatedSubtitles: PrecalcSceneSubtitleLayout[],
+  audioBuffer: AudioBuffer,
+  drawSceneAt: (
+    activeIdx: number,
+    sceneTimeSec: number,
+    sceneDurationSec: number,
+    masterElapsedSec: number,
+    activeWordIdx: number,
+    localWordProgress: number
+  ) => void,
+  drawOutroAt: (outroTimeSec: number) => void,
+  enableVoiceover: boolean,
+  voiceTone: CommercialVoiceTone,
+  voiceAccent: CommercialVoiceAccent,
+  onProgress?: (pct: number, detail: string) => void
+): Promise<{ blob: Blob; finalDurationSec: number }> {
+  const stream = canvas.captureStream(fps);
+  const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+  let audioCtx: AudioContext | null = null;
+  let bufferSrcNode: AudioBufferSourceNode | null = null;
+
+  try {
+    if (AudioCtx) {
+      audioCtx = new AudioCtx({ sampleRate: SAMPLE_RATE });
+      const dest = audioCtx.createMediaStreamDestination();
+      bufferSrcNode = audioCtx.createBufferSource();
+      bufferSrcNode.buffer = audioBuffer;
+      bufferSrcNode.connect(dest);
+      dest.stream.getAudioTracks().forEach((track) => stream.addTrack(track));
+    }
+  } catch (e) {
+    console.warn('[AUDIO-SYNC] Live AudioContext setup failed:', e);
+  }
+
+  const mimeCandidates = [
+    'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+    'video/mp4',
+    'video/webm;codecs=vp9,opus',
+    'video/webm;codecs=vp8,opus',
+    'video/webm',
+  ];
+  const chosenMime =
+    mimeCandidates.find(
+      (m) => typeof MediaRecorder !== 'undefined' && MediaRecorder.isTypeSupported(m)
+    ) || 'video/webm';
+
+  const recorder = new MediaRecorder(stream, {
+    mimeType: chosenMime,
+    videoBitsPerSecond: 6_500_000,
+  });
+
+  const chunks: Blob[] = [];
+  recorder.ondataavailable = (e) => {
+    if (e.data && e.data.size > 0) chunks.push(e.data);
+  };
+
+  const stopped = new Promise<Blob>((resolve) => {
+    recorder.onstop = () => {
+      resolve(
+        new Blob(chunks, {
+          type: chosenMime.startsWith('video/mp4') ? 'video/mp4' : 'video/webm',
+        })
+      );
+    };
+  });
+
+  let masterAnchorMs: number | null = null;
+  let isAudioSourceStarted = false;
+  let currentSceneIdx = 0;
+  let sceneSpeechStartMs = 0;
+  let isSceneSpeaking = false;
+  let isSceneSpeechEnded = false;
+  let sceneVisualBufferUntilMs = 0;
+  let latestBoundaryChar = 0;
+  let isOutro = false;
+  let outroStartMs = 0;
+  let fallbackTimerId: number | null = null;
+
+  const startMusicIfAnchored = (now: number) => {
+    if (masterAnchorMs === null) {
+      masterAnchorMs = now;
+      if (audioCtx && bufferSrcNode && !isAudioSourceStarted) {
+        try {
+          bufferSrcNode.start();
+          isAudioSourceStarted = true;
+        } catch {}
+      }
+    }
+  };
+
+  const startSceneSpeech = (idx: number) => {
+    if (fallbackTimerId) {
+      clearTimeout(fallbackTimerId);
+      fallbackTimerId = null;
+    }
+
+    if (idx >= scheduledScenes.length) {
+      isOutro = true;
+      outroStartMs = performance.now();
+      return;
+    }
+
+    const sc = scheduledScenes[idx];
+    const text = sc.scene.voiceoverLine ? sanitizeSpokenVoiceoverScript(sc.scene.voiceoverLine) : '';
+
+    isSceneSpeaking = false;
+    isSceneSpeechEnded = false;
+    sceneSpeechStartMs = 0;
+    latestBoundaryChar = 0;
+    let hasReceivedBoundary = false;
+
+    if (enableVoiceover && text && isBrowserSpeechSynthesisSupported()) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = voiceAccent === 'uk' ? 'en-GB' : 'en-US';
+      const v = pickBestEnglishVoice(voiceAccent);
+      if (v) utterance.voice = v;
+      if (voiceTone === 'energetic') {
+        utterance.rate = 1.07;
+        utterance.pitch = 1.04;
+      } else if (voiceTone === 'calm_luxury') {
+        utterance.rate = 0.93;
+        utterance.pitch = 0.96;
+      } else {
+        utterance.rate = 1.0;
+        utterance.pitch = 1.01;
+      }
+
+      // 1. Single Master Clock: Anchored strictly to the exact moment voiceover starts speaking
+      utterance.onstart = () => {
+        const now = performance.now();
+        sceneSpeechStartMs = now;
+        isSceneSpeaking = true;
+        startMusicIfAnchored(now);
+      };
+
+      // 2. Real-Time Word/Phrase Boundary Tracking
+      utterance.onboundary = (evt) => {
+        if (evt.name === 'word' || typeof evt.charIndex === 'number') {
+          latestBoundaryChar = evt.charIndex;
+          hasReceivedBoundary = true;
+        }
+      };
+
+      // 2b. Dynamic Scene Duration: Advance only when voiceover segment finishes + 320ms visual buffer
+      utterance.onend = () => {
+        const now = performance.now();
+        isSceneSpeaking = false;
+        isSceneSpeechEnded = true;
+        sceneVisualBufferUntilMs = now + 320; // 320ms visual buffer
+      };
+
+      utterance.onerror = () => {
+        const now = performance.now();
+        isSceneSpeaking = false;
+        isSceneSpeechEnded = true;
+        sceneVisualBufferUntilMs = now + 320;
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } else {
+      // Voiceover disabled or not supported: character-progress based pacing + 320ms buffer
+      const estimatedDurMs = Math.max(2200, countWords(text || sc.scene.headline) * 380);
+      const now = performance.now();
+      sceneSpeechStartMs = now;
+      startMusicIfAnchored(now);
+      isSceneSpeaking = true;
+
+      fallbackTimerId = window.setTimeout(() => {
+        isSceneSpeaking = false;
+        isSceneSpeechEnded = true;
+        sceneVisualBufferUntilMs = performance.now() + 320;
+      }, estimatedDurMs);
+    }
+  };
+
+  recorder.start(200);
+  startSceneSpeech(0);
+
+  // Safety watchdog: ensure masterAnchorMs is set within 700ms even if voice engine initialization is slow
+  const watchdogId = window.setTimeout(() => {
+    if (masterAnchorMs === null) {
+      const now = performance.now();
+      startMusicIfAnchored(now);
+    }
+  }, 700);
+
+  await new Promise<void>((resolve) => {
+    const tick = () => {
+      const now = performance.now();
+      if (masterAnchorMs === null) {
+        // Voice is warming up (brief 50-150ms startup delay): draw initial calm frame at t = 0
+        drawSceneAt(0, 0, 4.0, 0, 0, 0);
+        requestAnimationFrame(tick);
+        return;
+      }
+
+      const masterElapsedSec = (now - masterAnchorMs) / 1000;
+
+      if (isOutro) {
+        const outroElapsedSec = (now - outroStartMs) / 1000;
+        drawOutroAt(outroElapsedSec);
+        const pct = Math.round(90 + (outroElapsedSec / DBUY_OUTRO_DURATION_SEC) * 9);
+        onProgress?.(pct, `Recording DBuy Branded Outro (${outroElapsedSec.toFixed(1)}s / ${DBUY_OUTRO_DURATION_SEC}s)`);
+
+        if (outroElapsedSec >= DBUY_OUTRO_DURATION_SEC) {
+          resolve();
+          return;
+        }
+      } else {
+        // Dynamic scene completion: advance scene and subtitle block only when utterance.onend + buffer finishes
+        if (isSceneSpeechEnded && now >= sceneVisualBufferUntilMs) {
+          currentSceneIdx++;
+          if (currentSceneIdx >= scheduledScenes.length) {
+            isOutro = true;
+            outroStartMs = now;
+          } else {
+            startSceneSpeech(currentSceneIdx);
+          }
+        }
+
+        const activeIdx = Math.min(currentSceneIdx, scheduledScenes.length - 1);
+        const sc = scheduledScenes[activeIdx];
+        const layout = precalculatedSubtitles[activeIdx];
+
+        const sceneTimeSec = sceneSpeechStartMs > 0 ? Math.max(0, (now - sceneSpeechStartMs) / 1000) : 0;
+        const sceneDurationSec = sceneVisualBufferUntilMs > 0 && sceneSpeechStartMs > 0
+          ? Math.max(0.5, (sceneVisualBufferUntilMs - sceneSpeechStartMs) / 1000)
+          : Math.max(3.0, sc.durationSec || 4.0);
+
+        // Real-Time Word Boundary Tracking: 100% Synced to Master Voice Clock with Zero Lag
+        let activeWordIdx = 0;
+        let localWordProgress = 0;
+        if (layout && layout.words.length > 0) {
+          if (!isSceneSpeaking && sceneSpeechStartMs === 0) {
+            // Utterance has not started speaking yet: hold on word 0 with 0 progress
+            activeWordIdx = 0;
+            localWordProgress = 0;
+          } else if (isSceneSpeechEnded) {
+            // Utterance finished, holding for visual buffer: lock to last word fully
+            activeWordIdx = layout.words.length - 1;
+            localWordProgress = 1;
+          } else if (latestBoundaryChar > 0) {
+            // Browser speech boundary event is active: lock directly to latestBoundaryChar
+            for (let w = 0; w < layout.words.length; w++) {
+              if (latestBoundaryChar >= layout.words[w].charStart && latestBoundaryChar <= layout.words[w].charEnd) {
+                activeWordIdx = w;
+                const wordLen = Math.max(1, layout.words[w].charEnd - layout.words[w].charStart);
+                localWordProgress = clamp((latestBoundaryChar - layout.words[w].charStart) / wordLen, 0, 1);
+                break;
+              }
+              if (latestBoundaryChar > layout.words[w].charEnd) {
+                activeWordIdx = w;
+                localWordProgress = 1;
+              }
+            }
+          } else {
+            // Voice engine does not fire boundary events: fall back to rate-adjusted timing
+            const rateMultiplier = voiceTone === 'energetic' ? 1.07 : voiceTone === 'calm_luxury' ? 0.93 : 1.0;
+            const charsPerSec = 15 * rateMultiplier;
+            const elapsedSec = Math.max(0, (now - sceneSpeechStartMs) / 1000);
+            const estChar = Math.min(layout.cleanText.length - 1, Math.floor(elapsedSec * charsPerSec));
+
+            for (let w = 0; w < layout.words.length; w++) {
+              if (estChar >= layout.words[w].charStart && estChar <= layout.words[w].charEnd) {
+                activeWordIdx = w;
+                const wordLen = Math.max(1, layout.words[w].charEnd - layout.words[w].charStart);
+                localWordProgress = clamp((estChar - layout.words[w].charStart) / wordLen, 0, 1);
+                break;
+              }
+              if (estChar > layout.words[w].charEnd) {
+                activeWordIdx = w;
+                localWordProgress = 1;
+              }
+            }
+          }
+        }
+
+        drawSceneAt(activeIdx, sceneTimeSec, sceneDurationSec, masterElapsedSec, activeWordIdx, localWordProgress);
+
+        const approxTotalSec = scheduledScenes.length * 3.8 + DBUY_OUTRO_DURATION_SEC;
+        const pct = Math.min(89, Math.round(35 + (masterElapsedSec / approxTotalSec) * 54));
+        onProgress?.(pct, `Recording 60 FPS Commercial · Scene ${activeIdx + 1} / ${scheduledScenes.length} (${masterElapsedSec.toFixed(1)}s)`);
+      }
+
+      requestAnimationFrame(tick);
+    };
+
+    requestAnimationFrame(tick);
+  });
+
+  window.clearTimeout(watchdogId);
+  if (fallbackTimerId) clearTimeout(fallbackTimerId);
+  recorder.stop();
+  const blob = await stopped;
+  stopBrowserSpeechSynthesis();
+  if (audioCtx) {
+    audioCtx.close().catch(() => {});
+  }
+
+  const finalDurationSec = masterAnchorMs
+    ? (performance.now() - masterAnchorMs) / 1000
+    : scheduledScenes.reduce((a, s) => a + s.durationSec, 0) + DBUY_OUTRO_DURATION_SEC;
+
+  return { blob, finalDurationSec };
+}
+
 // ============================================================================
 // Main Exported 60fps Pro Motion Graphics Commercial Video Compositor
 // ============================================================================
@@ -2055,6 +3017,7 @@ interface ScheduledScene {
   startSec: number;
   endSec: number;
   durationSec: number;
+  precalculatedSubtitles?: PrecalcSceneSubtitleLayout;
 }
 
 export async function renderProMotionCommercialVideo(
@@ -2062,12 +3025,16 @@ export async function renderProMotionCommercialVideo(
     product: Product;
     selectedImages: string[];
     aspectRatio: CommercialAspectRatio;
+    generationMode?: 'mode1_card' | 'mode2_cinematic';
     resolution?: CommercialResolutionPreset;
     visualTheme: CommercialVisualTheme;
     musicMood: CommercialMusicMood;
     scenes: CommercialScenePlan[];
     voiceoverScript: string;
     voiceoverAudioBase64?: string;
+    enableVoiceover?: boolean;
+    voiceTone?: CommercialVoiceTone;
+    voiceAccent?: CommercialVoiceAccent;
     priceBanner?: string;
     includeWebLinkOverlay?: boolean;
     accentColorHex?: string;
@@ -2226,37 +3193,42 @@ export async function renderProMotionCommercialVideo(
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) throw new Error('Failed to initialize 2D motion graphics canvas.');
 
-    const outroCrossfadeSec = 0.38;
+    // Pre-calculate subtitle metrics once for all scenes at this exact canvas resolution (0 ctx.measureText in 60fps loop!)
+    const precalculatedSubtitles: PrecalcSceneSubtitleLayout[] = scheduledScenes.map((sc, idx) => {
+      return precalculateSceneSubtitleLayout(
+        ctx,
+        w,
+        h,
+        sc.scene.voiceoverLine || sc.scene.headline,
+        idx
+      );
+    });
 
-    const drawFrameAt = (t: number) => {
-      if (t >= targetMainDurationSec) {
-        const outroT = clamp(t - targetMainDurationSec, 0, DBUY_OUTRO_DURATION_SEC);
-        renderDBuyBrandedOutroCard(
-          ctx,
-          w,
-          h,
-          outroT,
-          DBUY_OUTRO_DURATION_SEC,
-          priceBannerText,
-          1,
-          particles,
-          params.ctaText
-        );
-        return;
-      }
+    const drawOutroAt = (outroT: number, outroBlend: number = 1) => {
+      renderDBuyBrandedOutroCard(
+        ctx,
+        w,
+        h,
+        outroT,
+        DBUY_OUTRO_DURATION_SEC,
+        priceBannerText,
+        outroBlend,
+        particles,
+        params.ctaText
+      );
+    };
 
-      // Find active scene
-      let current = scheduledScenes[scheduledScenes.length - 1];
-      for (const s of scheduledScenes) {
-        if (t >= s.startSec && t < s.endSec) {
-          current = s;
-          break;
-        }
-      }
-
+    const drawSceneAt = (
+      activeIdx: number,
+      sceneTimeSec: number,
+      sceneDurationSec: number,
+      masterElapsedSec: number,
+      activeWordIdx: number,
+      localWordProgress: number
+    ) => {
+      const current = scheduledScenes[activeIdx] || scheduledScenes[0];
       const prev = current.index > 0 ? scheduledScenes[current.index - 1] : null;
-      const sceneTimeSec = Math.max(0, t - current.startSec);
-      const sceneProgress = clamp(sceneTimeSec / Math.max(0.1, current.durationSec), 0, 1);
+      const sceneProgress = clamp(sceneTimeSec / Math.max(0.1, sceneDurationSec), 0, 1);
 
       const inTransition = Boolean(prev && sceneTimeSec < SCENE_TRANSITION_SEC);
       const transProgress = inTransition ? clamp(sceneTimeSec / SCENE_TRANSITION_SEC, 0, 1) : 1;
@@ -2270,12 +3242,40 @@ export async function renderProMotionCommercialVideo(
           ? mixRgb(prev.photo.secondaryRgb, current.photo.secondaryRgb, easeWhipOut(transProgress))
           : current.photo.secondaryRgb;
 
+      // Mode 2: Full-Bleed 3D Volumetric Studio Commercial Scene (Auto White BG Removal + Rim Light + Reflection)
+      if (params.generationMode === 'mode2_cinematic') {
+        renderCinematicStudioScene(
+          ctx,
+          w,
+          h,
+          activeIdx,
+          sceneTimeSec,
+          sceneDurationSec,
+          masterElapsedSec,
+          activeWordIdx,
+          localWordProgress,
+          current,
+          prev,
+          inTransition,
+          transProgress,
+          params.dominantColors,
+          activeAccent,
+          activeSecondary,
+          particles,
+          params.ratingScore || 4.9,
+          params.ratingReviewCount || 1280,
+          priceBannerText,
+          precalculatedSubtitles[activeIdx]
+        );
+        return;
+      }
+
       // 1. Dynamic Multi-Layer Studio Background (Ambient Glow + Grid + Particles)
       renderDynamicStudioBackground(
         ctx,
         w,
         h,
-        t,
+        masterElapsedSec,
         activeAccent,
         activeSecondary,
         current.photo.blurredBackdrop,
@@ -2370,8 +3370,8 @@ export async function renderProMotionCommercialVideo(
         h,
         current.scene,
         sceneTimeSec,
-        current.durationSec,
-        t,
+        sceneDurationSec,
+        masterElapsedSec,
         targetMainDurationSec,
         activeAccent,
         priceBannerText,
@@ -2390,7 +3390,7 @@ export async function renderProMotionCommercialVideo(
       // Scene 1 Hook & Scene 4 CTA: Kinetic Discount & Price Pill
       if ((current.scene.role === 'hook' || current.scene.role === 'cta') && formattedPrice) {
         const badgeEnter = easeSpringOvershoot(clamp((sceneTimeSec - 0.15) / 0.4, 0, 1));
-        const badgeExit = clamp((current.durationSec - sceneTimeSec) / 0.2, 0, 1);
+        const badgeExit = clamp((sceneDurationSec - sceneTimeSec) / 0.2, 0, 1);
         const badgeY = isLandscape ? h * 0.78 : stageCenterY + cardH * 0.52;
         renderKineticDiscountAndPriceBadge(
           ctx,
@@ -2410,7 +3410,7 @@ export async function renderProMotionCommercialVideo(
       const specDetail = current.scene.specDetail || (params.product.features && params.product.features[0]) || '';
       if (current.scene.role === 'showcase' && (specBadge || specDetail)) {
         const specEnter = easeSpringOvershoot(clamp((sceneTimeSec - 0.12) / 0.4, 0, 1));
-        const specExit = clamp((current.durationSec - sceneTimeSec) / 0.2, 0, 1);
+        const specExit = clamp((sceneDurationSec - sceneTimeSec) / 0.2, 0, 1);
         const specY = isLandscape ? h * 0.78 : stageCenterY + cardH * 0.52;
         renderGlassmorphismSpecCard(
           ctx,
@@ -2428,7 +3428,7 @@ export async function renderProMotionCommercialVideo(
       // Scene 3 Benefit / Social Proof: 5-Star Customer Rating Pop-up
       if (current.scene.role === 'benefit') {
         const ratingEnter = easeSpringOvershoot(clamp((sceneTimeSec - 0.1) / 0.42, 0, 1));
-        const ratingExit = clamp((current.durationSec - sceneTimeSec) / 0.2, 0, 1);
+        const ratingExit = clamp((sceneDurationSec - sceneTimeSec) / 0.2, 0, 1);
         const score = params.ratingScore || 4.9;
         const reviews = params.ratingReviewCount || 1280;
         const ratingY = isLandscape ? h * 0.78 : stageCenterY + cardH * 0.52;
@@ -2444,36 +3444,69 @@ export async function renderProMotionCommercialVideo(
         );
       }
 
-      // 5. Bold TikTok/Shorts Word-by-Word Highlighted Subtitles
-      renderWordByWordSubtitles(
+      // 5. Zero-Lag Pre-Calculated Word-by-Word Highlighted Subtitles
+      const layout = precalculatedSubtitles[activeIdx];
+      const exitAlpha = clamp((sceneDurationSec - sceneTimeSec) / 0.18, 0, 1);
+      renderZeroLagWordByWordSubtitles(
         ctx,
         w,
         h,
-        current.scene.voiceoverLine,
-        sceneTimeSec,
-        current.durationSec,
+        layout,
+        activeWordIdx,
+        localWordProgress,
+        exitAlpha,
         activeAccent
       );
+    };
 
-      // 6. Smooth Crossfade into Branded 2.5-Second DBuy Outro
+    const outroCrossfadeSec = 0.38;
+
+    const drawFrameAt = (t: number) => {
+      if (t >= targetMainDurationSec) {
+        const outroT = clamp(t - targetMainDurationSec, 0, DBUY_OUTRO_DURATION_SEC);
+        drawOutroAt(outroT, 1);
+        return;
+      }
+
+      // Find active scene
+      let current = scheduledScenes[scheduledScenes.length - 1];
+      for (const s of scheduledScenes) {
+        if (t >= s.startSec && t < s.endSec) {
+          current = s;
+          break;
+        }
+      }
+
+      const sceneTimeSec = Math.max(0, t - current.startSec);
+      const layout = precalculatedSubtitles[current.index];
+      let wordIdx = 0;
+      let wordProgress = 0;
+
+      if (layout && layout.words.length > 0) {
+        const prog = clamp(sceneTimeSec / Math.max(0.1, current.durationSec), 0, 1);
+        const rawIdx = prog * layout.words.length;
+        wordIdx = Math.min(layout.words.length - 1, Math.floor(rawIdx));
+        wordProgress = rawIdx - wordIdx;
+      }
+
+      drawSceneAt(
+        current.index,
+        sceneTimeSec,
+        current.durationSec,
+        t,
+        wordIdx,
+        wordProgress
+      );
+
+      // Smooth Crossfade into Branded 2.5-Second DBuy Outro
       const timeBeforeOutro = targetMainDurationSec - t;
       if (timeBeforeOutro < outroCrossfadeSec) {
         const outroBlend = easeInOutExpo(1 - timeBeforeOutro / outroCrossfadeSec);
-        renderDBuyBrandedOutroCard(
-          ctx,
-          w,
-          h,
-          outroBlend * 0.22,
-          DBUY_OUTRO_DURATION_SEC,
-          priceBannerText,
-          outroBlend,
-          particles,
-          params.ctaText
-        );
+        drawOutroAt(outroBlend * 0.22, outroBlend);
       }
     };
 
-    return { canvas, drawFrameAt };
+    return { canvas, drawFrameAt, drawSceneAt, drawOutroAt, precalculatedSubtitles };
   };
 
   onProgress?.({
@@ -2487,65 +3520,117 @@ export async function renderProMotionCommercialVideo(
   let finalHeight = targetHeight;
   let blob: Blob | null = null;
   let encoderUsed: 'webcodecs-mp4' | 'mediarecorder-fallback' = 'webcodecs-mp4';
+  let recordedDurationSec = totalDurationSec;
 
-  // Primary: WebCodecs 60fps H.264/AAC MP4 (with auto fallback from 1080p -> 720p if H.264 level capped)
-  try {
-    const primaryRenderer = createFrameRenderer(finalWidth, finalHeight);
-    blob = await encode60fpsWithWebCodecs(
-      primaryRenderer.canvas,
-      finalWidth,
-      finalHeight,
-      TARGET_FPS,
-      totalDurationSec,
-      finalAudio.audioBuffer,
-      primaryRenderer.drawFrameAt,
-      (pct, detail) => {
-        onProgress?.({
-          stage: pct >= 90 ? 'encoding' : 'rendering',
-          progressPct: pct,
-          message:
-            pct >= 90
-              ? 'Finalizing 60fps H.264 / AAC Commercial MP4...'
-              : `Rendering ${aspectRatio} 60fps Commercial...`,
-          detail,
-        });
-      }
-    );
-  } catch (err1080) {
-    if (resolution === '1080p') {
-      try {
-        finalWidth = aspectRatio === '16:9' ? 1280 : 720;
-        finalHeight = aspectRatio === '16:9' ? 720 : 1280;
-        const hdRenderer = createFrameRenderer(finalWidth, finalHeight);
-        blob = await encode60fpsWithWebCodecs(
-          hdRenderer.canvas,
-          finalWidth,
-          finalHeight,
-          TARGET_FPS,
-          totalDurationSec,
-          finalAudio.audioBuffer,
-          hdRenderer.drawFrameAt,
-          (pct, detail) => {
-            onProgress?.({
-              stage: pct >= 90 ? 'encoding' : 'rendering',
-              progressPct: pct,
-              message:
-                pct >= 90
-                  ? 'Finalizing 60fps H.264 / AAC Commercial MP4...'
-                  : `Rendering ${aspectRatio} 60fps HD Commercial...`,
-              detail,
-            });
-          }
-        );
-      } catch (err720) {
-        console.warn('[MOTION-COMPOSITOR] WebCodecs unavailable, using MediaRecorder 60fps:', err1080, err720);
-      }
-    } else {
-      console.warn('[MOTION-COMPOSITOR] WebCodecs unavailable, using MediaRecorder 60fps:', err1080);
+  const enableVoiceover = params.enableVoiceover !== false;
+  const voiceTone: CommercialVoiceTone = params.voiceTone || 'energetic';
+  const voiceAccent: CommercialVoiceAccent = params.voiceAccent || 'us';
+
+  // Primary Path for Voiceover: Single Master Clock Audio-Synced 60fps MediaRecorder
+  // Ties canvas render loop, scene transitions, and subtitles to utterance.onstart + utterance.onboundary
+  const shouldUseAudioSyncedRecorder =
+    (enableVoiceover && isBrowserSpeechSynthesisSupported()) ||
+    typeof (window as any).VideoEncoder === 'undefined';
+
+  if (shouldUseAudioSyncedRecorder && typeof MediaRecorder !== 'undefined') {
+    try {
+      encoderUsed = 'mediarecorder-fallback';
+      finalWidth = aspectRatio === '16:9' ? 1280 : 720;
+      finalHeight = aspectRatio === '16:9' ? 720 : 1280;
+      const syncedRenderer = createFrameRenderer(finalWidth, finalHeight);
+
+      const syncResult = await encodeAudioSynced60fpsWithMediaRecorder(
+        syncedRenderer.canvas,
+        TARGET_FPS,
+        scheduledScenes,
+        syncedRenderer.precalculatedSubtitles,
+        finalAudio.audioBuffer,
+        syncedRenderer.drawSceneAt,
+        syncedRenderer.drawOutroAt,
+        enableVoiceover,
+        voiceTone,
+        voiceAccent,
+        (pct, detail) => {
+          onProgress?.({
+            stage: pct >= 90 ? 'encoding' : 'rendering',
+            progressPct: pct,
+            message:
+              pct >= 90
+                ? 'Finalizing Audio-Synced 60fps Commercial...'
+                : `Recording ${aspectRatio} 60fps Commercial...`,
+            detail,
+          });
+        }
+      );
+      blob = syncResult.blob;
+      recordedDurationSec = Math.round(syncResult.finalDurationSec * 10) / 10;
+    } catch (errSync) {
+      console.warn('[AUDIO-SYNC] Audio-synced MediaRecorder threw, trying offline WebCodecs:', errSync);
     }
   }
 
-  // Seamless MediaRecorder 60fps fallback
+  // Secondary Path: WebCodecs 60fps H.264/AAC MP4 (used when pre-mixed audio is available or offline rendering)
+  if (!blob) {
+    try {
+      const primaryRenderer = createFrameRenderer(finalWidth, finalHeight);
+      blob = await encode60fpsWithWebCodecs(
+        primaryRenderer.canvas,
+        finalWidth,
+        finalHeight,
+        TARGET_FPS,
+        totalDurationSec,
+        finalAudio.audioBuffer,
+        primaryRenderer.drawFrameAt,
+        (pct, detail) => {
+          onProgress?.({
+            stage: pct >= 90 ? 'encoding' : 'rendering',
+            progressPct: pct,
+            message:
+              pct >= 90
+                ? 'Finalizing 60fps H.264 / AAC Commercial MP4...'
+                : `Rendering ${aspectRatio} 60fps Commercial...`,
+            detail,
+          });
+        }
+      );
+      encoderUsed = 'webcodecs-mp4';
+    } catch (err1080) {
+      if (resolution === '1080p') {
+        try {
+          finalWidth = aspectRatio === '16:9' ? 1280 : 720;
+          finalHeight = aspectRatio === '16:9' ? 720 : 1280;
+          const hdRenderer = createFrameRenderer(finalWidth, finalHeight);
+          blob = await encode60fpsWithWebCodecs(
+            hdRenderer.canvas,
+            finalWidth,
+            finalHeight,
+            TARGET_FPS,
+            totalDurationSec,
+            finalAudio.audioBuffer,
+            hdRenderer.drawFrameAt,
+            (pct, detail) => {
+              onProgress?.({
+                stage: pct >= 90 ? 'encoding' : 'rendering',
+                progressPct: pct,
+                message:
+                  pct >= 90
+                    ? 'Finalizing 60fps H.264 / AAC Commercial MP4...'
+                    : `Rendering ${aspectRatio} 60fps HD Commercial...`,
+                detail,
+              });
+            }
+          );
+          encoderUsed = 'webcodecs-mp4';
+        } catch (err720) {
+          console.warn('[MOTION-COMPOSITOR] WebCodecs unavailable, using MediaRecorder 60fps:', err1080, err720);
+        }
+      } else {
+        console.warn('[MOTION-COMPOSITOR] WebCodecs unavailable, using MediaRecorder 60fps:', err1080);
+      }
+    }
+  }
+
+  // Seamless MediaRecorder 60fps fallback if offline WebCodecs also failed
   if (!blob) {
     encoderUsed = 'mediarecorder-fallback';
     finalWidth = aspectRatio === '16:9' ? 1280 : 720;
@@ -2568,6 +3653,8 @@ export async function renderProMotionCommercialVideo(
     );
   }
 
+  const finalVideoDuration = recordedDurationSec || totalDurationSec;
+
   const safeSlug =
     sanitizeCommercialCopy(params.product.title || 'product')
       .toLowerCase()
@@ -2585,7 +3672,7 @@ export async function renderProMotionCommercialVideo(
   onProgress?.({
     stage: 'done',
     progressPct: 100,
-    message: `60fps AI Commercial Ready (${totalDurationSec.toFixed(1)}s ${aspectRatio})`,
+    message: `60fps AI Commercial Ready (${finalVideoDuration.toFixed(1)}s ${aspectRatio})`,
     detail: `${(file.size / (1024 * 1024)).toFixed(2)} MB · ${finalWidth}×${finalHeight} @ ${TARGET_FPS}fps · ${
       finalAudio.hasVoiceover ? 'Voiceover (17% Duck)' : 'Studio Beat'
     } + 2.5s DBuy Outro`,
@@ -2593,7 +3680,7 @@ export async function renderProMotionCommercialVideo(
 
   return {
     file,
-    durationSec: totalDurationSec,
+    durationSec: finalVideoDuration,
     width: finalWidth,
     height: finalHeight,
     aspectRatio,

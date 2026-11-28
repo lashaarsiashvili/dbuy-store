@@ -38,6 +38,7 @@ import {
   CommercialMusicMood,
   PromoVideoGenerationProgress,
   speakWithBrowserSpeechSynthesis,
+  speakCommercialScenesWithBoundarySync,
   stopBrowserSpeechSynthesis,
   isBrowserSpeechSynthesisSupported,
 } from '../utils/tiktokVideoGenerator';
@@ -52,6 +53,7 @@ import {
   generateYouTubePromotionalVideo,
   YouTubeAdPlan,
   YouTubeVideoGenerationSuccess,
+  buildYouTuberProductDescription,
 } from '../utils/youtubeVideoApi';
 import { YouTubeShortsLogo } from './YouTubeLogo';
 import { YouTubeShortsModal } from './YouTubeShortsModal';
@@ -105,6 +107,7 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
   }, [selectedProduct?.id]);
 
   // 3. Format & Settings
+  const [generationMode, setGenerationMode] = useState<'mode1_card' | 'mode2_cinematic'>('mode2_cinematic');
   const [aspectRatio, setAspectRatio] = useState<CommercialAspectRatio>('9:16');
   const [musicMood, setMusicMood] = useState<CommercialMusicMood>('upbeat_tech');
   const [enableVoiceover, setEnableVoiceover] = useState<boolean>(true);
@@ -123,6 +126,19 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
   const [isYouTubeModalOpen, setIsYouTubeModalOpen] = useState(false);
   const [copiedField, setCopiedField] = useState<'title' | 'desc' | 'tags' | null>(null);
   const [isPlayingVoiceoverPreview, setIsPlayingVoiceoverPreview] = useState(false);
+  const [previewActiveSceneIdx, setPreviewActiveSceneIdx] = useState<number | null>(null);
+  const [previewActiveWord, setPreviewActiveWord] = useState<string | null>(null);
+  const speechCancelRef = useRef<(() => void) | null>(null);
+
+  // Stop any active speech on unmount
+  useEffect(() => {
+    return () => {
+      if (speechCancelRef.current) {
+        speechCancelRef.current();
+      }
+      stopBrowserSpeechSynthesis();
+    };
+  }, []);
 
   // Filter products for selector
   const categories = useMemo(() => {
@@ -166,24 +182,84 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
     }
   };
 
-  // Preview Voiceover Narration via Web SpeechSynthesis
+  // Preview Voiceover Narration via Web SpeechSynthesis with Millisecond Boundary Sync
   const handlePreviewVoiceover = () => {
     if (isPlayingVoiceoverPreview) {
+      if (speechCancelRef.current) {
+        speechCancelRef.current();
+        speechCancelRef.current = null;
+      }
       stopBrowserSpeechSynthesis();
       setIsPlayingVoiceoverPreview(false);
+      setPreviewActiveSceneIdx(null);
+      setPreviewActiveWord(null);
       return;
     }
-    const script = activePlan?.fullVoiceoverScript || selectedProduct?.title;
-    if (!script) return;
 
-    setIsPlayingVoiceoverPreview(true);
-    speakWithBrowserSpeechSynthesis({
-      script,
-      voiceTone,
-      accent: voiceAccent,
-      onEnd: () => setIsPlayingVoiceoverPreview(false),
-      onError: () => setIsPlayingVoiceoverPreview(false),
-    });
+    if (activePlan?.scenes && activePlan.scenes.length > 0) {
+      setIsPlayingVoiceoverPreview(true);
+      setPreviewActiveSceneIdx(0);
+      setPreviewActiveWord(null);
+
+      const cancelFn = speakCommercialScenesWithBoundarySync({
+        scenes: activePlan.scenes.map((s, idx) => ({
+          sceneNumber: s.sceneNumber || idx + 1,
+          text: s.voiceoverLine || s.voiceover || s.headline || '',
+        })),
+        voiceTone,
+        accent: voiceAccent,
+        onSceneStart: (sceneIdx) => {
+          setPreviewActiveSceneIdx(sceneIdx);
+          setPreviewActiveWord(null);
+        },
+        onWordBoundary: (sceneIdx, charIdx) => {
+          setPreviewActiveSceneIdx(sceneIdx);
+          const line = activePlan.scenes[sceneIdx]?.voiceoverLine || activePlan.scenes[sceneIdx]?.headline || '';
+          const match = line.slice(charIdx).match(/^\S+/);
+          if (match) {
+            setPreviewActiveWord(match[0]);
+          }
+        },
+        onAllCompleted: () => {
+          setIsPlayingVoiceoverPreview(false);
+          setPreviewActiveSceneIdx(null);
+          setPreviewActiveWord(null);
+          speechCancelRef.current = null;
+        },
+        onError: () => {
+          setIsPlayingVoiceoverPreview(false);
+          setPreviewActiveSceneIdx(null);
+          setPreviewActiveWord(null);
+          speechCancelRef.current = null;
+        },
+      });
+
+      speechCancelRef.current = cancelFn;
+    } else {
+      const script = activePlan?.fullVoiceoverScript || selectedProduct?.title;
+      if (!script) return;
+
+      setIsPlayingVoiceoverPreview(true);
+      speakWithBrowserSpeechSynthesis({
+        script,
+        voiceTone,
+        accent: voiceAccent,
+        onBoundary: (event) => {
+          const match = script.slice(event.charIndex).match(/^\S+/);
+          if (match) {
+            setPreviewActiveWord(match[0]);
+          }
+        },
+        onEnd: () => {
+          setIsPlayingVoiceoverPreview(false);
+          setPreviewActiveWord(null);
+        },
+        onError: () => {
+          setIsPlayingVoiceoverPreview(false);
+          setPreviewActiveWord(null);
+        },
+      });
+    }
   };
 
   // Main Action: Generate Video
@@ -228,6 +304,7 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
         product: selectedProduct,
         selectedImages,
         aspectRatio,
+        generationMode,
         musicMood,
         enableVoiceover,
         voiceTone,
@@ -587,11 +664,113 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
             )}
           </div>
 
-          {/* STEP 2: Choose Video Format */}
+          {/* STEP 2: Choose Commercial Engine Mode */}
+          <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-lg space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2">
+                <span className="w-6 h-6 rounded-lg bg-red-600/20 text-red-400 font-black text-xs flex items-center justify-center border border-red-500/30">
+                  2
+                </span>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Select Video Generator Mode
+                </h3>
+              </div>
+              <span className="text-[10px] font-bold text-slate-400 bg-slate-800/80 px-2.5 py-0.5 rounded-full border border-slate-700">
+                2 Synchronized Engines
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              {/* Mode 1: Card-Style Commercial */}
+              <button
+                type="button"
+                onClick={() => setGenerationMode('mode1_card')}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                  generationMode === 'mode1_card'
+                    ? 'bg-blue-950/25 border-blue-500 text-white shadow-xl shadow-blue-950/40 ring-1 ring-blue-500/50'
+                    : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-blue-600/20 flex items-center justify-center text-blue-400 border border-blue-500/30">
+                      <Layers className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                      Mode 1 · Card Frame
+                    </span>
+                  </div>
+                  <div className="text-sm font-black text-white">Card-Style Commercial</div>
+                  <div className="text-xs font-mono text-blue-400 font-bold mt-0.5">
+                    Glassmorphism Card + Ambient Blur
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                    Signature floating card layout with ambient backdrop blur, crisp product card framing, and 100% voiceover-synced zero-lag typography subtitles.
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-800/60 flex flex-wrap gap-1 text-[10px] text-slate-500">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">Zero-Lag Subtitles</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">Ambient Blur</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">60 FPS</span>
+                </div>
+                {generationMode === 'mode1_card' && (
+                  <div className="absolute top-3 right-3 w-4 h-4 rounded-full bg-blue-500 flex items-center justify-center shadow-md shadow-blue-500/50">
+                    <Check className="w-2.5 h-2.5 text-white" />
+                  </div>
+                )}
+              </button>
+
+              {/* Mode 2: Cinematic 3D Studio Commercial (NEW) */}
+              <button
+                type="button"
+                onClick={() => setGenerationMode('mode2_cinematic')}
+                className={`p-4 rounded-xl border text-left transition-all cursor-pointer relative flex flex-col justify-between ${
+                  generationMode === 'mode2_cinematic'
+                    ? 'bg-gradient-to-br from-amber-950/25 via-red-950/20 to-slate-950 border-amber-500 text-white shadow-xl shadow-amber-950/40 ring-1 ring-amber-500/50'
+                    : 'bg-slate-950/80 border-slate-800 text-slate-400 hover:text-white hover:border-slate-700'
+                }`}
+              >
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="w-8 h-8 rounded-lg bg-amber-500/20 flex items-center justify-center text-amber-400 border border-amber-500/30">
+                      <Sparkles className="w-4 h-4" />
+                    </div>
+                    <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+                      Mode 2 · Full-Frame Studio
+                    </span>
+                  </div>
+                  <div className="text-sm font-black text-white flex items-center gap-1.5">
+                    <span>Cinematic Commercial</span>
+                    <span className="text-[9px] font-black uppercase px-1.5 py-0.2 bg-gradient-to-r from-red-500 to-amber-500 text-white rounded">NEW</span>
+                  </div>
+                  <div className="text-xs font-mono text-amber-400 font-bold mt-0.5">
+                    3D Volumetric Studio + Rim Light
+                  </div>
+                  <p className="text-[11px] text-slate-400 mt-2 leading-relaxed">
+                    Full-bleed dark volumetric studio. Automatically removes white photo backgrounds so the product floats in 3D with dramatic rim lighting, reflective floor, specular light sweeps, smooth camera push-in, and official DBUY Store outro.
+                  </p>
+                </div>
+                <div className="mt-3 pt-2 border-t border-slate-800/60 flex flex-wrap gap-1 text-[10px] text-slate-500">
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-amber-400/90 font-medium">Auto BG Cutout</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">Floor Reflection</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">Rim Light</span>
+                  <span className="px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800">DBUY Outro</span>
+                </div>
+                {generationMode === 'mode2_cinematic' && (
+                  <div className="absolute top-3 right-3 w-4 h-4 rounded-full bg-amber-500 flex items-center justify-center shadow-md shadow-amber-500/50">
+                    <Check className="w-2.5 h-2.5 text-white" />
+                  </div>
+                )}
+              </button>
+            </div>
+          </div>
+
+          {/* STEP 3: Choose Video Format */}
           <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-lg space-y-4">
             <div className="flex items-center space-x-2">
               <span className="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-400 font-black text-xs flex items-center justify-center border border-blue-500/30">
-                2
+                3
               </span>
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">
                 Choose Video Format
@@ -665,11 +844,11 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
             </div>
           </div>
 
-          {/* STEP 3: Audio & Narration Options */}
+          {/* STEP 4: Audio & Narration Options */}
           <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-lg space-y-4">
             <div className="flex items-center space-x-2">
               <span className="w-6 h-6 rounded-lg bg-blue-600/20 text-blue-400 font-black text-xs flex items-center justify-center border border-blue-500/30">
-                3
+                4
               </span>
               <h3 className="text-sm font-bold text-white uppercase tracking-wider">
                 Soundtrack & Narration Settings
@@ -760,7 +939,7 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
             </div>
           </div>
 
-          {/* STEP 4: Primary Action Button */}
+          {/* STEP 5: Primary Action Button */}
           <div className="space-y-3">
             <button
               onClick={handleGenerateVideo}
@@ -770,7 +949,9 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                   ? 'bg-blue-600/50 text-white cursor-wait'
                   : remainingQuota === 0
                   ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
-                  : 'bg-gradient-to-r from-red-600 via-rose-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white shadow-red-950/50 hover:shadow-red-600/30'
+                  : generationMode === 'mode2_cinematic'
+                  ? 'bg-gradient-to-r from-amber-600 via-red-600 to-rose-700 hover:from-amber-500 hover:to-rose-600 text-white shadow-amber-950/50 hover:shadow-red-600/30'
+                  : 'bg-gradient-to-r from-blue-600 via-indigo-600 to-red-600 hover:from-blue-500 hover:to-red-500 text-white shadow-blue-950/50 hover:shadow-blue-600/30'
               }`}
             >
               {isGenerating ? (
@@ -786,7 +967,9 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
               ) : (
                 <>
                   <Sparkles className="w-5 h-5 text-yellow-300" />
-                  <span>Generate Pro Ad ({remainingQuota} / {quota.maxDaily} Free Generations Left Today)</span>
+                  <span>
+                    Generate {generationMode === 'mode2_cinematic' ? 'Mode 2: 3D Commercial' : 'Mode 1: Card Commercial'} ({remainingQuota} / {quota.maxDaily} Free Generations Left Today)
+                  </span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}
@@ -858,6 +1041,70 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                   loop
                   className="w-full h-full object-contain"
                 />
+              ) : isPlayingVoiceoverPreview ? (
+                /* Live Zero-Lag Spoken Subtitle & Visual Synchronization Preview */
+                <div className="relative w-full h-full flex flex-col justify-between p-5 bg-gradient-to-br from-slate-900 via-slate-950 to-blue-950/50 text-center select-none overflow-hidden">
+                  <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_35%,rgba(56,189,248,0.18),transparent_70%)] pointer-events-none" />
+
+                  {/* Top Live Badge */}
+                  <div className="relative z-10 flex items-center justify-between">
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-blue-500/20 text-blue-300 text-[10px] font-black uppercase tracking-wider border border-blue-500/30">
+                      <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+                      Live Audio Sync
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400 font-bold bg-slate-900/80 px-2 py-0.5 rounded-md border border-slate-800">
+                      Scene {(previewActiveSceneIdx ?? 0) + 1} / {activePlan?.scenes.length || 4}
+                    </span>
+                  </div>
+
+                  {/* Center Visual Product Showcase */}
+                  <div className="relative z-10 my-auto space-y-3">
+                    {selectedProduct?.image && (
+                      <div className="w-24 h-24 mx-auto rounded-2xl overflow-hidden shadow-2xl border-2 border-blue-500/40 ring-4 ring-blue-500/10">
+                        <CachedImage
+                          src={selectedProduct.image}
+                          alt="Product Preview"
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                    )}
+                    <div className="text-xs sm:text-sm font-black text-white uppercase tracking-wider px-2">
+                      {activePlan?.scenes[previewActiveSceneIdx ?? 0]?.headline || selectedProduct?.title}
+                    </div>
+                  </div>
+
+                  {/* Bottom Real-time Word-by-Word Highlighted Subtitle Pill */}
+                  <div className="relative z-10 p-3 rounded-xl bg-slate-950/90 border border-blue-500/40 backdrop-blur-md shadow-2xl">
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1.5 flex items-center justify-center gap-1.5">
+                      <Mic className="w-3 h-3 text-purple-400 animate-pulse" />
+                      <span>Zero-Lag Subtitles</span>
+                    </div>
+                    <div className="text-xs sm:text-sm font-extrabold text-white leading-relaxed flex flex-wrap items-center justify-center gap-1.5">
+                      {((activePlan?.scenes[previewActiveSceneIdx ?? 0]?.voiceoverLine ||
+                        activePlan?.fullVoiceoverScript ||
+                        '')
+                        .split(/\s+/)
+                        .filter(Boolean))
+                        .map((word, wIdx) => {
+                          const cleanWord = word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                          const cleanActive = (previewActiveWord || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                          const isSpoken = Boolean(cleanActive && cleanWord === cleanActive);
+                          return (
+                            <span
+                              key={wIdx}
+                              className={`transition-all duration-150 px-1.5 py-0.5 rounded-md ${
+                                isSpoken
+                                  ? 'bg-blue-500 text-white shadow-lg shadow-blue-500/50 scale-110 font-black'
+                                  : 'text-slate-300'
+                              }`}
+                            >
+                              {word}
+                            </span>
+                          );
+                        })}
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div className="p-6 text-center space-y-3">
                   <div className="w-12 h-12 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center mx-auto text-slate-600">
@@ -881,6 +1128,12 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
               <div className="space-y-3 pt-2">
                 <div className="grid grid-cols-2 gap-2 text-[11px] text-slate-400 bg-slate-950 p-2.5 rounded-xl border border-slate-800/80">
                   <div>
+                    <span className="text-slate-500">Mode:</span>{' '}
+                    <strong className={generationResult.generationMode === 'mode2_cinematic' ? 'text-amber-400 font-bold' : 'text-blue-400 font-bold'}>
+                      {generationResult.generationMode === 'mode2_cinematic' ? 'Mode 2 · 3D Studio' : 'Mode 1 · Card'}
+                    </strong>
+                  </div>
+                  <div>
                     <span className="text-slate-500">Format:</span>{' '}
                     <strong className="text-white">
                       {generationResult.aspectRatio} (
@@ -897,14 +1150,14 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                       {(generationResult.result.file.size / (1024 * 1024)).toFixed(2)} MB
                     </strong>
                   </div>
-                  <div>
-                    <span className="text-slate-500">Script AI:</span>{' '}
+                  <div className="col-span-2">
+                    <span className="text-slate-500">Engine AI:</span>{' '}
                     <strong className="text-emerald-400">
                       {activePlan?.modelUsed === 'gemini-2.5-pro'
-                        ? 'Gemini 2.5 Pro'
+                        ? 'Gemini 2.5 Pro Vision'
                         : activePlan?.modelUsed === 'gemini-2.5-flash'
-                        ? 'Gemini 2.5 Flash'
-                        : 'Free Engine'}
+                        ? 'Gemini 2.5 Flash Vision'
+                        : 'Free-Tier Vision'}
                     </strong>
                   </div>
                 </div>
@@ -1037,34 +1290,56 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                   </span>
                 </div>
 
-                {activePlan.scenes.map((scene, i) => (
-                  <div
-                    key={i}
-                    className="p-2.5 bg-slate-950 rounded-xl border border-slate-800/80 text-xs space-y-1"
-                  >
-                    <div className="flex items-center justify-between">
-                      <span className="font-black text-blue-400 text-[11px]">
-                        Scene {scene.sceneNumber}: {scene.roleLabel}
-                      </span>
-                      <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-purple-300">
-                        {scene.durationSec}s · {scene.cameraMotion.replace('_', ' ')}
-                      </span>
+                {activePlan.scenes.map((scene, i) => {
+                  const isCurrentActive = isPlayingVoiceoverPreview && previewActiveSceneIdx === i;
+                  return (
+                    <div
+                      key={i}
+                      className={`p-2.5 rounded-xl border transition-all duration-200 text-xs space-y-1 ${
+                        isCurrentActive
+                          ? 'bg-blue-950/40 border-blue-500 ring-2 ring-blue-500/20 shadow-lg'
+                          : 'bg-slate-950 border-slate-800/80'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-black text-blue-400 text-[11px] flex items-center gap-1.5">
+                          {isCurrentActive && (
+                            <span className="w-2 h-2 rounded-full bg-blue-400 animate-ping" />
+                          )}
+                          <span>Scene {scene.sceneNumber}: {scene.roleLabel}</span>
+                        </span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-slate-900 border border-slate-800 text-purple-300">
+                          {scene.durationSec}s · {scene.cameraMotion.replace('_', ' ')}
+                        </span>
+                      </div>
+                      <div className="font-extrabold text-white text-xs">{scene.headline}</div>
+                      <div className="text-[11px] text-slate-400">{scene.subheadline}</div>
+                      {scene.calloutBadge && (
+                        <div className="inline-block mt-0.5 px-2 py-0.5 rounded bg-blue-900/40 text-blue-300 border border-blue-700/40 text-[10px] font-medium">
+                          Badge: {scene.calloutBadge}
+                        </div>
+                      )}
+                      {scene.voiceoverLine && (
+                        <div className="text-[10px] italic flex items-center gap-1 mt-1 flex-wrap">
+                          <Mic className={`w-2.5 h-2.5 shrink-0 ${isCurrentActive ? 'text-blue-400 animate-pulse' : 'text-purple-400'}`} />
+                          {scene.voiceoverLine.split(/\s+/).filter(Boolean).map((word, wIdx) => {
+                            const cleanW = word.replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                            const cleanActive = (previewActiveWord || '').replace(/[^a-zA-Z0-9]/g, '').toLowerCase();
+                            const isSpoken = isCurrentActive && Boolean(cleanActive && cleanW === cleanActive);
+                            return (
+                              <span
+                                key={wIdx}
+                                className={isSpoken ? 'text-blue-300 font-black bg-blue-500/30 px-1 py-0.5 rounded border border-blue-400/40' : 'text-slate-400'}
+                              >
+                                {word}
+                              </span>
+                            );
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <div className="font-extrabold text-white text-xs">{scene.headline}</div>
-                    <div className="text-[11px] text-slate-400">{scene.subheadline}</div>
-                    {scene.calloutBadge && (
-                      <div className="inline-block mt-0.5 px-2 py-0.5 rounded bg-blue-900/40 text-blue-300 border border-blue-700/40 text-[10px] font-medium">
-                        Badge: {scene.calloutBadge}
-                      </div>
-                    )}
-                    {scene.voiceoverLine && (
-                      <div className="text-[10px] text-slate-500 italic flex items-center gap-1 mt-1">
-                        <Mic className="w-2.5 h-2.5 text-purple-400 shrink-0" />
-                        <span>&quot;{scene.voiceoverLine}&quot;</span>
-                      </div>
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
 
               {/* Voiceover preview audio button */}
@@ -1084,19 +1359,30 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
           )}
 
           {/* YouTube SEO Copy Hub (Title, Description, Tags) */}
-          {activePlan && (
+          {selectedProduct && (
             <div className="rounded-2xl bg-slate-900 border border-slate-800 p-5 shadow-lg space-y-3">
-              <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Tag className="w-3.5 h-3.5 text-red-400" />
-                <span>YouTube Upload Metadata</span>
-              </h4>
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                  <Tag className="w-3.5 h-3.5 text-red-400" />
+                  <span>YouTube Upload Metadata</span>
+                </h4>
+                <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20">
+                  Clickable Hyperlink Ready
+                </span>
+              </div>
 
               {/* Title */}
               <div className="space-y-1">
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
                   <span className="font-semibold">Suggested Title:</span>
                   <button
-                    onClick={() => handleCopy(activePlan.youtubeTitle, 'title')}
+                    onClick={() =>
+                      handleCopy(
+                        activePlan?.youtubeTitle ||
+                          `${selectedProduct.title.slice(0, 42)} — Official Showcase ⚡ #Shorts #DBUY`,
+                        'title'
+                      )
+                    }
                     className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-[10px] font-bold cursor-pointer"
                   >
                     {copiedField === 'title' ? (
@@ -1113,16 +1399,25 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                   </button>
                 </div>
                 <div className="p-2.5 bg-slate-950 rounded-xl border border-slate-800 text-xs text-white font-medium">
-                  {activePlan.youtubeTitle}
+                  {activePlan?.youtubeTitle ||
+                    `${selectedProduct.title.slice(0, 42)} — Official Showcase ⚡ #Shorts #DBUY`}
                 </div>
               </div>
 
-              {/* Description */}
-              <div className="space-y-1">
+              {/* Description (Concise YouTuber-Style & Clickable Link) */}
+              <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
-                  <span className="font-semibold">Description & Store Link:</span>
+                  <span className="font-semibold flex items-center gap-1.5">
+                    <span>YouTuber Description (5 Clean Lines):</span>
+                  </span>
                   <button
-                    onClick={() => handleCopy(activePlan.youtubeDescription, 'desc')}
+                    onClick={() =>
+                      handleCopy(
+                        activePlan?.youtubeDescription ||
+                          buildYouTuberProductDescription(selectedProduct),
+                        'desc'
+                      )
+                    }
                     className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-[10px] font-bold cursor-pointer"
                   >
                     {copiedField === 'desc' ? (
@@ -1140,10 +1435,22 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                 </div>
                 <textarea
                   readOnly
-                  rows={3}
-                  value={activePlan.youtubeDescription}
-                  className="w-full p-2 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-300 font-mono resize-none focus:outline-none"
+                  rows={5}
+                  value={
+                    activePlan?.youtubeDescription ||
+                    buildYouTuberProductDescription(selectedProduct)
+                  }
+                  className="w-full p-2.5 bg-slate-950 rounded-xl border border-slate-800 text-[11px] text-slate-200 font-mono leading-relaxed resize-none focus:outline-none"
                 />
+
+                {/* YouTube Shorts External Link Notice */}
+                <div className="p-2.5 rounded-xl bg-amber-950/20 border border-amber-800/40 text-[11px] text-amber-300/90 leading-relaxed flex items-start gap-2">
+                  <Info className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold text-amber-200">YouTube Shorts Tip: </span>
+                    For <strong>YouTube Shorts</strong> (where YouTube disables external links in descriptions), attach a standard YouTube <strong>Related Video</strong> that contains this description so viewers can click straight through to the product page.
+                  </div>
+                </div>
               </div>
 
               {/* Tags */}
@@ -1151,9 +1458,17 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                 <div className="flex items-center justify-between text-[11px] text-slate-400">
                   <span className="font-semibold">Hashtags & Tags:</span>
                   <button
-                    onClick={() =>
-                      handleCopy(activePlan.youtubeTags.map((t) => `#${t}`).join(' '), 'tags')
-                    }
+                    onClick={() => {
+                      const tags =
+                        activePlan?.youtubeTags || [
+                          'tech',
+                          'gadgets',
+                          'dbuystore',
+                          'shorts',
+                          (selectedProduct.category || '').toLowerCase(),
+                        ].filter(Boolean);
+                      handleCopy(tags.map((t) => `#${t}`).join(' '), 'tags');
+                    }}
                     className="text-blue-400 hover:text-blue-300 flex items-center gap-1 text-[10px] font-bold cursor-pointer"
                   >
                     {copiedField === 'tags' ? (
@@ -1170,7 +1485,15 @@ export const YouTubeVideoStudio: React.FC<YouTubeVideoStudioProps> = ({ initialP
                   </button>
                 </div>
                 <div className="flex flex-wrap gap-1">
-                  {activePlan.youtubeTags.map((t, idx) => (
+                  {(
+                    activePlan?.youtubeTags || [
+                      'tech',
+                      'gadgets',
+                      'dbuystore',
+                      'shorts',
+                      (selectedProduct.category || '').toLowerCase(),
+                    ].filter(Boolean)
+                  ).map((t, idx) => (
                     <span
                       key={idx}
                       className="px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-[10px] text-slate-400"

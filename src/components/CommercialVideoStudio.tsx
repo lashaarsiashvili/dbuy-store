@@ -85,6 +85,8 @@ const MOTION_STYLE_BADGE_MAP: Record<CommercialMotionStyle, string> = {
   whip_pan: 'Whip-Pan',
   tilt_3d: '3D Tilt',
   light_sweep: 'Light Sweep',
+  parallax_float: 'Parallax Float',
+  dof_blur_whip: 'Depth Blur Whip',
 };
 
 export const CommercialVideoStudio: React.FC<CommercialVideoStudioProps> = ({

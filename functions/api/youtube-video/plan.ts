@@ -26,13 +26,22 @@ function buildFallbackYouTubePlan(
   price: string,
   origPrice: string,
   features: string[],
-  _aspectRatio: string
+  _aspectRatio: string,
+  productId?: string
 ) {
   const f1 = features[0] || 'Aerospace Aluminum & Precision Finish';
   const f2 = features[1] || 'Engineered for Everyday Peak Performance';
   const f3 = features[2] || 'Uncompromising Build & Long-Term Reliability';
   const priceDisplay = price ? `$${price}` : 'Special Price';
   const discountTag = computeDiscountTag(price, origPrice);
+  const productUrl = productId ? `https://www.dbuystore.com/product/${productId}` : 'https://www.dbuystore.com';
+  const youtubeDescription = [
+    `The ultimate ${title.slice(0, 45)} is finally here! 🔥`,
+    '👉 Get yours here:',
+    productUrl,
+    `⚡ Only ${priceDisplay} (${discountTag}) • ${f1.slice(0, 32)}`,
+    '#tech #gadgets #dbuystore #shorts #shopping',
+  ].join('\n');
 
   const scenes = [
     {
@@ -96,7 +105,7 @@ function buildFallbackYouTubePlan(
     ratingScore: 4.9,
     ratingReviewCount: 1280,
     youtubeTitle: `${title.slice(0, 45)} — Official Showcase ⚡ #Shorts #DBUY`,
-    youtubeDescription: `Discover ${title}. Engineered for modern lifestyle, work, and everyday excellence.\n\n🔥 Order now at DBUY Store: https://dbuystore.com\n💰 Price: ${priceDisplay} (${discountTag})\n\nKey Specs:\n• ${f1}\n• ${f2}\n• ${f3}\n\n#dbuy #gadgets #tech #shopping #shorts`,
+    youtubeDescription,
     youtubeTags: ['dbuy', 'dbuystore', 'tech', 'gadgets', 'shorts', 'review', 'shopping'],
     ctaText: 'Shop Now at DBUYStore.com',
     fullVoiceoverScript: `Upgrade your daily setup with ${title.slice(0, 35)}. Engineered with ${f1.slice(0, 40)} for peak performance. Grab yours now at DBUY Store for only ${priceDisplay}.`,
@@ -112,6 +121,7 @@ export async function onRequestPost(context: any) {
     const env = context.env || {};
     const body = await req.json().catch(() => ({}));
     const product = body.product || {};
+    const productId = String(product.id || '').trim();
     const title = String(product.title || '').trim().slice(0, 250);
     const price = String(product.price ?? '').trim();
     const origPrice = String(product.origPrice ?? '').trim();
@@ -137,7 +147,7 @@ export async function onRequestPost(context: any) {
 
     const apiKey = env.GEMINI_API_KEY || env.VITE_GEMINI_API_KEY;
     if (!apiKey) {
-      const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio);
+      const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio, productId);
       return new Response(
         JSON.stringify({ success: true, plan: fallbackPlan, modelUsed: 'deterministic-fallback' }),
         { status: 200, headers: CORS_HEADERS }
@@ -152,6 +162,10 @@ export async function onRequestPost(context: any) {
         },
       },
     });
+
+    const directProductUrl = productId
+      ? `https://www.dbuystore.com/product/${productId}`
+      : 'https://www.dbuystore.com';
 
     const promptText = `You are an elite motion-graphics commercial director creating a viral, studio-grade 15–18 second promotional ad for YouTube (${aspectRatio === '9:16' ? 'YouTube Shorts (9:16 vertical)' : 'Standard YouTube (16:9 widescreen)'}).
 
@@ -188,7 +202,12 @@ Analyze the product and return a structured JSON commercial plan:
    - cameraChoreography: one of ["tilt_3d", "parallax_float", "light_sweep", "dof_blur_whip", "zoom_punch"]
 7. fullVoiceoverScript: A seamless 35–48 word English commercial script combining the spoken sentences.
 8. youtubeTitle: Catchy YouTube title (under 70 chars) with hashtags (e.g. "${title.slice(0, 35)} — Studio Commercial ⚡ #Shorts #DBUY").
-9. youtubeDescription: Engaging description with store link https://dbuystore.com and bullet points.
+9. youtubeDescription: Strictly 5 clean lines for YouTube's clickable hyperlink parser (no walls of text):
+   Line 1: Attention-grabbing 1-sentence YouTuber hook + emoji (e.g. "The ultimate ${title.slice(0, 30)} is finally here! 🔥").
+   Line 2: "👉 Get yours here:"
+   Line 3: "${directProductUrl}" (isolated on its own empty line with NO trailing punctuation)
+   Line 4: "⚡ Only $${price} (${computeDiscountTag(price, origPrice)}) • ${features[0] ? features[0].slice(0, 30) : 'Premium Craft'}"
+   Line 5: 3-5 hashtags (e.g. "#tech #gadgets #dbuystore #shorts")
 10. youtubeTags: Array of 6-8 relevant tags.
 11. ctaText: Call-to-action button label ("Shop Now at DBUYStore.com").`;
 
@@ -306,7 +325,7 @@ Analyze the product and return a structured JSON commercial plan:
           '[YOUTUBE-STUDIO-CF] gemini-2.5-flash failed, using fallback:',
           flashErr?.message || flashErr
         );
-        const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio);
+        const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio, productId);
         return new Response(
           JSON.stringify({ success: true, plan: fallbackPlan, modelUsed: 'deterministic-fallback' }),
           { status: 200, headers: CORS_HEADERS }
@@ -316,7 +335,7 @@ Analyze the product and return a structured JSON commercial plan:
 
     const rawText = (geminiResponse?.text || '').trim();
     if (!rawText) {
-      const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio);
+      const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio, productId);
       return new Response(
         JSON.stringify({ success: true, plan: fallbackPlan, modelUsed: 'deterministic-fallback' }),
         { status: 200, headers: CORS_HEADERS }
@@ -327,7 +346,7 @@ Analyze the product and return a structured JSON commercial plan:
     try {
       parsed = JSON.parse(rawText);
     } catch {
-      const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio);
+      const fallbackPlan = buildFallbackYouTubePlan(title, price, origPrice, features, aspectRatio, productId);
       return new Response(
         JSON.stringify({ success: true, plan: fallbackPlan, modelUsed: 'deterministic-fallback' }),
         { status: 200, headers: CORS_HEADERS }
@@ -394,10 +413,23 @@ Analyze the product and return a structured JSON commercial plan:
       youtubeTitle: String(
         parsed.youtubeTitle || `${title.slice(0, 40)} — Official Showcase ⚡ #Shorts #DBUY`
       ).trim().slice(0, 100),
-      youtubeDescription: String(
-        parsed.youtubeDescription ||
-          `Discover ${title} at DBUY Store: https://dbuystore.com\nPrice: $${price} (${discountTag})`
-      ).trim(),
+      youtubeDescription: (() => {
+        const raw = String(parsed.youtubeDescription || '').trim();
+        // If Gemini followed the instructions and has the standalone URL, keep it, otherwise format cleanly
+        if (raw && raw.includes(directProductUrl) && raw.split('\n').length <= 7) {
+          return raw;
+        }
+        const hook = `The ultimate ${title.slice(0, 42)} is finally here! 🔥`;
+        const f1 = (features[0] || 'Premium Engineering').slice(0, 32);
+        const f2 = (features[1] || 'Studio-Grade Finish').slice(0, 32);
+        return [
+          hook,
+          '👉 Get yours here:',
+          directProductUrl,
+          `⚡ Only $${price || 'Special Price'} (${discountTag}) • ${f1} • ${f2}`,
+          '#tech #gadgets #dbuystore #shorts #trending',
+        ].join('\n');
+      })(),
       youtubeTags: Array.isArray(parsed.youtubeTags)
         ? parsed.youtubeTags.map((t: unknown) => String(t).trim()).filter(Boolean).slice(0, 10)
         : ['tech', 'dbuy', 'shorts', 'shopping'],

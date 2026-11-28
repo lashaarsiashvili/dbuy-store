@@ -84,30 +84,28 @@ export function buildYouTubeShortDescription(
   product: Product,
   isKa = false
 ): string {
-  const title =
-    (isKa ? product.titleKa || product.title : product.title) || 'Featured Essential';
-  const rawDesc = stripHtmlClean(
-    isKa ? product.descriptionKa || product.description : product.description
-  );
-  const shortDesc =
-    rawDesc.length > 420 ? `${rawDesc.slice(0, 417).trim()}…` : rawDesc;
+  const title = (
+    (isKa ? product.titleKa || product.title : product.title) || 'Featured Essential'
+  ).slice(0, 48).trim();
+
+  const hook = isKa
+    ? `ნახეთ ეს საოცარი ${title}! 🔥`
+    : `The ultimate ${title} is finally here! 🔥`;
+
+  const ctaLine = isKa ? `👉 შეიძინეთ აქ:` : `👉 Get yours here:`;
+  const productUrl = `https://www.dbuystore.com/product/${product.id}`;
+
+  const priceNum = Number(product.price) > 0 ? `$${Number(product.price).toFixed(2)}` : 'Special Price';
   const highlights = extractTopProductHighlights(product, isKa);
-  const bulletBlock = highlights.slice(0, 3).map((h) => `✓ ${h}`).join('\n');
-  const priceLine = buildLuxurySocialPricingLine(product, isKa);
-  const productUrl = `https://www.dbuystore.com/b/${product.id}`;
+  const f1 = highlights[0] ? ` • ${highlights[0].slice(0, 30)}` : '';
+  const f2 = highlights[1] ? ` • ${highlights[1].slice(0, 30)}` : '';
+  const highlightLine = `⚡ Only ${priceNum}${f1}${f2}`;
 
-  const parts = [
-    title,
-    shortDesc,
-    bulletBlock,
-    priceLine,
-    isKa
-      ? `🛒 შეუკვეთეთ აქ: ${productUrl}`
-      : `🛒 Shop now at DBuy Store: ${productUrl}`,
-    `#Shorts #DBUYStore #TechFinds #SmartGadgets #CuratedLiving`,
-  ].filter(Boolean);
+  const categoryTag = (product.category || 'tech').toLowerCase().replace(/[^a-z0-9]/g, '');
+  const tagsLine = `#${categoryTag} #gadgets #dbuystore #shorts #trending`;
 
-  return parts.join('\n\n').slice(0, MAX_YOUTUBE_DESCRIPTION_LENGTH);
+  // Exactly 5 clean lines, isolated URL on line 3 with no trailing punctuation for YouTube clickable blue link
+  return `${hook}\n${ctaLine}\n${productUrl}\n${highlightLine}\n${tagsLine}`;
 }
 
 export function buildYouTubeShortTags(product: Product): string {

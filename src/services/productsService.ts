@@ -25,8 +25,17 @@ export const ProductsManager = {
         const list = Array.isArray(data) ? data : (data?.products || data?.results || []);
         const total = typeof data?.total === 'number' ? data.total : (Array.isArray(list) ? list.length : 0);
         if (Array.isArray(list)) {
+          const viewsMap: Record<string, number> = data?.product_views || {};
+          const normalized = list.map(p => {
+            const parsed = normalizeProductArrays(p);
+            const fromMap = viewsMap[String(parsed.id)] ?? (parsed.customSlug ? viewsMap[String(parsed.customSlug)] : undefined);
+            if (typeof fromMap === 'number' && fromMap > (parsed.views || 0)) {
+              parsed.views = fromMap;
+            }
+            return parsed;
+          });
           return {
-            products: list.map(normalizeProductArrays),
+            products: normalized,
             total
           };
         }
