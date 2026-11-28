@@ -87,12 +87,33 @@ export async function requestYouTubeAdPlan(
     console.warn('[YOUTUBE-API] Image preparation for Gemini Vision skipped:', imgErr);
   }
 
+  const extractedFeatures: string[] = [];
+  if (Array.isArray(product.features) && product.features.length > 0) {
+    extractedFeatures.push(...product.features.map((f) => String(f).trim()).filter(Boolean));
+  } else if (typeof (product.features as any) === 'string') {
+    try {
+      const parsed = JSON.parse(product.features as any);
+      if (Array.isArray(parsed)) {
+        extractedFeatures.push(...parsed.map((f) => String(f).trim()).filter(Boolean));
+      }
+    } catch {
+      extractedFeatures.push(String(product.features));
+    }
+  }
+  if (extractedFeatures.length === 0 && product.description) {
+    const lines = product.description
+      .split(/[\n\r•\-\*]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 10 && s.length < 120);
+    extractedFeatures.push(...lines.slice(0, 5));
+  }
+
   const payload = {
     product: {
       title: product.title,
       price: product.price,
       origPrice: product.origPrice,
-      features: product.features || [],
+      features: extractedFeatures,
       images: selectedImages.slice(0, 6),
       imageParts,
     },

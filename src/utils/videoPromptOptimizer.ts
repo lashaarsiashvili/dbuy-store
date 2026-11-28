@@ -25,7 +25,9 @@ export type CommercialMotionStyle =
   | 'whip_pan'
   | 'tilt_3d'
   | 'zoom_punch'
-  | 'light_sweep';
+  | 'light_sweep'
+  | 'parallax_float'
+  | 'dof_blur_whip';
 
 export type CommercialResolutionPreset = '1080p' | '720p';
 
@@ -140,15 +142,18 @@ export function normalizeMotionStyle(
   sceneIndex = 0
 ): CommercialMotionStyle {
   const val = (raw || '').trim().toLowerCase();
-  if (val === 'whip_pan' || val === 'smooth_pan_right' || val === 'dof_blur_whip') return 'whip_pan';
-  if (val === 'tilt_3d' || val === 'gentle_orbit' || val === 'parallax_float') return 'tilt_3d';
+  if (val === 'dof_blur_whip') return 'dof_blur_whip';
+  if (val === 'parallax_float') return 'parallax_float';
+  if (val === 'whip_pan' || val === 'smooth_pan_right') return 'whip_pan';
+  if (val === 'tilt_3d' || val === 'gentle_orbit') return 'tilt_3d';
   if (val === 'zoom_punch' || val === 'slow_zoom_in') return 'zoom_punch';
   if (val === 'light_sweep' || val === 'macro_reveal') return 'light_sweep';
   const cycle: CommercialMotionStyle[] = [
-    'zoom_punch',
-    'whip_pan',
     'tilt_3d',
     'light_sweep',
+    'parallax_float',
+    'dof_blur_whip',
+    'zoom_punch',
   ];
   return cycle[sceneIndex % cycle.length];
 }

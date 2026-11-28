@@ -199,7 +199,18 @@ function saveUploadsMap(): void {
   }
 }
 
-// Serve uploaded product photos directly
+// Serve uploaded product photos directly with CORS headers for Canvas and Motion Engine
+app.use('/uploads', (req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.header('Access-Control-Allow-Headers', '*');
+  res.header('Cross-Origin-Resource-Policy', 'cross-origin');
+  if (req.method === 'OPTIONS') {
+    res.sendStatus(204);
+    return;
+  }
+  next();
+});
 app.use('/uploads', express.static(UPLOADS_DIR));
 app.use('/uploads', express.static(PUBLIC_UPLOADS_DIR));
 
@@ -8635,6 +8646,37 @@ app.post('/api/youtube-video/plan', async (req, res) => {
       : Array.isArray(body.imageParts)
       ? body.imageParts
       : [];
+
+    if (imageParts.length === 0 && images.length > 0) {
+      for (const imgUrl of images.slice(0, 2)) {
+        try {
+          let buffer: Buffer | null = null;
+          let mime = 'image/jpeg';
+          if (imgUrl.startsWith('/uploads/')) {
+            const relName = imgUrl.replace('/uploads/', '');
+            const p1 = path.join(UPLOADS_DIR, relName);
+            const p2 = path.join(PUBLIC_UPLOADS_DIR, relName);
+            if (fs.existsSync(p1)) buffer = fs.readFileSync(p1);
+            else if (fs.existsSync(p2)) buffer = fs.readFileSync(p2);
+            if (relName.endsWith('.png')) mime = 'image/png';
+            else if (relName.endsWith('.webp')) mime = 'image/webp';
+          } else if (imgUrl.startsWith('http://') || imgUrl.startsWith('https://')) {
+            const fetchRes = await fetch(imgUrl, { signal: AbortSignal.timeout(4000) });
+            if (fetchRes.ok) {
+              const ab = await fetchRes.arrayBuffer();
+              buffer = Buffer.from(ab);
+              mime = fetchRes.headers.get('content-type') || 'image/jpeg';
+            }
+          }
+          if (buffer && buffer.length > 0 && buffer.length < 5 * 1024 * 1024) {
+            imageParts.push({ mimeType: mime, data: buffer.toString('base64') });
+          }
+        } catch (readErr) {
+          console.warn('[YOUTUBE-STUDIO-SERVER] Could not load image for Vision analysis:', readErr);
+        }
+      }
+    }
+
     const aspectRatio = body.aspectRatio === '16:9' ? '16:9' : '9:16';
 
     if (!title) {
@@ -8785,7 +8827,7 @@ Analyze the product and return a structured JSON commercial plan:
       // 1. Try gemini-2.5-pro first
       geminiResponse = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
-        contents: geminiContents.length === 1 ? geminiContents[0].text : geminiContents,
+        contents: { parts: geminiContents },
         config: {
           responseMimeType: 'application/json',
           responseSchema,
@@ -8798,7 +8840,7 @@ Analyze the product and return a structured JSON commercial plan:
       try {
         geminiResponse = await ai.models.generateContent({
           model: 'gemini-2.5-flash',
-          contents: geminiContents.length === 1 ? geminiContents[0].text : geminiContents,
+          contents: { parts: geminiContents },
           config: {
             responseMimeType: 'application/json',
             responseSchema,

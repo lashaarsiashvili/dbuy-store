@@ -279,7 +279,7 @@ Analyze the product and return a structured JSON commercial plan:
       // 1. Try gemini-2.5-pro first
       geminiResponse = await ai.models.generateContent({
         model: 'gemini-2.5-pro',
-        contents: geminiContents.length === 1 ? geminiContents[0].text : geminiContents,
+        contents: { parts: geminiContents },
         config: {
           responseMimeType: 'application/json',
           responseSchema,
@@ -295,7 +295,7 @@ Analyze the product and return a structured JSON commercial plan:
       try {
         geminiResponse = await ai.models.generateContent({
           model: 'gemini-2.5-flash',
-          contents: geminiContents.length === 1 ? geminiContents[0].text : geminiContents,
+          contents: { parts: geminiContents },
           config: {
             responseMimeType: 'application/json',
             responseSchema,

@@ -138,10 +138,12 @@ async function loadImageElement(url: string): Promise<HTMLImageElement | null> {
   const safeUrl = resolveCanvasSafeUrl(url);
   if (!safeUrl) return null;
 
-  const tryLoad = (src: string): Promise<HTMLImageElement | null> =>
+  const tryLoad = (src: string, withCrossOrigin = true): Promise<HTMLImageElement | null> =>
     new Promise((resolve) => {
       const img = new Image();
-      img.crossOrigin = 'anonymous';
+      if (withCrossOrigin) {
+        img.crossOrigin = 'anonymous';
+      }
       const timer = window.setTimeout(() => resolve(null), 10000);
       img.onload = () => {
         window.clearTimeout(timer);
@@ -154,10 +156,14 @@ async function loadImageElement(url: string): Promise<HTMLImageElement | null> {
       img.src = src;
     });
 
-  const primary = await tryLoad(safeUrl);
+  const primary = await tryLoad(safeUrl, true);
   if (primary) return primary;
+  if (safeUrl.startsWith('/')) {
+    const localFallback = await tryLoad(safeUrl, false);
+    if (localFallback) return localFallback;
+  }
   if (safeUrl !== url && /^https?:\/\//i.test(url)) {
-    return tryLoad(url);
+    return tryLoad(url, true);
   }
   return null;
 }
@@ -570,25 +576,45 @@ function renderDynamicStudioBackground(
     ctx.restore();
   }
 
-  // Layer 3: Pulsing Product-Matched Ambient Glow Orbs
-  const orb1X = width * (0.28 + Math.sin(t * 0.85) * 0.14);
-  const orb1Y = height * (0.3 + Math.cos(t * 0.65) * 0.08);
-  const orb1R = Math.max(width, height) * (0.46 + beatPulse * 0.05);
-  const orb1 = ctx.createRadialGradient(orb1X, orb1Y, 10, orb1X, orb1Y, orb1R);
-  orb1.addColorStop(0, rgbStr(accentRgb, 0.34 + beatPulse * 0.08));
-  orb1.addColorStop(0.5, rgbStr(accentRgb, 0.09));
-  orb1.addColorStop(1, rgbStr(accentRgb, 0));
-  ctx.fillStyle = orb1;
+  // Layer 3: Dynamic 4-Node Animated Dark Gradient Mesh & Ambient Aura
+  const mesh1X = width * (0.24 + Math.sin(t * 0.75) * 0.14);
+  const mesh1Y = height * (0.26 + Math.cos(t * 0.6) * 0.09);
+  const mesh1R = Math.max(width, height) * (0.48 + beatPulse * 0.08);
+  const mesh1 = ctx.createRadialGradient(mesh1X, mesh1Y, 12, mesh1X, mesh1Y, mesh1R);
+  mesh1.addColorStop(0, rgbStr(accentRgb, 0.38 + beatPulse * 0.1));
+  mesh1.addColorStop(0.5, rgbStr(accentRgb, 0.09));
+  mesh1.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = mesh1;
   ctx.fillRect(0, 0, width, height);
 
-  const orb2X = width * (0.74 + Math.cos(t * 0.7) * 0.12);
-  const orb2Y = height * (0.68 + Math.sin(t * 0.6) * 0.08);
-  const orb2R = Math.max(width, height) * 0.42;
-  const orb2 = ctx.createRadialGradient(orb2X, orb2Y, 10, orb2X, orb2Y, orb2R);
-  orb2.addColorStop(0, rgbStr(secondaryRgb, 0.24));
-  orb2.addColorStop(0.55, rgbStr(secondaryRgb, 0.06));
-  orb2.addColorStop(1, rgbStr(secondaryRgb, 0));
-  ctx.fillStyle = orb2;
+  const mesh2X = width * (0.76 - Math.cos(t * 0.68) * 0.13);
+  const mesh2Y = height * (0.34 + Math.sin(t * 0.72) * 0.09);
+  const mesh2R = Math.max(width, height) * 0.44;
+  const mesh2 = ctx.createRadialGradient(mesh2X, mesh2Y, 12, mesh2X, mesh2Y, mesh2R);
+  mesh2.addColorStop(0, rgbStr(secondaryRgb, 0.28));
+  mesh2.addColorStop(0.55, rgbStr(secondaryRgb, 0.06));
+  mesh2.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = mesh2;
+  ctx.fillRect(0, 0, width, height);
+
+  const mesh3X = width * (0.3 + Math.cos(t * 0.8) * 0.12);
+  const mesh3Y = height * (0.78 - Math.sin(t * 0.65) * 0.07);
+  const mesh3R = Math.max(width, height) * 0.4;
+  const mesh3 = ctx.createRadialGradient(mesh3X, mesh3Y, 10, mesh3X, mesh3Y, mesh3R);
+  mesh3.addColorStop(0, 'rgba(14, 165, 233, 0.2)');
+  mesh3.addColorStop(0.6, 'rgba(14, 165, 233, 0.03)');
+  mesh3.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = mesh3;
+  ctx.fillRect(0, 0, width, height);
+
+  const mesh4X = width * (0.72 + Math.sin(t * 0.62) * 0.1);
+  const mesh4Y = height * (0.74 + Math.cos(t * 0.68) * 0.08);
+  const mesh4R = Math.max(width, height) * 0.42;
+  const mesh4 = ctx.createRadialGradient(mesh4X, mesh4Y, 10, mesh4X, mesh4Y, mesh4R);
+  mesh4.addColorStop(0, 'rgba(99, 102, 241, 0.18)');
+  mesh4.addColorStop(0.55, 'rgba(99, 102, 241, 0.03)');
+  mesh4.addColorStop(1, 'rgba(0, 0, 0, 0)');
+  ctx.fillStyle = mesh4;
   ctx.fillRect(0, 0, width, height);
 
   // Layer 4: Animated 3D Perspective Studio Grid (lower floor + subtle upper tech grid)
@@ -1041,6 +1067,29 @@ function renderAnimatedProductStage(
     shadowOffsetX = -tiltWave * 36 * scaleFactor;
     shadowOffsetY = 30 * scaleFactor;
     lightSweepProgress = clamp((sceneProgress - 0.1) / 0.8, 0, 1);
+  } else if (motionStyle === 'parallax_float') {
+    const enter = easeWhipOut(enterT);
+    const floatWave = Math.sin(sceneTimeSec * 1.8);
+    const floatCos = Math.cos(sceneTimeSec * 1.4);
+    scaleX = lerp(0.88, 1.0, enter) + Math.sin(sceneProgress * Math.PI) * 0.04;
+    scaleY = scaleX;
+    tx = floatCos * 22 * scaleFactor;
+    ty += (1 - enter) * 45 * scaleFactor + floatWave * 14 * scaleFactor;
+    rotRad = floatCos * 0.028;
+    skewY = floatCos * 0.04;
+    shadowOffsetX = -floatCos * 20 * scaleFactor;
+    shadowOffsetY = (26 + floatWave * 8) * scaleFactor;
+    lightSweepProgress = clamp((sceneProgress - 0.15) / 0.75, 0, 1);
+  } else if (motionStyle === 'dof_blur_whip') {
+    const whip = easeWhipOut(enterT);
+    const velocity = Math.max(0, 1 - enterT * 1.8);
+    tx = (1 - whip) * width * 0.78 + lerp(-10, 14, sceneProgress) * scaleFactor;
+    ty += (1 - whip) * 22 * scaleFactor;
+    skewX = -velocity * 0.28;
+    scaleX = 1 + velocity * 0.12 + sceneProgress * 0.035;
+    scaleY = 1 - velocity * 0.04 + sceneProgress * 0.035;
+    ghostStrength = velocity * 1.35;
+    lightSweepProgress = clamp((sceneTimeSec - 0.1) / 1.0, 0, 1);
   } else {
     // light_sweep
     const enter = easeWhipOut(enterT);
