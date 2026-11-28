@@ -261,86 +261,12 @@ function createCutoutProductCanvas(
   const c = document.createElement('canvas');
   c.width = w;
   c.height = h;
-  const ctx = c.getContext('2d', { willReadFrequently: true });
-  if (!ctx) {
-    return { cutoutCanvas: c, rimSilhouetteCanvas: c, hasRemovedBg: false };
+  const ctx = c.getContext('2d');
+  if (ctx) {
+    ctx.drawImage(img, 0, 0, w, h);
   }
 
-  ctx.drawImage(img, 0, 0, w, h);
-
-  let hasRemovedBg = false;
-  try {
-    const imgData = ctx.getImageData(0, 0, w, h);
-    const data = imgData.data;
-
-    // Sample corner pixels to check background color
-    const cornerIndices = [
-      0, // top-left
-      Math.max(0, (w - 2) * 4), // top-right
-      Math.max(0, ((h - 2) * w) * 4), // bottom-left
-      Math.max(0, ((h - 2) * w + (w - 2)) * 4), // bottom-right
-      Math.max(0, Math.floor(w / 2) * 4), // top-center edge
-    ];
-
-    let cornerR = 0;
-    let cornerG = 0;
-    let cornerB = 0;
-    let validCount = 0;
-
-    for (const idx of cornerIndices) {
-      if (idx >= 0 && idx + 3 < data.length) {
-        cornerR += data[idx];
-        cornerG += data[idx + 1];
-        cornerB += data[idx + 2];
-        validCount++;
-      }
-    }
-
-    cornerR = validCount > 0 ? cornerR / validCount : 255;
-    cornerG = validCount > 0 ? cornerG / validCount : 255;
-    cornerB = validCount > 0 ? cornerB / validCount : 255;
-    const cornerBrightness = 0.299 * cornerR + 0.587 * cornerG + 0.114 * cornerB;
-
-    // Detect white, off-white, or pale studio background (typical e-commerce photos)
-    if (cornerBrightness >= 208) {
-      hasRemovedBg = true;
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        const a = data[i + 3];
-
-        if (a === 0) continue;
-
-        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
-        const colorDiff = Math.max(
-          Math.abs(r - cornerR),
-          Math.abs(g - cornerG),
-          Math.abs(b - cornerB)
-        );
-
-        if (lum >= 244 && colorDiff <= 22) {
-          // Pure / near-white background: make completely transparent
-          data[i + 3] = 0;
-        } else if (lum >= 218 && colorDiff <= 44) {
-          // Soft edge feathering between product and white backdrop
-          const feather = clamp((244 - lum) / 26, 0, 1);
-          data[i + 3] = Math.round(a * feather);
-        } else if (data[i + 3] > 0 && lum > 215) {
-          // Defringe bright edge halo
-          const factor = clamp((lum - 215) / 40, 0, 0.4);
-          data[i] = Math.round(r * (1 - factor * 0.25));
-          data[i + 1] = Math.round(g * (1 - factor * 0.25));
-          data[i + 2] = Math.round(b * (1 - factor * 0.25));
-        }
-      }
-      ctx.putImageData(imgData, 0, 0);
-    }
-  } catch (err) {
-    // Cross-origin fallback
-  }
-
-  // Generate rim silhouette canvas in accent color for dramatic rim lighting
+  // Generate rim silhouette canvas using pure GPU-safe globalCompositeOperation without getImageData
   const rimCanvas = document.createElement('canvas');
   rimCanvas.width = Math.min(640, w);
   rimCanvas.height = Math.min(640, h);
@@ -355,7 +281,7 @@ function createCutoutProductCanvas(
   return {
     cutoutCanvas: c,
     rimSilhouetteCanvas: rimCanvas,
-    hasRemovedBg,
+    hasRemovedBg: false,
   };
 }
 
@@ -365,79 +291,8 @@ function analyzePhotoForMotion(
   directorAccentRgb: [number, number, number] | null
 ): PreparedMotionPhoto {
   const aspect = img.naturalWidth / Math.max(1, img.naturalHeight);
-  let isBrightStudioBg = false;
-  let accentRgb: [number, number, number] = directorAccentRgb || [13, 146, 255];
-  let secondaryRgb: [number, number, number] = [56, 189, 248];
-
-  try {
-    const sample = document.createElement('canvas');
-    sample.width = 28;
-    sample.height = 28;
-    const sCtx = sample.getContext('2d');
-    if (sCtx) {
-      sCtx.drawImage(img, 0, 0, 28, 28);
-      const data = sCtx.getImageData(0, 0, 28, 28).data;
-
-      // Detect bright studio white/off-white cutout corners
-      const corners = [
-        [1, 1], [2, 1], [1, 2],
-        [26, 1], [25, 1], [26, 2],
-        [1, 26], [2, 26], [1, 25],
-        [26, 26], [25, 26], [26, 25],
-      ];
-      let brightCount = 0;
-      for (const [cx, cy] of corners) {
-        const i = (cy * 28 + cx) * 4;
-        const lum = 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
-        if (data[i + 3] < 220 || lum > 224) brightCount++;
-      }
-      isBrightStudioBg = brightCount >= 9;
-
-      // Sample center region for vibrant product accent colors
-      let bestSat = -1;
-      let secondSat = -1;
-      let foundPrimary: [number, number, number] | null = null;
-      let foundSecondary: [number, number, number] | null = null;
-
-      for (let y = 6; y < 22; y++) {
-        for (let x = 6; x < 22; x++) {
-          const i = (y * 28 + x) * 4;
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          const maxC = Math.max(r, g, b);
-          const minC = Math.min(r, g, b);
-          const sat = maxC - minC;
-          if (sat > 38 && maxC > 60 && minC < 215) {
-            if (sat > bestSat) {
-              secondSat = bestSat;
-              foundSecondary = foundPrimary;
-              bestSat = sat;
-              foundPrimary = [r, g, b];
-            } else if (sat > secondSat) {
-              secondSat = sat;
-              foundSecondary = [r, g, b];
-            }
-          }
-        }
-      }
-
-      if (foundPrimary) {
-        accentRgb = directorAccentRgb ? mixRgb(foundPrimary, directorAccentRgb, 0.35) : foundPrimary;
-      }
-      if (foundSecondary) {
-        secondaryRgb = foundSecondary;
-      } else {
-        secondaryRgb = [
-          clamp(accentRgb[0] + 45, 40, 255),
-          clamp(accentRgb[1] + 30, 60, 255),
-          clamp(accentRgb[2] + 55, 90, 255),
-        ];
-      }
-    }
-  } catch {
-    // Graceful fallback
-  }
+  const accentRgb: [number, number, number] = directorAccentRgb || [13, 146, 255];
+  const secondaryRgb: [number, number, number] = [56, 189, 248];
 
   const cutout = createCutoutProductCanvas(img, accentRgb);
 
@@ -445,7 +300,7 @@ function analyzePhotoForMotion(
     img,
     url,
     aspect,
-    isBrightStudioBg: isBrightStudioBg || cutout.hasRemovedBg,
+    isBrightStudioBg: false,
     accentRgb,
     secondaryRgb,
     blurredBackdrop: createPreblurredBackdrop(img),
@@ -2843,24 +2698,23 @@ async function encodeAudioSynced60fpsWithMediaRecorder(
         }
       };
 
-      // 2b. Dynamic Scene Duration: Advance only when voiceover segment finishes + 320ms visual buffer
+      // 2b. Dynamic Scene Duration: Scene-by-Scene Audio Lock (utterance.onend + 250ms visual pause)
       utterance.onend = () => {
         const now = performance.now();
         isSceneSpeaking = false;
         isSceneSpeechEnded = true;
-        sceneVisualBufferUntilMs = now + 320; // 320ms visual buffer
+        sceneVisualBufferUntilMs = now + 250; // Exact 250ms pause lock
       };
 
       utterance.onerror = () => {
         const now = performance.now();
         isSceneSpeaking = false;
         isSceneSpeechEnded = true;
-        sceneVisualBufferUntilMs = now + 320;
+        sceneVisualBufferUntilMs = now + 250;
       };
 
       window.speechSynthesis.speak(utterance);
     } else {
-      // Voiceover disabled or not supported: character-progress based pacing + 320ms buffer
       const estimatedDurMs = Math.max(2200, countWords(text || sc.scene.headline) * 380);
       const now = performance.now();
       sceneSpeechStartMs = now;
@@ -2870,7 +2724,7 @@ async function encodeAudioSynced60fpsWithMediaRecorder(
       fallbackTimerId = window.setTimeout(() => {
         isSceneSpeaking = false;
         isSceneSpeechEnded = true;
-        sceneVisualBufferUntilMs = performance.now() + 320;
+        sceneVisualBufferUntilMs = performance.now() + 250;
       }, estimatedDurMs);
     }
   };
@@ -2878,7 +2732,6 @@ async function encodeAudioSynced60fpsWithMediaRecorder(
   recorder.start(200);
   startSceneSpeech(0);
 
-  // Safety watchdog: ensure masterAnchorMs is set within 700ms even if voice engine initialization is slow
   const watchdogId = window.setTimeout(() => {
     if (masterAnchorMs === null) {
       const now = performance.now();
@@ -2890,7 +2743,6 @@ async function encodeAudioSynced60fpsWithMediaRecorder(
     const tick = () => {
       const now = performance.now();
       if (masterAnchorMs === null) {
-        // Voice is warming up (brief 50-150ms startup delay): draw initial calm frame at t = 0
         drawSceneAt(0, 0, 4.0, 0, 0, 0);
         requestAnimationFrame(tick);
         return;
@@ -2902,14 +2754,13 @@ async function encodeAudioSynced60fpsWithMediaRecorder(
         const outroElapsedSec = (now - outroStartMs) / 1000;
         drawOutroAt(outroElapsedSec);
         const pct = Math.round(90 + (outroElapsedSec / DBUY_OUTRO_DURATION_SEC) * 9);
-        onProgress?.(pct, `Recording DBuy Branded Outro (${outroElapsedSec.toFixed(1)}s / ${DBUY_OUTRO_DURATION_SEC}s)`);
+        onProgress?.(pct, `Rendering DBuy Branded Outro (${outroElapsedSec.toFixed(1)}s)...`);
 
         if (outroElapsedSec >= DBUY_OUTRO_DURATION_SEC) {
           resolve();
           return;
         }
       } else {
-        // Dynamic scene completion: advance scene and subtitle block only when utterance.onend + buffer finishes
         if (isSceneSpeechEnded && now >= sceneVisualBufferUntilMs) {
           currentSceneIdx++;
           if (currentSceneIdx >= scheduledScenes.length) {
@@ -2929,20 +2780,16 @@ async function encodeAudioSynced60fpsWithMediaRecorder(
           ? Math.max(0.5, (sceneVisualBufferUntilMs - sceneSpeechStartMs) / 1000)
           : Math.max(3.0, sc.durationSec || 4.0);
 
-        // Real-Time Word Boundary Tracking: 100% Synced to Master Voice Clock with Zero Lag
         let activeWordIdx = 0;
         let localWordProgress = 0;
         if (layout && layout.words.length > 0) {
           if (!isSceneSpeaking && sceneSpeechStartMs === 0) {
-            // Utterance has not started speaking yet: hold on word 0 with 0 progress
             activeWordIdx = 0;
             localWordProgress = 0;
           } else if (isSceneSpeechEnded) {
-            // Utterance finished, holding for visual buffer: lock to last word fully
             activeWordIdx = layout.words.length - 1;
             localWordProgress = 1;
           } else if (latestBoundaryChar > 0) {
-            // Browser speech boundary event is active: lock directly to latestBoundaryChar
             for (let w = 0; w < layout.words.length; w++) {
               if (latestBoundaryChar >= layout.words[w].charStart && latestBoundaryChar <= layout.words[w].charEnd) {
                 activeWordIdx = w;
@@ -2956,7 +2803,6 @@ async function encodeAudioSynced60fpsWithMediaRecorder(
               }
             }
           } else {
-            // Voice engine does not fire boundary events: fall back to rate-adjusted timing
             const rateMultiplier = voiceTone === 'energetic' ? 1.07 : voiceTone === 'calm_luxury' ? 0.93 : 1.0;
             const charsPerSec = 15 * rateMultiplier;
             const elapsedSec = Math.max(0, (now - sceneSpeechStartMs) / 1000);
@@ -2981,7 +2827,7 @@ async function encodeAudioSynced60fpsWithMediaRecorder(
 
         const approxTotalSec = scheduledScenes.length * 3.8 + DBUY_OUTRO_DURATION_SEC;
         const pct = Math.min(89, Math.round(35 + (masterElapsedSec / approxTotalSec) * 54));
-        onProgress?.(pct, `Recording 60 FPS Commercial · Scene ${activeIdx + 1} / ${scheduledScenes.length} (${masterElapsedSec.toFixed(1)}s)`);
+        onProgress?.(pct, `Rendering scene ${activeIdx + 1}/${scheduledScenes.length}... (${masterElapsedSec.toFixed(1)}s)`);
       }
 
       requestAnimationFrame(tick);
